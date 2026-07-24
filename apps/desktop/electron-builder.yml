@@ -6,6 +6,15 @@ asar: true
 files:
   - dist/**
   - package.json
+# Runtime window / notification icons (BrowserWindow.icon). Separate from the
+# exe-embedded icon from win.icon — both are required on Windows for taskbar.
+extraResources:
+  - from: build/icon.ico
+    to: icon.ico
+  - from: build/icon.png
+    to: icon.png
+  - from: build/icon.icns
+    to: icon.icns
 directories:
   output: release/app
   buildResources: build
@@ -23,6 +32,9 @@ dmg:
   writeUpdateInfo: false
 win:
   icon: icon.ico
+  # Keep true so rcedit writes icon.ico into Pix.exe (taskbar + Start Menu).
+  # false skips resource editing and leaves Electron's default atom icon.
+  signAndEditExecutable: true
   target:
     - nsis
 nsis:

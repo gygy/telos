@@ -3561,14 +3561,52 @@ function packageRoot(): string {
   return fromDist;
 }
 
+/**
+ * Resolve the brand icon for window chrome / dock / notifications.
+ *
+ * Dev: apps/desktop/build/*
+ * Packaged: extraResources next to app.asar (build/ is not inside asar).
+ * Windows prefers .ico so the taskbar matches the executable.
+ */
 function resolveAppIconPath(): string | undefined {
   const root = packageRoot();
-  // Prefer PNG for dock / About / window chrome. Packaged .app also ships .icns via builder.
-  for (const rel of ["build/icon.png", "build/icon.icns"]) {
-    const path = join(root, rel);
-    if (existsSync(path)) return path;
+  const resources =
+    typeof process.resourcesPath === "string" && process.resourcesPath
+      ? process.resourcesPath
+      : undefined;
+
+  const names =
+    process.platform === "win32"
+      ? (["icon.ico", "icon.png"] as const)
+      : process.platform === "darwin"
+        ? (["icon.png", "icon.icns"] as const)
+        : (["icon.png"] as const);
+
+  const dirs = [
+    ...(resources ? [resources, join(resources, "build")] : []),
+    join(root, "build"),
+    root,
+  ];
+
+  for (const dir of dirs) {
+    for (const name of names) {
+      const path = join(dir, name);
+      if (existsSync(path)) return path;
+    }
   }
   return undefined;
+}
+
+/** Windows AppUserModelID — must match electron-builder appId for packaged installs. */
+const WINDOWS_APP_USER_MODEL_ID = "dev.pix.app";
+/** Separate AUMID for unpackaged `electron .` so Start Menu Electron.lnk cannot steal the taskbar icon. */
+const WINDOWS_DEV_APP_USER_MODEL_ID = "dev.pix.app.dev";
+
+function applyWindowsAppUserModelId(): void {
+  if (process.platform !== "win32") return;
+  // Packaged Pix and dev Electron must NOT share an AUMID: Windows groups by AUMID and
+  // will show the Electron atom icon from Programs\Electron.lnk for the installed app.
+  app.setAppUserModelId(app.isPackaged ? WINDOWS_APP_USER_MODEL_ID : WINDOWS_DEV_APP_USER_MODEL_ID);
 }
 
 /**
@@ -3596,9 +3634,7 @@ function applyDockIcon(iconPath: string | undefined): void {
  */
 function applyAppBranding(): void {
   app.setName("Pix");
-  if (process.platform === "win32") {
-    app.setAppUserModelId("dev.pix.app");
-  }
+  applyWindowsAppUserModelId();
   const iconPath = resolveAppIconPath();
   applyDockIcon(iconPath);
   if (iconPath) {
@@ -3614,7 +3650,7 @@ function applyAppBranding(): void {
       console.warn("[pix] setAboutPanelOptions failed:", error);
     }
   } else {
-    console.warn("[pix] app icon not found under build/icon.png|icns");
+    console.warn("[pix] app icon not found (build/ or process.resourcesPath)");
   }
 }
 
@@ -3739,9 +3775,8 @@ async function createWindow(): Promise<void> {
 }
 
 // Identity early (before ready). Full branding (About icon/Dock) re-applied in whenReady.
-if (process.platform === "win32") {
-  app.setAppUserModelId("dev.pix.app");
-}
+// On Windows this must run before the first window, or the shell keeps the wrong taskbar icon.
+applyWindowsAppUserModelId();
 app.setName("Pix");
 
 function openSystemNotificationSettings(): void {
