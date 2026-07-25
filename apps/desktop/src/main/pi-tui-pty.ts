@@ -1,9 +1,13 @@
 /**
  * PTY lifecycle for embedded pi TUI.
  *
- * Correctness rule: never stream a prior process into a new UI surface.
- * Every `open()` tears down any existing PTY and spawns a fresh `pi --session`.
- * (Tool bootstrap stays warm via PI_CODING_AGENT_DIR / PATH — not via process reuse.)
+ * Performance:
+ * - Same session: suspend/resume reuses the live process (chat ⇄ terminal).
+ * - Other sessions: park up to N warm processes and promote on switch (terminal ⇄ terminal).
+ *
+ * Correctness:
+ * - Data is bound to the live handle + generation (stale processes never feed the UI).
+ * - open() for a different session parks the current one instead of always killing.
  */
 import type { PiTuiLaunchPlan } from "./pi-tui-session.ts";
 import { buildPiTuiEnv } from "./pi-tui-env.ts";
@@ -32,9 +36,8 @@ export type PiTuiPtyOpenResult = {
   sessionKey: string;
   sessionFile: string;
   cwd: string;
-  /** Always false — open never reuses a process (avoids wrong-session paints). */
+  /** True when an existing process was reused (resume or promote from park). */
   resumed: boolean;
-  /** Monotonic generation for this live PTY; renderer can ignore stale opens. */
   generation: number;
 };
 
@@ -43,20 +46,37 @@ export type PiTuiPtyCallbacks = {
   onExit: (event: PtyExitEvent) => void;
 };
 
+type LivePty = {
+  pty: PtyHandle;
+  sessionKey: string;
+  sessionFile: string;
+  cwd: string;
+  generation: number;
+};
+
+type ParkedPty = {
+  pty: PtyHandle;
+  sessionKey: string;
+  sessionFile: string;
+  cwd: string;
+  parkedAt: number;
+};
+
+/** Max warm pi processes kept for instant terminal session hops. */
+const MAX_PARKED = 4;
+
 /**
- * Manages at most one live pi TUI PTY.
+ * Manages one live pi TUI PTY plus a small park of warm sessions.
  */
 export class PiTuiPtyController {
   #spawn: PtySpawnFn;
   #resolvePiPath: () => Promise<string>;
-  #pty: PtyHandle | null = null;
-  #sessionKey: string | null = null;
-  #sessionFile: string | null = null;
+  #live: LivePty | null = null;
   #suspended = false;
   #dataListener: ((data: string) => void) | null = null;
   #exitListener: ((event: PtyExitEvent) => void) | null = null;
-  /** Bumped on every open/dispose so stale process I/O is ignored. */
   #generation = 0;
+  #parked = new Map<string, ParkedPty>();
 
   constructor(spawn: PtySpawnFn, resolvePiPath: () => Promise<string>) {
     this.#spawn = spawn;
@@ -64,23 +84,23 @@ export class PiTuiPtyController {
   }
 
   isOpen(): boolean {
-    return this.#pty !== null && !this.#suspended;
+    return this.#live !== null && !this.#suspended;
   }
 
   isAlive(): boolean {
-    return this.#pty !== null;
+    return this.#live !== null;
   }
 
   isSuspended(): boolean {
-    return this.#suspended && this.#pty !== null;
+    return this.#suspended && this.#live !== null;
   }
 
   sessionKey(): string | null {
-    return this.#sessionKey;
+    return this.#live?.sessionKey ?? null;
   }
 
   sessionFile(): string | null {
-    return this.#sessionFile;
+    return this.#live?.sessionFile ?? null;
   }
 
   generation(): number {
@@ -88,17 +108,56 @@ export class PiTuiPtyController {
   }
 
   async open(plan: PiTuiLaunchPlan, callbacks: PiTuiPtyCallbacks): Promise<PiTuiPtyOpenResult> {
-    // Always kill any prior process first — never resume a buffer that may belong
-    // to another session or an earlier mount of the same path.
-    if (this.#pty) {
-      this.dispose();
+    // Same live session → resume (chat ⇄ terminal on one session).
+    if (this.#live && this.#live.sessionKey === plan.sessionKey) {
+      this.#suspended = false;
+      this.#dataListener = callbacks.onData;
+      this.#exitListener = callbacks.onExit;
+      this.#live.pty.resize(plan.cols, plan.rows);
+      return {
+        sessionKey: plan.sessionKey,
+        sessionFile: plan.sessionFile,
+        cwd: plan.cwd,
+        resumed: true,
+        generation: this.#live.generation,
+      };
     }
 
+    // Different live session → park it warm for a later hop back.
+    if (this.#live) {
+      this.#parkLive();
+    }
+
+    // Promote a parked process for this session (terminal ⇄ terminal hop).
+    const parked = this.#parked.get(plan.sessionKey);
+    if (parked) {
+      this.#parked.delete(plan.sessionKey);
+      const generation = ++this.#generation;
+      this.#live = {
+        pty: parked.pty,
+        sessionKey: parked.sessionKey,
+        sessionFile: parked.sessionFile,
+        cwd: parked.cwd,
+        generation,
+      };
+      this.#suspended = false;
+      this.#dataListener = callbacks.onData;
+      this.#exitListener = callbacks.onExit;
+      // Already wired at spawn — only reattach listeners + resize.
+      parked.pty.resize(plan.cols, plan.rows);
+      return {
+        sessionKey: plan.sessionKey,
+        sessionFile: plan.sessionFile,
+        cwd: plan.cwd,
+        resumed: true,
+        generation,
+      };
+    }
+
+    // Cold spawn.
     const generation = ++this.#generation;
     const piPath = await this.#resolvePiPath();
     if (!piPath.trim()) throw new Error("pi executable not found; install the pi CLI first");
-
-    // Superseded while resolving pi path (rapid session switches).
     if (generation !== this.#generation) {
       throw new Error("Terminal open superseded");
     }
@@ -112,7 +171,6 @@ export class PiTuiPtyController {
       env,
     });
 
-    // Another open won the race after spawn — kill this orphan immediately.
     if (generation !== this.#generation) {
       try {
         pty.kill();
@@ -122,30 +180,17 @@ export class PiTuiPtyController {
       throw new Error("Terminal open superseded");
     }
 
-    this.#pty = pty;
-    this.#sessionKey = plan.sessionKey;
-    this.#sessionFile = plan.sessionFile;
+    this.#live = {
+      pty,
+      sessionKey: plan.sessionKey,
+      sessionFile: plan.sessionFile,
+      cwd: plan.cwd,
+      generation,
+    };
     this.#suspended = false;
     this.#dataListener = callbacks.onData;
     this.#exitListener = callbacks.onExit;
-
-    pty.onData((data) => {
-      // Identity + generation: dying processes must not feed a newer session UI.
-      if (this.#pty !== pty || this.#generation !== generation || this.#suspended) return;
-      this.#dataListener?.(data);
-    });
-    pty.onExit((event) => {
-      if (this.#pty === pty && this.#generation === generation) {
-        this.#pty = null;
-        this.#sessionKey = null;
-        this.#sessionFile = null;
-        this.#suspended = false;
-        this.#dataListener = null;
-        const exitListener = this.#exitListener;
-        this.#exitListener = null;
-        exitListener?.(event);
-      }
-    });
+    this.#wireHandle(pty);
 
     return {
       sessionKey: plan.sessionKey,
@@ -156,46 +201,127 @@ export class PiTuiPtyController {
     };
   }
 
-  /**
-   * Keep process alive but stop UI feed. Prefer dispose() when switching sessions;
-   * open() always kills any prior process regardless.
-   */
+  /** Wire once per process at spawn; park/promote reuses the same handlers. */
+  #wireHandle(pty: PtyHandle): void {
+    pty.onData((data) => {
+      if (!this.#live || this.#live.pty !== pty || this.#suspended) return;
+      this.#dataListener?.(data);
+    });
+    pty.onExit((event) => {
+      if (this.#live?.pty === pty) {
+        this.#live = null;
+        this.#suspended = false;
+        this.#dataListener = null;
+        const exitListener = this.#exitListener;
+        this.#exitListener = null;
+        exitListener?.(event);
+        return;
+      }
+      // Parked process died — drop from park.
+      for (const [key, entry] of this.#parked) {
+        if (entry.pty === pty) {
+          this.#parked.delete(key);
+          break;
+        }
+      }
+    });
+  }
+
+  #parkLive(): void {
+    const live = this.#live;
+    if (!live) return;
+    this.#dataListener = null;
+    this.#exitListener = null;
+    this.#suspended = false;
+    this.#live = null;
+    // Drop existing park entry for same key, then insert.
+    const existing = this.#parked.get(live.sessionKey);
+    if (existing) {
+      try {
+        existing.pty.kill();
+      } catch {
+        // ignore
+      }
+    }
+    this.#parked.set(live.sessionKey, {
+      pty: live.pty,
+      sessionKey: live.sessionKey,
+      sessionFile: live.sessionFile,
+      cwd: live.cwd,
+      parkedAt: Date.now(),
+    });
+    this.#trimPark();
+  }
+
+  #trimPark(): void {
+    while (this.#parked.size > MAX_PARKED) {
+      let oldestKey: string | null = null;
+      let oldestAt = Number.POSITIVE_INFINITY;
+      for (const [key, entry] of this.#parked) {
+        if (entry.parkedAt < oldestAt) {
+          oldestAt = entry.parkedAt;
+          oldestKey = key;
+        }
+      }
+      if (!oldestKey) break;
+      const entry = this.#parked.get(oldestKey);
+      this.#parked.delete(oldestKey);
+      try {
+        entry?.pty.kill();
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /** Detach UI feed but keep process live for instant re-enter (same session). */
   suspend(): { sessionFile: string | null } {
-    if (!this.#pty) return { sessionFile: null };
+    if (!this.#live) return { sessionFile: null };
     this.#suspended = true;
     this.#dataListener = null;
-    return { sessionFile: this.#sessionFile };
+    return { sessionFile: this.#live.sessionFile };
   }
 
   write(data: string): void {
-    if (!this.#pty || this.#suspended) throw new Error("Terminal is not open");
-    this.#pty.write(data);
+    if (!this.#live || this.#suspended) throw new Error("Terminal is not open");
+    this.#live.pty.write(data);
   }
 
   resize(cols: number, rows: number): void {
-    if (!this.#pty) return;
-    this.#pty.resize(Math.max(20, cols), Math.max(5, rows));
+    if (!this.#live) return;
+    this.#live.pty.resize(Math.max(20, cols), Math.max(5, rows));
   }
 
+  /** Kill live process only (parked sessions stay warm). */
   dispose(): { sessionFile: string | null } {
-    const file = this.#sessionFile;
-    const pty = this.#pty;
-    // Invalidate generation so any in-flight open/spawn cannot attach.
+    const file = this.#live?.sessionFile ?? null;
+    const live = this.#live;
     this.#generation += 1;
-    this.#pty = null;
-    this.#sessionKey = null;
-    this.#sessionFile = null;
+    this.#live = null;
     this.#suspended = false;
     this.#dataListener = null;
     this.#exitListener = null;
-    if (pty) {
+    if (live) {
       try {
-        pty.kill();
+        live.pty.kill();
       } catch {
-        // process may already have exited
+        // ignore
       }
     }
     return { sessionFile: file };
+  }
+
+  /** Kill live + all parked processes (app quit / hard reset). */
+  disposeAll(): void {
+    this.dispose();
+    for (const entry of this.#parked.values()) {
+      try {
+        entry.pty.kill();
+      } catch {
+        // ignore
+      }
+    }
+    this.#parked.clear();
   }
 }
 

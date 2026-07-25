@@ -44,25 +44,24 @@ function fakeSpawn(
 }
 
 describe("PiTuiPtyController", () => {
-  it("always spawns fresh — never resumes a prior process", async () => {
+  it("resumes the same session without a second spawn", async () => {
     const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
     const controller = new PiTuiPtyController(fakeSpawn(tracker), async () => "pi");
     const plan = planPiTuiLaunch({ sessionFile: "/s.jsonl", cwd: "/cwd" });
 
     await controller.open(plan, { onData: () => undefined, onExit: () => undefined });
     expect(tracker.spawns).toHaveLength(1);
-
     controller.suspend();
     const second = await controller.open(plan, {
       onData: () => undefined,
       onExit: () => undefined,
     });
-    expect(second.resumed).toBe(false);
-    expect(tracker.kills).toBe(1);
-    expect(tracker.spawns).toHaveLength(2);
+    expect(second.resumed).toBe(true);
+    expect(tracker.kills).toBe(0);
+    expect(tracker.spawns).toHaveLength(1);
   });
 
-  it("replaces a different live session and ignores stale data", async () => {
+  it("parks the previous session and promotes it on hop back", async () => {
     const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
     const handles: Array<PtyHandle & { emitData: (data: string) => void }> = [];
     const controller = new PiTuiPtyController(
@@ -93,8 +92,7 @@ describe("PiTuiPtyController", () => {
       },
       onExit: () => undefined,
     });
-    expect(tracker.spawns[0]?.args).toEqual(["--session", "/work/a.jsonl"]);
-    expect(tracker.spawns[0]?.env.PI_CODING_AGENT_DIR).toBeTruthy();
+    expect(tracker.spawns).toHaveLength(1);
 
     await controller.open(planB, {
       onData: (d) => {
@@ -102,17 +100,24 @@ describe("PiTuiPtyController", () => {
       },
       onExit: () => undefined,
     });
-    expect(tracker.kills).toBe(1);
+    // A parked (not killed), B spawned
     expect(tracker.spawns).toHaveLength(2);
-    expect(tracker.spawns[1]?.args).toEqual(["--session", "/work/b.jsonl"]);
+    expect(tracker.kills).toBe(0);
 
-    handles[0]?.emitData("from-old-session");
-    handles[1]?.emitData("from-new-session");
-    expect(received).toEqual(["B:from-new-session"]);
+    handles[0]?.emitData("from-parked-A");
+    handles[1]?.emitData("from-live-B");
+    expect(received).toEqual(["B:from-live-B"]);
 
-    controller.dispose();
-    expect(tracker.kills).toBe(2);
-    expect(controller.isAlive()).toBe(false);
+    // Hop back to A — promote park, no third spawn
+    await controller.open(planA, {
+      onData: (d) => {
+        received.push(`A2:${d}`);
+      },
+      onExit: () => undefined,
+    });
+    expect(tracker.spawns).toHaveLength(2);
+    handles[0]?.emitData("from-promoted-A");
+    expect(received).toContain("A2:from-promoted-A");
   });
 
   it("write requires an active (non-suspended) PTY", async () => {

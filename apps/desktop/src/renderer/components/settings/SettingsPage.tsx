@@ -3465,7 +3465,7 @@ function ModelsSection(
           testId="models-add-custom"
         />
         <SettingsPillButton
-          label={loading ? "…" : tr("auth.refresh")}
+          label={loading ? "…" : tr("models.reloadCatalog")}
           onClick={() => void refresh()}
           disabled={loading}
           testId="models-refresh"

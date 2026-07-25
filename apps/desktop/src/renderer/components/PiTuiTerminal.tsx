@@ -1,11 +1,9 @@
 /**
  * Embedded pi TUI — ghostty-web + main-process node-pty (`pi --session`).
  *
- * Hard rules for switch correctness:
- * - Parent keeps SurfaceTransitionOverlay until onReady.
- * - Canvas stays visibility:hidden until ready (second line of defense).
- * - Every mount spawns a fresh PTY for this sessionFile (main never resumes).
- * - Stale async open after unmount is discarded; if it still owns the session, dispose it.
+ * - Parent may keep SurfaceTransitionOverlay until onReady (mode changes only).
+ * - Canvas stays visibility:hidden until ready.
+ * - open() resumes/promotes warm PTYs when possible (do not dispose before open).
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -25,17 +23,21 @@ function normSession(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
-/** Debounce after first verified output before lifting the gate. */
-const READY_SETTLE_MS = 420;
-/** Absolute max wait after a verified open (pi may paint slowly). */
-const READY_MAX_MS = 2000;
+/** After first verified output (cold spawn). */
+const READY_SETTLE_MS = 120;
+/** After resume/promote (process already warm — just need canvas paint). */
+const READY_SETTLE_RESUMED_MS = 48;
+/** Absolute max wait after open. */
+const READY_MAX_MS = 900;
+const READY_MAX_RESUMED_MS = 220;
 
 export function PiTuiTerminal(props: {
   sessionFile: string;
   cwd: string;
   colorMode: "light" | "dark";
   className?: string | undefined;
-  onReady?: (() => void) | undefined;
+  /** Fired only after this mount has bound the expected session and painted. */
+  onReady?: ((info: { sessionFile: string }) => void) | undefined;
   onOpenError?: ((error: unknown) => void) | undefined;
   onProcessExit?: ((event: { exitCode: number; signal?: number }) => void) | undefined;
 }) {
@@ -129,10 +131,13 @@ export function PiTuiTerminal(props: {
       // Double rAF: composite themed canvas before parent lifts the logo mask.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          if (!cancelled) onReadyRef.current?.();
+          if (!cancelled) onReadyRef.current?.({ sessionFile });
         });
       });
     }
+
+    let settleMs = READY_SETTLE_MS;
+    let maxMs = READY_MAX_MS;
 
     function scheduleReadyAfterVerifiedOutput() {
       if (readyFired || cancelled) return;
@@ -140,7 +145,7 @@ export function PiTuiTerminal(props: {
       settleTimer = window.setTimeout(() => {
         settleTimer = null;
         fireReady();
-      }, READY_SETTLE_MS);
+      }, settleMs);
     }
 
     void (async () => {
@@ -229,14 +234,7 @@ export function PiTuiTerminal(props: {
         // ignore
       }
 
-      // Force a clean process for this session (main always spawns fresh).
-      try {
-        await window.pix.terminal.dispose();
-      } catch {
-        // ignore
-      }
-      if (cancelled) return;
-
+      // Do NOT dispose first — open() resumes same session or promotes a parked one.
       let opened: { sessionFile?: string; resumed?: boolean };
       try {
         opened = await window.pix.terminal.open({
@@ -250,11 +248,11 @@ export function PiTuiTerminal(props: {
         return;
       }
       if (cancelled) {
-        // Stale mount: if we still own this session, release it.
+        // Stale mount: only kill if we still own this session (don't wipe a newer hop).
         try {
           const st = await window.pix.terminal.status();
           if (st.sessionFile && normSession(st.sessionFile) === expectedKey) {
-            await window.pix.terminal.dispose();
+            await window.pix.terminal.suspend();
           }
         } catch {
           // ignore
@@ -264,30 +262,16 @@ export function PiTuiTerminal(props: {
 
       const liveKey = normSession(opened.sessionFile ?? sessionFile);
       if (liveKey !== expectedKey) {
-        try {
-          await window.pix.terminal.dispose();
-        } catch {
-          // ignore
-        }
         if (!cancelled) {
           onOpenErrorRef.current?.(new Error("Terminal opened for the wrong session"));
         }
         return;
       }
 
-      // Double-check via status IPC (guards races with concurrent opens).
-      try {
-        const st = await window.pix.terminal.status();
-        if (!st.sessionFile || normSession(st.sessionFile) !== expectedKey) {
-          if (!cancelled) {
-            onOpenErrorRef.current?.(new Error("Terminal session mismatch after open"));
-          }
-          return;
-        }
-      } catch {
-        // status optional
+      if (opened.resumed) {
+        settleMs = READY_SETTLE_RESUMED_MS;
+        maxMs = READY_MAX_RESUMED_MS;
       }
-      if (cancelled) return;
 
       applyPrefsToTerminal(next, prefsRef.current);
       // Only now may PTY bytes hit the canvas.
@@ -302,11 +286,14 @@ export function PiTuiTerminal(props: {
         } catch {
           // ignore
         }
-        // Max wait — if pi is quiet, still show after READY_MAX_MS (empty but correct session).
+        // Resume: reveal almost immediately after resize (warm process already painted).
+        if (opened.resumed) {
+          scheduleReadyAfterVerifiedOutput();
+        }
         maxTimer = window.setTimeout(() => {
           maxTimer = null;
           fireReady();
-        }, READY_MAX_MS);
+        }, maxMs);
       });
       nextFit.observeResize();
     })();

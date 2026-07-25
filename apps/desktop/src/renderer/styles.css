@@ -843,6 +843,12 @@ html[data-custom-window-controls="true"] .page-header {
   flex: 1 1 auto;
   flex-direction: column;
 }
+/* pi TUI lives under ThreadHeader only — never covers the title / mode toggle row. */
+.thread-pane-terminal {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
 .thread-pane-scroll {
   flex: 1 1 auto;
   min-width: 0;
@@ -1839,7 +1845,7 @@ html[data-custom-window-controls="true"] .page-header {
 .surface-transition-mask {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1849,6 +1855,7 @@ html[data-custom-window-controls="true"] .page-header {
   opacity: 1;
   pointer-events: auto;
   user-select: none;
+  isolation: isolate;
 }
 .surface-transition-mask-terminal,
 .surface-transition-mask[data-for="terminal"] {
@@ -2649,25 +2656,6 @@ html[data-custom-window-controls="true"] .page-header {
   border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
   background: color-mix(in srgb, #f59e0b 16%, transparent);
   color: color-mix(in srgb, #d97706 85%, var(--foreground));
-}
-.btn-package-enable {
-  @apply inline-flex h-7 items-center justify-center rounded-lg border px-2.5 text-[11px] leading-none font-semibold whitespace-nowrap transition-colors;
-}
-.btn-package-enable[data-on="true"] {
-  border-color: color-mix(in srgb, #22c55e 40%, var(--border));
-  background: color-mix(in srgb, #22c55e 12%, transparent);
-  color: color-mix(in srgb, #16a34a 85%, var(--foreground));
-}
-.btn-package-enable[data-on="false"] {
-  border-color: color-mix(in srgb, #ef4444 40%, var(--border));
-  background: color-mix(in srgb, #ef4444 10%, transparent);
-  color: color-mix(in srgb, #dc2626 85%, var(--foreground));
-}
-.btn-package-enable:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-.btn-package-enable:disabled {
-  @apply cursor-not-allowed opacity-50;
 }
 .empty-panel {
   @apply flex flex-col items-start gap-1.5 border border-dashed p-5;

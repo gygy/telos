@@ -20,6 +20,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { ArrowDown } from "lucide-react";
 import { AppSidebar } from "./components/AppSidebar.tsx";
 import { CommandPalette } from "./components/CommandPalette.tsx";
@@ -40,8 +41,9 @@ import {
   type EnvPanelLayoutMode,
 } from "./components/EnvPanel.tsx";
 import { BootstrapOverlay } from "./components/BootstrapOverlay.tsx";
-import { SurfaceTransitionOverlay } from "./components/SurfaceTransitionOverlay.tsx";
+
 import { PixLogo } from "./components/PixLogo.tsx";
+import { SurfaceTransitionOverlay } from "./components/SurfaceTransitionOverlay.tsx";
 import { ThreadHeader } from "./components/ThreadHeader.tsx";
 import { PiTuiTerminal } from "./components/PiTuiTerminal.tsx";
 import { WindowCaptionButtons } from "./components/WindowCaptionButtons.tsx";
@@ -85,6 +87,7 @@ import { installOverlayScroll, syncOverlayScroll } from "./lib/overlay-scroll.ts
 import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
 import { matchShortcut, SHORTCUT_OVERRIDES_CHANGED_EVENT } from "./lib/shortcuts.ts";
 import { loadContentModeForSession } from "./lib/content-mode-prefs.ts";
+import { loadTerminalPrefs, resolveTerminalTheme } from "./lib/terminal-prefs.ts";
 import {
   filterRecentWorkspaces,
   firstLine,
@@ -222,11 +225,26 @@ function App() {
   const contentMode = useShellStore((s) => s.contentMode);
   const setContentMode = useShellStore((s) => s.setContentMode);
   /**
-   * Opaque cover while chat ⇄ terminal (or terminal session bind) is in flight.
-   * Prevents a one-frame paint of the previous surface / previous session TUI.
+   * Opaque cover while landing on terminal (chat→terminal or terminal→terminal).
+   * Chat→chat and terminal→chat: no mask.
+   *
+   * Critical: under the mask we fully unmount PiTuiTerminal so the previous
+   * session canvas cannot paint. Remount only after the *new* session identity
+   * is applied; lift the mask only from that mount's onReady.
    */
   const [surfaceMask, setSurfaceMask] = useState(false);
+  const [surfaceMaskKind, setSurfaceMaskKind] = useState<"view" | "session">("view");
+  /** When false, PiTuiTerminal is unmounted (no previous-session canvas). */
+  const [terminalSurfaceActive, setTerminalSurfaceActive] = useState(true);
   const surfaceMaskTimerRef = useRef<number | null>(null);
+  /** Bumps on every show; stale onReady / safety timeout cannot lift a newer mask. */
+  const surfaceMaskGenRef = useRef(0);
+  /** Session file the current mask is waiting for (normed path). */
+  const maskExpectsSessionRef = useRef<string | null>(null);
+
+  function normSessionPath(path: string): string {
+    return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  }
 
   function clearSurfaceMaskTimer() {
     if (surfaceMaskTimerRef.current != null) {
@@ -236,36 +254,62 @@ function App() {
   }
 
   /**
-   * Opaque cover over the content column. Stays up until hideSurfaceMask —
-   * PiTuiTerminal.onReady / chat settle / error paths. Long safety timeout only.
+   * Sync paint: cover + unmount old TUI in this call stack (before any await).
+   * Real unmask is only onReady for the expected session (or error / safety).
    */
-  function showSurfaceMask() {
+  function showSurfaceMask(kind: "view" | "session" = "view", expectsSession?: string) {
     clearSurfaceMaskTimer();
-    setSurfaceMask(true);
-    // Safety only — real unmask is onReady / chat settle. Do not lift early.
+    const gen = ++surfaceMaskGenRef.current;
+    maskExpectsSessionRef.current = expectsSession?.trim() ? normSessionPath(expectsSession) : null;
+    // flushSync: mask must cover before the previous session can paint another frame.
+    flushSync(() => {
+      setSurfaceMaskKind(kind);
+      setSurfaceMask(true);
+      setTerminalSurfaceActive(false);
+    });
     surfaceMaskTimerRef.current = window.setTimeout(() => {
+      if (surfaceMaskGenRef.current !== gen) return;
       surfaceMaskTimerRef.current = null;
+      maskExpectsSessionRef.current = null;
       setSurfaceMask(false);
+      // Do not force-remount here if still mid-switch — restore/enter will remount.
+      if (useShellStore.getState().contentMode === "terminal") {
+        setTerminalSurfaceActive(true);
+      }
     }, 12_000);
   }
 
-  function hideSurfaceMask() {
+  function hideSurfaceMask(fromSession?: string) {
+    const expects = maskExpectsSessionRef.current;
+    if (expects && fromSession?.trim()) {
+      if (normSessionPath(fromSession) !== expects) return;
+    }
     clearSurfaceMaskTimer();
+    maskExpectsSessionRef.current = null;
     setSurfaceMask(false);
   }
 
   /**
    * Restore chat vs terminal for a session after open/switch.
-   * Does not persist — the map is the authority; this only drives the UI.
+   * Terminal: contentMode + remount TUI for the *already applied* sessionFile under mask.
    */
   function restoreSessionContentMode(sessionFile: string | undefined) {
     const desired = loadContentModeForSession(sessionFile);
     const busy = useShellStore.getState().running;
     if (desired === "terminal" && !busy && sessionFile?.trim()) {
-      showSurfaceMask();
+      holdBlankRef.current = false;
+      pendingScrollBottomRef.current = false;
+      setTimelineReady(true);
+      // Snapshot already has the new sessionFile — mount only that identity under mask.
       setContentMode("terminal", { persist: false });
+      maskExpectsSessionRef.current = normSessionPath(sessionFile);
+      window.requestAnimationFrame(() => {
+        if (useShellStore.getState().contentMode !== "terminal") return;
+        setTerminalSurfaceActive(true);
+      });
       return;
     }
+    setTerminalSurfaceActive(false);
     if (useShellStore.getState().contentMode !== "chat") {
       setContentMode("chat", { persist: false });
     }
@@ -1569,6 +1613,20 @@ function App() {
     setSidebarOpen(false);
   }
 
+  /**
+   * After package install/enable/remove/update, re-read models.json + extension
+   * providers so composer model list stays current without a manual packages-page button.
+   */
+  async function reloadModelsAfterPackageChange(): Promise<void> {
+    try {
+      await window.pix.models.refreshCatalog().catch(() => window.pix.models.list());
+      await refreshComposerModels().catch(() => undefined);
+      acceptSnapshot(await window.pix.host.snapshot());
+    } catch {
+      // Non-fatal: package op already succeeded.
+    }
+  }
+
   async function installPackage(
     source: string,
     scope: "global" | "project",
@@ -1590,6 +1648,7 @@ function App() {
       );
       acceptSnapshot(await window.pix.host.snapshot());
       await refreshPiStatus({ ensure: false });
+      await reloadModelsAfterPackageChange();
     } catch (error) {
       reportAppError(error, t(loc, "packages.status.installFailed"));
       throw error;
@@ -1609,24 +1668,10 @@ function App() {
       );
       acceptSnapshot(await window.pix.host.snapshot());
       await refreshPiStatus({ ensure: false });
+      await reloadModelsAfterPackageChange();
     } catch (error) {
       reportAppError(error, t(loc, "packages.status.enableFailed"));
       throw error;
-    } finally {
-      setEcoLoading(false);
-    }
-  }
-
-  async function refreshModelCatalogFromPackages() {
-    const loc = useShellStore.getState().locale;
-    setEcoLoading(true);
-    try {
-      await ensureHost();
-      await window.pix.models.refreshCatalog();
-      setStatus(t(loc, "packages.status.catalogRefreshed"));
-      acceptSnapshot(await window.pix.host.snapshot());
-    } catch (error) {
-      reportAppError(error, t(loc, "packages.status.catalogRefreshFailed"));
     } finally {
       setEcoLoading(false);
     }
@@ -1642,6 +1687,7 @@ function App() {
       setStatus(t(loc, "packages.status.removed"));
       acceptSnapshot(await window.pix.host.snapshot());
       await refreshPiStatus({ ensure: false });
+      await reloadModelsAfterPackageChange();
     } catch (error) {
       reportAppError(error, t(loc, "packages.status.removeFailed"));
       throw error;
@@ -1664,6 +1710,7 @@ function App() {
       setStatus(t(loc, "packages.status.updated"));
       acceptSnapshot(await window.pix.host.snapshot());
       await refreshPiStatus({ ensure: false });
+      await reloadModelsAfterPackageChange();
     } catch (error) {
       reportAppError(error, t(loc, "packages.status.updateFailed"));
       throw error;
@@ -2037,20 +2084,36 @@ function App() {
   async function switchThread(sessionPath: string, projectCwd?: string) {
     // Tab-like switch: never abort. Main parks a busy host and may promote a parked one.
     switchingSessionRef.current = true;
-    // Leave any embedded TUI (active or suspended) so we never dual-attach sessions.
-    // Cover while tearing down — UI flip must NOT persist, or the outgoing session
-    // would forget it was left in terminal mode.
-    if (useShellStore.getState().contentMode === "terminal") {
-      showSurfaceMask();
+    const fromMode = useShellStore.getState().contentMode;
+    // Best-effort target mode from prefs (sessionPath is the session file).
+    const targetModePref = loadContentModeForSession(sessionPath);
+    const stayTerminal = fromMode === "terminal" && targetModePref === "terminal";
+    const landTerminal = targetModePref === "terminal";
+
+    // Mask only when landing on terminal (chat→terminal or terminal→terminal).
+    // Sync cover + unmount previous TUI so old session canvas cannot paint.
+    // Mask stays until the *new* session's PiTuiTerminal onReady.
+    if (landTerminal) {
+      showSurfaceMask(fromMode === "terminal" ? "session" : "view", sessionPath);
+    }
+
+    // Terminal → chat: leave TUI (no mask). Terminal → terminal: chrome stays; TUI already unmounted.
+    if (fromMode === "terminal" && !stayTerminal) {
       setContentMode("chat", { persist: false });
+      try {
+        await window.pix.terminal.dispose();
+      } catch {
+        // ignore
+      }
     }
-    try {
-      await window.pix.terminal.dispose();
-    } catch {
-      // ignore if never opened
+    // Chat blank-hold only when landing in (or passing through) chat — not terminal hops.
+    if (!stayTerminal) {
+      markSessionOpenForBottomScroll();
+    } else {
+      holdBlankRef.current = false;
+      pendingScrollBottomRef.current = false;
+      setTimelineReady(true);
     }
-    // Blank immediately: no empty-hero, no project protrusion, no stale messages.
-    markSessionOpenForBottomScroll();
     setEvents([]);
     setSentPrompts([]);
     // Drop prior history so empty chrome cannot paint even if ready flips early.
@@ -2154,10 +2217,12 @@ function App() {
       // Restore this session's remembered surface (chat vs terminal).
       const landedFile = opened.snapshot.sessionFile?.trim() || sessionPath;
       restoreSessionContentMode(landedFile);
+      // Chat landings never need a mask (and landTerminal false never showed one).
+      // If we expected terminal but restored chat (e.g. busy), drop any cover.
+      // Terminal: mask stays until PiTuiTerminal onReady.
       if (useShellStore.getState().contentMode !== "terminal") {
         window.requestAnimationFrame(() => hideSurfaceMask());
       }
-      // terminal: mask stays until PiTuiTerminal onReady
     } catch (error) {
       reportAppError(error, "无法打开会话");
       holdBlankRef.current = false;
@@ -2191,25 +2256,30 @@ function App() {
       reportAppError(new Error("Agent busy"), t(locale, "contentMode.waitForTurn"));
       return;
     }
-    // Kill any prior TUI process before mounting — never attach a leftover buffer.
-    try {
-      await window.pix.terminal.dispose();
-    } catch {
-      // ignore
-    }
-    showSurfaceMask();
+    // Do not dispose here — open() resumes a suspended same-session PTY for instant enter.
+    // Cross-session replace/park is handled inside terminal.open.
+    showSurfaceMask("view", sessionFile);
+    holdBlankRef.current = false;
+    pendingScrollBottomRef.current = false;
+    setTimelineReady(true);
     setContentMode("terminal");
+    // Mount under mask; onReady lifts it.
+    window.requestAnimationFrame(() => {
+      if (useShellStore.getState().contentMode !== "terminal") return;
+      setTerminalSurfaceActive(true);
+    });
   }
 
   async function leaveTerminalMode() {
-    showSurfaceMask();
+    // No mask: chat paints fast enough. Drop TUI first so the canvas cannot flash.
+    setTerminalSurfaceActive(false);
+    setContentMode("chat");
     try {
-      // Always kill the TUI process — never leave a suspended buffer that can
-      // flash into another session on the next open.
-      const disposed = await window.pix.terminal.dispose();
+      // Suspend (keep process warm) so re-entering this session is instant.
+      const suspended = await window.pix.terminal.suspend();
       const store = useShellStore.getState();
       const sessionFile =
-        disposed.sessionFile?.trim() || store.snapshot?.sessionFile?.trim() || undefined;
+        suspended.sessionFile?.trim() || store.snapshot?.sessionFile?.trim() || undefined;
       if (sessionFile) {
         const opened = await window.pix.session.switch(sessionFile);
         applySessionOpen(opened);
@@ -2222,13 +2292,6 @@ function App() {
       } catch {
         // ignore
       }
-    } finally {
-      setContentMode("chat");
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          hideSurfaceMask();
-        });
-      });
     }
   }
 
@@ -2509,8 +2572,13 @@ function App() {
             ref={threadColumnRef}
             className="main-column relative flex h-full min-w-0 flex-1 flex-col"
           >
-            {/* Title only when content is ready and the session has messages. */}
-            {timelineReady && hasActivity ? (
+            {/*
+              Chat: title only when timeline is ready and has messages.
+              Terminal: always show header so chat⇄TUI toggle never disappears
+              (session switch into terminal leaves timelineReady false because
+              MessageScroller is unmounted and the blank-hold effect never settles).
+            */}
+            {contentMode === "terminal" || (timelineReady && hasActivity) ? (
               <ThreadHeader
                 locale={locale}
                 title={threadTitle}
@@ -2518,7 +2586,9 @@ function App() {
                 workspacePath={workspacePath}
                 sessionId={snapshot?.sessionId}
                 collapsed={sidebarCollapsed}
-                envToggleVisible={Boolean(workspacePath) && envPanelFits}
+                envToggleVisible={
+                  contentMode !== "terminal" && Boolean(workspacePath) && envPanelFits
+                }
                 onToggleContentMode={() => void toggleContentModeSurface()}
               />
             ) : null}
@@ -2531,32 +2601,39 @@ function App() {
             */}
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {/*
-                Terminal mode: full content surface is real pi TUI (PTY).
-                Chat mode: MessageScroller timeline + sticky composer.
+                Terminal mode: pi TUI fills the pane *below* ThreadHeader (not full
+                window). Chat mode: MessageScroller timeline + sticky composer.
               */}
               {contentMode === "terminal" &&
               snapshot?.sessionFile?.trim() &&
               (snapshot.cwd?.trim() || workspacePath?.trim()) ? (
                 <div
-                  className="thread-pane flex min-h-0 min-w-0 flex-1 flex-col"
+                  className="thread-pane thread-pane-terminal flex min-h-0 min-w-0 flex-1 flex-col"
                   data-content-mode="terminal"
                   data-testid="thread-terminal-surface"
+                  style={{
+                    background: resolveTerminalTheme(loadTerminalPrefs(), colorMode).background,
+                  }}
                 >
-                  <PiTuiTerminal
-                    key={snapshot.sessionFile}
-                    sessionFile={snapshot.sessionFile}
-                    cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
-                    colorMode={colorMode}
-                    className="min-h-0 flex-1 p-2"
-                    onReady={() => hideSurfaceMask()}
-                    onOpenError={(error) => {
-                      reportAppError(error, t(locale, "contentMode.openFailed"));
-                      // Keep per-session terminal preference so the user can retry.
-                      setContentMode("chat", { persist: false });
-                      hideSurfaceMask();
-                    }}
-                    onProcessExit={() => void leaveTerminalMode()}
-                  />
+                  {/* Unmounted while switching so previous session canvas is gone under the mask. */}
+                  {terminalSurfaceActive ? (
+                    <PiTuiTerminal
+                      key={snapshot.sessionFile}
+                      sessionFile={snapshot.sessionFile}
+                      cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
+                      colorMode={colorMode}
+                      className="min-h-0 flex-1 p-2"
+                      onReady={(info) => hideSurfaceMask(info.sessionFile)}
+                      onOpenError={(error) => {
+                        reportAppError(error, t(locale, "contentMode.openFailed"));
+                        // Keep per-session terminal preference so the user can retry.
+                        setContentMode("chat", { persist: false });
+                        setTerminalSurfaceActive(false);
+                        hideSurfaceMask();
+                      }}
+                      onProcessExit={() => void leaveTerminalMode()}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="thread-pane">
@@ -2808,7 +2885,11 @@ function App() {
 
               {surfaceMask ? (
                 <SurfaceTransitionOverlay
-                  status={t(locale, "contentMode.switching")}
+                  status={
+                    surfaceMaskKind === "session"
+                      ? t(locale, "contentMode.switchingSession")
+                      : t(locale, "contentMode.switching")
+                  }
                   variant={contentMode === "terminal" ? "terminal" : "chat"}
                 />
               ) : null}
@@ -2843,7 +2924,6 @@ function App() {
             onUpdate={(source) => updatePackages(source)}
             onCheckUpdates={() => checkPackageUpdates()}
             onSetEnabled={(source, scope, enabled) => setPackageEnabled(source, scope, enabled)}
-            onRefreshCatalog={() => void refreshModelCatalogFromPackages()}
           />
         ) : view === "resources" ? (
           <ResourcesPage
@@ -3105,7 +3185,6 @@ function PackagesPage(props: {
     Array<{ source: string; displayName: string; type: "npm" | "git"; scope: "global" | "project" }>
   >;
   onSetEnabled: (source: string, scope: "global" | "project", enabled: boolean) => Promise<void>;
-  onRefreshCatalog: () => void;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
     t(props.locale, key, vars);
@@ -3314,16 +3393,6 @@ function PackagesPage(props: {
           </button>
           {tab === "installed" ? (
             <>
-              <button
-                type="button"
-                className="btn-secondary"
-                data-testid="packages-refresh-catalog"
-                onClick={() => props.onRefreshCatalog()}
-                disabled={props.loading || busy}
-                title={tr("packages.refreshCatalogHint")}
-              >
-                {tr("packages.refreshCatalog")}
-              </button>
               <button
                 type="button"
                 className="btn-secondary"
@@ -3565,8 +3634,7 @@ function PackagesPage(props: {
                           <span className="chip">{item.kind}</span>
                           <button
                             type="button"
-                            className="btn-package-enable"
-                            data-on={item.enabled ? "true" : "false"}
+                            className="btn-secondary btn-sm"
                             data-testid={`package-enable-${item.scope}-${item.source}`}
                             disabled={props.loading || busy}
                             onClick={() =>

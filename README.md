@@ -2,6 +2,20 @@
 
 Pix is a desktop shell for the [pi](https://pi.dev) coding agent: a Codex-style UI that keeps configuration, packages, sessions, and tools on the native pi side (`~/.pi/agent`).
 
+## Screenshots
+
+Empty conversation — start without a project:
+
+![Empty conversation](./assets/screenshots/empty-conversation.png)
+
+Chat session with sidebar, timeline, and composer:
+
+![Chat session](./assets/screenshots/chat-session.png)
+
+Embedded pi TUI (terminal mode) for the same session:
+
+![Terminal session](./assets/screenshots/terminal-session.png)
+
 ## Requirements
 
 - Node.js 22.19 or newer
