@@ -40,8 +40,10 @@ import {
   type EnvPanelLayoutMode,
 } from "./components/EnvPanel.tsx";
 import { BootstrapOverlay } from "./components/BootstrapOverlay.tsx";
+import { SurfaceTransitionOverlay } from "./components/SurfaceTransitionOverlay.tsx";
 import { PixLogo } from "./components/PixLogo.tsx";
 import { ThreadHeader } from "./components/ThreadHeader.tsx";
+import { PiTuiTerminal } from "./components/PiTuiTerminal.tsx";
 import { WindowCaptionButtons } from "./components/WindowCaptionButtons.tsx";
 import {
   TimelineLiveStatus,
@@ -82,10 +84,12 @@ import { loadNotificationPrefs } from "./lib/notification-prefs.ts";
 import { installOverlayScroll, syncOverlayScroll } from "./lib/overlay-scroll.ts";
 import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
 import { matchShortcut, SHORTCUT_OVERRIDES_CHANGED_EVENT } from "./lib/shortcuts.ts";
+import { loadContentModeForSession } from "./lib/content-mode-prefs.ts";
 import {
   filterRecentWorkspaces,
   firstLine,
   isNonProjectWorkspacePath,
+  mergeRecentWithOpenProject,
   prependRecentPath,
   workspaceLabel,
 } from "./lib/workspace.ts";
@@ -216,7 +220,56 @@ function App() {
   const settingsSection = useShellStore((s) => s.settingsSection);
   const paletteOpen = useShellStore((s) => s.paletteOpen);
   const contentMode = useShellStore((s) => s.contentMode);
-  const toggleContentMode = useShellStore((s) => s.toggleContentMode);
+  const setContentMode = useShellStore((s) => s.setContentMode);
+  /**
+   * Opaque cover while chat ⇄ terminal (or terminal session bind) is in flight.
+   * Prevents a one-frame paint of the previous surface / previous session TUI.
+   */
+  const [surfaceMask, setSurfaceMask] = useState(false);
+  const surfaceMaskTimerRef = useRef<number | null>(null);
+
+  function clearSurfaceMaskTimer() {
+    if (surfaceMaskTimerRef.current != null) {
+      window.clearTimeout(surfaceMaskTimerRef.current);
+      surfaceMaskTimerRef.current = null;
+    }
+  }
+
+  /**
+   * Opaque cover over the content column. Stays up until hideSurfaceMask —
+   * PiTuiTerminal.onReady / chat settle / error paths. Long safety timeout only.
+   */
+  function showSurfaceMask() {
+    clearSurfaceMaskTimer();
+    setSurfaceMask(true);
+    // Safety only — real unmask is onReady / chat settle. Do not lift early.
+    surfaceMaskTimerRef.current = window.setTimeout(() => {
+      surfaceMaskTimerRef.current = null;
+      setSurfaceMask(false);
+    }, 12_000);
+  }
+
+  function hideSurfaceMask() {
+    clearSurfaceMaskTimer();
+    setSurfaceMask(false);
+  }
+
+  /**
+   * Restore chat vs terminal for a session after open/switch.
+   * Does not persist — the map is the authority; this only drives the UI.
+   */
+  function restoreSessionContentMode(sessionFile: string | undefined) {
+    const desired = loadContentModeForSession(sessionFile);
+    const busy = useShellStore.getState().running;
+    if (desired === "terminal" && !busy && sessionFile?.trim()) {
+      showSurfaceMask();
+      setContentMode("terminal", { persist: false });
+      return;
+    }
+    if (useShellStore.getState().contentMode !== "chat") {
+      setContentMode("chat", { persist: false });
+    }
+  }
 
   const setStatus = useShellStore((s) => s.setStatus);
   const setEvents = useShellStore((s) => s.setEvents);
@@ -1619,17 +1672,38 @@ function App() {
     }
   }
 
+  async function checkPackageUpdates(): Promise<
+    Array<{ source: string; displayName: string; type: "npm" | "git"; scope: "global" | "project" }>
+  > {
+    const loc = useShellStore.getState().locale;
+    setEcoLoading(true);
+    setStatus(t(loc, "packages.status.checkingUpdates"));
+    try {
+      const updates = await window.pix.packages.checkUpdates();
+      setStatus(
+        updates.length === 0
+          ? t(loc, "packages.updateCheckedNone")
+          : t(loc, "packages.updateAvailableCount", { n: String(updates.length) }),
+      );
+      return updates;
+    } catch (error) {
+      reportAppError(error, t(loc, "packages.status.checkUpdatesFailed"));
+      throw error;
+    } finally {
+      setEcoLoading(false);
+    }
+  }
+
   async function refreshRecentWorkspaces() {
     try {
       const listed = await window.pix.workspace.listRecent();
-      // Exclude only the explicitly selected project (shown via workspacePath).
-      // Do NOT exclude snapshot.cwd — during global 新建会话 the snapshot may still
-      // be the old project for a tick, and filtering it out makes the rail flash empty.
       // Read from ref so callers that just cleared selection don't exclude the old project.
       const selected = asProjectPath(selectedWorkspacePathRef.current);
-      setRecentWorkspaces(
-        filterRecentWorkspaces(listed, selected ? { current: selected, max: 12 } : { max: 12 }),
-      );
+      // Keep the open project inside `recent` as well (partitionProjects dedupes with
+      // workspacePath). Otherwise project→对话 switch clears selection while recent
+      // still excludes "current", and project sessions flash under 对话 for a frame.
+      const filtered = filterRecentWorkspaces(listed, { max: 12 });
+      setRecentWorkspaces(mergeRecentWithOpenProject(filtered, selected, 12));
     } catch {
       // Keep the previous list — never wipe the rail on a transient listRecent failure.
     }
@@ -1963,6 +2037,18 @@ function App() {
   async function switchThread(sessionPath: string, projectCwd?: string) {
     // Tab-like switch: never abort. Main parks a busy host and may promote a parked one.
     switchingSessionRef.current = true;
+    // Leave any embedded TUI (active or suspended) so we never dual-attach sessions.
+    // Cover while tearing down — UI flip must NOT persist, or the outgoing session
+    // would forget it was left in terminal mode.
+    if (useShellStore.getState().contentMode === "terminal") {
+      showSurfaceMask();
+      setContentMode("chat", { persist: false });
+    }
+    try {
+      await window.pix.terminal.dispose();
+    } catch {
+      // ignore if never opened
+    }
     // Blank immediately: no empty-hero, no project protrusion, no stale messages.
     markSessionOpenForBottomScroll();
     setEvents([]);
@@ -1997,6 +2083,16 @@ function App() {
       const sameCwd =
         Boolean(currentCwd) && normalizeCwdKey(currentCwd!) === normalizeCwdKey(targetCwd);
       const needWorkspaceSwitch = !hostReady || !sameCwd;
+
+      // Leaving a project for pure conversation: promote project into recent BEFORE
+      // selection clears (same pattern as newBlankTask). Otherwise projectKeys empties
+      // for a frame and every project session floods the 对话 section.
+      const prevProject =
+        asProjectPath(selectedWorkspacePathRef.current) ?? asProjectPath(currentCwd);
+      const targetProject = asProjectPath(targetCwd);
+      if (prevProject && !targetProject) {
+        setRecentWorkspaces((prev) => prependRecentPath(prev, prevProject, 12));
+      }
 
       // Optimistic: only flip `active` flags — never empty lists or collapse projects.
       const markActive = (list: SessionThreadSummary[]) =>
@@ -2036,7 +2132,12 @@ function App() {
       applySessionOpen(opened);
       useShellStore.getState().syncForegroundRunning();
       const cwd = opened.snapshot.cwd || targetCwd;
-      selectWorkspacePath(asProjectPath(cwd));
+      // If we land on conversation home, keep prev project on the rail (selection → undefined).
+      const nextProject = asProjectPath(cwd);
+      if (!nextProject && prevProject) {
+        setRecentWorkspaces((prev) => prependRecentPath(prev, prevProject, 12));
+      }
+      selectWorkspacePath(nextProject);
       if (cwd) {
         setThreadsByCwd((prev) => ({
           ...prev,
@@ -2050,16 +2151,106 @@ function App() {
       // End switch gate, then bump reveal so settle runs with final history.
       switchingSessionRef.current = false;
       requestContentReveal();
+      // Restore this session's remembered surface (chat vs terminal).
+      const landedFile = opened.snapshot.sessionFile?.trim() || sessionPath;
+      restoreSessionContentMode(landedFile);
+      if (useShellStore.getState().contentMode !== "terminal") {
+        window.requestAnimationFrame(() => hideSurfaceMask());
+      }
+      // terminal: mask stays until PiTuiTerminal onReady
     } catch (error) {
       reportAppError(error, "无法打开会话");
       holdBlankRef.current = false;
       pendingScrollBottomRef.current = false;
       setTimelineReady(true);
       void refreshThreads();
+      hideSurfaceMask();
     } finally {
       switchingSessionRef.current = false;
     }
   }
+
+  /**
+   * Terminal mode = real pi TUI via PTY (`pi --session <file>`), not CSS skin.
+   * Enter only flips contentMode + mask; PiTuiTerminal opens the PTY after it
+   * has subscribed to data (avoids previous-session flash).
+   */
+  async function enterTerminalMode() {
+    const store = useShellStore.getState();
+    const sessionFile = store.snapshot?.sessionFile?.trim();
+    const cwd = store.snapshot?.cwd?.trim() || workspacePath?.trim() || undefined;
+    if (!sessionFile) {
+      reportAppError(new Error("No session file"), t(locale, "contentMode.needSession"));
+      return;
+    }
+    if (!cwd) {
+      reportAppError(new Error("No workspace cwd"), t(locale, "contentMode.needSession"));
+      return;
+    }
+    if (store.running) {
+      reportAppError(new Error("Agent busy"), t(locale, "contentMode.waitForTurn"));
+      return;
+    }
+    // Kill any prior TUI process before mounting — never attach a leftover buffer.
+    try {
+      await window.pix.terminal.dispose();
+    } catch {
+      // ignore
+    }
+    showSurfaceMask();
+    setContentMode("terminal");
+  }
+
+  async function leaveTerminalMode() {
+    showSurfaceMask();
+    try {
+      // Always kill the TUI process — never leave a suspended buffer that can
+      // flash into another session on the next open.
+      const disposed = await window.pix.terminal.dispose();
+      const store = useShellStore.getState();
+      const sessionFile =
+        disposed.sessionFile?.trim() || store.snapshot?.sessionFile?.trim() || undefined;
+      if (sessionFile) {
+        const opened = await window.pix.session.switch(sessionFile);
+        applySessionOpen(opened);
+        requestContentReveal();
+      }
+    } catch (error) {
+      reportAppError(error, t(locale, "contentMode.closeFailed"));
+      try {
+        await window.pix.terminal.dispose();
+      } catch {
+        // ignore
+      }
+    } finally {
+      setContentMode("chat");
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          hideSurfaceMask();
+        });
+      });
+    }
+  }
+
+  async function toggleContentModeSurface() {
+    if (useShellStore.getState().contentMode === "terminal") {
+      await leaveTerminalMode();
+    } else {
+      await enterTerminalMode();
+    }
+  }
+
+  // Preference may restore "terminal" without a session — fall back to chat.
+  // PTY open is owned by PiTuiTerminal (subscribe-then-open).
+  useEffect(() => {
+    if (contentMode !== "terminal") return;
+    const sessionFile = snapshot?.sessionFile?.trim();
+    const cwd = snapshot?.cwd?.trim() || workspacePath?.trim();
+    if (!sessionFile || !cwd) {
+      setContentMode("chat");
+      hideSurfaceMask();
+    }
+  }, [contentMode, snapshot?.sessionFile, snapshot?.cwd, workspacePath, setContentMode]);
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -2120,7 +2311,7 @@ function App() {
             if (!envPanelFits || !workspacePath || !hasActivity) return;
             setEnvPanelOpen((open) => !open);
           },
-          toggleContentMode: () => toggleContentMode(),
+          toggleContentMode: () => void toggleContentModeSurface(),
         },
         locale,
       ),
@@ -2189,7 +2380,7 @@ function App() {
           setEnvPanelOpen((open) => !open);
           break;
         case "toggle-content-mode":
-          toggleContentMode();
+          void toggleContentModeSurface();
           break;
         default:
           break;
@@ -2328,6 +2519,7 @@ function App() {
                 sessionId={snapshot?.sessionId}
                 collapsed={sidebarCollapsed}
                 envToggleVisible={Boolean(workspacePath) && envPanelFits}
+                onToggleContentMode={() => void toggleContentModeSurface()}
               />
             ) : null}
 
@@ -2339,261 +2531,299 @@ function App() {
             */}
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {/*
-                Scrollport = full main column (below title, full right pane height).
-                Floating scrollbar track spans the whole app content column — not just
-                the message stack above the composer.
-                Messages + composer share one `.thread-content-column` (same width/edges).
-                Composer is sticky to the bottom of that full-height scrollport.
+                Terminal mode: full content surface is real pi TUI (PTY).
+                Chat mode: MessageScroller timeline + sticky composer.
               */}
-              <div className="thread-pane">
-                <MessageScrollerProvider
-                  autoScroll={timelineReady && hasActivity}
-                  defaultScrollPosition="end"
-                  scrollEdgeThreshold={SCROLL_BOTTOM_GAP_PX}
+              {contentMode === "terminal" &&
+              snapshot?.sessionFile?.trim() &&
+              (snapshot.cwd?.trim() || workspacePath?.trim()) ? (
+                <div
+                  className="thread-pane flex min-h-0 min-w-0 flex-1 flex-col"
+                  data-content-mode="terminal"
+                  data-testid="thread-terminal-surface"
                 >
-                  <MessageScroller className="size-full min-h-0">
-                    <MessageScrollerViewport
-                      ref={timelineScrollRef}
-                      className={cn(
-                        "timeline-scroll thread-pane-scroll size-full min-h-0",
-                        !timelineReady && "invisible pointer-events-none",
-                      )}
-                      aria-busy={!timelineReady}
-                      data-ready={timelineReady ? "true" : "false"}
-                    >
-                      {/*
+                  <PiTuiTerminal
+                    key={snapshot.sessionFile}
+                    sessionFile={snapshot.sessionFile}
+                    cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
+                    colorMode={colorMode}
+                    className="min-h-0 flex-1 p-2"
+                    onReady={() => hideSurfaceMask()}
+                    onOpenError={(error) => {
+                      reportAppError(error, t(locale, "contentMode.openFailed"));
+                      // Keep per-session terminal preference so the user can retry.
+                      setContentMode("chat", { persist: false });
+                      hideSurfaceMask();
+                    }}
+                    onProcessExit={() => void leaveTerminalMode()}
+                  />
+                </div>
+              ) : (
+                <div className="thread-pane">
+                  <MessageScrollerProvider
+                    autoScroll={timelineReady && hasActivity}
+                    defaultScrollPosition="end"
+                    scrollEdgeThreshold={SCROLL_BOTTOM_GAP_PX}
+                  >
+                    <MessageScroller className="size-full min-h-0">
+                      <MessageScrollerViewport
+                        ref={timelineScrollRef}
+                        className={cn(
+                          "timeline-scroll thread-pane-scroll size-full min-h-0",
+                          !timelineReady && "invisible pointer-events-none",
+                        )}
+                        aria-busy={!timelineReady}
+                        data-ready={timelineReady ? "true" : "false"}
+                      >
+                        {/*
                         MessageScrollerItems MUST be direct children of Content.
                         Nesting them under `.thread-messages` broke MutationObserver /
                         item-count / scroll-height math (mid-stream collapse).
                       */}
-                      <MessageScrollerContent
-                        className={cn(
-                          "thread-content-column thread-content-column-stack gap-0",
-                          hasActivity && "thread-messages-active pt-6 pb-0",
-                          contentMode === "terminal" && "thread-content-terminal",
-                        )}
-                        data-testid="timeline"
-                        data-content-mode={contentMode}
-                      >
-                        {hasActivity ? (
-                          <>
-                            {timelineBlocks.map((block) => {
-                              const messageId = block.type === "process" ? block.id : block.item.id;
-                              return (
+                        <MessageScrollerContent
+                          className={cn(
+                            "thread-content-column thread-content-column-stack gap-0",
+                            hasActivity && "thread-messages-active pt-6 pb-0",
+                          )}
+                          data-testid="timeline"
+                          data-content-mode="chat"
+                        >
+                          {hasActivity ? (
+                            <>
+                              {timelineBlocks.map((block) => {
+                                const messageId =
+                                  block.type === "process" ? block.id : block.item.id;
+                                return (
+                                  <MessageScrollerItem
+                                    key={messageId}
+                                    messageId={messageId}
+                                    // Do not use scrollAnchor during agent turns: pin-to-user-message
+                                    // + spacer math fights streaming growth and collapses earlier rows.
+                                    // autoScroll following-bottom is enough for chat.
+                                    scrollAnchor={false}
+                                    className="w-full"
+                                  >
+                                    {block.type === "process" ? (
+                                      <TimelineProcessBlock
+                                        locale={locale}
+                                        items={block.items}
+                                        open={block.open}
+                                        running={running}
+                                        waiting={waitingForInput}
+                                        {...(block.open && liveActivity?.phase
+                                          ? { livePhase: liveActivity.phase }
+                                          : {})}
+                                        {...(block.startedAt ? { startedAt: block.startedAt } : {})}
+                                        {...(block.endedAt ? { endedAt: block.endedAt } : {})}
+                                        {...(block.durationLabel
+                                          ? { durationLabel: block.durationLabel }
+                                          : {})}
+                                        {...(workspacePath ? { workspacePath } : {})}
+                                      />
+                                    ) : (
+                                      <TimelineRow
+                                        item={block.item}
+                                        locale={locale}
+                                        workspacePath={workspacePath}
+                                        editingLocked={running}
+                                        onEditUser={(item, text) =>
+                                          void editUserAndResend(item, text)
+                                        }
+                                        onForkAssistant={(item) => {
+                                          // pi fork: new session file from this assistant entry.
+                                          void forkThread(item.entryId);
+                                        }}
+                                      />
+                                    )}
+                                  </MessageScrollerItem>
+                                );
+                              })}
+                              {showLiveStatus && liveActivity ? (
                                 <MessageScrollerItem
-                                  key={messageId}
-                                  messageId={messageId}
-                                  // Do not use scrollAnchor during agent turns: pin-to-user-message
-                                  // + spacer math fights streaming growth and collapses earlier rows.
-                                  // autoScroll following-bottom is enough for chat.
-                                  scrollAnchor={false}
+                                  messageId={`${sessionKey || "live"}:live-status`}
                                   className="w-full"
                                 >
-                                  {block.type === "process" ? (
-                                    <TimelineProcessBlock
-                                      locale={locale}
-                                      items={block.items}
-                                      open={block.open}
-                                      running={running}
-                                      waiting={waitingForInput}
-                                      {...(block.open && liveActivity?.phase
-                                        ? { livePhase: liveActivity.phase }
-                                        : {})}
-                                      {...(block.startedAt ? { startedAt: block.startedAt } : {})}
-                                      {...(block.endedAt ? { endedAt: block.endedAt } : {})}
-                                      {...(block.durationLabel
-                                        ? { durationLabel: block.durationLabel }
-                                        : {})}
-                                      {...(workspacePath ? { workspacePath } : {})}
-                                    />
-                                  ) : (
-                                    <TimelineRow
-                                      item={block.item}
-                                      locale={locale}
-                                      workspacePath={workspacePath}
-                                      editingLocked={running}
-                                      onEditUser={(item, text) =>
-                                        void editUserAndResend(item, text)
-                                      }
-                                      onForkAssistant={(item) => {
-                                        // pi fork: new session file from this assistant entry.
-                                        void forkThread(item.entryId);
-                                      }}
-                                    />
-                                  )}
+                                  <TimelineLiveStatus locale={locale} activity={liveActivity} />
                                 </MessageScrollerItem>
-                              );
-                            })}
-                            {showLiveStatus && liveActivity ? (
-                              <MessageScrollerItem
-                                messageId={`${sessionKey || "live"}:live-status`}
-                                className="w-full"
-                              >
-                                <TimelineLiveStatus locale={locale} activity={liveActivity} />
-                              </MessageScrollerItem>
-                            ) : null}
+                              ) : null}
+                              <div
+                                ref={timelineEndRef}
+                                className="h-px w-full shrink-0"
+                                aria-hidden
+                              />
+                            </>
+                          ) : timelineReady ? (
                             <div
-                              ref={timelineEndRef}
-                              className="h-px w-full shrink-0"
-                              aria-hidden
-                            />
-                          </>
-                        ) : timelineReady ? (
-                          <div
-                            className="thread-messages empty flex min-h-full flex-1 flex-col items-center justify-center px-4 text-center"
-                            data-testid="empty-hero"
-                          >
-                            <PixLogo className="mb-5 size-12" title={t(locale, "app.name")} />
-                            <h1 className="m-0 max-w-lg text-[26px] leading-snug font-semibold tracking-[-0.03em] text-[var(--text)]">
-                              {workspacePath
-                                ? t(locale, "empty.title", { name: workspace.name })
-                                : isPureConversation || snapshot || pendingPureConversation
-                                  ? t(locale, "empty.titleConversation")
-                                  : t(locale, "empty.titleNoWorkspace")}
-                            </h1>
-                            {!workspacePath ? (
-                              <p className="mt-3 max-w-md text-[13px] text-[var(--muted-foreground)]">
-                                {isPureConversation || snapshot || pendingPureConversation
-                                  ? t(locale, "empty.subtitleConversation")
-                                  : t(locale, "empty.subtitleNoWorkspace")}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : null}
+                              className="thread-messages empty flex min-h-full flex-1 flex-col items-center justify-center px-4 text-center"
+                              data-testid="empty-hero"
+                            >
+                              <PixLogo className="mb-5 size-12" title={t(locale, "app.name")} />
+                              <h1 className="m-0 max-w-lg text-[26px] leading-snug font-semibold tracking-[-0.03em] text-[var(--text)]">
+                                {workspacePath
+                                  ? t(locale, "empty.title", { name: workspace.name })
+                                  : isPureConversation || snapshot || pendingPureConversation
+                                    ? t(locale, "empty.titleConversation")
+                                    : t(locale, "empty.titleNoWorkspace")}
+                              </h1>
+                              {!workspacePath ? (
+                                <p className="mt-3 max-w-md text-[13px] text-[var(--muted-foreground)]">
+                                  {isPureConversation || snapshot || pendingPureConversation
+                                    ? t(locale, "empty.subtitleConversation")
+                                    : t(locale, "empty.subtitleNoWorkspace")}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
 
-                        {/*
+                          {/*
                           mt-auto pins the dock to the bottom of the min-h-full column when
                           messages are short; sticky keeps it glued to the scrollport bottom
                           while scrolling long threads. (Flattened MessageScroller items no
                           longer provide a flex-1 message wrapper that used to push this down.)
                         */}
-                        <div
-                          ref={composerDockRef}
-                          className="composer-dock pointer-events-none sticky bottom-0 z-[2] mt-auto w-full shrink-0 bg-[var(--canvas)] pt-1 pb-2"
-                          data-mode="sticky"
-                          data-testid="composer-dock"
-                        >
-                          {/*
+                          <div
+                            ref={composerDockRef}
+                            className="composer-dock pointer-events-none sticky bottom-0 z-[2] mt-auto w-full shrink-0 bg-[var(--canvas)] pt-1 pb-2"
+                            data-mode="sticky"
+                            data-testid="composer-dock"
+                          >
+                            {/*
                             Jump-to-bottom is anchored to the dock top (not the scrollport
                             bottom). Measuring dock height and using bottom:Npx was fragile —
                             a low floor (72px) parked the control inside the composer card.
                           */}
-                          {timelineReady && hasActivity ? (
-                            <MessageScrollerButton
-                              data-testid="scroll-to-bottom"
-                              direction="end"
-                              behavior="smooth"
-                              title={t(locale, "thread.scrollToBottom")}
-                              aria-label={t(locale, "thread.scrollToBottom")}
-                              className={cn(
-                                "pointer-events-auto z-20 size-7 rounded-full border border-border bg-popover text-foreground",
-                                "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
-                                // Defeat MessageScrollerButton’s default data-[direction=end]:bottom-4.
-                                "data-[direction=end]:bottom-[calc(100%+12px)]",
-                              )}
-                              style={{
-                                left: "50%",
-                                marginLeft: -14, // half of size-7 (28px)
-                              }}
-                            >
-                              <ArrowDown className="size-3.5" strokeWidth={2.25} />
-                              <span className="sr-only">{t(locale, "thread.scrollToBottom")}</span>
-                            </MessageScrollerButton>
-                          ) : null}
-                          {hasActivity && timelineReady ? (
-                            <div
-                              className="composer-dock-fade pointer-events-none absolute inset-x-0 top-0 z-[1] h-10 -translate-y-full"
-                              aria-hidden
-                            />
-                          ) : null}
-                          <Composer
-                            locale={locale}
-                            prompt={prompt}
-                            onPromptChange={setPrompt}
-                            onSubmit={(event) => void sendPrompt(event)}
-                            onAbort={() => void abort()}
-                            onKeyDown={onComposerKeyDown}
-                            running={running}
-                            composerRef={composerRef}
-                            workspacePath={workspacePath}
-                            recentWorkspaces={recentWorkspaces}
-                            onOpenProject={(path) =>
-                              void openWorkspacePath(path, { resumeRecent: true })
-                            }
-                            onAddProject={() => void openWorkspacePicker()}
-                            showProjectBar={timelineReady && !hasActivity}
-                            accessMode={accessMode}
-                            onAccessMode={applyAccessMode}
-                            accessVisibility={accessVisibility}
-                            modelOptions={modelOptions}
-                            modelValue={
-                              displayModel ? `${displayModel.provider}/${displayModel.id}` : ""
-                            }
-                            onModelChange={(provider, id) => void changeModel(provider, id)}
-                            thinkingLevel={displayThinkingLevel}
-                            thinkingLevels={displayThinkingLevels}
-                            onThinkingChange={(level) => void changeThinking(level)}
-                            speedMode={speedMode}
-                            onSpeedMode={(mode) => {
-                              setSpeedMode(mode);
-                              try {
-                                localStorage.setItem("pix.composer.speed", mode);
-                              } catch {
-                                // ignore
+                            {timelineReady && hasActivity ? (
+                              <MessageScrollerButton
+                                data-testid="scroll-to-bottom"
+                                direction="end"
+                                behavior="smooth"
+                                title={t(locale, "thread.scrollToBottom")}
+                                aria-label={t(locale, "thread.scrollToBottom")}
+                                className={cn(
+                                  "pointer-events-auto z-20 size-7 rounded-full border border-border bg-popover text-foreground",
+                                  "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
+                                  // Defeat MessageScrollerButton’s default data-[direction=end]:bottom-4.
+                                  "data-[direction=end]:bottom-[calc(100%+12px)]",
+                                )}
+                                style={{
+                                  left: "50%",
+                                  marginLeft: -14, // half of size-7 (28px)
+                                }}
+                              >
+                                <ArrowDown className="size-3.5" strokeWidth={2.25} />
+                                <span className="sr-only">
+                                  {t(locale, "thread.scrollToBottom")}
+                                </span>
+                              </MessageScrollerButton>
+                            ) : null}
+                            {hasActivity && timelineReady ? (
+                              <div
+                                className="composer-dock-fade pointer-events-none absolute inset-x-0 top-0 z-[1] h-10 -translate-y-full"
+                                aria-hidden
+                              />
+                            ) : null}
+                            <Composer
+                              locale={locale}
+                              prompt={prompt}
+                              onPromptChange={setPrompt}
+                              onSubmit={(event) => void sendPrompt(event)}
+                              onAbort={() => void abort()}
+                              onKeyDown={onComposerKeyDown}
+                              running={running}
+                              composerRef={composerRef}
+                              workspacePath={workspacePath}
+                              recentWorkspaces={recentWorkspaces}
+                              onOpenProject={(path) =>
+                                void openWorkspacePath(path, { resumeRecent: true })
                               }
-                            }}
-                            contextPercent={snapshot?.usage?.context?.percent ?? undefined}
-                            contextTokens={
-                              snapshot?.usage?.context?.tokens ??
-                              snapshot?.usage?.tokens.total ??
-                              undefined
-                            }
-                            showContextUsage={showContextUsage}
-                            projectTrusted={snapshot?.projectTrusted}
-                            runState={runState}
-                            piThemeLabel={piThemeLabel(snapshot)}
-                            attachments={attachments}
-                            onPickAttachments={pickComposerAttachments}
-                            onRemoveAttachment={(path) =>
-                              setAttachments((current) => current.filter((item) => item !== path))
-                            }
-                            onAddAttachments={(paths) =>
-                              setAttachments((current) =>
-                                [...new Set([...current, ...paths])].slice(0, 12),
-                              )
-                            }
-                            packages={packages}
-                            slashCommands={buildUnifiedSlashCatalog(snapshot, locale).map(
-                              (item) => ({
-                                name: item.name,
-                                description: item.upcoming
-                                  ? `${item.description}${t(locale, "slash.upcomingSuffix")}`
-                                  : item.description,
-                                source:
-                                  item.source === "skill" ||
-                                  item.source === "prompt" ||
-                                  item.source === "extension" ||
-                                  item.source === "builtin"
-                                    ? item.source
-                                    : "builtin",
-                                ...(item.argumentHint ? { argumentHint: item.argumentHint } : {}),
-                              }),
-                            )}
-                            queuedMessages={queuedMessages}
-                            onClearQueue={() => void clearQueuedMessages()}
-                          />
-                        </div>
-                      </MessageScrollerContent>
-                    </MessageScrollerViewport>
-                  </MessageScroller>
-                </MessageScrollerProvider>
-              </div>
+                              onAddProject={() => void openWorkspacePicker()}
+                              showProjectBar={timelineReady && !hasActivity}
+                              accessMode={accessMode}
+                              onAccessMode={applyAccessMode}
+                              accessVisibility={accessVisibility}
+                              modelOptions={modelOptions}
+                              modelValue={
+                                displayModel ? `${displayModel.provider}/${displayModel.id}` : ""
+                              }
+                              onModelChange={(provider, id) => void changeModel(provider, id)}
+                              thinkingLevel={displayThinkingLevel}
+                              thinkingLevels={displayThinkingLevels}
+                              onThinkingChange={(level) => void changeThinking(level)}
+                              speedMode={speedMode}
+                              onSpeedMode={(mode) => {
+                                setSpeedMode(mode);
+                                try {
+                                  localStorage.setItem("pix.composer.speed", mode);
+                                } catch {
+                                  // ignore
+                                }
+                              }}
+                              contextPercent={snapshot?.usage?.context?.percent ?? undefined}
+                              contextTokens={
+                                snapshot?.usage?.context?.tokens ??
+                                snapshot?.usage?.tokens.total ??
+                                undefined
+                              }
+                              showContextUsage={showContextUsage}
+                              projectTrusted={snapshot?.projectTrusted}
+                              runState={runState}
+                              piThemeLabel={piThemeLabel(snapshot)}
+                              attachments={attachments}
+                              onPickAttachments={pickComposerAttachments}
+                              onRemoveAttachment={(path) =>
+                                setAttachments((current) => current.filter((item) => item !== path))
+                              }
+                              onAddAttachments={(paths) =>
+                                setAttachments((current) =>
+                                  [...new Set([...current, ...paths])].slice(0, 12),
+                                )
+                              }
+                              packages={packages}
+                              slashCommands={buildUnifiedSlashCatalog(snapshot, locale).map(
+                                (item) => ({
+                                  name: item.name,
+                                  description: item.upcoming
+                                    ? `${item.description}${t(locale, "slash.upcomingSuffix")}`
+                                    : item.description,
+                                  source:
+                                    item.source === "skill" ||
+                                    item.source === "prompt" ||
+                                    item.source === "extension" ||
+                                    item.source === "builtin"
+                                      ? item.source
+                                      : "builtin",
+                                  ...(item.argumentHint ? { argumentHint: item.argumentHint } : {}),
+                                }),
+                              )}
+                              queuedMessages={queuedMessages}
+                              onClearQueue={() => void clearQueuedMessages()}
+                            />
+                          </div>
+                        </MessageScrollerContent>
+                      </MessageScrollerViewport>
+                    </MessageScroller>
+                  </MessageScrollerProvider>
+                </div>
+              )}
+
+              {surfaceMask ? (
+                <SurfaceTransitionOverlay
+                  status={t(locale, "contentMode.switching")}
+                  variant={contentMode === "terminal" ? "terminal" : "chat"}
+                />
+              ) : null}
 
               <EnvPanel
                 locale={locale}
                 cwd={workspacePath}
                 layout={envPanelLayout}
-                open={hasActivity && Boolean(workspacePath) && envPanelOpen && envPanelFits}
+                open={
+                  contentMode !== "terminal" &&
+                  hasActivity &&
+                  Boolean(workspacePath) &&
+                  envPanelOpen &&
+                  envPanelFits
+                }
                 onOpenSettings={() => {
                   setSettingsSection("environment");
                   setView("settings");
@@ -2608,10 +2838,10 @@ function App() {
             packages={packages}
             loading={ecoLoading}
             onRefresh={() => void openPackages()}
-            onBack={() => void openThread()}
             onInstall={(source, scope, options) => installPackage(source, scope, options)}
             onRemove={(source, scope) => removePackage(source, scope)}
             onUpdate={(source) => updatePackages(source)}
+            onCheckUpdates={() => checkPackageUpdates()}
             onSetEnabled={(source, scope, enabled) => setPackageEnabled(source, scope, enabled)}
             onRefreshCatalog={() => void refreshModelCatalogFromPackages()}
           />
@@ -2621,7 +2851,6 @@ function App() {
             resources={resources}
             loading={ecoLoading}
             onRefresh={() => void openResources()}
-            onBack={() => void openThread()}
           />
         ) : (
           <SettingsPage
@@ -2865,7 +3094,6 @@ function PackagesPage(props: {
   packages: PackageSummary[];
   loading: boolean;
   onRefresh: () => void;
-  onBack: () => void;
   onInstall: (
     source: string,
     scope: "global" | "project",
@@ -2873,6 +3101,9 @@ function PackagesPage(props: {
   ) => Promise<void>;
   onRemove: (source: string, scope: "global" | "project") => Promise<void>;
   onUpdate: (source?: string) => Promise<void>;
+  onCheckUpdates: () => Promise<
+    Array<{ source: string; displayName: string; type: "npm" | "git"; scope: "global" | "project" }>
+  >;
   onSetEnabled: (source: string, scope: "global" | "project", enabled: boolean) => Promise<void>;
   onRefreshCatalog: () => void;
 }) {
@@ -2881,6 +3112,9 @@ function PackagesPage(props: {
   /** Trial install: like CLI `-e` — not written to settings. */
   const [temporary, setTemporary] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Sources known to have an available update after the last check. */
+  const [updateSources, setUpdateSources] = useState<Set<string>>(() => new Set());
+  const [updatesChecked, setUpdatesChecked] = useState(false);
   const CATALOG_PAGE = 20;
   const [tab, setTab] = useState<"installed" | "discover">("installed");
   const [catalogQuery, setCatalogQuery] = useState("");
@@ -3027,6 +3261,40 @@ function PackagesPage(props: {
     return tr("packages.discoverWeekly", { n: String(Math.round(n)) });
   }
 
+  async function runCheckUpdates() {
+    setBusy(true);
+    try {
+      const updates = await props.onCheckUpdates();
+      setUpdateSources(new Set(updates.map((u) => u.source)));
+      setUpdatesChecked(true);
+    } catch {
+      // parent reports error
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runUpdate(source?: string) {
+    setBusy(true);
+    try {
+      await props.onUpdate(source);
+      if (source) {
+        setUpdateSources((prev) => {
+          const next = new Set(prev);
+          next.delete(source);
+          return next;
+        });
+      } else {
+        setUpdateSources(new Set());
+      }
+      setUpdatesChecked(true);
+    } catch {
+      // parent reports error
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="page" data-testid="packages-page">
       <header className="page-header">
@@ -3059,17 +3327,26 @@ function PackagesPage(props: {
               <button
                 type="button"
                 className="btn-secondary"
-                data-testid="packages-update-all"
-                onClick={() => void props.onUpdate()}
+                data-testid="packages-check-updates"
+                onClick={() => void runCheckUpdates()}
                 disabled={props.loading || busy || props.packages.length === 0}
+                title={tr("packages.checkUpdatesHint")}
               >
-                {tr("packages.updateAll")}
+                {tr("packages.checkUpdates")}
               </button>
+              {updatesChecked && updateSources.size > 0 ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  data-testid="packages-update-all"
+                  onClick={() => void runUpdate()}
+                  disabled={props.loading || busy}
+                >
+                  {tr("packages.updateAllAvailable")}
+                </button>
+              ) : null}
             </>
           ) : null}
-          <button type="button" className="btn-ghost" onClick={props.onBack}>
-            {tr("packages.back")}
-          </button>
         </div>
       </header>
       <div className="page-tabs" data-testid="packages-tabs">
@@ -3245,51 +3522,92 @@ function PackagesPage(props: {
                 </div>
               ) : (
                 <div className="item-list" data-testid="packages-list">
-                  {props.packages.map((item) => (
-                    <article key={`${item.scope}:${item.source}`} className="item-card">
-                      <div className="min-w-0">
-                        <div className="title">{item.source}</div>
-                        <div className="meta">
-                          {item.installedPath ? item.installedPath : tr("packages.notResolved")}
-                          {item.filtered ? ` · ${tr("packages.filtered")}` : ""}
-                          {!item.enabled ? ` · ${tr("packages.disabled")}` : ""}
+                  {updatesChecked ? (
+                    <p className="form-hint m-0" data-testid="packages-update-summary">
+                      {updateSources.size === 0
+                        ? tr("packages.updateCheckedNone")
+                        : tr("packages.updateAvailableCount", {
+                            n: String(updateSources.size),
+                          })}
+                    </p>
+                  ) : null}
+                  {props.packages.map((item) => {
+                    const hasUpdate = updateSources.has(item.source);
+                    return (
+                      <article
+                        key={`${item.scope}:${item.source}`}
+                        className="item-card"
+                        data-enabled={item.enabled ? "true" : "false"}
+                        data-update={hasUpdate ? "true" : "false"}
+                        data-testid={`package-card-${item.scope}-${item.source}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="title">{item.source}</div>
+                          <div className="meta">
+                            {item.installedPath ? item.installedPath : tr("packages.notResolved")}
+                            {item.filtered ? ` · ${tr("packages.filtered")}` : ""}
+                          </div>
                         </div>
-                      </div>
-                      <div className="badges">
-                        <span className="chip">{item.scope}</span>
-                        <span className="chip">{item.kind}</span>
-                        <button
-                          type="button"
-                          className="btn-ghost btn-sm"
-                          data-testid={`package-enable-${item.scope}-${item.source}`}
-                          disabled={props.loading || busy}
-                          onClick={() =>
-                            void props.onSetEnabled(item.source, item.scope, !item.enabled)
-                          }
-                        >
-                          {item.enabled ? tr("packages.disable") : tr("packages.enable")}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost btn-sm"
-                          data-testid={`package-update-${item.scope}-${item.source}`}
-                          disabled={props.loading || busy || item.kind === "local"}
-                          onClick={() => void props.onUpdate(item.source)}
-                        >
-                          {tr("packages.update")}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost btn-sm danger"
-                          data-testid={`package-remove-${item.scope}-${item.source}`}
-                          disabled={props.loading || busy}
-                          onClick={() => void props.onRemove(item.source, item.scope)}
-                        >
-                          {tr("packages.remove")}
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                        <div className="badges">
+                          <span
+                            className="chip-status"
+                            data-tone={item.enabled ? "on" : "off"}
+                            data-testid={`package-status-${item.scope}-${item.source}`}
+                          >
+                            {item.enabled ? tr("packages.enabled") : tr("packages.disabled")}
+                          </span>
+                          {hasUpdate ? (
+                            <span className="chip-status" data-tone="update">
+                              {tr("packages.updateAvailable")}
+                            </span>
+                          ) : null}
+                          <span className="chip">{item.scope}</span>
+                          <span className="chip">{item.kind}</span>
+                          <button
+                            type="button"
+                            className="btn-package-enable"
+                            data-on={item.enabled ? "true" : "false"}
+                            data-testid={`package-enable-${item.scope}-${item.source}`}
+                            disabled={props.loading || busy}
+                            onClick={() =>
+                              void props.onSetEnabled(item.source, item.scope, !item.enabled)
+                            }
+                          >
+                            {item.enabled ? tr("packages.disable") : tr("packages.enable")}
+                          </button>
+                          {item.kind !== "local" ? (
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              data-testid={`package-update-${item.scope}-${item.source}`}
+                              disabled={
+                                props.loading || busy || (updatesChecked ? !hasUpdate : false)
+                              }
+                              title={
+                                updatesChecked && !hasUpdate
+                                  ? tr("packages.upToDate")
+                                  : tr("packages.update")
+                              }
+                              onClick={() => void runUpdate(item.source)}
+                            >
+                              {updatesChecked && !hasUpdate
+                                ? tr("packages.upToDate")
+                                : tr("packages.update")}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="btn-ghost btn-sm danger"
+                            data-testid={`package-remove-${item.scope}-${item.source}`}
+                            disabled={props.loading || busy}
+                            onClick={() => void props.onRemove(item.source, item.scope)}
+                          >
+                            {tr("packages.remove")}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -3305,7 +3623,6 @@ function ResourcesPage(props: {
   resources: ResourceSummary[];
   loading: boolean;
   onRefresh: () => void;
-  onBack: () => void;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
     t(props.locale, key, vars);
@@ -3322,9 +3639,6 @@ function ResourcesPage(props: {
             disabled={props.loading}
           >
             {props.loading ? tr("resources.loading") : tr("resources.refresh")}
-          </button>
-          <button type="button" className="btn-ghost" onClick={props.onBack}>
-            {tr("resources.back")}
           </button>
         </div>
       </header>

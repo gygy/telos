@@ -1829,31 +1829,92 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 /*
- * Terminal content mode (#25): same timeline data, monospaced denser chrome.
- * Does not clear history — only presentation of the content column.
+ * Chat ⇄ terminal transition cover — hides the outgoing surface until the next
+ * one is ready (prevents previous-session TUI flash).
  */
-.thread-content-terminal {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 12.5px;
-  line-height: 1.5;
+/*
+ * Chat ⇄ terminal cover — full opaque gate (logo + status), same language as bootstrap.
+ * Must fully hide incomplete / wrong-session TUI paints underneath.
+ */
+.surface-transition-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  opacity: 1;
+  pointer-events: auto;
+  user-select: none;
 }
-.thread-content-terminal .timeline-assistant-body,
-.thread-content-terminal .settings-row-desc,
-.thread-content-terminal .content-system-body,
-.thread-content-terminal .process-step-thinking-body {
-  font-family: inherit;
-  font-size: inherit;
+.surface-transition-mask-terminal,
+.surface-transition-mask[data-for="terminal"] {
+  background: #191919;
+  color: #e8e8e8;
 }
-.thread-content-terminal [data-kind="user"] {
-  border-left: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
-  padding-left: 0.65rem;
+.surface-transition-inner {
+  display: flex;
+  max-width: min(28rem, 100%);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
 }
-.thread-content-terminal [data-kind="assistant"],
-.thread-content-terminal .timeline-assistant-row {
-  opacity: 0.98;
+.surface-transition-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+  filter: drop-shadow(0 10px 28px color-mix(in srgb, currentColor 12%, transparent));
 }
-.thread-content-terminal .process-step-row {
-  font-size: 12px;
+.surface-transition-logo {
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  border-radius: 0.95rem;
+}
+.surface-transition-brand {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.surface-transition-status {
+  min-height: 1.35em;
+  max-width: 22rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  opacity: 0.72;
+}
+/* Canvas stays invisible until PiTuiTerminal marks ready (second line of defense). */
+.pi-tui-terminal[data-surface-ready="false"] .pi-tui-terminal-host {
+  visibility: hidden;
+}
+.pi-tui-terminal[data-surface-ready="true"] .pi-tui-terminal-host {
+  visibility: visible;
+}
+
+/*
+ * Embedded pi TUI surface (issue #25) — ghostty-web (Ghostty VT / WASM) canvas host.
+ * Background is also set inline from terminal prefs / color mode.
+ */
+.pi-tui-terminal {
+  background: #191919;
+}
+.pi-tui-terminal-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 4px 6px;
+  overflow: hidden;
+}
+.pi-tui-terminal-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .timeline-assistant-row {
   width: 100%;
@@ -2553,6 +2614,14 @@ html[data-custom-window-controls="true"] .page-header {
   border-color: var(--border);
   background: var(--surface-panel);
 }
+.item-card[data-enabled="false"] {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--muted) 35%, var(--surface-panel));
+  opacity: 0.88;
+}
+.item-card[data-enabled="false"] .title {
+  color: var(--muted-foreground);
+}
 .item-card .title {
   @apply text-[13px] leading-snug font-semibold break-all;
 }
@@ -2562,6 +2631,43 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .item-card .badges {
   @apply flex flex-wrap items-center justify-end gap-1.5;
+}
+.chip-status {
+  @apply inline-flex h-6 items-center justify-center rounded-full border px-2 text-[11px] leading-none font-semibold whitespace-nowrap;
+}
+.chip-status[data-tone="on"] {
+  border-color: color-mix(in srgb, #22c55e 45%, var(--border));
+  background: color-mix(in srgb, #22c55e 16%, transparent);
+  color: color-mix(in srgb, #16a34a 80%, var(--foreground));
+}
+.chip-status[data-tone="off"] {
+  border-color: color-mix(in srgb, #ef4444 40%, var(--border));
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: color-mix(in srgb, #dc2626 85%, var(--foreground));
+}
+.chip-status[data-tone="update"] {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: color-mix(in srgb, #d97706 85%, var(--foreground));
+}
+.btn-package-enable {
+  @apply inline-flex h-7 items-center justify-center rounded-lg border px-2.5 text-[11px] leading-none font-semibold whitespace-nowrap transition-colors;
+}
+.btn-package-enable[data-on="true"] {
+  border-color: color-mix(in srgb, #22c55e 40%, var(--border));
+  background: color-mix(in srgb, #22c55e 12%, transparent);
+  color: color-mix(in srgb, #16a34a 85%, var(--foreground));
+}
+.btn-package-enable[data-on="false"] {
+  border-color: color-mix(in srgb, #ef4444 40%, var(--border));
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: color-mix(in srgb, #dc2626 85%, var(--foreground));
+}
+.btn-package-enable:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.btn-package-enable:disabled {
+  @apply cursor-not-allowed opacity-50;
 }
 .empty-panel {
   @apply flex flex-col items-start gap-1.5 border border-dashed p-5;

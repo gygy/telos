@@ -399,6 +399,14 @@ export interface PackageSummary {
   installedPath?: string;
 }
 
+/** Result of packages.checkUpdates (pi DefaultPackageManager.checkForAvailableUpdates). */
+export interface PackageUpdateInfo {
+  source: string;
+  displayName: string;
+  type: "npm" | "git";
+  scope: "global" | "project";
+}
+
 /** Loaded pi resource row for Resources view. */
 export interface ResourceSummary {
   kind: "extension" | "skill" | "prompt" | "theme" | "context" | "system";
@@ -934,6 +942,11 @@ export type HostCommand =
     }
   | {
       protocolVersion: typeof IPC_PROTOCOL_VERSION;
+      type: "packages.checkUpdates";
+      requestId: string;
+    }
+  | {
+      protocolVersion: typeof IPC_PROTOCOL_VERSION;
       type: "packages.setEnabled";
       requestId: string;
       source: string;
@@ -1125,6 +1138,12 @@ export type HostEvent =
     }
   | {
       protocolVersion: typeof IPC_PROTOCOL_VERSION;
+      type: "packages.updates";
+      requestId?: string;
+      updates: PackageUpdateInfo[];
+    }
+  | {
+      protocolVersion: typeof IPC_PROTOCOL_VERSION;
       type: "resources.list";
       requestId?: string;
       resources: ResourceSummary[];
@@ -1271,6 +1290,31 @@ export interface PixDesktopApi {
   pi: {
     ensure(): Promise<PiCliEnsureResult>;
     onProgress(listener: (event: PiCliProgressEvent) => void): () => void;
+  };
+  /**
+   * Embedded pi TUI (terminal mode): real PTY running `pi --session <file>`.
+   * Mutually exclusive with host chat prompts on the active session.
+   */
+  terminal: {
+    /** Open or resume interactive pi TUI for the given session file + cwd. */
+    open(options: {
+      sessionFile: string;
+      cwd: string;
+      cols?: number;
+      rows?: number;
+    }): Promise<{ sessionFile: string; cwd: string; resumed?: boolean }>;
+    write(data: string): Promise<void>;
+    resize(cols: number, rows: number): Promise<void>;
+    /**
+     * Keep the pi process alive but hide the UI (fast re-enter).
+     * Releases exclusive lock so chat can prompt; next host prompt kills suspended TUI.
+     */
+    suspend(): Promise<{ sessionFile?: string }>;
+    /** Kill PTY; returns the sessionFile that was bound (for history re-projection). */
+    dispose(): Promise<{ sessionFile?: string }>;
+    status(): Promise<{ open: boolean; suspended?: boolean; sessionFile?: string }>;
+    onData(listener: (data: string) => void): () => void;
+    onExit(listener: (event: { exitCode: number; signal?: number }) => void): () => void;
   };
   appearance: {
     /** Keep native window materials aligned with the renderer theme. */
@@ -1588,6 +1632,8 @@ export interface PixDesktopApi {
     ): Promise<PackageSummary[]>;
     remove(source: string, scope: "global" | "project"): Promise<PackageSummary[]>;
     update(source?: string): Promise<PackageSummary[]>;
+    /** Check npm/git packages for available updates without installing. */
+    checkUpdates(): Promise<PackageUpdateInfo[]>;
     /** Toggle package autoload (pi object-form `autoload: false` when disabled). */
     setEnabled(
       source: string,
@@ -2148,6 +2194,7 @@ export function isHostCommand(value: unknown): value is HostCommand {
     return isRecord(value.patch);
   }
   if (value.type === "packages.list" || value.type === "resources.list") return true;
+  if (value.type === "packages.checkUpdates") return true;
   if (value.type === "packages.install" || value.type === "packages.remove") {
     return (
       typeof value.source === "string" &&
@@ -2226,6 +2273,16 @@ function isSessionHistoryMessage(value: unknown): value is SessionHistoryMessage
   if (value.entryId !== undefined && typeof value.entryId !== "string") return false;
   if (value.timestamp !== undefined && typeof value.timestamp !== "string") return false;
   return true;
+}
+
+function isPackageUpdateInfo(value: unknown): value is PackageUpdateInfo {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.source === "string" &&
+    typeof value.displayName === "string" &&
+    (value.type === "npm" || value.type === "git") &&
+    (value.scope === "global" || value.scope === "project")
+  );
 }
 
 function isPackageSummary(value: unknown): value is PackageSummary {
@@ -2380,6 +2437,8 @@ export function isHostEvent(value: unknown): value is HostEvent {
           value.phase === "error") &&
         (value.message === undefined || typeof value.message === "string")
       );
+    case "packages.updates":
+      return Array.isArray(value.updates) && value.updates.every(isPackageUpdateInfo);
     case "resources.list":
       return Array.isArray(value.resources) && value.resources.every(isResourceSummary);
     case "trust.info":

@@ -89,7 +89,12 @@ import {
   type SortMode,
 } from "../lib/sidebar-organize.ts";
 import { cn } from "../lib/utils.ts";
-import { isNonProjectWorkspacePath, workspaceLabel } from "../lib/workspace.ts";
+import {
+  belongsInConversationsSection,
+  isNonProjectWorkspacePath,
+  projectThreadIdsFromCwdMap,
+  workspaceLabel,
+} from "../lib/workspace.ts";
 import type { SessionMarker } from "../lib/session-markers.ts";
 import { sessionMarkerFromThread } from "../lib/session-markers.ts";
 import { sessionRunKey } from "../store/shell-store.ts";
@@ -198,16 +203,6 @@ export function ProjectList(props: ProjectListProps) {
       }),
     [restPathsRaw, sortMode, props.recentWorkspaces],
   );
-
-  /** Normalized paths that count as "projects" in the rail (置顶 + 项目). */
-  const projectKeys = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of allPaths) {
-      const key = p.replace(/\\/g, "/").replace(/\/+$/, "");
-      if (key) set.add(key);
-    }
-    return set;
-  }, [allPaths]);
 
   // Expand active workspace once when it becomes current — never collapse others (avoids switch flash).
   useEffect(() => {
@@ -825,12 +820,17 @@ export function ProjectList(props: ProjectListProps) {
   }
 
   /**
-   * 对话分区：只收「不属于任何已知项目」的会话。
-   * 项目下的会话绝不能出现在这里（严重产品约束）。
+   * 对话分区：只收纯对话（conversation home / non-project cwd）。
+   * 项目会话绝不能出现在这里——即使项目卡片因 recent/selection 竞态暂时消失
+   * （否则会出现「全部涌入对话再弹回项目」的闪帧）。
+   *
+   * Do **not** rely only on `projectKeys` (current+recent+pinned): on project→对话
+   * switch that set can be empty for a frame while threadsByCwd still holds project sessions.
    */
   const conversationList = useMemo(() => {
     const seen = new Set<string>();
     const all: SessionThreadSummary[] = [];
+    const projectThreadIds = projectThreadIdsFromCwdMap(props.threadsByCwd);
     const sources = [...Object.values(props.threadsByCwd).flat(), ...props.threads];
     for (const t of sources) {
       if (
@@ -840,9 +840,7 @@ export function ProjectList(props: ProjectListProps) {
       ) {
         continue;
       }
-      const cwdKey = (t.cwd || "").replace(/\\/g, "/").replace(/\/+$/, "");
-      // Bound to a project in 置顶/项目 → session under that project only.
-      if (cwdKey && projectKeys.has(cwdKey)) continue;
+      if (!belongsInConversationsSection(t, { projectThreadIds })) continue;
       seen.add(t.id);
       all.push(t);
     }
@@ -850,7 +848,6 @@ export function ProjectList(props: ProjectListProps) {
   }, [
     props.threadsByCwd,
     props.threads,
-    projectKeys,
     archivedThreads,
     deletedThreads,
     pinnedThreads,

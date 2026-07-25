@@ -60,13 +60,15 @@ export function ThreadHeader(props: {
   collapsed?: boolean;
   /** When false, env toggle is hidden (e.g. viewport too narrow for panel). */
   envToggleVisible?: boolean;
+  /** Enter/leave real pi TUI (exclusive with chat). */
+  onToggleContentMode?: (() => void) | undefined;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
     t(props.locale, key, vars);
   const envPanelOpen = useShellStore((s) => s.envPanelOpen);
   const setEnvPanelOpen = useShellStore((s) => s.setEnvPanelOpen);
   const contentMode = useShellStore((s) => s.contentMode);
-  const toggleContentMode = useShellStore((s) => s.toggleContentMode);
+  const toggleContentModePref = useShellStore((s) => s.toggleContentMode);
   const [menuOpen, setMenuOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [pinnedIds, setPinnedIds] = useState(loadPinnedThreads);
@@ -236,7 +238,10 @@ export function ThreadHeader(props: {
           }
           aria-pressed={contentMode === "terminal"}
           data-content-mode={contentMode}
-          onClick={() => toggleContentMode()}
+          onClick={() => {
+            if (props.onToggleContentMode) props.onToggleContentMode();
+            else toggleContentModePref();
+          }}
         >
           {contentMode === "terminal" ? (
             <MessageSquare className="size-3.5" strokeWidth={1.75} />

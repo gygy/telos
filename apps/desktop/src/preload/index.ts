@@ -31,6 +31,27 @@ const api: PixDesktopApi = {
       return () => ipcRenderer.removeListener("pix:pi:progress", handler);
     },
   },
+  terminal: {
+    open: (options) => ipcRenderer.invoke("pix:terminal:open", options),
+    write: (data) => ipcRenderer.invoke("pix:terminal:write", data),
+    resize: (cols, rows) => ipcRenderer.invoke("pix:terminal:resize", cols, rows),
+    suspend: () => ipcRenderer.invoke("pix:terminal:suspend"),
+    dispose: () => ipcRenderer.invoke("pix:terminal:dispose"),
+    status: () => ipcRenderer.invoke("pix:terminal:status"),
+    onData(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, data: string) => listener(data);
+      ipcRenderer.on("pix:terminal:data", handler);
+      return () => ipcRenderer.removeListener("pix:terminal:data", handler);
+    },
+    onExit(listener) {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        value: { exitCode: number; signal?: number },
+      ) => listener(value);
+      ipcRenderer.on("pix:terminal:exit", handler);
+      return () => ipcRenderer.removeListener("pix:terminal:exit", handler);
+    },
+  },
   appearance: {
     setThemeSource: (source) => ipcRenderer.invoke("pix:appearance:set-theme-source", source),
   },
@@ -172,6 +193,7 @@ const api: PixDesktopApi = {
       ipcRenderer.invoke("pix:packages:install", source, scope, options),
     remove: (source, scope) => ipcRenderer.invoke("pix:packages:remove", source, scope),
     update: (source) => ipcRenderer.invoke("pix:packages:update", source),
+    checkUpdates: () => ipcRenderer.invoke("pix:packages:check-updates"),
     setEnabled: (source, scope, enabled) =>
       ipcRenderer.invoke("pix:packages:set-enabled", source, scope, enabled),
     searchCatalog: (query, size, from) =>

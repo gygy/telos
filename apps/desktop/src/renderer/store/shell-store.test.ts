@@ -1,12 +1,13 @@
 import { IPC_PROTOCOL_VERSION, type HostEvent } from "@pix/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { loadContentModeForSession, saveContentModeForSession } from "../lib/content-mode-prefs.ts";
+import { isBusyRunState } from "../lib/session-markers.ts";
 import {
   classifyRuntimeEventDelivery,
   sessionKeyFromSnapshot,
   sessionRunKey,
   useShellStore,
 } from "./shell-store.ts";
-import { isBusyRunState } from "../lib/session-markers.ts";
 
 function runtimeEvent(
   runtimeId: string,
@@ -43,6 +44,22 @@ describe("runtime event delivery", () => {
 });
 
 describe("contentMode presentation", () => {
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, String(v));
+        },
+        removeItem: (k: string) => {
+          store.delete(k);
+        },
+      },
+    });
+  });
+
   it("toggles chat/terminal without clearing history", () => {
     const history = [
       { role: "user" as const, text: "hello" },
@@ -52,6 +69,10 @@ describe("contentMode presentation", () => {
       contentMode: "chat",
       history,
       liveStream: useShellStore.getState().liveStream,
+      snapshot: {
+        ...useShellStore.getState().snapshot,
+        sessionFile: "/tmp/session-a.jsonl",
+      } as never,
     });
     useShellStore.getState().toggleContentMode();
     expect(useShellStore.getState().contentMode).toBe("terminal");
@@ -59,6 +80,20 @@ describe("contentMode presentation", () => {
     useShellStore.getState().setContentMode("chat");
     expect(useShellStore.getState().contentMode).toBe("chat");
     expect(useShellStore.getState().history).toEqual(history);
+  });
+
+  it("persist:false does not overwrite the session's stored mode", () => {
+    useShellStore.setState({
+      contentMode: "terminal",
+      snapshot: { sessionFile: "/tmp/keep-terminal.jsonl" } as never,
+    });
+    saveContentModeForSession("/tmp/keep-terminal.jsonl", "terminal");
+    useShellStore.getState().setContentMode("terminal");
+    // Teardown flip during switch
+    useShellStore.getState().setContentMode("chat", { persist: false });
+    expect(useShellStore.getState().contentMode).toBe("chat");
+    // Map still says terminal for that session
+    expect(loadContentModeForSession("/tmp/keep-terminal.jsonl")).toBe("terminal");
   });
 });
 

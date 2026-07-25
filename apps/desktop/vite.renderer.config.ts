@@ -33,13 +33,18 @@ export default defineConfig({
               name: "markdown-vendor",
               test: /node_modules[\\/](?:react-markdown|remark-[^\\/]+|rehype-[^\\/]+|unified|micromark[^\\/]*|mdast-util-[^\\/]+|hast-util-[^\\/]+|unist-util-[^\\/]+|vfile[^\\/]*|property-information)[\\/]/,
             },
+            {
+              // Ghostty VT WASM engine — only needed when terminal mode mounts.
+              name: "ghostty-web",
+              test: /node_modules[\\/]ghostty-web[\\/]/,
+            },
           ],
         },
       },
     },
   },
   test: {
-    include: ["**/*.test.ts", "../agent-host/**/*.test.ts"],
+    include: ["**/*.test.ts", "../agent-host/**/*.test.ts", "../main/**/*.test.ts"],
     exclude: ["**/e2e/**", "**/node_modules/**"],
   },
 });

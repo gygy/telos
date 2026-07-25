@@ -22,6 +22,7 @@ import type {
   ModelSummary,
   ModelsJsonConfigView,
   PackageSummary,
+  PackageUpdateInfo,
   PiSettingsPatch,
   PiSettingsView,
   ProjectTrustSummary,
@@ -183,6 +184,8 @@ export interface PixRuntimeHandle {
       message?: string;
     }) => void,
   ): Promise<PackageSummary[]>;
+  /** npm/git only — does not install; see pi DefaultPackageManager.checkForAvailableUpdates. */
+  checkPackageUpdates(): Promise<PackageUpdateInfo[]>;
   setPackageEnabled(
     source: string,
     scope: "global" | "project",
@@ -1429,6 +1432,16 @@ export async function createPixRuntime(
       } finally {
         manager.setProgressCallback(undefined);
       }
+    },
+    async checkPackageUpdates() {
+      const manager = createPackageManager(runtime.services);
+      const updates = await manager.checkForAvailableUpdates();
+      return updates.map((item) => ({
+        source: item.source,
+        displayName: item.displayName,
+        type: item.type,
+        scope: item.scope === "project" ? ("project" as const) : ("global" as const),
+      }));
     },
     newSession: (sessionOptions) =>
       afterSessionReplacement(() => runtime.newSession(sessionOptions)),

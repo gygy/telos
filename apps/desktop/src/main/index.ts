@@ -15,6 +15,7 @@ import {
   type ModelsJsonConfigView,
   type PhotonProbeResult,
   type PackageSummary,
+  type PackageUpdateInfo,
   type PiSettingsPatch,
   type PiSettingsPatchResult,
   type PiSettingsView,
@@ -65,7 +66,16 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import {
+  findParkedSessionKeyByCwd,
+  MAX_PARKED_HOSTS,
+  normalizeHostCwdKey,
+  pickParkedEvictionKey,
+  shouldParkForeground,
+} from "./host-park-policy.ts";
 import { ensurePiCli, type PiCliProgressEvent } from "./pi-cli-ensure.ts";
+import { createNodePtySpawn, PiTuiPtyController } from "./pi-tui-pty.ts";
+import { PiTuiExclusiveGuard, planPiTuiLaunch } from "./pi-tui-session.ts";
 import {
   applyProxyChannelToEnv,
   electronProxyConfig,
@@ -75,6 +85,32 @@ import {
   type ProxyPrefs,
 } from "./proxy-prefs.ts";
 import { discoverLocalProxies } from "./proxy-discover.ts";
+
+/** Embedded pi TUI (terminal mode) — exclusive with host chat prompts. */
+const piTuiGuard = new PiTuiExclusiveGuard();
+let piTuiController: PiTuiPtyController | undefined;
+let piTuiControllerInit: Promise<PiTuiPtyController> | undefined;
+
+async function getPiTuiController(): Promise<PiTuiPtyController> {
+  if (piTuiController) return piTuiController;
+  if (!piTuiControllerInit) {
+    piTuiControllerInit = (async () => {
+      const spawn = await createNodePtySpawn();
+      const controller = new PiTuiPtyController(spawn, async () => {
+        const ensured = await ensurePiCli();
+        if (!ensured.path?.trim()) {
+          throw new Error(
+            ensured.error || "pi CLI not found; install @earendil-works/pi-coding-agent",
+          );
+        }
+        return ensured.path;
+      });
+      piTuiController = controller;
+      return controller;
+    })();
+  }
+  return piTuiControllerInit;
+}
 
 const execFileAsync = promisify(execFile);
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -1790,8 +1826,9 @@ class HostSupervisor {
   #eventCounts = new Map<string, number>();
   #pending = new Map<string, PendingWaiter>();
   /**
-   * Generating hosts detached from the UI. Keyed by session file / session id.
-   * Only busy (in-flight prompt) hosts are parked; idle ones are stopped.
+   * Detached live hosts keyed by session file / session id.
+   * Busy hosts are always parked; idle hosts are also parked (up to MAX_PARKED_HOSTS)
+   * so cross-project / conversation switches can promote instead of cold-starting.
    */
   #parked = new Map<string, ParkedHost>();
 
@@ -1836,17 +1873,67 @@ class HostSupervisor {
     return undefined;
   }
 
+  #findParkedByCwd(cwd: string): ParkedHost | undefined {
+    const sessionKey = findParkedSessionKeyByCwd(
+      [...this.#parked.values()].map((p) => ({
+        sessionKey: p.sessionKey,
+        ...(p.workspaceCwd ? { workspaceCwd: p.workspaceCwd } : {}),
+        ...(p.snapshot.cwd ? { snapshotCwd: p.snapshot.cwd } : {}),
+        busy: pendingHasPrompt(p.pending),
+      })),
+      cwd,
+    );
+    return sessionKey ? this.#findParkedBySession(sessionKey) : undefined;
+  }
+
+  #parkedRefs() {
+    return [...this.#parked.values()].map((p) => ({
+      sessionKey: p.sessionKey,
+      ...(p.workspaceCwd ? { workspaceCwd: p.workspaceCwd } : {}),
+      ...(p.snapshot.cwd ? { snapshotCwd: p.snapshot.cwd } : {}),
+      busy: pendingHasPrompt(p.pending),
+    }));
+  }
+
+  /** Evict oldest idle (then any) parked host when over capacity. */
+  #evictParkedIfNeeded(): void {
+    while (this.#parked.size >= MAX_PARKED_HOSTS) {
+      const key = pickParkedEvictionKey(this.#parkedRefs());
+      if (!key) break;
+      const victim = this.#findParkedBySession(key);
+      if (!victim) {
+        this.#parked.delete(key);
+        continue;
+      }
+      void this.#killParked(victim, "evict");
+    }
+  }
+
   /**
-   * Detach the foreground host without aborting. Keeps the utility process alive so
-   * an in-flight prompt can finish writing to its session file.
+   * Detach the foreground host without aborting.
+   * - busy: always park (in-flight prompt keeps writing)
+   * - idle + allowIdle: park for later promote (cross-project switch)
+   * - idle without allowIdle: caller should stop instead
    */
-  #parkForeground(): boolean {
+  #parkForeground(options?: { allowIdle?: boolean }): boolean {
     const host = this.#host;
     const snapshot = this.#snapshot;
-    if (!host || !snapshot || host.stopping || host.ignoreMessages) return false;
-    if (!this.#isForegroundBusy()) return false;
+    const allowIdle = options?.allowIdle === true;
+    const busy = this.#isForegroundBusy();
     const sessionKey = sessionKeyFromSnapshot(snapshot);
-    if (!sessionKey) return false;
+    if (
+      !shouldParkForeground({
+        hasHost: Boolean(host),
+        hasSnapshot: Boolean(snapshot),
+        hostStopping: Boolean(host?.stopping || host?.ignoreMessages),
+        allowIdle,
+        busy,
+        sessionKey,
+      })
+    ) {
+      return false;
+    }
+    if (!host || !snapshot || !sessionKey) return false;
 
     // Replace any older park for the same session.
     const existing = this.#parked.get(sessionKey);
@@ -1854,6 +1941,10 @@ class HostSupervisor {
       void this.#killParked(existing, "replaced");
     }
 
+    this.#evictParkedIfNeeded();
+
+    // Re-insert so Map order tracks recency (FIFO eviction prefers older entries).
+    this.#parked.delete(sessionKey);
     this.#parked.set(sessionKey, {
       host,
       snapshot,
@@ -1890,27 +1981,17 @@ class HostSupervisor {
     await parked.host.exit.promise.catch(() => undefined);
   }
 
-  /** Stop idle parked hosts; keep ones still generating. */
-  async #retireIdleParked(parked: ParkedHost): Promise<void> {
-    if (pendingHasPrompt(parked.pending)) return;
-    if (this.#host === parked.host) return;
-    if (!this.#parked.has(parked.sessionKey) && !this.#findParkedByHost(parked.host)) return;
-    await this.#killParked(parked, "idle");
-  }
-
   /**
-   * Bring a parked generating session back to the UI foreground.
-   * Parks or stops the current foreground first.
+   * Bring a parked host (busy or idle) back to the UI foreground.
+   * Parks the current foreground (idle or busy) first so it can be reused later.
    */
   async #promoteParked(sessionPath: string): Promise<boolean> {
     const parked = this.#findParkedBySession(sessionPath);
     if (!parked) return false;
 
-    // Detach current foreground without aborting a live turn.
+    // Detach current foreground without aborting; prefer park over kill for reuse.
     if (this.#host) {
-      if (this.#isForegroundBusy()) {
-        this.#parkForeground();
-      } else {
+      if (!this.#parkForeground({ allowIdle: true })) {
         await this.#stopExclusive().catch(() => undefined);
       }
     }
@@ -1938,13 +2019,20 @@ class HostSupervisor {
     return true;
   }
 
+  /** Promote any parked host bound to this workspace cwd (project or conversation). */
+  async #promoteParkedByCwd(cwd: string): Promise<boolean> {
+    const parked = this.#findParkedByCwd(cwd);
+    if (!parked) return false;
+    return this.#promoteParked(parked.sessionKey);
+  }
+
   /**
-   * Leave the foreground host: park if generating, otherwise stop.
+   * Leave the foreground host: park when possible (idle or busy), otherwise stop.
    * Used before openWorkspace / new blank / force spawn.
    */
   async #detachForeground(): Promise<void> {
     if (!this.#host) return;
-    if (this.#isForegroundBusy() && this.#parkForeground()) return;
+    if (this.#parkForeground({ allowIdle: true })) return;
     await this.#stopExclusive().catch(() => undefined);
   }
 
@@ -2078,7 +2166,23 @@ class HostSupervisor {
   ): Promise<HostSnapshot> {
     return this.#exclusive(async () => {
       rememberWorkspace(cwd);
-      // Re-focus a session still generating in a parked host.
+
+      // Already on this workspace host — no detach/restart.
+      if (
+        this.#host &&
+        this.#snapshot &&
+        !this.#host.stopping &&
+        !this.#host.ignoreMessages &&
+        normalizeHostCwdKey(this.#snapshot.cwd || this.#workspaceCwd || "") ===
+          normalizeHostCwdKey(cwd)
+      ) {
+        this.#workspaceCwd = cwd;
+        this.#requireExplicitWorkspace = false;
+        if (options?.sessionFile) this.#sessionFile = options.sessionFile;
+        return this.#snapshot;
+      }
+
+      // Re-focus a parked host for this exact session (busy or idle).
       if (options?.sessionFile) {
         const promoted = await this.#promoteParked(options.sessionFile);
         if (promoted && this.#snapshot) {
@@ -2088,12 +2192,24 @@ class HostSupervisor {
           return this.#snapshot;
         }
       }
+
+      // Re-focus any parked host for this cwd (same project / conversation home).
+      // Renderer will session.switch to the target file if needed — no cold start.
+      if (await this.#promoteParkedByCwd(cwd)) {
+        if (this.#snapshot) {
+          this.#workspaceCwd = this.#snapshot.cwd || cwd;
+          this.#requireExplicitWorkspace = false;
+          if (options?.sessionFile) this.#sessionFile = options.sessionFile;
+          return this.#snapshot;
+        }
+      }
+
       this.#workspaceCwd = cwd;
       this.#requireExplicitWorkspace = false;
       // Prefer explicit session when switching into a project (avoids open→default→switch flicker).
       this.#sessionFile = options?.sessionFile;
       this.#resumeRecent = options?.resumeRecent === true && !options?.sessionFile;
-      // Park generating hosts instead of aborting them.
+      // Park current host (idle or busy) for later promote instead of killing it.
       await this.#detachForeground();
       // stop/park may have cleared pointers; re-assert intent.
       this.#sessionFile = options?.sessionFile;
@@ -2851,6 +2967,18 @@ class HostSupervisor {
     return event.packages;
   }
 
+  async checkPackageUpdates(): Promise<PackageUpdateInfo[]> {
+    if (!this.#host) await this.start();
+    const event = await this.#request({
+      protocolVersion: IPC_PROTOCOL_VERSION,
+      type: "packages.checkUpdates",
+      requestId: randomUUID(),
+    });
+    if (event.type !== "packages.updates")
+      throw new Error("Agent Host returned an unexpected packages.checkUpdates response");
+    return event.updates;
+  }
+
   async listResources(): Promise<ResourceSummary[]> {
     if (!this.#host) await this.start();
     const event = await this.#request({
@@ -3487,10 +3615,8 @@ class HostSupervisor {
     } else {
       pending.resolve(message);
     }
-    // When a parked generator finishes its last prompt, retire the process.
-    if (parked && !pendingHasPrompt(parked.pending)) {
-      void this.#retireIdleParked(parked);
-    }
+    // Parked hosts stay alive after the last prompt so cross-project switches can
+    // promote them (bounded by MAX_PARKED_HOSTS eviction). Do not auto-kill idle parks.
   }
 
   #rejectPending(error: Error): void {
@@ -4368,9 +4494,113 @@ void app
     );
     ipcMain.handle(
       "pix:agent:prompt",
-      (_event, message: string, streamingBehavior?: "steer" | "followUp", imagePaths?: string[]) =>
-        supervisor?.prompt(message, streamingBehavior, imagePaths),
+      async (
+        _event,
+        message: string,
+        streamingBehavior?: "steer" | "followUp",
+        imagePaths?: string[],
+      ) => {
+        // If a TUI was only suspended (chat UI showing), kill it before host prompts
+        // so we never dual-write the same session file.
+        if (piTuiController?.isAlive()) {
+          piTuiController.dispose();
+          piTuiGuard.release();
+        }
+        piTuiGuard.assertHostPromptAllowed();
+        return supervisor?.prompt(message, streamingBehavior, imagePaths);
+      },
     );
+
+    // ── Embedded pi TUI (real PTY; contentMode terminal) ─────────────────────
+    ipcMain.handle(
+      "pix:terminal:open",
+      async (
+        _event,
+        options: { sessionFile: string; cwd: string; cols?: number; rows?: number },
+      ) => {
+        if (
+          !options ||
+          typeof options.sessionFile !== "string" ||
+          typeof options.cwd !== "string"
+        ) {
+          throw new Error("terminal.open requires sessionFile and cwd");
+        }
+        const plan = planPiTuiLaunch({
+          sessionFile: options.sessionFile,
+          cwd: options.cwd,
+          ...(typeof options.cols === "number" ? { cols: options.cols } : {}),
+          ...(typeof options.rows === "number" ? { rows: options.rows } : {}),
+        });
+        const controller = await getPiTuiController();
+        // Session switch while a prior TUI is suspended/open: drop it before acquire so
+        // the renderer never paints the previous session's stream for a frame.
+        const liveKey = controller.sessionKey();
+        if (liveKey && liveKey !== plan.sessionKey) {
+          controller.dispose();
+          piTuiGuard.release();
+        }
+        const acquired = piTuiGuard.tryAcquire(plan.sessionKey);
+        if (!acquired.ok) throw new Error(acquired.reason);
+
+        try {
+          const send = (channel: string, payload: unknown) => {
+            if (!mainWindow || mainWindow.isDestroyed()) return;
+            mainWindow.webContents.send(channel, payload);
+          };
+          const opened = await controller.open(plan, {
+            onData: (data) => send("pix:terminal:data", data),
+            onExit: (event) => {
+              piTuiGuard.release(plan.sessionKey);
+              send("pix:terminal:exit", event);
+            },
+          });
+          return {
+            sessionFile: opened.sessionFile,
+            cwd: opened.cwd,
+            resumed: opened.resumed,
+          };
+        } catch (error) {
+          piTuiGuard.release(plan.sessionKey);
+          throw error;
+        }
+      },
+    );
+    ipcMain.handle("pix:terminal:write", async (_event, data: string) => {
+      const controller = await getPiTuiController();
+      controller.write(typeof data === "string" ? data : String(data ?? ""));
+    });
+    ipcMain.handle("pix:terminal:resize", async (_event, cols: number, rows: number) => {
+      const controller = await getPiTuiController();
+      controller.resize(Number(cols) || 80, Number(rows) || 24);
+    });
+    ipcMain.handle("pix:terminal:suspend", async () => {
+      if (!piTuiController?.isAlive()) {
+        piTuiGuard.release();
+        return {};
+      }
+      const { sessionFile } = piTuiController.suspend();
+      // Release exclusive lock so chat can prompt (prompt path disposes suspended TUI).
+      piTuiGuard.release();
+      return sessionFile ? { sessionFile } : {};
+    });
+    ipcMain.handle("pix:terminal:dispose", async () => {
+      if (!piTuiController) {
+        piTuiGuard.release();
+        return {};
+      }
+      const { sessionFile } = piTuiController.dispose();
+      piTuiGuard.release();
+      return sessionFile ? { sessionFile } : {};
+    });
+    ipcMain.handle("pix:terminal:status", async () => {
+      if (!piTuiController?.isAlive()) return { open: false };
+      const sessionFile = piTuiController.sessionFile() ?? undefined;
+      return {
+        open: piTuiController.isOpen(),
+        suspended: piTuiController.isSuspended(),
+        ...(sessionFile ? { sessionFile } : {}),
+      };
+    });
     ipcMain.handle("pix:agent:queue-clear", () => supervisor?.clearQueue());
     ipcMain.handle("pix:agent:abort", () => supervisor?.abort());
     ipcMain.handle("pix:session:list", () => supervisor?.listSessions());
@@ -4449,6 +4679,7 @@ void app
     ipcMain.handle("pix:packages:update", (_event, source?: string) =>
       supervisor?.updatePackage(source),
     );
+    ipcMain.handle("pix:packages:check-updates", () => supervisor?.checkPackageUpdates());
     ipcMain.handle(
       "pix:packages:search-catalog",
       (_event, query?: string, size?: number, from?: number) =>

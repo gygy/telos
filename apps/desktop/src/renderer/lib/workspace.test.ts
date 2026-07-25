@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  belongsInConversationsSection,
   filterRecentWorkspaces,
   isAutoDefaultWorkspacePath,
   isConversationWorkspacePath,
   isEphemeralWorkspacePath,
   isNonProjectWorkspacePath,
+  mergeRecentWithOpenProject,
   prependRecentPath,
+  projectThreadIdsFromCwdMap,
   workspaceLabel,
 } from "./workspace.ts";
 
@@ -63,5 +66,50 @@ describe("workspace helpers", () => {
     expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Pix/conversations")).toEqual([
       "/Users/me/a",
     ]);
+  });
+
+  it("keeps the open project on recent so selection clear cannot empty projectKeys", () => {
+    expect(mergeRecentWithOpenProject(["/Users/me/code/other"], "/Users/me/code/pix", 12)).toEqual([
+      "/Users/me/code/pix",
+      "/Users/me/code/other",
+    ]);
+    expect(mergeRecentWithOpenProject(["/Users/me/code/pix"], "/Users/me/code/pix", 12)).toEqual([
+      "/Users/me/code/pix",
+    ]);
+    expect(
+      mergeRecentWithOpenProject(
+        ["/Users/me/code/pix"],
+        "/Users/me/Documents/Pix/conversations",
+        12,
+      ),
+    ).toEqual(["/Users/me/code/pix"]);
+  });
+
+  it("never classifies project-bound sessions into the 对话 section", () => {
+    const byCwd = {
+      "/Users/me/code/pix": [{ id: "proj-1" }, { id: "proj-2" }],
+      "/Users/me/Documents/Pix/conversations": [{ id: "conv-1" }],
+    };
+    const projectIds = projectThreadIdsFromCwdMap(byCwd);
+    expect(projectIds.has("proj-1")).toBe(true);
+    expect(projectIds.has("conv-1")).toBe(false);
+
+    // Even if projectKeys is empty (selection/recent race), cwd type decides.
+    expect(
+      belongsInConversationsSection(
+        { id: "proj-1", cwd: "/Users/me/code/pix" },
+        { projectThreadIds: new Set() },
+      ),
+    ).toBe(false);
+    expect(
+      belongsInConversationsSection(
+        { id: "conv-1", cwd: "/Users/me/Documents/Pix/conversations" },
+        { projectThreadIds: projectIds },
+      ),
+    ).toBe(true);
+    // Bucket membership wins when cwd is briefly missing.
+    expect(
+      belongsInConversationsSection({ id: "proj-2", cwd: "" }, { projectThreadIds: projectIds }),
+    ).toBe(false);
   });
 });

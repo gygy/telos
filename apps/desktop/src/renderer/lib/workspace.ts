@@ -63,9 +63,55 @@ export function isNonProjectWorkspacePath(path: string): boolean {
   );
 }
 
+/** Normalize workspace/session cwd keys for map lookups (slash + trim trailing). */
+export function normalizeWorkspaceKey(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 /**
- * Product recent list: drop ephemerals, drop current cwd, dedupe, cap.
+ * Thread ids that already live under a **project** bucket in `threadsByCwd`.
+ * Used so the 对话 section never briefly inherits project sessions when the
+ * project drops out of recent/current for a frame during switches.
+ */
+export function projectThreadIdsFromCwdMap(
+  threadsByCwd: Record<string, ReadonlyArray<{ id: string }>>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const [rawKey, list] of Object.entries(threadsByCwd)) {
+    if (!rawKey?.trim() || isNonProjectWorkspacePath(rawKey)) continue;
+    for (const thread of list) {
+      if (thread?.id) ids.add(thread.id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Whether a thread belongs in the sidebar **对话** section.
+ *
+ * Product rule: project-bound sessions never appear under 对话 — even when the
+ * project is temporarily missing from 置顶/项目 (e.g. selection cleared before
+ * recent is refreshed). Classification uses cwd type + optional project-bucket ids,
+ * not the live projectKeys set (which can lag one frame).
+ */
+export function belongsInConversationsSection(
+  thread: { id: string; cwd?: string },
+  options?: { projectThreadIds?: ReadonlySet<string> },
+): boolean {
+  if (options?.projectThreadIds?.has(thread.id)) return false;
+  const cwd = (thread.cwd || "").trim();
+  if (!cwd) return true;
+  // Real project path → session under that project only.
+  if (!isNonProjectWorkspacePath(cwd)) return false;
+  return true;
+}
+
+/**
+ * Product recent list: drop ephemerals, optionally drop current cwd, dedupe, cap.
  * Pure helper — unit-tested without Electron.
+ *
+ * Prefer **not** excluding the open project when the result is the only place
+ * that keeps it on the rail after selection clears (see `mergeRecentWithOpenProject`).
  */
 export function filterRecentWorkspaces(
   paths: readonly string[],
@@ -97,4 +143,20 @@ export function prependRecentPath(paths: string[], path: string, max = 12): stri
     return paths.filter((item) => item !== normalized).slice(0, max);
   }
   return [normalized, ...paths.filter((item) => item !== normalized)].slice(0, max);
+}
+
+/**
+ * Keep the open project on the recent rail so clearing selection (switch to
+ * pure conversation) never unmounts its card for a frame.
+ * `partitionProjects` dedupes when the same path is also `workspacePath`.
+ */
+export function mergeRecentWithOpenProject(
+  recent: readonly string[],
+  openProject: string | undefined,
+  max = 12,
+): string[] {
+  if (!openProject?.trim() || isNonProjectWorkspacePath(openProject)) {
+    return recent.slice(0, max);
+  }
+  return prependRecentPath([...recent], openProject, max);
 }

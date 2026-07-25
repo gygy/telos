@@ -25,6 +25,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   SquarePen,
+  Terminal,
   BarChart3,
 } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
@@ -499,6 +500,12 @@ function SettingsRail(props: {
           testId: "settings-nav-appearance",
           labelKey: "section.appearance",
           icon: <Palette className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "terminal",
+          testId: "settings-nav-terminal",
+          labelKey: "section.terminal",
+          icon: <Terminal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
           section: "behavior",

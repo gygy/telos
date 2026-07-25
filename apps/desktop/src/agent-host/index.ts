@@ -935,6 +935,17 @@ async function handleCommand(command: HostCommand): Promise<void> {
         });
         break;
       }
+      case "packages.checkUpdates": {
+        if (!handle) throw new Error("Agent Host is not ready");
+        const updates = await handle.checkPackageUpdates();
+        post({
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          type: "packages.updates",
+          requestId: command.requestId,
+          updates,
+        });
+        break;
+      }
       case "packages.update": {
         if (!handle) throw new Error("Agent Host is not ready");
         const packages = await handle.updatePackage(command.source, (event) => {

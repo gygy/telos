@@ -77,6 +77,25 @@ import {
   saveConfirmDelete,
 } from "../../lib/behavior-prefs.ts";
 import {
+  listInstalledTerminalFonts,
+  matchTerminalFontChoiceId,
+  SYSTEM_TERMINAL_FONT_ID,
+  type TerminalFontChoice,
+} from "../../lib/terminal-fonts.ts";
+import {
+  DEFAULT_TERMINAL_PREFS,
+  loadTerminalPrefs,
+  patchTerminalPrefs,
+  resetTerminalPrefs,
+  TERMINAL_FONT_SIZE_MAX,
+  TERMINAL_FONT_SIZE_MIN,
+  TERMINAL_SCROLLBACK_MAX,
+  TERMINAL_SCROLLBACK_MIN,
+  type TerminalColorScheme,
+  type TerminalCursorStyle,
+  type TerminalPrefs,
+} from "../../lib/terminal-prefs.ts";
+import {
   formatResetCountdown,
   formatUsageUpdatedAt,
   formatWindowDuration,
@@ -153,6 +172,8 @@ export function SettingsPage(props: SettingsPageProps) {
           <GeneralSection {...props} tr={tr} />
         ) : props.section === "appearance" ? (
           <AppearanceSection {...props} tr={tr} />
+        ) : props.section === "terminal" ? (
+          <TerminalSection {...props} tr={tr} />
         ) : props.section === "behavior" ? (
           <BehaviorSection {...props} tr={tr} />
         ) : props.section === "environment" ? (
@@ -1649,6 +1670,266 @@ function BehaviorSection(
               }}
               testId="settings-confirm-archive"
               aria-label={tr("settings.confirmArchive")}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+    </SettingsPageShell>
+  );
+}
+
+function TerminalSection(
+  props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
+) {
+  const { tr } = props;
+  const [prefs, setPrefs] = useState<TerminalPrefs>(loadTerminalPrefs);
+  const [fontChoices, setFontChoices] = useState<TerminalFontChoice[]>(() => [
+    {
+      id: SYSTEM_TERMINAL_FONT_ID,
+      family: DEFAULT_TERMINAL_PREFS.fontFamily,
+      label: tr("terminal.font.system"),
+    },
+  ]);
+  const [fontsLoading, setFontsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFontsLoading(true);
+    void listInstalledTerminalFonts(tr("terminal.font.system")).then((list) => {
+      if (cancelled) return;
+      setFontChoices(list);
+      setFontsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-scan when locale label for "system" changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tr identity is unstable; use locale
+  }, [props.locale]);
+
+  function update(patch: Partial<TerminalPrefs>) {
+    setPrefs(patchTerminalPrefs(patch));
+  }
+
+  const fontChoiceId = matchTerminalFontChoiceId(prefs.fontFamily, fontChoices);
+  const fontOptions = fontChoices.map((c) => ({
+    value: c.id,
+    label: c.id === SYSTEM_TERMINAL_FONT_ID ? tr("terminal.font.system") : c.label,
+  }));
+  // Keep a stored orphan family visible if it is not in the scanned list.
+  if (
+    fontChoiceId !== SYSTEM_TERMINAL_FONT_ID &&
+    !fontOptions.some((o) => o.value === fontChoiceId)
+  ) {
+    fontOptions.push({ value: fontChoiceId, label: fontChoiceId });
+  }
+
+  return (
+    <SettingsPageShell
+      title={tr("section.terminal")}
+      testId="settings-terminal"
+      titleAction={
+        <SettingsPillButton
+          label={tr("terminal.reset")}
+          testId="settings-terminal-reset"
+          onClick={() => {
+            setPrefs(resetTerminalPrefs());
+          }}
+        />
+      }
+    >
+      <SettingsSectionBlock label={tr("terminal.group.font")} testId="settings-terminal-font">
+        <SettingsRow
+          title={tr("terminal.fontFamily")}
+          description={
+            fontsLoading ? tr("terminal.fontFamilyLoading") : tr("terminal.fontFamilyHint")
+          }
+          control={
+            <SettingsSelect
+              value={fontChoiceId}
+              onChange={(id) => {
+                const choice = fontChoices.find((c) => c.id === id);
+                if (choice) {
+                  update({ fontFamily: choice.family });
+                  return;
+                }
+                // Orphan id from a previously saved family name.
+                if (id && id !== SYSTEM_TERMINAL_FONT_ID) {
+                  update({
+                    fontFamily: `"${id.replace(/"/g, "")}", ui-monospace, monospace`,
+                  });
+                }
+              }}
+              options={fontOptions}
+              testId="settings-terminal-font-family"
+              size="lg"
+              disabled={fontsLoading && fontChoices.length <= 1}
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("terminal.fontSize")}
+          description={tr("terminal.fontSizeHint", {
+            min: String(TERMINAL_FONT_SIZE_MIN),
+            max: String(TERMINAL_FONT_SIZE_MAX),
+          })}
+          control={
+            <SettingsSelect
+              value={String(prefs.fontSize)}
+              onChange={(v) => update({ fontSize: Number(v) })}
+              options={Array.from(
+                { length: TERMINAL_FONT_SIZE_MAX - TERMINAL_FONT_SIZE_MIN + 1 },
+                (_, i) => {
+                  const n = TERMINAL_FONT_SIZE_MIN + i;
+                  return { value: String(n), label: `${n}px` };
+                },
+              )}
+              testId="settings-terminal-font-size"
+              size="sm"
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <SettingsSectionBlock label={tr("terminal.group.cursor")} testId="settings-terminal-cursor">
+        <SettingsRow
+          title={tr("terminal.cursorStyle")}
+          description={tr("terminal.cursorStyleHint")}
+          control={
+            <SettingsSelect
+              value={prefs.cursorStyle}
+              onChange={(v) => update({ cursorStyle: v as TerminalCursorStyle })}
+              options={[
+                { value: "block", label: tr("terminal.cursor.block") },
+                { value: "underline", label: tr("terminal.cursor.underline") },
+                { value: "bar", label: tr("terminal.cursor.bar") },
+              ]}
+              testId="settings-terminal-cursor-style"
+              size="md"
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("terminal.cursorBlink")}
+          description={tr("terminal.cursorBlinkHint")}
+          control={
+            <SettingsToggle
+              checked={prefs.cursorBlink}
+              onChange={(on) => update({ cursorBlink: on })}
+              testId="settings-terminal-cursor-blink"
+              aria-label={tr("terminal.cursorBlink")}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <SettingsSectionBlock label={tr("terminal.group.scroll")} testId="settings-terminal-scroll">
+        <SettingsRow
+          title={tr("terminal.scrollback")}
+          description={tr("terminal.scrollbackHint", {
+            min: String(TERMINAL_SCROLLBACK_MIN),
+            max: String(TERMINAL_SCROLLBACK_MAX),
+          })}
+          control={
+            <SettingsSelect
+              value={String(prefs.scrollback)}
+              onChange={(v) => update({ scrollback: Number(v) })}
+              options={[
+                { value: "1000", label: "1,000" },
+                { value: "5000", label: "5,000" },
+                { value: "10000", label: "10,000" },
+                { value: "20000", label: "20,000" },
+                { value: "50000", label: "50,000" },
+                { value: "100000", label: "100,000" },
+              ]}
+              testId="settings-terminal-scrollback"
+              size="md"
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("terminal.smoothScroll")}
+          description={tr("terminal.smoothScrollHint")}
+          control={
+            <SettingsSelect
+              value={String(prefs.smoothScrollMs)}
+              onChange={(v) => update({ smoothScrollMs: Number(v) })}
+              options={[
+                { value: "0", label: tr("terminal.smoothScroll.off") },
+                { value: "50", label: "50ms" },
+                { value: "100", label: "100ms" },
+                { value: "200", label: "200ms" },
+                { value: "300", label: "300ms" },
+              ]}
+              testId="settings-terminal-smooth-scroll"
+              size="md"
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("terminal.scrollOnOutput")}
+          description={tr("terminal.scrollOnOutputHint")}
+          control={
+            <SettingsToggle
+              checked={prefs.scrollOnOutput}
+              onChange={(on) => update({ scrollOnOutput: on })}
+              testId="settings-terminal-scroll-on-output"
+              aria-label={tr("terminal.scrollOnOutput")}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <SettingsSectionBlock
+        label={tr("terminal.group.selection")}
+        testId="settings-terminal-selection"
+      >
+        <SettingsRow
+          title={tr("terminal.copyOnSelect")}
+          description={tr("terminal.copyOnSelectHint")}
+          control={
+            <SettingsToggle
+              checked={prefs.copyOnSelect}
+              onChange={(on) => update({ copyOnSelect: on })}
+              testId="settings-terminal-copy-on-select"
+              aria-label={tr("terminal.copyOnSelect")}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <SettingsSectionBlock label={tr("terminal.group.render")} testId="settings-terminal-render">
+        <SettingsRow
+          title={tr("terminal.colorScheme")}
+          description={tr("terminal.colorSchemeHint")}
+          control={
+            <SettingsSelect
+              value={prefs.colorScheme}
+              onChange={(v) => update({ colorScheme: v as TerminalColorScheme })}
+              options={[
+                { value: "match", label: tr("terminal.color.match") },
+                { value: "dark", label: tr("terminal.color.dark") },
+                { value: "light", label: tr("terminal.color.light") },
+              ]}
+              testId="settings-terminal-color-scheme"
+              size="md"
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("terminal.convertEol")}
+          description={tr("terminal.convertEolHint")}
+          control={
+            <SettingsToggle
+              checked={prefs.convertEol}
+              onChange={(on) => update({ convertEol: on })}
+              testId="settings-terminal-convert-eol"
+              aria-label={tr("terminal.convertEol")}
             />
           }
           last

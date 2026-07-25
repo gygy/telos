@@ -37,6 +37,7 @@ import {
 import {
   loadContentMode,
   saveContentMode,
+  saveContentModeForSession,
   toggleContentMode as flipContentMode,
   type ContentMode,
 } from "../lib/content-mode-prefs.ts";
@@ -72,6 +73,7 @@ export type { ThemePreference, ResolvedColorMode };
 export type SettingsSection =
   | "general"
   | "appearance"
+  | "terminal"
   | "environment"
   | "worktree"
   | "behavior"
@@ -139,13 +141,21 @@ export interface ShellState {
   runtimeId: string | undefined;
   lastSequence: number;
   /**
-   * Presentation of the thread content column: chat timeline vs terminal stream.
-   * Pure desktop UI — does not restart host or clear history.
+   * Primary content surface: React chat timeline vs embedded pi TUI (PTY).
+   * Preference only — enter/leave transitions live in main.tsx (open/dispose PTY).
    */
   contentMode: ContentMode;
 
   setStatus: (status: string) => void;
-  setContentMode: (mode: ContentMode) => void;
+  /**
+   * Set content surface. By default persists for the current session (and global last-used).
+   * Pass `persist: false` for temporary UI flips during session switch teardown so we do not
+   * overwrite another session's remembered chat/terminal choice.
+   */
+  setContentMode: (
+    mode: ContentMode,
+    options?: { persist?: boolean; sessionFile?: string },
+  ) => void;
   toggleContentMode: () => void;
   setSnapshot: (snapshot: HostSnapshot | undefined) => void;
   setEvents: (events: HostEvent[] | ((current: HostEvent[]) => HostEvent[])) => void;
@@ -356,13 +366,26 @@ export const useShellStore = create<ShellState>((set, get) => ({
   contentMode: loadContentMode(),
 
   setStatus: (status) => set({ status }),
-  setContentMode: (mode) => {
-    saveContentMode(mode);
+  setContentMode: (mode, options) => {
+    const persist = options?.persist !== false;
+    if (persist) {
+      const sessionFile = options?.sessionFile ?? get().snapshot?.sessionFile;
+      if (sessionFile?.trim()) {
+        saveContentModeForSession(sessionFile, mode);
+      } else {
+        saveContentMode(mode);
+      }
+    }
     set({ contentMode: mode });
   },
   toggleContentMode: () => {
     const next = flipContentMode(get().contentMode);
-    saveContentMode(next);
+    const sessionFile = get().snapshot?.sessionFile;
+    if (sessionFile?.trim()) {
+      saveContentModeForSession(sessionFile, next);
+    } else {
+      saveContentMode(next);
+    }
     set({ contentMode: next });
   },
   setSnapshot: (snapshot) => set({ snapshot }),
