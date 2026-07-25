@@ -39,6 +39,7 @@ import {
   envPanelLayoutForWidth,
   type EnvPanelLayoutMode,
 } from "./components/EnvPanel.tsx";
+import { BootstrapOverlay } from "./components/BootstrapOverlay.tsx";
 import { PixLogo } from "./components/PixLogo.tsx";
 import { ThreadHeader } from "./components/ThreadHeader.tsx";
 import { WindowCaptionButtons } from "./components/WindowCaptionButtons.tsx";
@@ -240,8 +241,16 @@ function App() {
   const [sessionInfoError, setSessionInfoError] = useState<string | undefined>();
   /** `/name` with no args → rename dialog for pi session display name. */
   const [sessionNameDialogOpen, setSessionNameDialogOpen] = useState(false);
-  /** Product-visible pi install / ensure progress (not only Developer pill). */
-  const [piInstallNotice, setPiInstallNotice] = useState<string | undefined>();
+  /**
+   * Cold-start gate: full-window overlay until pi is ensured and host config is loaded.
+   * Main process may already be running ensure; we join that work and show live status.
+   */
+  const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState(() =>
+    t(useShellStore.getState().locale, "boot.starting"),
+  );
+  const [bootstrapDetail, setBootstrapDetail] = useState<string | undefined>();
+  const [bootstrapError, setBootstrapError] = useState<string | undefined>();
   const lastEscapeAtRef = useRef(0);
   const threadColumnRef = useRef<HTMLElement | null>(null);
   const setSidebarOpen = useShellStore((s) => s.setSidebarOpen);
@@ -547,73 +556,71 @@ function App() {
     void refreshConversationSessions();
   }, [workspacePath, recentWorkspaces]);
 
-  // Cold start: ensure global `pi` CLI → recent projects + packages/resources.
+  // Cold start: full-window gate until pi is ready and host config is loaded.
   useEffect(() => {
     let cancelled = false;
-    let hideTimer: number | undefined;
-    const formatPiProgress = (event: {
+    const loc = () => useShellStore.getState().locale;
+    const setBoot = (status: string, detail?: string) => {
+      if (cancelled) return;
+      setBootstrapStatus(status);
+      setBootstrapDetail(detail);
+      useShellStore.getState().setStatus(status);
+    };
+    const applyPiProgress = (event: {
       phase: string;
       message: string;
       version?: string;
       installedNow?: boolean;
     }) => {
-      const loc = useShellStore.getState().locale;
       const versionLabel = event.version ? ` ${event.version}` : "";
       switch (event.phase) {
         case "checking":
-          return t(loc, "pi.checking");
+          setBoot(t(loc(), "pi.checking"));
+          break;
         case "installing":
-          return t(loc, "pi.installing");
+          setBoot(t(loc(), "pi.installing"));
+          break;
         case "progress":
-          return t(loc, "pi.progress", { detail: event.message });
+          setBoot(t(loc(), "pi.progress"), event.message.slice(0, 200));
+          break;
         case "complete":
-          return event.installedNow
-            ? t(loc, "pi.completeInstalled", { version: versionLabel })
-            : t(loc, "pi.complete", { version: versionLabel });
+          setBoot(
+            event.installedNow
+              ? t(loc(), "pi.completeInstalled", { version: versionLabel })
+              : t(loc(), "pi.complete", { version: versionLabel }),
+          );
+          break;
         case "error":
-          return t(loc, "pi.error", { detail: event.message });
+          setBoot(t(loc(), "pi.error", { detail: event.message }));
+          setBootstrapError(event.message);
+          break;
         case "skipped":
-          return t(loc, "pi.skipped");
+          setBoot(t(loc(), "pi.skipped"));
+          break;
         default:
-          return event.message;
+          if (event.message) setBoot(event.message);
+          break;
       }
     };
-    const showPiNotice = (text: string, phase?: string) => {
-      useShellStore.getState().setStatus(text);
-      // Keep product-visible for install work / errors; hide quiet "already present" quickly.
-      if (phase === "complete" && !text.includes("刷新") && !/refresh/i.test(text)) {
-        setPiInstallNotice(text);
-        window.clearTimeout(hideTimer);
-        hideTimer = window.setTimeout(() => {
-          if (!cancelled) setPiInstallNotice(undefined);
-        }, 2800);
-        return;
-      }
-      if (phase === "skipped") {
-        setPiInstallNotice(undefined);
-        return;
-      }
-      setPiInstallNotice(text);
-    };
+    // Subscribe before ensure() so install lines from main's in-flight work still surface.
     const unsubPiProgress = window.pix.pi.onProgress((event) => {
-      showPiNotice(formatPiProgress(event), event.phase);
+      applyPiProgress(event);
     });
     void (async () => {
       try {
-        // Main process also starts ensure on ready; this shares the in-flight promise.
+        setBoot(t(loc(), "boot.starting"));
+        // Main also starts ensure on window create; this joins the same in-flight promise.
         const piResult = await window.pix.pi.ensure();
         if (cancelled) return;
         if (piResult.error) {
-          showPiNotice(
-            t(useShellStore.getState().locale, "pi.error", { detail: piResult.error }),
-            "error",
-          );
+          const msg = t(loc(), "pi.error", { detail: piResult.error });
+          setBoot(msg);
+          setBootstrapError(piResult.error);
         } else if (piResult.installedNow) {
-          showPiNotice(
-            t(useShellStore.getState().locale, "pi.completeInstalled", {
+          setBoot(
+            t(loc(), "pi.completeInstalled", {
               version: piResult.version ? ` ${piResult.version}` : "",
             }),
-            "complete",
           );
           try {
             const snap = await window.pix.host.start({ force: true });
@@ -621,34 +628,52 @@ function App() {
           } catch {
             // Host may not be up yet — refreshPiStatus will start it.
           }
-        } else if (piResult.alreadyPresent) {
-          showPiNotice(
-            t(useShellStore.getState().locale, "pi.complete", {
-              version: piResult.version ? ` ${piResult.version}` : "",
-            }),
-            "complete",
+        } else if (piResult.alreadyPresent || piResult.skipped) {
+          setBoot(
+            piResult.skipped
+              ? t(loc(), "pi.skipped")
+              : t(loc(), "pi.complete", {
+                  version: piResult.version ? ` ${piResult.version}` : "",
+                }),
           );
         }
+
+        if (cancelled) return;
+        setBoot(t(loc(), "boot.workspaces"));
+        await refreshRecentWorkspaces();
+        if (cancelled) return;
+
+        setBoot(t(loc(), "boot.host"));
+        await refreshPiStatus({ ensure: true });
+        if (cancelled) return;
+
+        setBoot(t(loc(), "boot.config"));
+        await refreshConversationSessions();
+        if (cancelled) return;
+
+        setBoot(t(loc(), "boot.ready"));
+        // Brief beat so "ready" is readable before the shell appears.
+        await new Promise((resolve) => window.setTimeout(resolve, 180));
       } catch (error) {
         if (!cancelled) {
-          showPiNotice(
-            t(useShellStore.getState().locale, "pi.error", {
-              detail: error instanceof Error ? error.message : String(error),
-            }),
-            "error",
-          );
+          const detail = error instanceof Error ? error.message : String(error);
+          setBoot(t(loc(), "pi.error", { detail }));
+          setBootstrapError(detail);
+          // Still try to bring the shell up so the user is not stuck forever.
+          try {
+            await refreshRecentWorkspaces();
+            await refreshPiStatus({ ensure: true });
+            await refreshConversationSessions();
+          } catch {
+            // ignore secondary failures
+          }
         }
+      } finally {
+        if (!cancelled) setBootstrapReady(true);
       }
-      if (cancelled) return;
-      await refreshRecentWorkspaces();
-      if (cancelled) return;
-      await refreshPiStatus({ ensure: true });
-      if (cancelled) return;
-      await refreshConversationSessions();
     })();
     return () => {
       cancelled = true;
-      window.clearTimeout(hideTimer);
       unsubPiProgress();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2184,20 +2209,16 @@ function App() {
       data-testid="pix-app"
       data-theme={colorMode}
       data-sidebar-translucent={sidebarTranslucent ? "true" : "false"}
+      data-bootstrap-ready={bootstrapReady ? "true" : "false"}
     >
       {/* Linux only (customWindowControls); Windows uses native titleBarOverlay. */}
       <WindowCaptionButtons />
-      {piInstallNotice ? (
-        <div
-          className="pi-install-banner pointer-events-none fixed inset-x-0 top-0 z-[2147483002] flex justify-center px-3 pt-2"
-          data-testid="pi-install-banner"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="pointer-events-none max-w-[min(520px,92vw)] truncate rounded-full border border-[var(--border)] bg-[var(--surface-panel)] px-3.5 py-1.5 text-[12px] text-[var(--foreground)] shadow-[var(--shadow-soft)]">
-            {piInstallNotice}
-          </div>
-        </div>
+      {!bootstrapReady ? (
+        <BootstrapOverlay
+          status={bootstrapStatus}
+          {...(bootstrapDetail ? { detail: bootstrapDetail } : {})}
+          {...(bootstrapError ? { error: bootstrapError } : {})}
+        />
       ) : null}
       <AppSidebar
         colorMode={colorMode}

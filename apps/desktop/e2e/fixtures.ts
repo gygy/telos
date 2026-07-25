@@ -188,8 +188,10 @@ async function launchPixApp(): Promise<LaunchedPix> {
 
   const page = await app.firstWindow({ timeout: 60_000 });
   await page.waitForSelector('[data-testid="pix-app"]', { timeout: 30_000 });
-  // Let cold-start bootstrap (packages/resources refresh) settle before UI clicks.
-  await page.waitForTimeout(800);
+  // Cold-start overlay (pi ensure + host config) must finish before UI clicks.
+  await page.waitForSelector('[data-testid="pix-app"][data-bootstrap-ready="true"]', {
+    timeout: 120_000,
+  });
 
   return { app, page, root, workspace, attachmentPaths, fakeModel };
 }
