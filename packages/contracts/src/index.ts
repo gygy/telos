@@ -375,8 +375,13 @@ export interface SessionHistoryMessage {
   title?: string;
   /** pi session entry id when available (fork target). */
   entryId?: string;
-  /** ISO timestamp when known. */
+  /**
+   * ISO timestamp when known.
+   * For tools: prefer toolCall start when paired; otherwise the result entry time.
+   */
   timestamp?: string;
+  /** ISO end time for tool rows (toolResult entry), when start was taken from toolCall. */
+  endedAt?: string;
 }
 
 /** Configured pi package row for Installed view. */

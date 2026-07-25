@@ -63,16 +63,21 @@
     background-position: -100% 0;
   }
 }
+/*
+ * Shimmer fill must NOT use currentColor: this rule sets color:transparent,
+ * so currentColor would paint an invisible gradient (e.g. “正在执行” vanishes).
+ */
 @utility shimmer {
   background-image: linear-gradient(
     90deg,
-    color-mix(in srgb, currentColor 35%, transparent) 0%,
-    color-mix(in srgb, currentColor 85%, transparent) 50%,
-    color-mix(in srgb, currentColor 35%, transparent) 100%
+    color-mix(in srgb, var(--text-subtle, var(--muted-foreground)) 40%, transparent) 0%,
+    var(--muted-foreground) 50%,
+    color-mix(in srgb, var(--text-subtle, var(--muted-foreground)) 40%, transparent) 100%
   );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   color: transparent;
   animation: pix-shimmer 1.4s linear infinite;
 }
@@ -106,7 +111,12 @@
   --hover-fill-foreground: oklch(0.985 0.004 260);
   --accent: var(--hover-fill);
   --accent-foreground: var(--hover-fill-foreground);
-  --destructive: oklch(0.396 0.141 25.723);
+  /*
+   * Error text on dark canvas — keep light enough to read (old 0.40 L was muddy).
+   * Solid destructive buttons still use this; contrast stays OK on dark surfaces.
+   */
+  --destructive: oklch(0.72 0.17 25);
+  --destructive-foreground: oklch(0.18 0.02 25);
   /* Chrome borders / row dividers (cards, composer, env, settings). */
   --border: #3c3c3c;
   --border-subtle: color-mix(in srgb, #ffffff 11%, transparent);
@@ -1429,7 +1439,7 @@ html[data-custom-window-controls="true"] .page-header {
   color: #16a34a;
 }
 .timeline-process {
-  margin: 4px 0 18px;
+  margin: 2px 0 14px;
 }
 .timeline-process-details {
   border: none;
@@ -1442,10 +1452,10 @@ html[data-custom-window-controls="true"] .page-header {
   gap: 4px;
   list-style: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-subtle);
   user-select: none;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--divider, var(--border));
   box-sizing: border-box;
   background: transparent;
@@ -1498,17 +1508,18 @@ html[data-custom-window-controls="true"] .page-header {
 .process-steps {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 2px 0 6px;
+  gap: 0;
+  padding: 0 0 4px;
   margin: 0;
 }
 /* Narrative / thinking text inside “已处理” — always readable (not the quiet tool-row gray). */
 .process-step-thinking {
-  margin: 8px 0 10px;
+  margin: 6px 0 8px;
   padding: 0;
   color: var(--foreground);
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.92;
 }
 .process-step-thinking-body {
   color: inherit;
@@ -1541,74 +1552,73 @@ html[data-custom-window-controls="true"] .page-header {
   cursor: pointer;
 }
 /*
- * Tool / command / group rows (“运行了多个命令”, “已运行 …”, “已编辑 …”):
- * quiet by default (same family as “已处理” header), full color on hover.
- * Narrative thinking above stays --foreground always.
+ * Tool rows: same quiet family as “已处理” header.
+ * Flat log density — no row fill, no command chips; hover only lifts text a notch.
  */
 .process-step-row {
-  /* Icon column starts at the same left edge as thinking prose. */
   box-sizing: border-box;
   width: 100%;
   margin: 0;
-  border-radius: 8px;
-  padding: 5px 4px 5px 0;
-  gap: 8px;
+  border-radius: 4px;
+  padding: 2px 2px 2px 0;
+  gap: 6px;
   color: var(--text-subtle);
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
+  font-size: 12.5px;
+  line-height: 1.45;
+  transition: color 0.12s ease;
 }
 .process-step-row:hover,
 .process-step-trigger:hover .process-step-row {
-  background: color-mix(in srgb, var(--muted-foreground) 8%, transparent);
-  color: var(--foreground);
+  background: transparent;
+  color: var(--muted-foreground);
 }
 .process-step-row.is-running {
   color: var(--text-subtle);
 }
+/* Error: verb/suffix use full error red (readable); command/path stay quiet. */
 .process-step-row.is-error {
-  color: var(--destructive, #ef4444);
+  color: var(--text-subtle);
 }
-.process-step-row.is-error:hover,
-.process-step-trigger:hover .process-step-row.is-error {
-  color: var(--destructive, #ef4444);
+.process-step-row.is-error .process-step-verb,
+.process-step-row.is-error .process-step-suffix {
+  color: var(--destructive);
+  font-weight: 500;
 }
-/* Expanded tool I/O under a step: readable body, not forced gray. */
+.process-step-row.is-error:hover .process-step-verb,
+.process-step-row.is-error:hover .process-step-suffix,
+.process-step-trigger:hover .process-step-row.is-error .process-step-verb,
+.process-step-trigger:hover .process-step-row.is-error .process-step-suffix {
+  color: color-mix(in srgb, var(--destructive) 88%, var(--foreground));
+}
 .process-step-body,
 .process-step-body-nested {
-  color: var(--foreground);
+  color: var(--muted-foreground);
 }
-/*
- * Nested rows live inside .process-step-group-body, which already pads by
- * icon+gap so content lines up with the group label (“运…” / “Ran…”).
- * Do not add a second margin here — that pushed verbs past the label.
- */
 .process-step-row-nested {
   position: relative;
   padding-left: 0;
   margin-left: 0;
 }
-/* Spinner for nested running rows: sit in the group’s icon column, not the text. */
 .process-step-row-nested .process-step-icon-nested {
   position: absolute;
-  left: calc(-1 * (0.875rem + 8px));
+  left: calc(-1 * (0.875rem + 6px));
   top: 50%;
   transform: translateY(-50%);
   margin: 0;
 }
 .process-step-icon {
   display: inline-flex;
-  width: 0.875rem; /* size-3.5 */
+  width: 0.875rem;
   height: 0.875rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  opacity: 0.85;
+  opacity: 0.55;
   color: inherit;
 }
 .process-step-row:hover .process-step-icon,
 .process-step-trigger:hover .process-step-icon {
-  opacity: 1;
+  opacity: 0.75;
 }
 .process-step-content {
   display: block;
@@ -1619,87 +1629,196 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .process-step-verb {
   color: inherit;
+  font-weight: 400;
+  flex-shrink: 0;
 }
-/* Command / query / path always stand out from the quiet verb. */
+/* Mono detail = structure only, never louder than the verb by default. */
 .process-step-detail {
-  color: var(--foreground);
+  color: inherit;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 0.92em;
+  font-size: 0.94em;
+  font-weight: 400;
+  opacity: 0.92;
+  transition: opacity 0.12s ease;
 }
-.process-step-detail-command {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--muted) 70%, transparent);
-  border-radius: 0.25rem;
-  padding: 0.05em 0.35em;
+.process-step-detail-command,
+.process-step-detail-query,
+.process-step-detail-muted {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-weight: 400;
 }
-.process-step-detail-query {
-  color: var(--foreground);
-  font-weight: 500;
+.process-step-row:hover .process-step-detail,
+.process-step-trigger:hover .process-step-detail {
+  opacity: 1;
+  color: inherit;
 }
-/* File path links: always highlighted (not only on hover). */
 .process-step-path {
   display: inline;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--link, #379cfc);
+  color: inherit;
   font: inherit;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 0.92em;
-  text-decoration: underline;
+  font-size: 0.94em;
+  text-decoration: none;
   text-underline-offset: 2px;
-  text-decoration-color: color-mix(in srgb, var(--link, #379cfc) 55%, transparent);
   cursor: pointer;
+  transition:
+    color 0.12s ease,
+    text-decoration-color 0.12s ease;
 }
+/* Path: underline only on direct hover — not whole-row blue. */
 .process-step-row:hover .process-step-path,
-.process-step-trigger:hover .process-step-path,
+.process-step-trigger:hover .process-step-path {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+}
 .process-step-path:hover {
   color: var(--link, #379cfc);
+  text-decoration: underline;
   text-decoration-color: currentColor;
-  filter: brightness(1.08);
 }
 .process-step-expand {
   color: inherit;
   margin-left: auto;
+  opacity: 0.35;
+}
+.process-step-row:hover .process-step-expand,
+.process-step-trigger:hover .process-step-expand {
+  opacity: 0.55;
 }
 
-/* Expand body under a top-level tool row: align with that row’s verb (after icon+gap). */
+/* Expand: bordered command/result panels under the row. */
 .process-step-body {
-  margin: 2px 0 6px;
-  padding-left: calc(0.875rem + 8px); /* size-3.5 + gap-2 */
+  margin: 2px 0 8px 0.35rem;
+  padding: 2px 0 2px calc(0.875rem + 2px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-/*
- * Nested child under “运行了多个命令”:
- * group-body already shifted to the text column — do NOT pad another icon+gap.
- * No tree rails / connector lines — only indent alignment.
- */
 .process-step-body-nested {
-  margin: 2px 0 8px;
+  margin: 2px 0 6px;
   padding-left: 0;
-  border-left: none;
 }
 .process-step-group {
-  margin: 1px 0;
+  margin: 2px 0 4px;
 }
 .process-step-group-body {
-  margin: 2px 0 6px;
-  padding-left: calc(0.875rem + 8px); /* size-3.5 + gap-2 → align with “运” */
+  margin: 1px 0 4px;
+  padding-left: calc(0.875rem + 6px);
 }
-.process-step-pre {
-  margin: 4px 0;
+/* Tool type chip (bash / powershell / …) — only on expandable rows. */
+.process-step-type {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 3px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  opacity: 0.7;
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-step-row:hover .process-step-type,
+.process-step-trigger:hover .process-step-type,
+.process-step-row.is-open .process-step-type {
+  opacity: 0.9;
+}
+.process-step-panel {
+  position: relative;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted, #222) 55%, transparent);
+  overflow: hidden;
+}
+.process-step-panel-input {
+  background: color-mix(in srgb, var(--muted, #222) 35%, transparent);
+}
+.process-step-panel-output {
+  background: color-mix(in srgb, var(--muted, #222) 62%, transparent);
+}
+.process-step-panel-pre {
+  margin: 0;
   max-height: 220px;
   overflow: auto;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--muted) 55%, transparent);
-  /* Tool output body: normal readable tone (not the quiet tool-row gray). */
-  color: var(--foreground);
+  padding: 8px 10px;
+  color: var(--muted-foreground);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11.5px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.process-step-panel-input .process-step-panel-pre {
+  color: var(--text-subtle);
+}
+.process-step-panel-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--background, #191919) 88%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.process-step-panel.is-copyable:hover .process-step-panel-copy,
+.process-step-panel.is-copyable:focus-within .process-step-panel-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
+.process-step-panel-copy:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--border) 100%, transparent);
+}
+/* Legacy bare pre (kept for safety if any caller still uses it). */
+.process-step-pre {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 2px 0 4px;
+}
+.process-step-pre:first-child {
+  color: var(--text-subtle);
+}
+.process-step-pre-follow {
+  margin-top: 2px;
+  color: var(--muted-foreground);
 }
 .process-step-body-nested .process-step-pre {
   margin-left: 0;
@@ -1902,8 +2021,20 @@ html[data-custom-window-controls="true"] .page-header {
   color: var(--muted-foreground);
 }
 .content-system-card.is-error {
-  border-left-color: color-mix(in srgb, var(--destructive) 72%, transparent);
+  border-left-color: var(--destructive);
+  border-left-width: 3px;
   color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+  border-radius: 0 6px 6px 0;
+  padding: 6px 10px 6px 12px;
+}
+.content-system-card.is-error .content-system-title {
+  color: var(--destructive);
+  font-weight: 600;
+}
+.content-system-card.is-error .content-system-body {
+  color: color-mix(in srgb, var(--destructive) 82%, var(--foreground));
+  opacity: 0.95;
 }
 .content-system-title {
   margin-bottom: 2px;
@@ -3416,20 +3547,19 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   @apply flex shrink-0 items-center justify-end gap-2 px-6 pt-3 pb-5;
 }
 .settings-provider-form {
-  @apply flex flex-col gap-1 border-b border-[var(--border)] pb-3;
+  @apply flex w-full min-w-0 flex-col gap-1 border-b border-[var(--border)] pb-3;
 }
-/* API key form: compact controls — provider select is mid-width (not full column). */
+/* API key form: provider select + key row fill the settings card width. */
 .settings-provider-field {
-  max-width: 22rem;
+  @apply w-full min-w-0 max-w-none;
 }
 .settings-provider-field-key {
-  max-width: 28rem; /* key + save button */
+  @apply w-full min-w-0 max-w-none;
 }
 .settings-provider-select {
-  /* Fit label, but never stretch across the settings column. */
-  width: fit-content !important;
-  max-width: 17rem; /* ~272px — room for longer provider display names */
-  min-width: 12rem;
+  width: 100% !important;
+  max-width: none;
+  min-width: 0;
 }
 .provider-oauth-dialog {
   border-radius: calc(var(--radius-panel) + 3px);

@@ -481,13 +481,127 @@ type SessionHistoryEntryLike = {
   timestamp?: string;
   summary?: string;
   message?: {
-    role?: string;
+    role?: string | undefined;
     content?: unknown;
-    toolName?: string;
-    isError?: boolean;
-    customType?: string;
+    toolName?: string | undefined;
+    toolCallId?: string | undefined;
+    isError?: boolean | undefined;
+    customType?: string | undefined;
+    args?: unknown;
+    arguments?: unknown;
+    input?: unknown;
+    command?: string | undefined;
+    output?: string | undefined;
+    exitCode?: number | undefined;
+    excludeFromContext?: boolean | undefined;
+    details?: unknown;
+    /** pi often stores ms epoch on the message as well as entry ISO. */
+    timestamp?: string | number | undefined;
   };
 };
+
+/** Args recorded on assistant `toolCall` parts — paired later onto `toolResult` by id. */
+type PendingToolCall = {
+  toolName?: string;
+  args?: unknown;
+  command?: string;
+  startedAt?: string;
+};
+
+/** Prefer real message ms epoch, then entry ISO — never invent times. */
+function isoFromRecordedTime(
+  messageTs: string | number | undefined,
+  entryTs: string | undefined,
+): string | undefined {
+  if (typeof messageTs === "number" && Number.isFinite(messageTs) && messageTs > 0) {
+    const d = new Date(messageTs);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  if (typeof messageTs === "string" && messageTs.trim()) {
+    const t = new Date(messageTs).getTime();
+    if (!Number.isNaN(t)) return new Date(t).toISOString();
+  }
+  if (typeof entryTs === "string" && entryTs.trim()) {
+    const t = new Date(entryTs).getTime();
+    if (!Number.isNaN(t)) return entryTs;
+  }
+  return undefined;
+}
+
+/**
+ * pi stores command/path on the assistant message (`toolCall.arguments`), while the
+ * result message (`toolResult`) only has toolCallId + output. Without joining them,
+ * history reload shows bare "bash" with no command/path.
+ */
+function harvestToolCallsFromAssistantContent(
+  content: unknown,
+  startedAt: string | undefined,
+  into: Map<string, PendingToolCall>,
+): void {
+  if (!Array.isArray(content)) return;
+  for (const part of content) {
+    if (!part || typeof part !== "object" || Array.isArray(part)) continue;
+    const row = part as {
+      type?: unknown;
+      id?: unknown;
+      name?: unknown;
+      arguments?: unknown;
+      args?: unknown;
+      input?: unknown;
+    };
+    if (row.type !== "toolCall" && row.type !== "tool_use") continue;
+    if (typeof row.id !== "string" || !row.id.trim()) continue;
+    const args =
+      row.arguments !== undefined
+        ? row.arguments
+        : row.args !== undefined
+          ? row.args
+          : row.input !== undefined
+            ? row.input
+            : undefined;
+    let command: string | undefined;
+    if (args && typeof args === "object" && !Array.isArray(args)) {
+      const bag = args as Record<string, unknown>;
+      for (const key of ["command", "cmd"] as const) {
+        const v = bag[key];
+        if (typeof v === "string" && v.trim()) {
+          command = v.trim();
+          break;
+        }
+      }
+    }
+    const pending: PendingToolCall = {};
+    if (typeof row.name === "string" && row.name.trim()) pending.toolName = row.name.trim();
+    if (args !== undefined) pending.args = args;
+    if (command) pending.command = command;
+    if (startedAt) pending.startedAt = startedAt;
+    into.set(row.id, pending);
+  }
+}
+
+function enrichToolResultWithPendingCall(
+  message: NonNullable<SessionHistoryEntryLike["message"]>,
+  pending: Map<string, PendingToolCall>,
+): NonNullable<SessionHistoryEntryLike["message"]> & { _toolStartedAt?: string } {
+  const callId = typeof message.toolCallId === "string" ? message.toolCallId : undefined;
+  const call = callId ? pending.get(callId) : undefined;
+  if (!call) return message;
+
+  const hasArgs =
+    message.args !== undefined || message.arguments !== undefined || message.input !== undefined;
+  const enriched: NonNullable<SessionHistoryEntryLike["message"]> & { _toolStartedAt?: string } = {
+    ...message,
+  };
+  if (!hasArgs && call.args !== undefined) enriched.args = call.args;
+  if (!(typeof message.command === "string" && message.command.trim()) && call.command) {
+    enriched.command = call.command;
+  }
+  if (!(typeof message.toolName === "string" && message.toolName.trim()) && call.toolName) {
+    enriched.toolName = call.toolName;
+  }
+  if (call.startedAt) enriched._toolStartedAt = call.startedAt;
+  return enriched;
+}
 
 /**
  * Build timeline history from the active branch (root → leaf).
@@ -504,11 +618,36 @@ export function projectHistoryFromSessionManager(sessionManager: {
     typeof sessionManager.getBranch === "function"
       ? sessionManager.getBranch()
       : sessionManager.getEntries();
+  /** toolCallId → args/command from earlier assistant toolCall parts on this branch. */
+  const pendingToolCalls = new Map<string, PendingToolCall>();
+
   for (const entry of entries) {
     if (entry.type === "message") {
-      const projected = projectSessionHistory([entry.message], [entry.id]);
+      const message = entry.message;
+      const recordedAt = isoFromRecordedTime(message?.timestamp, entry.timestamp);
+      if (message?.role === "assistant") {
+        // All toolCalls in one assistant message share this recorded time (pi has no per-call start).
+        harvestToolCallsFromAssistantContent(message.content, recordedAt, pendingToolCalls);
+      }
+      const toProject =
+        message?.role === "toolResult" && message
+          ? enrichToolResultWithPendingCall(message, pendingToolCalls)
+          : message;
+      const projected = projectSessionHistory([toProject], [entry.id]);
       for (const item of projected) {
-        if (entry.timestamp) item.timestamp = entry.timestamp;
+        if (item.role === "tool" && toProject && typeof toProject === "object") {
+          const startedAt = (toProject as { _toolStartedAt?: unknown })._toolStartedAt;
+          const endedAt = isoFromRecordedTime(message?.timestamp, entry.timestamp);
+          if (typeof startedAt === "string" && startedAt.trim() && endedAt) {
+            item.timestamp = startedAt;
+            item.endedAt = endedAt;
+          } else if (endedAt) {
+            // Result only — no paired start; do not invent a duration (need both bounds).
+            item.timestamp = endedAt;
+          }
+        } else if (recordedAt) {
+          item.timestamp = recordedAt;
+        }
         history.push(item);
       }
       continue;

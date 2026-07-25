@@ -74,6 +74,78 @@ describe("session history projection", () => {
     ]);
   });
 
+  it("pairs assistant toolCall args onto later toolResult by toolCallId (pi session shape)", () => {
+    const history = projectHistoryFromSessionManager({
+      getEntries: () => [
+        {
+          type: "message",
+          id: "a1",
+          timestamp: "2026-01-01T00:00:00.000Z",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "call-1",
+                name: "bash",
+                arguments: { command: "pwd; git status" },
+              },
+              {
+                type: "toolCall",
+                id: "call-2",
+                name: "read",
+                arguments: { path: "C:\\\\state.json", offset: 1, limit: 200 },
+              },
+            ],
+          },
+        },
+        {
+          type: "message",
+          id: "t1",
+          timestamp: "2026-01-01T00:00:23.000Z",
+          message: {
+            role: "toolResult",
+            toolCallId: "call-1",
+            toolName: "bash",
+            content: [{ type: "text", text: "/tmp\nok" }],
+            isError: false,
+          },
+        },
+        {
+          type: "message",
+          id: "t2",
+          timestamp: "2026-01-01T00:00:24.000Z",
+          message: {
+            role: "toolResult",
+            toolCallId: "call-2",
+            toolName: "read",
+            content: [{ type: "text", text: '{ "version": 1 }' }],
+            isError: false,
+          },
+        },
+      ],
+    });
+    const tools = history.filter((h) => h.role === "tool");
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toMatchObject({
+      role: "tool",
+      toolName: "bash",
+      command: "pwd; git status",
+      args: { command: "pwd; git status" },
+      text: "/tmp\nok",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      endedAt: "2026-01-01T00:00:23.000Z",
+    });
+    expect(tools[1]).toMatchObject({
+      role: "tool",
+      toolName: "read",
+      args: { path: "C:\\\\state.json", offset: 1, limit: 200 },
+      text: '{ "version": 1 }',
+      timestamp: "2026-01-01T00:00:00.000Z",
+      endedAt: "2026-01-01T00:00:24.000Z",
+    });
+  });
+
   it("projects compaction entries instead of dropping them", () => {
     expect(
       projectHistoryFromSessionManager({

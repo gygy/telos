@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   BookOpen,
   Brain,
@@ -48,15 +48,21 @@ import {
 } from "../lib/composer-suggestions.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import {
+  extractCommandFromArgs,
   groupConsecutiveTools,
+  isWeakToolLabel,
   processToolView,
   type ProcessToolKind,
   type ProcessToolView,
 } from "../lib/process-activity.ts";
 import {
   elapsedDurationLabel,
+  formatDurationMs,
   formatMessageTime,
+  groupDurationMs,
+  hasIndependentToolDuration,
   resolveProcessActivity,
+  toolDurationMs,
   type ProcessActivity,
   type ProcessActivityPhase,
   type TimelineItem,
@@ -706,7 +712,10 @@ function FilePenLineIcon(props: { className?: string; strokeWidth?: number }) {
 }
 
 type ToolRowParts = {
-  /** Leading status verb, e.g. 已读取 / 已运行 / 已在 */
+  /**
+   * Leading action phrase — pick natural wording per kind/status
+   * (运行 / 正在运行; 读取 path; 在 path 中搜索 …). Error never changes copy.
+   */
   verb: string;
   /** Optional path rendered as accent link */
   path?: string;
@@ -715,8 +724,61 @@ type ToolRowParts = {
   /** Trailing detail (command / query / free text) */
   detail?: string;
   /** Visual weight for the detail span. */
-  detailTone?: "command" | "query" | "plain";
+  detailTone?: "command" | "query" | "plain" | "muted";
+  /** Optional trailing fragment (reserved; error no longer uses “失败” here). */
+  suffix?: string;
 };
+
+/**
+ * Bare tool ids (bash/read) after a verb are noise — omit, or paint muted if kept.
+ * Real commands/paths keep command/query/path styling.
+ */
+function detailFromView(
+  toolName: string,
+  view: ProcessToolView,
+  prefer: "command" | "query" | "plain",
+): Pick<ToolRowParts, "detail" | "detailTone"> {
+  const text = (view.preview || view.detail || "").trim();
+  if (!text) return {};
+  const weak = view.weak === true || isWeakToolLabel(text, toolName);
+  // "执行 bash" / "读取 read" — drop the redundant tool name entirely.
+  if (weak && isWeakToolLabel(text, toolName)) {
+    return {};
+  }
+  if (weak) {
+    return { detail: text, detailTone: "muted" };
+  }
+  return { detail: text, detailTone: prefer };
+}
+
+function processStatusVerb(
+  locale: Locale,
+  kind: ProcessToolKind,
+  toolName: string,
+  status: "running" | "error",
+): string {
+  const tr = (key: MessageKey, vars?: Record<string, string>) => t(locale, key, vars);
+  const running: Record<ProcessToolKind, MessageKey> = {
+    read: "timeline.process.readRunning",
+    run: "timeline.process.runRunning",
+    search: "timeline.process.searchRunning",
+    edit: "timeline.process.editRunning",
+    write: "timeline.process.writeRunning",
+    list: "timeline.process.listRunning",
+    generic: "timeline.process.genericRunning",
+  };
+  const failed: Record<ProcessToolKind, MessageKey> = {
+    read: "timeline.process.readFailed",
+    run: "timeline.process.runFailed",
+    search: "timeline.process.searchFailed",
+    edit: "timeline.process.editFailed",
+    write: "timeline.process.writeFailed",
+    list: "timeline.process.listFailed",
+    generic: "timeline.process.genericFailed",
+  };
+  const key = status === "running" ? running[kind] : failed[kind];
+  return tr(key, { tool: toolName });
+}
 
 function toolRowParts(
   locale: Locale,
@@ -729,58 +791,107 @@ function toolRowParts(
   if (view.kind === "read") {
     parts = view.path
       ? { verb: tr("timeline.process.read"), path: view.path }
-      : { verb: tr("timeline.process.read"), detail: view.preview, detailTone: "plain" };
+      : { verb: tr("timeline.process.read"), ...detailFromView(toolName, view, "plain") };
   } else if (view.kind === "run") {
-    // Prefer full command detail over tool name alone ("bash").
-    const cmd = view.preview && view.preview !== toolName ? view.preview : view.detail;
-    parts = {
-      verb: tr("timeline.process.run"),
-      detail: cmd && cmd !== toolName ? cmd : view.preview || toolName,
-      detailTone: "command",
-    };
+    const runDetail = detailFromView(toolName, view, "command");
+    // 有具体命令：运行 git status · 无命令时：运行命令（避免只剩「运行」二字不知对象）
+    parts = runDetail.detail
+      ? { verb: tr("timeline.process.run"), ...runDetail }
+      : { verb: tr("timeline.process.runOpen") };
   } else if (view.kind === "search") {
-    parts = view.path
-      ? {
-          verb: locale === "zh" ? "已在" : "Searched",
-          path: view.path,
-          mid: locale === "zh" ? "中搜索" : "for",
-          detail: `“${view.detail}”`,
-          detailTone: "query",
-        }
-      : {
-          verb: tr("timeline.process.search"),
-          detail: `“${view.detail}”`,
-          detailTone: "query",
-        };
+    if (view.weak || isWeakToolLabel(view.detail, toolName)) {
+      parts = { verb: tr("timeline.process.search") };
+    } else if (view.path) {
+      parts = {
+        // ZH: 在 a.ts 中搜索 “render” · EN: Searched a.ts for “render”
+        verb: locale === "zh" ? "在" : tr("timeline.process.search"),
+        path: view.path,
+        mid: locale === "zh" ? "中搜索" : "for",
+        detail: `“${view.detail}”`,
+        detailTone: "query",
+      };
+    } else {
+      parts = {
+        verb: tr("timeline.process.search"),
+        detail: `“${view.detail}”`,
+        detailTone: "query",
+      };
+    }
   } else if (view.kind === "edit") {
     parts = view.path
       ? { verb: tr("timeline.process.edit"), path: view.path }
-      : { verb: tr("timeline.process.edit"), detail: view.preview, detailTone: "plain" };
+      : { verb: tr("timeline.process.edit"), ...detailFromView(toolName, view, "plain") };
   } else if (view.kind === "write") {
     parts = view.path
       ? { verb: tr("timeline.process.write"), path: view.path }
-      : { verb: tr("timeline.process.write"), detail: view.preview, detailTone: "plain" };
+      : { verb: tr("timeline.process.write"), ...detailFromView(toolName, view, "plain") };
   } else if (view.kind === "list") {
     parts = view.path
       ? { verb: tr("timeline.process.list"), path: view.path }
-      : { verb: tr("timeline.process.list"), detail: view.preview, detailTone: "plain" };
+      : { verb: tr("timeline.process.list"), ...detailFromView(toolName, view, "plain") };
   } else {
     parts = {
       verb: tr("timeline.process.generic", { tool: toolName }),
-      ...(view.preview !== toolName ? { detail: view.preview, detailTone: "plain" as const } : {}),
+      ...detailFromView(toolName, view, "plain"),
     };
   }
 
   if (status === "running") {
-    return { ...parts, verb: `${parts.verb} · ${tr("timeline.process.running")}` };
+    // 正在执行 pnpm check / Reading path
+    const running = { ...parts, verb: processStatusVerb(locale, view.kind, toolName, "running") };
+    // Search mid while running: 在 path 中搜索 (no 了)
+    if (view.kind === "search" && parts.path && locale === "zh") {
+      return { ...running, mid: "中搜索" };
+    }
+    return running;
   }
   if (status === "error") {
-    return { ...parts, verb: `${parts.verb} · ${tr("timeline.process.failed")}` };
+    // Never append “失败” / “Failed to …” in the label — error is color-only (is-error).
+    // Same wording as completed; details live in the expand panels.
+    return parts;
   }
   return parts;
 }
 
-function groupSummaryLabel(locale: Locale, kind: ProcessToolKind): string {
+/** Expanded-row title: 运行命令 / 读取文件 …（时长仅本条；失败不改文案） */
+function processOpenTitle(
+  locale: Locale,
+  kind: ProcessToolKind,
+  toolName: string,
+  status: "running" | "completed" | "error" = "completed",
+): string {
+  const tr = (key: MessageKey, vars?: Record<string, string>) => t(locale, key, vars);
+  if (status === "running") {
+    return processStatusVerb(locale, kind, toolName, "running");
+  }
+  // completed + error share open titles (no “运行失败” / “Failed”).
+  switch (kind) {
+    case "read":
+      return tr("timeline.process.readOpen");
+    case "run":
+      return tr("timeline.process.runOpen");
+    case "search":
+      return tr("timeline.process.searchOpen");
+    case "edit":
+      return tr("timeline.process.editOpen");
+    case "write":
+      return tr("timeline.process.writeOpen");
+    case "list":
+      return tr("timeline.process.listOpen");
+    default:
+      return tr("timeline.process.genericOpen", { tool: toolName });
+  }
+}
+
+/** Short tool-type chip (bash / powershell / read …). */
+function processToolTypeLabel(toolName: string): string {
+  const name = toolName.trim();
+  if (!name) return "tool";
+  const base = name.includes("/") ? (name.split("/").pop() ?? name) : name;
+  return base.length > 18 ? `${base.slice(0, 17)}…` : base;
+}
+
+function groupSummaryLabel(locale: Locale, kind: ProcessToolKind, count: number): string {
   const key: MessageKey =
     kind === "read"
       ? "timeline.process.group.read"
@@ -795,7 +906,7 @@ function groupSummaryLabel(locale: Locale, kind: ProcessToolKind): string {
               : kind === "list"
                 ? "timeline.process.group.list"
                 : "timeline.process.group.generic";
-  return t(locale, key);
+  return t(locale, key, { count: String(count) });
 }
 
 function ProcessPathLink(props: {
@@ -819,11 +930,96 @@ function ProcessPathLink(props: {
   );
 }
 
+/**
+ * Expand body: command/args + result.
+ * History often only has output — reconstruct a minimal input from path/command when args missing.
+ */
+function processToolExpandBodies(
+  item: Extract<TimelineItem, { kind: "tool" }>,
+  view: ProcessToolView,
+): { input?: string; output?: string } {
+  let input: string | undefined;
+  if (item.args !== undefined) {
+    // Prefer a single-line command string for shell tools when we can extract it.
+    if (view.kind === "run") {
+      const cmd = extractCommandFromArgs(item.args);
+      input = cmd || structuredText(item.args);
+    } else {
+      input = structuredText(item.args);
+    }
+  } else if (!view.weak) {
+    if (view.kind === "run" && view.detail.trim()) input = view.detail;
+    else if (view.path) input = view.path;
+    else if (view.kind === "search" && view.detail.trim()) input = view.detail;
+    else if (view.detail.trim()) input = view.detail;
+  }
+  const output = item.output?.trim() ? item.output : undefined;
+  return {
+    ...(input ? { input } : {}),
+    ...(output ? { output } : {}),
+  };
+}
+
+/** Bordered pre panel; optional hover copy (top-right) for result blocks. */
+function ProcessStepPanel(props: {
+  text: string;
+  locale: Locale;
+  copyable?: boolean | undefined;
+  className?: string | undefined;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyText(props.text);
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    }
+  }
+
+  return (
+    <div className={cn("process-step-panel", props.copyable && "is-copyable", props.className)}>
+      {props.copyable ? (
+        <button
+          type="button"
+          className="process-step-panel-copy"
+          onClick={(e) => void handleCopy(e)}
+          aria-label={t(
+            props.locale,
+            copied ? "timeline.process.copiedOutput" : "timeline.process.copyOutput",
+          )}
+          title={t(
+            props.locale,
+            copied ? "timeline.process.copiedOutput" : "timeline.process.copyOutput",
+          )}
+        >
+          {copied ? (
+            <Check className="size-3" strokeWidth={2} />
+          ) : (
+            <Copy className="size-3" strokeWidth={2} />
+          )}
+          <span>
+            {t(
+              props.locale,
+              copied ? "timeline.process.copiedOutput" : "timeline.process.copyOutput",
+            )}
+          </span>
+        </button>
+      ) : null}
+      <pre className="process-step-panel-pre">{props.text}</pre>
+    </div>
+  );
+}
+
 function ProcessToolRow(props: {
   item: Extract<TimelineItem, { kind: "tool" }>;
   locale: Locale;
   workspacePath?: string | undefined;
   nested?: boolean | undefined;
+  /** Sibling tools in the same group — used to detect shared parallel start times. */
+  groupSiblings?: Array<Extract<TimelineItem, { kind: "tool" }>> | undefined;
 }) {
   const view = processToolView(
     props.item.toolName,
@@ -831,12 +1027,39 @@ function ProcessToolRow(props: {
     props.item.output ? { output: props.item.output } : undefined,
   );
   const parts = toolRowParts(props.locale, props.item.toolName, view, props.item.status);
+  const expand = processToolExpandBodies(props.item, view);
   const [open, setOpen] = useState(false);
-  const hasBody = props.item.args !== undefined || Boolean(props.item.output);
+  const hasBody = Boolean(expand.input || expand.output);
 
   const running = props.item.status === "running";
-  // Nested under a group (“运行了多个命令”): no in-flow icon so the verb shares
-  // the left edge with the group label (group-body already pads icon+gap).
+  // Duration only from real tool timestamps (start + end, or start→now while running).
+  // Never invent end time for completed tools that lack endedAt.
+  const now = useNow(running && Boolean(props.item.timestamp));
+  const siblings = props.groupSiblings ?? [props.item];
+  // Parallel toolCalls share one assistant start — don't show the same batch span on every child.
+  const independent = hasIndependentToolDuration(props.item, siblings);
+  const durationMs = independent || !props.nested ? toolDurationMs(props.item, now) : undefined;
+  const duration =
+    durationMs !== undefined ? formatDurationMs(durationMs, props.locale) : undefined;
+
+  const openTitleBase = processOpenTitle(
+    props.locale,
+    view.kind,
+    props.item.toolName,
+    props.item.status,
+  );
+  // Per-tool duration only when this row is expanded and time is independently measured.
+  const openTitle =
+    open && duration != null && duration !== ""
+      ? t(props.locale, "timeline.process.titleWithDuration", {
+          title: openTitleBase,
+          duration,
+        })
+      : openTitleBase;
+
+  const typeLabel = hasBody ? processToolTypeLabel(props.item.toolName) : undefined;
+
+  // Nested under a group: no in-flow icon so the verb shares the left edge with the group label.
   // Running spinner sits in the left gutter via CSS, not the text column.
   const row = (
     <Marker
@@ -846,11 +1069,13 @@ function ProcessToolRow(props: {
         props.nested && "process-step-row-nested",
         props.item.status === "error" && "is-error",
         running && "is-running",
+        open && "is-open",
       )}
       data-kind="tool"
       data-tool-kind={view.kind}
       data-status={props.item.status}
       data-nested={props.nested ? "true" : undefined}
+      data-open={open ? "true" : undefined}
     >
       {props.nested ? (
         running ? (
@@ -868,35 +1093,52 @@ function ProcessToolRow(props: {
         </MarkerIcon>
       )}
       <MarkerContent className="process-step-content min-w-0 flex-1">
-        {/* Only the status verb shimmers while running — path/detail stay solid. */}
-        <span className={cn("process-step-verb", running && "shimmer")}>{parts.verb}</span>
-        {parts.path ? (
+        {open ? (
+          <span className={cn("process-step-verb", running && "shimmer")}>{openTitle}</span>
+        ) : (
           <>
-            {" "}
-            <ProcessPathLink path={parts.path} workspacePath={props.workspacePath} />
+            <span className={cn("process-step-verb", running && "shimmer")}>{parts.verb}</span>
+            {parts.path ? (
+              <>
+                {" "}
+                <ProcessPathLink path={parts.path} workspacePath={props.workspacePath} />
+              </>
+            ) : null}
+            {parts.mid ? (
+              <>
+                {" "}
+                <span className={cn("process-step-verb", running && "shimmer")}>{parts.mid}</span>
+              </>
+            ) : null}
+            {parts.detail ? (
+              <>
+                {" "}
+                <span
+                  className={cn(
+                    "process-step-detail",
+                    parts.detailTone === "command" && "process-step-detail-command",
+                    parts.detailTone === "query" && "process-step-detail-query",
+                    parts.detailTone === "muted" && "process-step-detail-muted",
+                  )}
+                >
+                  {parts.detail}
+                </span>
+              </>
+            ) : null}
+            {parts.suffix ? (
+              <>
+                {" "}
+                <span className="process-step-verb process-step-suffix">{parts.suffix}</span>
+              </>
+            ) : null}
           </>
-        ) : null}
-        {parts.mid ? (
-          <>
-            {" "}
-            <span className={cn("process-step-verb", running && "shimmer")}>{parts.mid}</span>
-          </>
-        ) : null}
-        {parts.detail ? (
-          <>
-            {" "}
-            <span
-              className={cn(
-                "process-step-detail",
-                parts.detailTone === "command" && "process-step-detail-command",
-                parts.detailTone === "query" && "process-step-detail-query",
-              )}
-            >
-              {parts.detail}
-            </span>
-          </>
-        ) : null}
+        )}
       </MarkerContent>
+      {typeLabel ? (
+        <span className="process-step-type" title={props.item.toolName}>
+          {typeLabel}
+        </span>
+      ) : null}
       {hasBody ? (
         <ChevronRight
           className={cn(
@@ -911,6 +1153,12 @@ function ProcessToolRow(props: {
 
   if (!hasBody) return row;
 
+  const inputText =
+    expand.input &&
+    (view.kind === "run" && !expand.input.startsWith("$") && !expand.input.startsWith("{")
+      ? `$ ${expand.input}`
+      : expand.input);
+
   return (
     <Collapsible
       open={open}
@@ -922,16 +1170,27 @@ function ProcessToolRow(props: {
         {row}
       </CollapsibleTrigger>
       {/*
-        Nested under “运行了多个命令”: body must share the child row’s text edge
+        Nested under a multi-step group: body shares the child row’s text edge
         (no second icon+gap pad). Top-level tools keep icon-column indent.
       */}
       <CollapsibleContent
         className={cn("process-step-body", props.nested && "process-step-body-nested")}
       >
-        {props.item.args !== undefined ? (
-          <pre className="process-step-pre">{structuredText(props.item.args)}</pre>
+        {inputText ? (
+          <ProcessStepPanel
+            text={inputText}
+            locale={props.locale}
+            className="process-step-panel-input"
+          />
         ) : null}
-        {props.item.output ? <pre className="process-step-pre">{props.item.output}</pre> : null}
+        {expand.output ? (
+          <ProcessStepPanel
+            text={expand.output}
+            locale={props.locale}
+            copyable
+            className="process-step-panel-output"
+          />
+        ) : null}
       </CollapsibleContent>
     </Collapsible>
   );
@@ -946,6 +1205,18 @@ function ProcessToolGroup(props: {
   const [open, setOpen] = useState(false);
   const anyRunning = props.items.some((i) => i.status === "running");
   const anyError = props.items.some((i) => i.status === "error");
+  // Expanded only: group duration from real timestamps (parallel clusters counted once).
+  const now = useNow(open && anyRunning);
+  const totalMs = open ? groupDurationMs(props.items, now) : undefined;
+  const durationLabel = totalMs !== undefined ? formatDurationMs(totalMs, props.locale) : undefined;
+  const baseLabel = groupSummaryLabel(props.locale, props.kind, props.items.length);
+  const label =
+    open && durationLabel != null && durationLabel !== ""
+      ? t(props.locale, "timeline.process.titleWithDuration", {
+          title: baseLabel,
+          duration: durationLabel,
+        })
+      : baseLabel;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="process-step-group">
@@ -957,6 +1228,7 @@ function ProcessToolGroup(props: {
             "process-step-row process-step-group-row min-h-0 gap-2 text-[13px]",
             anyError && "is-error",
             anyRunning && "is-running",
+            open && "is-open",
           )}
           data-kind="tool-group"
           data-tool-kind={props.kind}
@@ -969,7 +1241,7 @@ function ProcessToolGroup(props: {
             )}
           </MarkerIcon>
           <MarkerContent className="min-w-0 flex-1 truncate">
-            {groupSummaryLabel(props.locale, props.kind)}
+            <span className={cn("process-step-verb", anyRunning && "shimmer")}>{label}</span>
           </MarkerContent>
           <ChevronRight
             className={cn(
@@ -988,6 +1260,7 @@ function ProcessToolGroup(props: {
             locale={props.locale}
             workspacePath={props.workspacePath}
             nested
+            groupSiblings={props.items}
           />
         ))}
       </CollapsibleContent>

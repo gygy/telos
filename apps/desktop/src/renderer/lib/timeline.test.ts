@@ -11,6 +11,10 @@ import {
   processBlockCoversLiveActivity,
   projectEventsToTimeline,
   splitAttachedPaths,
+  groupDurationMs,
+  hasIndependentToolDuration,
+  sumToolDurationsMs,
+  toolDurationMs,
 } from "./timeline.ts";
 
 function runtimeEvent(sequence: number, event: RuntimeEvent): HostEvent {
@@ -331,6 +335,89 @@ describe("process activity", () => {
         "zh",
       ),
     ).toBe("1 分");
+  });
+
+  it("measures tool duration only from real start/end timestamps", () => {
+    expect(
+      toolDurationMs({
+        timestamp: "2026-01-01T00:00:00.000Z",
+        endedAt: "2026-01-01T00:00:10.000Z",
+      }),
+    ).toBe(10_000);
+    // Completed without endedAt — never invent end = now
+    expect(
+      toolDurationMs({
+        timestamp: "2026-01-01T00:00:00.000Z",
+        status: "completed",
+      }),
+    ).toBeUndefined();
+    // Running may use now for live elapsed
+    expect(
+      toolDurationMs(
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          status: "running",
+        },
+        Date.parse("2026-01-01T00:00:05.000Z"),
+      ),
+    ).toBe(5_000);
+    // Naive sum counts parallel spans n times
+    expect(
+      sumToolDurationsMs([
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          endedAt: "2026-01-01T00:00:10.000Z",
+        },
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          endedAt: "2026-01-01T00:00:12.000Z",
+        },
+      ]),
+    ).toBe(22_000);
+    // Group clusters parallel tools by shared start → one wall span (12s, not 22s)
+    expect(
+      groupDurationMs([
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          endedAt: "2026-01-01T00:00:10.000Z",
+        },
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          endedAt: "2026-01-01T00:00:12.000Z",
+        },
+      ]),
+    ).toBe(12_000);
+    // Sequential distinct starts still sum
+    expect(
+      groupDurationMs([
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          endedAt: "2026-01-01T00:00:10.000Z",
+        },
+        {
+          timestamp: "2026-01-01T00:00:10.000Z",
+          endedAt: "2026-01-01T00:00:15.000Z",
+        },
+      ]),
+    ).toBe(15_000);
+    expect(
+      hasIndependentToolDuration(
+        { timestamp: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:10.000Z" },
+        [
+          { timestamp: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:10.000Z" },
+          { timestamp: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:12.000Z" },
+        ],
+      ),
+    ).toBe(false);
+    expect(
+      hasIndependentToolDuration(
+        { timestamp: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:10.000Z" },
+        [
+          { timestamp: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:10.000Z" },
+          { timestamp: "2026-01-01T00:00:10.000Z", endedAt: "2026-01-01T00:00:15.000Z" },
+        ],
+      ),
+    ).toBe(true);
   });
 
   it("derives live activity from recent runtime events", () => {

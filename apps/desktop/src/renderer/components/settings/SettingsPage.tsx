@@ -2324,6 +2324,7 @@ function ProvidersSection(
             <span>{tr("auth.provider")}</span>
             <SettingsSelect
               testId="provider-select"
+              fullWidth
               className="settings-provider-select"
               value={keyProvider || (providers[0]?.provider ?? "")}
               onChange={setKeyProvider}
@@ -2342,7 +2343,7 @@ function ProvidersSection(
                 data-testid="provider-api-key-input"
                 type="password"
                 autoComplete="off"
-                className="min-w-0 flex-1"
+                className="min-w-0 w-full flex-1"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={loading}
@@ -3633,21 +3634,28 @@ function piViewToDraft(view: PiSettingsView): PiDraft {
   };
 }
 
-function piDraftEqual(a: PiDraft, b: PiDraft): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 function PiSettingsSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
   const [view, setView] = useState<PiSettingsView | undefined>();
   const [prefs, setPrefs] = useState<PiDraft | undefined>();
-  const [saved, setSaved] = useState<PiDraft | undefined>();
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const showAppError = useShellStore((s) => s.showAppError);
-  const dirty = Boolean(prefs && saved && !piDraftEqual(prefs, saved));
+  /** Latest draft for debounced auto-save (toggles/selects + number fields). */
+  const prefsRef = useRef<PiDraft | undefined>(undefined);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveSeqRef = useRef(0);
+
+  useEffect(() => {
+    prefsRef.current = prefs;
+  }, [prefs]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current !== undefined) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   async function refresh() {
     setLoading(true);
@@ -3657,7 +3665,7 @@ function PiSettingsSection(
       const draft = piViewToDraft(next);
       setView(next);
       setPrefs(draft);
-      setSaved(draft);
+      prefsRef.current = draft;
     } catch (err) {
       showAppError(err instanceof Error ? err.message : tr("piSettings.saveFailed"));
     } finally {
@@ -3670,54 +3678,82 @@ function PiSettingsSection(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function save() {
-    if (!prefs || busy || loading || !dirty) return;
-    setBusy(true);
+  async function commitPrefs(draft: PiDraft) {
+    const seq = ++saveSeqRef.current;
     try {
-      const patch: PiSettingsPatch = { ...prefs };
+      const patch: PiSettingsPatch = { ...draft };
       const result = await window.pix.settings.patch(patch);
-      const draft = piViewToDraft(result.settings);
+      if (seq !== saveSeqRef.current) return;
+      const next = piViewToDraft(result.settings);
       setView(result.settings);
-      setPrefs(draft);
-      setSaved(draft);
+      setPrefs(next);
+      prefsRef.current = next;
       props.onSnapshot(result.snapshot);
       useShellStore.getState().setStatus(tr("piSettings.saved"));
     } catch (err) {
+      if (seq !== saveSeqRef.current) return;
       showAppError(err instanceof Error ? err.message : tr("piSettings.saveFailed"));
-    } finally {
-      setBusy(false);
+      // Reload server truth so UI does not stay on a failed local draft.
+      try {
+        const next = await window.pix.settings.get();
+        if (seq !== saveSeqRef.current) return;
+        const draft = piViewToDraft(next);
+        setView(next);
+        setPrefs(draft);
+        prefsRef.current = draft;
+      } catch {
+        // ignore secondary load failure
+      }
     }
+  }
+
+  function scheduleCommit(draft: PiDraft, debounceMs: number) {
+    prefsRef.current = draft;
+    if (saveTimerRef.current !== undefined) clearTimeout(saveTimerRef.current);
+    if (debounceMs <= 0) {
+      void commitPrefs(draft);
+      return;
+    }
+    saveTimerRef.current = setTimeout(() => {
+      const latest = prefsRef.current;
+      if (latest) void commitPrefs(latest);
+    }, debounceMs);
+  }
+
+  function flushCommit() {
+    if (saveTimerRef.current !== undefined) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+    const latest = prefsRef.current;
+    if (latest) void commitPrefs(latest);
   }
 
   function onFieldKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    void save();
+    flushCommit();
   }
 
-  function patchPrefs(patch: Partial<PiDraft>) {
-    setPrefs((current) => (current ? { ...current, ...patch } : current));
+  /** Instant save for toggles/selects; light debounce for number typing. */
+  function patchPrefs(patch: Partial<PiDraft>, options?: { debounceMs?: number }) {
+    setPrefs((current) => {
+      if (!current) return current;
+      const next = { ...current, ...patch };
+      scheduleCommit(next, options?.debounceMs ?? 0);
+      return next;
+    });
   }
 
   // Default thinking is a global settings.json field — always offer the full pi ThinkingLevel
   // set (docs/custom-provider thinkingLevelMap). Do not use the current session model's
   // availableThinkingLevels (often only "off" for models without mapped reasoning).
   const thinkingLevels = PI_THINKING_LEVELS;
-  const disabled = loading || busy || !prefs;
+  const disabled = loading || !prefs;
+  const numFieldClass = "w-24 text-right tabular-nums";
 
   return (
-    <SettingsPageShell
-      title={tr("section.piSettings")}
-      testId="settings-pi"
-      titleAction={
-        <SettingsPillButton
-          label={busy ? tr("piSettings.saving") : tr("piSettings.save")}
-          testId="pi-settings-save"
-          disabled={disabled || !dirty}
-          onClick={() => void save()}
-        />
-      }
-    >
+    <SettingsPageShell title={tr("section.piSettings")} testId="settings-pi">
       <SettingsSectionBlock label={tr("piSettings.sessionDefaults")}>
         <SettingsRow
           title={tr("piSettings.defaultThinking")}
@@ -3778,15 +3814,16 @@ function PiSettingsSection(
               type="number"
               min={1024}
               step={1024}
-              className="w-24 text-right tabular-nums"
+              className={numFieldClass}
               data-testid="pi-compaction-reserve"
               disabled={disabled}
               value={prefs?.compactionReserveTokens ?? 16384}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                patchPrefs({ compactionReserveTokens: n });
+                patchPrefs({ compactionReserveTokens: n }, { debounceMs: 400 });
               }}
+              onBlur={() => flushCommit()}
               onKeyDown={onFieldKeyDown}
             />
           }
@@ -3799,15 +3836,16 @@ function PiSettingsSection(
               type="number"
               min={1024}
               step={1024}
-              className="w-24 text-right tabular-nums"
+              className={numFieldClass}
               data-testid="pi-compaction-keep"
               disabled={disabled}
               value={prefs?.compactionKeepRecentTokens ?? 20000}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                patchPrefs({ compactionKeepRecentTokens: n });
+                patchPrefs({ compactionKeepRecentTokens: n }, { debounceMs: 400 });
               }}
+              onBlur={() => flushCommit()}
               onKeyDown={onFieldKeyDown}
             />
           }
@@ -3833,15 +3871,16 @@ function PiSettingsSection(
               min={0}
               max={20}
               step={1}
-              className="w-20 text-right tabular-nums"
+              className={numFieldClass}
               data-testid="pi-retry-max"
               disabled={disabled}
               value={prefs?.retryMaxRetries ?? 3}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                patchPrefs({ retryMaxRetries: n });
+                patchPrefs({ retryMaxRetries: n }, { debounceMs: 400 });
               }}
+              onBlur={() => flushCommit()}
               onKeyDown={onFieldKeyDown}
             />
           }
@@ -3855,15 +3894,16 @@ function PiSettingsSection(
               min={0}
               max={60000}
               step={100}
-              className="w-24 text-right tabular-nums"
+              className={numFieldClass}
               data-testid="pi-retry-base-delay"
               disabled={disabled}
               value={prefs?.retryBaseDelayMs ?? 2000}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                patchPrefs({ retryBaseDelayMs: n });
+                patchPrefs({ retryBaseDelayMs: n }, { debounceMs: 400 });
               }}
+              onBlur={() => flushCommit()}
               onKeyDown={onFieldKeyDown}
             />
           }

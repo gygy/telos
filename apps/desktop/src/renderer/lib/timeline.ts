@@ -35,7 +35,10 @@ export type TimelineItem =
       status: "running" | "completed" | "error";
       args?: unknown;
       output?: string;
+      /** ISO start (usually tool.started). */
       timestamp?: string;
+      /** ISO end when tool.completed was observed. */
+      endedAt?: string;
     }
   | {
       id: string;
@@ -156,7 +159,8 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
       continue;
     }
     if (item.role === "tool") {
-      // Prefer explicit command / args so process rows show "已运行 rg …" not bare "bash".
+      // Prefer explicit command / args so process rows show "运行 rg …" not bare "bash".
+      // Args/command are usually joined from assistant toolCall → toolResult in the runtime.
       const args =
         item.args !== undefined ? item.args : item.command ? { command: item.command } : undefined;
       items.push({
@@ -167,6 +171,7 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
         output: item.text,
         ...(args !== undefined ? { args } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
+        ...(item.endedAt ? { endedAt: item.endedAt } : {}),
       });
       continue;
     }
@@ -294,10 +299,12 @@ export function projectEventsToTimeline(
         items.push(tool);
       } else if (runtimeEvent.type === "tool.completed") {
         flushMessage();
+        const endTs = now();
         const tool = tools.get(runtimeEvent.toolCallId);
         if (tool) {
           tool.status = runtimeEvent.isError ? "error" : "completed";
           tool.output = runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done");
+          tool.endedAt = endTs;
         } else {
           items.push({
             id: `tool-end-${runtimeEvent.toolCallId}`,
@@ -306,7 +313,8 @@ export function projectEventsToTimeline(
             toolName: runtimeEvent.toolName,
             status: runtimeEvent.isError ? "error" : "completed",
             output: runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done"),
-            timestamp: now(),
+            timestamp: endTs,
+            endedAt: endTs,
           });
         }
       } else if (runtimeEvent.type === "shell.completed") {
@@ -789,6 +797,121 @@ export function elapsedDurationLabel(
   const end = endedAt ? new Date(endedAt).getTime() : nowMs;
   if (Number.isNaN(end)) return undefined;
   return formatDurationMs(Math.max(0, end - start), locale);
+}
+
+/**
+ * Single tool duration from real message timestamps only:
+ * - completed/error: requires both `timestamp` (start) and `endedAt` (end)
+ * - running: `timestamp` → nowMs (live elapsed; end not yet known)
+ * Missing either bound (except live running) → undefined (never invent times).
+ */
+export function toolDurationMs(
+  item: {
+    timestamp?: string | undefined;
+    endedAt?: string | undefined;
+    status?: string | undefined;
+  },
+  nowMs: number = Date.now(),
+): number | undefined {
+  if (!item.timestamp) return undefined;
+  const start = new Date(item.timestamp).getTime();
+  if (Number.isNaN(start)) return undefined;
+  let end: number;
+  if (item.endedAt) {
+    end = new Date(item.endedAt).getTime();
+  } else if (item.status === "running") {
+    end = nowMs;
+  } else {
+    // Completed/error without a recorded end — do not fall back to "now".
+    return undefined;
+  }
+  if (Number.isNaN(end)) return undefined;
+  return Math.max(0, end - start);
+}
+
+type TimedToolLike = {
+  timestamp?: string | undefined;
+  endedAt?: string | undefined;
+  status?: string | undefined;
+};
+
+/**
+ * Naive sum of each member's span. Prefer {@link groupDurationMs} for UI groups
+ * (parallel tools share one start and must not be counted n times).
+ */
+export function sumToolDurationsMs(
+  items: TimedToolLike[],
+  nowMs: number = Date.now(),
+): number | undefined {
+  let sum = 0;
+  let any = false;
+  for (const item of items) {
+    const ms = toolDurationMs(item, nowMs);
+    if (ms === undefined) continue;
+    sum += ms;
+    any = true;
+  }
+  return any ? sum : undefined;
+}
+
+/**
+ * Group duration from real timestamps only.
+ *
+ * Parallel tools often share one assistant `timestamp` (one model step emitted many
+ * toolCalls). Counting each full span invents n× wall time. Instead:
+ * - cluster by identical start timestamp
+ * - each cluster contributes one wall span: max(end) − start
+ * - sequential tools (distinct starts) each form their own cluster
+ */
+export function groupDurationMs(
+  items: TimedToolLike[],
+  nowMs: number = Date.now(),
+): number | undefined {
+  const clusters = new Map<string, TimedToolLike[]>();
+  for (const item of items) {
+    if (!item.timestamp) continue;
+    const list = clusters.get(item.timestamp) ?? [];
+    list.push(item);
+    clusters.set(item.timestamp, list);
+  }
+  if (clusters.size === 0) return undefined;
+
+  let sum = 0;
+  let any = false;
+  for (const [startIso, members] of clusters) {
+    const start = new Date(startIso).getTime();
+    if (Number.isNaN(start)) continue;
+    let maxEnd: number | undefined;
+    for (const m of members) {
+      let end: number | undefined;
+      if (m.endedAt) {
+        const t = new Date(m.endedAt).getTime();
+        if (!Number.isNaN(t)) end = t;
+      } else if (m.status === "running") {
+        end = nowMs;
+      }
+      if (end === undefined) continue;
+      maxEnd = maxEnd === undefined ? end : Math.max(maxEnd, end);
+    }
+    if (maxEnd === undefined) continue;
+    sum += Math.max(0, maxEnd - start);
+    any = true;
+  }
+  return any ? sum : undefined;
+}
+
+/**
+ * True when this tool's start is not shared with another sibling.
+ * Parallel batches share one start — those rows must not each claim a solo duration.
+ */
+export function hasIndependentToolDuration(
+  item: TimedToolLike,
+  siblings: TimedToolLike[],
+): boolean {
+  if (!item.timestamp) return false;
+  if (siblings.length <= 1) return true;
+  const sameStart = siblings.filter((s) => s.timestamp === item.timestamp);
+  return sameStart.length <= 1;
 }
 
 function summarizeData(value: unknown): string {

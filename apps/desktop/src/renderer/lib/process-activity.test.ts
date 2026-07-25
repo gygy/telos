@@ -12,6 +12,7 @@ describe("process activity", () => {
     expect(classifyToolName("read")).toBe("read");
     expect(classifyToolName("bash")).toBe("run");
     expect(classifyToolName("grep")).toBe("search");
+    expect(classifyToolName("web_search")).toBe("search");
     expect(classifyToolName("edit")).toBe("edit");
     expect(classifyToolName("write")).toBe("write");
     expect(classifyToolName("ls")).toBe("list");
@@ -52,18 +53,52 @@ describe("process activity", () => {
     expect(processToolView("bash", undefined, { command: "ls" }).preview).toBe("ls");
   });
 
-  it("groups consecutive tools of the same kind", () => {
+  it("marks bare tool-name fallbacks as weak (no fake path/command highlight)", () => {
+    expect(processToolView("bash", undefined)).toMatchObject({
+      kind: "run",
+      preview: "bash",
+      weak: true,
+    });
+    expect(processToolView("read", {})).toMatchObject({
+      kind: "read",
+      preview: "read",
+      weak: true,
+    });
+    expect(processToolView("bash", { command: "echo hi" }).weak).toBeUndefined();
+    expect(processToolView("read", { path: "a.ts" }).weak).toBeUndefined();
+  });
+
+  it("groups consecutive same-kind tools including shell/run", () => {
     const groups = groupConsecutiveTools([
       { kind: "tool" as const, toolName: "read" },
       { kind: "tool" as const, toolName: "read" },
       { kind: "tool" as const, toolName: "bash" },
+      { kind: "tool" as const, toolName: "powershell" },
       { kind: "tool" as const, toolName: "edit" },
       { kind: "tool" as const, toolName: "edit" },
       { kind: "tool" as const, toolName: "edit" },
     ]);
-    expect(groups.map((g) => g.type)).toEqual(["group", "single", "group"]);
+    expect(groups.map((g) => g.type)).toEqual(["group", "group", "group"]);
     expect(groups[0]).toMatchObject({ type: "group", kind: "read" });
-    expect(groups[1]).toMatchObject({ type: "single" });
+    expect(groups[1]).toMatchObject({ type: "group", kind: "run" });
+    expect(groups[1]).toMatchObject({ items: [{ toolName: "bash" }, { toolName: "powershell" }] });
     expect(groups[2]).toMatchObject({ type: "group", kind: "edit" });
+  });
+
+  it("classifies powershell and extracts command + argv", () => {
+    expect(classifyToolName("powershell")).toBe("run");
+    expect(classifyToolName("pwsh")).toBe("run");
+    expect(
+      extractCommandFromArgs({
+        command: "powershell",
+        args: ["-NoProfile", "-Command", "Get-ChildItem"],
+      }),
+    ).toBe("powershell -NoProfile -Command Get-ChildItem");
+    expect(
+      processToolView("powershell", {
+        command: "powershell",
+        args: ["-Command", "Get-Process"],
+      }).preview,
+    ).toContain("Get-Process");
   });
 });
