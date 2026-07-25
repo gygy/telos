@@ -3,7 +3,17 @@
  * Env floating popup toggled from the top-right control.
  */
 import type { SessionThreadSummary } from "@pix/contracts";
-import { Archive, Copy, Layers, MoreHorizontal, Pencil, Pin, PinOff } from "lucide-react";
+import {
+  Archive,
+  Copy,
+  Layers,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Terminal,
+} from "lucide-react";
 import {
   useEffect,
   useState,
@@ -55,6 +65,8 @@ export function ThreadHeader(props: {
     t(props.locale, key, vars);
   const envPanelOpen = useShellStore((s) => s.envPanelOpen);
   const setEnvPanelOpen = useShellStore((s) => s.setEnvPanelOpen);
+  const contentMode = useShellStore((s) => s.contentMode);
+  const toggleContentMode = useShellStore((s) => s.toggleContentMode);
   const [menuOpen, setMenuOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [pinnedIds, setPinnedIds] = useState(loadPinnedThreads);
@@ -204,6 +216,34 @@ export function ThreadHeader(props: {
           </button>
         </div>
         <div className="min-w-0 flex-1" aria-hidden />
+        <button
+          type="button"
+          data-testid="thread-content-mode-toggle"
+          className={cn(
+            "no-drag inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+            "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--foreground)]",
+            contentMode === "terminal" && "bg-[var(--accent)] text-[var(--foreground)]",
+          )}
+          title={
+            contentMode === "terminal"
+              ? tr("contentMode.toggleToChat")
+              : tr("contentMode.toggleToTerminal")
+          }
+          aria-label={
+            contentMode === "terminal"
+              ? tr("contentMode.toggleToChat")
+              : tr("contentMode.toggleToTerminal")
+          }
+          aria-pressed={contentMode === "terminal"}
+          data-content-mode={contentMode}
+          onClick={() => toggleContentMode()}
+        >
+          {contentMode === "terminal" ? (
+            <MessageSquare className="size-3.5" strokeWidth={1.75} />
+          ) : (
+            <Terminal className="size-3.5" strokeWidth={1.75} />
+          )}
+        </button>
         {showEnvToggle ? (
           <button
             type="button"

@@ -25,6 +25,7 @@ export interface CommandHandlers {
   forkThread: () => void | Promise<void>;
   toggleReview: () => void;
   toggleEnvPanel?: () => void;
+  toggleContentMode?: () => void;
 }
 
 function withShortcut(id: ShortcutId, base: Omit<ShellCommand, "shortcut">): ShellCommand {
@@ -73,6 +74,17 @@ export function buildShellCommands(
         "shortcuts.toggleEnvPanel",
         handlers.toggleEnvPanel,
         "toggle-env-panel",
+      ),
+    );
+  }
+  if (handlers.toggleContentMode) {
+    list.push(
+      cmd(
+        locale,
+        "toggle-content-mode",
+        "shortcuts.toggleContentMode",
+        handlers.toggleContentMode,
+        "toggle-content-mode",
       ),
     );
   }

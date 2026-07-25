@@ -42,6 +42,26 @@ describe("runtime event delivery", () => {
   });
 });
 
+describe("contentMode presentation", () => {
+  it("toggles chat/terminal without clearing history", () => {
+    const history = [
+      { role: "user" as const, text: "hello" },
+      { role: "assistant" as const, text: "world" },
+    ];
+    useShellStore.setState({
+      contentMode: "chat",
+      history,
+      liveStream: useShellStore.getState().liveStream,
+    });
+    useShellStore.getState().toggleContentMode();
+    expect(useShellStore.getState().contentMode).toBe("terminal");
+    expect(useShellStore.getState().history).toEqual(history);
+    useShellStore.getState().setContentMode("chat");
+    expect(useShellStore.getState().contentMode).toBe("chat");
+    expect(useShellStore.getState().history).toEqual(history);
+  });
+});
+
 describe("per-session running", () => {
   it("normalizes session keys", () => {
     expect(sessionRunKey("/tmp/Foo/")).toBe("/tmp/foo");

@@ -92,6 +92,7 @@ import {
   type AccessMode,
   type AccessVisibility,
 } from "../../lib/settings-prefs.ts";
+import { applyDiscoverResults } from "../../lib/proxy-discover-ui.ts";
 import type { ThemePreference } from "../../lib/theme.ts";
 import { cn } from "../../lib/utils.ts";
 import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace.ts";
@@ -229,6 +230,8 @@ function ProxySection(
   const showAppError = useShellStore((s) => s.showAppError);
   const dirty = !proxyPrefsEqual(prefs, saved);
 
+  // Load once on mount. Do NOT depend on `tr` — a new function each render would
+  // re-fetch prefs and wipe unsaved local edits (e.g. custom mode + first Discover).
   useEffect(() => {
     let cancelled = false;
     void window.pix.proxy
@@ -249,7 +252,8 @@ function ProxySection(
     return () => {
       cancelled = true;
     };
-  }, [showAppError, tr]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only load
+  }, [showAppError]);
 
   async function save() {
     if (busy || loading) return;
@@ -287,24 +291,23 @@ function ProxySection(
     setDiscovering(key);
     try {
       const found = await window.pix.proxy.discoverLocal();
+      // Pure helper keeps mode stable (custom must not flip to system on first Discover).
+      let nextCandidates: DesktopLocalProxyCandidate[] = [];
+      setPrefs((current) => {
+        const applied = applyDiscoverResults(current[key], found);
+        nextCandidates = applied.candidates;
+        return { ...current, [key]: applied.channel };
+      });
+      setDiscovered((d) => ({ ...d, [key]: nextCandidates }));
       if (found.length === 0) {
-        clearDiscovered(key);
         useShellStore.getState().setStatus(tr("proxy.discoverNone"));
-        return;
+      } else if (found.length === 1) {
+        useShellStore.getState().setStatus(tr("proxy.discoverFilled", { url: found[0]!.url }));
+      } else {
+        useShellStore
+          .getState()
+          .setStatus(tr("proxy.discoverMany", { count: String(found.length) }));
       }
-      if (found.length === 1) {
-        const only = found[0]!;
-        clearDiscovered(key);
-        patchChannel(key, { server: only.url });
-        useShellStore.getState().setStatus(tr("proxy.discoverFilled", { url: only.url }));
-        return;
-      }
-      // Multiple: keep list for dropdown; do not force a pick until the user chooses
-      // (pre-select first so the field is not empty if they just want the top hit).
-      setDiscovered((current) => ({ ...current, [key]: found }));
-      const best = found[0]!;
-      patchChannel(key, { server: best.url });
-      useShellStore.getState().setStatus(tr("proxy.discoverMany", { count: String(found.length) }));
     } catch (err) {
       showAppError(err instanceof Error ? err.message : tr("proxy.discoverFailed"));
     } finally {

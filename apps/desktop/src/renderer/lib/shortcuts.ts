@@ -14,7 +14,8 @@ export type ShortcutId =
   | "focus-composer"
   | "fork-thread"
   | "toggle-theme"
-  | "toggle-env-panel";
+  | "toggle-env-panel"
+  | "toggle-content-mode";
 
 export type ShortcutDefinition = {
   id: ShortcutId;
@@ -35,6 +36,11 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: "fork-thread", labelKey: "shortcuts.forkThread", defaultCombo: "mod+shift+f" },
   { id: "toggle-theme", labelKey: "shortcuts.toggleTheme", defaultCombo: "mod+shift+t" },
   { id: "toggle-env-panel", labelKey: "shortcuts.toggleEnvPanel", defaultCombo: "mod+." },
+  {
+    id: "toggle-content-mode",
+    labelKey: "shortcuts.toggleContentMode",
+    defaultCombo: "mod+shift+\\",
+  },
 ];
 
 const STORAGE_KEY = "pix.shortcuts.overrides";

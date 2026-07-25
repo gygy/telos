@@ -1107,23 +1107,30 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
     props.durationLabel;
   const label = activityLabel(props.locale, activity, liveDuration);
 
-  // Controlled details: expand while live; auto-collapse when becoming “已处理”.
-  // History loads with active=false → starts collapsed.
+  // Uncontrolled <details> (native open) so summary clicks always toggle in Electron.
+  // We only imperatively open while live and auto-collapse after “已处理”.
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(active);
   const prevActiveRef = useRef(active);
 
   useEffect(() => {
+    const el = detailsRef.current;
+    if (!el) return;
+    if (active) {
+      el.open = true;
+      setDetailsOpen(true);
+    }
+  }, [active]);
+
+  useEffect(() => {
     const wasActive = prevActiveRef.current;
     prevActiveRef.current = active;
-    if (active === wasActive) return;
-
-    if (active) {
-      setDetailsOpen(true);
-      return;
-    }
+    if (active === wasActive || active) return;
 
     // Process steps finished → show “已处理”, then fold the body.
     const timer = window.setTimeout(() => {
+      const el = detailsRef.current;
+      if (el) el.open = false;
       setDetailsOpen(false);
     }, PROCESS_AUTO_COLLAPSE_MS);
     return () => window.clearTimeout(timer);
@@ -1137,12 +1144,15 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
       data-active={active ? "true" : "false"}
       data-details-open={detailsOpen ? "true" : "false"}
     >
-      <Collapsible
+      <details
+        ref={detailsRef}
         className="timeline-process-details"
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
+        open={active ? true : undefined}
+        onToggle={(event) => {
+          setDetailsOpen(event.currentTarget.open);
+        }}
       >
-        <CollapsibleTrigger className="timeline-process-summary group/process-trigger w-full text-left">
+        <summary className="timeline-process-summary group/process-trigger w-full text-left">
           <span
             className={cn(
               "timeline-process-label min-w-0 flex-1 truncate",
@@ -1157,15 +1167,15 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
             className="timeline-process-chevron size-3.5 shrink-0 opacity-60"
             strokeWidth={2}
           />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="timeline-process-body">
+        </summary>
+        <div className="timeline-process-body">
           <ProcessSteps
             items={props.items}
             locale={props.locale}
             workspacePath={props.workspacePath}
           />
-        </CollapsibleContent>
-      </Collapsible>
+        </div>
+      </details>
     </div>
   );
 });

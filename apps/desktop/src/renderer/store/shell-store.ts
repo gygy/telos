@@ -34,6 +34,14 @@ import {
   type ResolvedColorMode,
   type ThemePreference,
 } from "../lib/theme.ts";
+import {
+  loadContentMode,
+  saveContentMode,
+  toggleContentMode as flipContentMode,
+  type ContentMode,
+} from "../lib/content-mode-prefs.ts";
+
+export type { ContentMode };
 
 /** Timers that clear the completed checkmark back to idle. */
 const completedMarkerTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -130,8 +138,15 @@ export interface ShellState {
   paletteOpen: boolean;
   runtimeId: string | undefined;
   lastSequence: number;
+  /**
+   * Presentation of the thread content column: chat timeline vs terminal stream.
+   * Pure desktop UI — does not restart host or clear history.
+   */
+  contentMode: ContentMode;
 
   setStatus: (status: string) => void;
+  setContentMode: (mode: ContentMode) => void;
+  toggleContentMode: () => void;
   setSnapshot: (snapshot: HostSnapshot | undefined) => void;
   setEvents: (events: HostEvent[] | ((current: HostEvent[]) => HostEvent[])) => void;
   /** Apply one runtime event to the append-only live stream log. */
@@ -338,8 +353,18 @@ export const useShellStore = create<ShellState>((set, get) => ({
   paletteOpen: false,
   runtimeId: undefined,
   lastSequence: 0,
+  contentMode: loadContentMode(),
 
   setStatus: (status) => set({ status }),
+  setContentMode: (mode) => {
+    saveContentMode(mode);
+    set({ contentMode: mode });
+  },
+  toggleContentMode: () => {
+    const next = flipContentMode(get().contentMode);
+    saveContentMode(next);
+    set({ contentMode: next });
+  },
   setSnapshot: (snapshot) => set({ snapshot }),
   setEvents: (events) =>
     set((state) => ({

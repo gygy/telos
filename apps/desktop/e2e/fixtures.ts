@@ -218,26 +218,35 @@ export { expect };
 /** Start host via 新建会话 and wait until the shell reports ready. */
 export async function startHost(page: Page): Promise<void> {
   await page.getByTestId("pix-app").waitFor({ state: "visible" });
+  // Cold-start overlay must finish (pi ensure + optional host warm-up).
+  await page
+    .waitForSelector('[data-testid="pix-app"][data-bootstrap-ready="true"]', {
+      timeout: 120_000,
+    })
+    .catch(() => undefined);
   const btn = page.getByTestId("start-host");
   await btn.waitFor({ state: "visible", timeout: 15_000 });
   const snapshot = page.getByTestId("runtime-snapshot").first();
-  await expect(snapshot).toContainText("runtimeId", { timeout: 30_000 });
+  // Bootstrap may leave no snapshot yet (ensureHost is best-effort). Do not require
+  // runtimeId before click — New conversation creates/replaces the host.
   const before = await snapshot.textContent().catch(() => "");
   const previousRuntimeId = /"runtimeId":\s*"([^"]+)"/.exec(before ?? "")?.[1];
-  // Bootstrap may remount the rail briefly — force click after short settle.
   await page.waitForTimeout(300);
   await btn.click({ force: true });
-  // Cold bootstrap may already say "ready" while New conversation is replacing that host.
-  // Wait for the replacement runtime so the next UI action cannot race clearActive().
-  await expect
-    .poll(
-      async () => {
-        const text = await snapshot.textContent().catch(() => "");
-        return /"runtimeId":\s*"([^"]+)"/.exec(text ?? "")?.[1];
-      },
-      { timeout: 45_000 },
-    )
-    .not.toBe(previousRuntimeId);
+  // Wait for a runtime (new or replaced) so later UI actions cannot race clearActive().
+  if (previousRuntimeId) {
+    await expect
+      .poll(
+        async () => {
+          const text = await snapshot.textContent().catch(() => "");
+          return /"runtimeId":\s*"([^"]+)"/.exec(text ?? "")?.[1];
+        },
+        { timeout: 60_000 },
+      )
+      .not.toBe(previousRuntimeId);
+  } else {
+    await expect(snapshot).toContainText("runtimeId", { timeout: 60_000 });
+  }
   await expect(page.getByTestId("host-status").first()).toContainText(
     /Agent Host ready|Agent Host restarted|Agent Host ready|就绪/,
     { timeout: 45_000 },

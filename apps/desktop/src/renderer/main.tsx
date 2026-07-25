@@ -215,6 +215,8 @@ function App() {
   const sidebarTranslucent = useShellStore((s) => s.sidebarTranslucent);
   const settingsSection = useShellStore((s) => s.settingsSection);
   const paletteOpen = useShellStore((s) => s.paletteOpen);
+  const contentMode = useShellStore((s) => s.contentMode);
+  const toggleContentMode = useShellStore((s) => s.toggleContentMode);
 
   const setStatus = useShellStore((s) => s.setStatus);
   const setEvents = useShellStore((s) => s.setEvents);
@@ -2118,11 +2120,22 @@ function App() {
             if (!envPanelFits || !workspacePath || !hasActivity) return;
             setEnvPanelOpen((open) => !open);
           },
+          toggleContentMode: () => toggleContentMode(),
         },
         locale,
       ),
     // handlers close over latest store setters; recompute lightly when mode/view/locale changes
-    [colorMode, view, running, envPanelFits, workspacePath, hasActivity, shortcutRevision, locale],
+    [
+      colorMode,
+      view,
+      running,
+      envPanelFits,
+      workspacePath,
+      hasActivity,
+      shortcutRevision,
+      locale,
+      contentMode,
+    ],
   );
 
   useEffect(() => {
@@ -2174,6 +2187,9 @@ function App() {
           // Ignore when empty session, no project, or viewport cannot fit panel.
           if (!envPanelFits || !workspacePath || !hasActivity) break;
           setEnvPanelOpen((open) => !open);
+          break;
+        case "toggle-content-mode":
+          toggleContentMode();
           break;
         default:
           break;
@@ -2354,8 +2370,10 @@ function App() {
                         className={cn(
                           "thread-content-column thread-content-column-stack gap-0",
                           hasActivity && "thread-messages-active pt-6 pb-0",
+                          contentMode === "terminal" && "thread-content-terminal",
                         )}
                         data-testid="timeline"
+                        data-content-mode={contentMode}
                       >
                         {hasActivity ? (
                           <>

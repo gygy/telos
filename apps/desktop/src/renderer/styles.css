@@ -1451,6 +1451,11 @@ html[data-custom-window-controls="true"] .page-header {
   background: transparent;
   border-left: 0;
   border-right: 0;
+}
+.timeline-process-summary::-webkit-details-marker {
+  display: none;
+}
+.timeline-process-summary {
   border-top: 0;
   text-align: left;
 }
@@ -1476,6 +1481,7 @@ html[data-custom-window-controls="true"] .page-header {
 .timeline-process-chevron {
   transition: transform 0.16s ease;
 }
+.timeline-process-details[open] .timeline-process-chevron,
 .timeline-process-details[data-state="open"] .timeline-process-chevron {
   transform: rotate(90deg);
 }
@@ -1701,6 +1707,34 @@ html[data-custom-window-controls="true"] .page-header {
 .timeline-live-status {
   margin: 2px 0 14px;
   color: var(--muted-foreground);
+}
+
+/*
+ * Terminal content mode (#25): same timeline data, monospaced denser chrome.
+ * Does not clear history — only presentation of the content column.
+ */
+.thread-content-terminal {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.thread-content-terminal .timeline-assistant-body,
+.thread-content-terminal .settings-row-desc,
+.thread-content-terminal .content-system-body,
+.thread-content-terminal .process-step-thinking-body {
+  font-family: inherit;
+  font-size: inherit;
+}
+.thread-content-terminal [data-kind="user"] {
+  border-left: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  padding-left: 0.65rem;
+}
+.thread-content-terminal [data-kind="assistant"],
+.thread-content-terminal .timeline-assistant-row {
+  opacity: 0.98;
+}
+.thread-content-terminal .process-step-row {
+  font-size: 12px;
 }
 .timeline-assistant-row {
   width: 100%;
