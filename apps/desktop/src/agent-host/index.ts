@@ -1,3 +1,4 @@
+import "./proxy-bootstrap.ts";
 import {
   createPixRuntime,
   projectCustomEntry,

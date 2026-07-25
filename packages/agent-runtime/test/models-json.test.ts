@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  defaultCustomProviderUserAgent,
+  DEFAULT_CUSTOM_PROVIDER_USER_AGENT,
   readModelsJsonConfig,
   removeCustomProviderFromModelsJson,
   upsertCustomProviderInModelsJson,
@@ -46,6 +48,7 @@ describe("models.json helpers", () => {
         {
           apiKey?: string;
           authHeader?: boolean;
+          headers?: Record<string, string>;
           models: Array<{
             id: string;
             name?: string;
@@ -61,6 +64,8 @@ describe("models.json helpers", () => {
     expect(raw.providers.ollama?.apiKey).toBeUndefined();
     expect(JSON.stringify(raw)).not.toContain("should-not-be-written");
     expect(raw.providers.ollama?.authHeader).toBe(true);
+    expect(raw.providers.ollama?.headers?.["User-Agent"]).toMatch(/^PixDesktop\//);
+    expect(raw.providers.ollama?.headers?.["User-Agent"]).toBe(DEFAULT_CUSTOM_PROVIDER_USER_AGENT);
     const model = raw.providers.ollama?.models.find((m) => m.id === "llama3.1:8b");
     expect(model?.name).toBe("Llama 3.1 8B");
     expect(model?.reasoning).toBe(true);
@@ -127,6 +132,52 @@ describe("models.json helpers", () => {
         modelId: "x",
       }),
     ).rejects.toThrow(/Provider id/);
+  });
+
+  it("writes explicit userAgent and projects it back", async () => {
+    const agentDir = await tempAgentDir();
+    await upsertCustomProviderInModelsJson(agentDir, {
+      provider: "proxy",
+      baseUrl: "https://proxy.example/v1",
+      api: "openai-completions",
+      modelId: "m1",
+      userAgent: "MyProxyClient/1.0",
+    });
+    const view = await readModelsJsonConfig(agentDir);
+    expect(view.providers[0]?.userAgent).toBe("MyProxyClient/1.0");
+    const raw = JSON.parse(await readFile(join(agentDir, "models.json"), "utf8")) as {
+      providers: { proxy?: { headers?: Record<string, string> } };
+    };
+    expect(raw.providers.proxy?.headers?.["User-Agent"]).toBe("MyProxyClient/1.0");
+  });
+
+  it("keeps previous User-Agent when input omits userAgent", async () => {
+    const agentDir = await tempAgentDir();
+    await writeFile(
+      join(agentDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          proxy: {
+            baseUrl: "https://proxy.example/v1",
+            api: "openai-completions",
+            headers: { "User-Agent": "MyProxyClient/1.0" },
+            models: [{ id: "m1" }],
+          },
+        },
+      }),
+      "utf8",
+    );
+    await upsertCustomProviderInModelsJson(agentDir, {
+      provider: "proxy",
+      baseUrl: "https://proxy.example/v1",
+      api: "openai-completions",
+      modelId: "m2",
+    });
+    const raw = JSON.parse(await readFile(join(agentDir, "models.json"), "utf8")) as {
+      providers: { proxy?: { headers?: Record<string, string> } };
+    };
+    expect(raw.providers.proxy?.headers?.["User-Agent"]).toBe("MyProxyClient/1.0");
+    expect(defaultCustomProviderUserAgent("1.2.3")).toBe("PixDesktop/1.2.3");
   });
 
   it("renames a model via previousProvider/previousModelId", async () => {

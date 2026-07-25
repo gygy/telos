@@ -71,6 +71,7 @@ export type SettingsSection =
   | "usage"
   | "notifications"
   | "shortcuts"
+  | "proxy"
   | "providers"
   | "models"
   | "piSettings"

@@ -37,11 +37,6 @@ import {
   Cpu,
   Download,
   File,
-  FileArchive,
-  FileCode2,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
   Folder,
   FolderGit2,
   FolderOpen,
@@ -58,7 +53,6 @@ import {
   Package,
   Plus,
   PlusCircle,
-  Presentation,
   Puzzle,
   RefreshCw,
   Search,
@@ -74,7 +68,6 @@ import {
   Trash2,
   Upload,
   Wand2,
-  X,
 } from "lucide-react";
 import {
   anchorFromElement,
@@ -82,29 +75,17 @@ import {
   FloatingMenu,
   type AnchorRect,
 } from "./FloatingMenu.tsx";
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@/components/ui/attachment";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
 import { groupModelsByProvider } from "../lib/model-groups.ts";
 import {
   addResourceQuery,
   applyPathTokenCompletion,
-  attachmentLabel,
-  attachmentPresentation,
   filterSlashCommands,
   pathTokenBeforeCursor,
   slashCommandQuery,
-  type AttachmentKind,
 } from "../lib/composer-suggestions.ts";
 import type { AccessMode, AccessVisibility } from "../lib/settings-prefs.ts";
 import { visibleAccessModes } from "../lib/settings-prefs.ts";
@@ -157,7 +138,7 @@ export interface ComposerProps {
   piThemeLabel: string;
   /** Absolute file or directory paths passed to pi as readable context. */
   attachments: string[];
-  onPickAttachments: () => Promise<void>;
+  onPickAttachments: (mode?: "files" | "folders") => Promise<void>;
   onRemoveAttachment: (path: string) => void;
   /** Add paths chosen from `@` file suggestions. */
   onAddAttachments?: (paths: string[]) => void;
@@ -569,20 +550,6 @@ function useSuggestOverflow(open: boolean, deps: unknown[]) {
   return { scrollRef, overflows };
 }
 
-function attachmentKindIcon(kind: AttachmentKind) {
-  const props = { className: "size-5", strokeWidth: 1.65 };
-  if (kind === "spreadsheet") return <FileSpreadsheet {...props} />;
-  if (kind === "image") return <FileImage {...props} />;
-  if (kind === "presentation") return <Presentation {...props} />;
-  if (kind === "archive") return <FileArchive {...props} />;
-  if (kind === "code") return <FileCode2 {...props} />;
-  if (kind === "folder") return <Folder {...props} />;
-  if (kind === "document" || kind === "pdf" || kind === "text") {
-    return <FileText {...props} />;
-  }
-  return <File {...props} />;
-}
-
 function queuedMessagePreview(message: string): string {
   return message.split("\n\n<attached-paths>", 1)[0]?.trim() || message.trim();
 }
@@ -784,8 +751,8 @@ export function Composer(props: ComposerProps) {
   const slashPanelOpen = menu === null && !suggestionsDismissed && slashQuery !== undefined;
   const resourcePanelOpen =
     menu === "attach" || (menu === null && !suggestionsDismissed && resourceQuery !== undefined);
-  /** Flat `@` nav: 0 = picker, then paths, then packages. */
-  const resourceItemCount = 1 + pathSuggestions.length + packageSuggestions.length;
+  /** Flat `@`/attach nav: 0 = files, 1 = folders, then paths, then packages. */
+  const resourceItemCount = 2 + pathSuggestions.length + packageSuggestions.length;
   const slashOverflow = useSuggestOverflow(slashPanelOpen, [
     slashQuery,
     slashSuggestions.length,
@@ -881,11 +848,15 @@ export function Composer(props: ComposerProps) {
     requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
-  async function selectAttachments() {
+  async function selectAttachments(mode: "files" | "folders" = "files") {
     if (resourceQuery !== undefined) props.onPromptChange("");
     setSuggestionsDismissed(true);
     closeMenu();
-    await props.onPickAttachments();
+    // Open native dialog after the menu unmounts so Windows doesn't steal focus oddly.
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+    await props.onPickAttachments(mode);
     requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
@@ -928,15 +899,20 @@ export function Composer(props: ComposerProps) {
 
   function commitResourceIndex(index: number) {
     if (index === 0) {
-      void selectAttachments();
+      void selectAttachments("files");
       return;
     }
-    if (index <= pathSuggestions.length) {
-      const hit = pathSuggestions[index - 1];
+    if (index === 1) {
+      void selectAttachments("folders");
+      return;
+    }
+    const pathIndex = index - 2;
+    if (pathIndex < pathSuggestions.length) {
+      const hit = pathSuggestions[pathIndex];
       if (hit) selectProjectPath(hit.path);
       return;
     }
-    const pkg = packageSuggestions[index - 1 - pathSuggestions.length];
+    const pkg = packageSuggestions[pathIndex - pathSuggestions.length];
     if (pkg) selectPackage(pkg);
   }
 
@@ -946,9 +922,13 @@ export function Composer(props: ComposerProps) {
     if (!token) return false;
     // When @ menu already has path hits, Tab accepts highlighted/first path.
     if (resourcePanelOpen && pathSuggestions.length > 0) {
+      // Paths start at flat index 2 (after files + folders pickers).
+      const pathStart = 2;
       const index =
-        suggestionIndex > 0 && suggestionIndex <= pathSuggestions.length ? suggestionIndex : 1;
-      const hit = pathSuggestions[index - 1];
+        suggestionIndex >= pathStart && suggestionIndex < pathStart + pathSuggestions.length
+          ? suggestionIndex
+          : pathStart;
+      const hit = pathSuggestions[index - pathStart];
       if (hit) {
         if (token.atMention) {
           selectProjectPath(hit.path);
@@ -1016,8 +996,9 @@ export function Composer(props: ComposerProps) {
         event.preventDefault();
         if (panel === "resource") {
           if (suggestionIndex >= 0) commitResourceIndex(suggestionIndex);
-          else if (pathSuggestions.length > 0) commitResourceIndex(1);
-          else void selectAttachments();
+          else if (pathSuggestions.length > 0)
+            commitResourceIndex(2); // first path after pickers
+          else void selectAttachments("files");
           return;
         }
         if (panel === "slash" && slashSuggestions.length > 0) {
@@ -1340,44 +1321,11 @@ export function Composer(props: ComposerProps) {
         onSubmit={(event) => props.onSubmit(event)}
       >
         {props.attachments.length > 0 ? (
-          <AttachmentGroup className="composer-attachment-grid" data-testid="composer-attachments">
-            {props.attachments.map((path) => {
-              const presentation = attachmentPresentation(path);
-              return (
-                <Attachment
-                  key={path}
-                  state="done"
-                  size="sm"
-                  data-kind={presentation.kind}
-                  data-testid="composer-attachment-card"
-                  className="composer-attachment-card"
-                  title={path}
-                >
-                  <AttachmentMedia variant="icon" className="composer-attachment-icon">
-                    {attachmentKindIcon(presentation.kind)}
-                  </AttachmentMedia>
-                  <AttachmentContent>
-                    <AttachmentTitle className="text-[12px]">
-                      {attachmentLabel(path)}
-                    </AttachmentTitle>
-                    <AttachmentDescription className="text-[10px] font-medium uppercase tracking-[0.04em]">
-                      {presentation.typeLabel}
-                    </AttachmentDescription>
-                  </AttachmentContent>
-                  <AttachmentActions>
-                    <AttachmentAction
-                      type="button"
-                      className="composer-attachment-remove"
-                      aria-label={tr("composer.attach.remove")}
-                      onClick={() => props.onRemoveAttachment(path)}
-                    >
-                      <X strokeWidth={2} />
-                    </AttachmentAction>
-                  </AttachmentActions>
-                </Attachment>
-              );
-            })}
-          </AttachmentGroup>
+          <ComposerAttachmentList
+            paths={props.attachments}
+            locale={props.locale}
+            onRemove={props.onRemoveAttachment}
+          />
         ) : null}
 
         <Textarea
@@ -1647,6 +1595,10 @@ export function Composer(props: ComposerProps) {
           <div ref={resourceOverflow.scrollRef} className="composer-suggest-scroll pt-0">
             <div className="composer-suggest-group" data-testid="composer-attach-group-add">
               <div className="composer-suggest-group-label">{tr("composer.add.title")}</div>
+              {/*
+                Split file vs folder pickers: on Windows/Linux Electron cannot combine
+                openFile + openDirectory (directory-only dialog was the “can't pick files” bug).
+              */}
               <button
                 type="button"
                 role="menuitem"
@@ -1655,18 +1607,32 @@ export function Composer(props: ComposerProps) {
                 className="composer-suggest-item"
                 onMouseEnter={() => setSuggestionIndex(0)}
                 onMouseLeave={() => setSuggestionIndex(-1)}
-                onClick={() => void selectAttachments()}
+                onClick={() => void selectAttachments("files")}
+              >
+                <File
+                  className="size-4 shrink-0 text-[var(--muted-foreground)]"
+                  strokeWidth={1.75}
+                />
+                <span className="composer-suggest-item-main">{tr("composer.attach.files")}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="composer-attach-folders"
+                data-active={suggestionIndex === 1 ? "true" : "false"}
+                className="composer-suggest-item"
+                onMouseEnter={() => setSuggestionIndex(1)}
+                onMouseLeave={() => setSuggestionIndex(-1)}
+                onClick={() => void selectAttachments("folders")}
               >
                 <FolderOpen
                   className="size-4 shrink-0 text-[var(--muted-foreground)]"
                   strokeWidth={1.75}
                 />
-                <span className="composer-suggest-item-main">
-                  {tr("composer.attach.filesAndFolders")}
-                </span>
+                <span className="composer-suggest-item-main">{tr("composer.attach.folders")}</span>
               </button>
               {pathSuggestions.map((item, index) => {
-                const flatIndex = index + 1;
+                const flatIndex = index + 2;
                 return (
                   <button
                     key={item.path}
@@ -1700,7 +1666,7 @@ export function Composer(props: ComposerProps) {
               <div className="composer-suggest-group" data-testid="composer-attach-group-plugins">
                 <div className="composer-suggest-group-label">{tr("composer.add.plugins")}</div>
                 {packageSuggestions.map((pkg, index) => {
-                  const flatIndex = 1 + pathSuggestions.length + index;
+                  const flatIndex = 2 + pathSuggestions.length + index;
                   return (
                     <button
                       key={`${pkg.scope}:${pkg.source}`}

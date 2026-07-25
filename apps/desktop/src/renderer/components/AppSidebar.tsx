@@ -14,6 +14,7 @@ import {
   GitBranch,
   Keyboard,
   KeyRound,
+  Network,
   Package,
   Palette,
   PanelLeft,
@@ -474,10 +475,18 @@ function SettingsRail(props: {
       labelKey: MessageKey;
       icon: ReactNode;
     }>;
+    /*
+     * Settings IA (product-facing):
+     *  通用 — shell prefs (look & feel, confirmations, hotkeys)
+     *  工作区 — project / git surface
+     *  模型 — providers, catalog, agent, usage
+     *  网络 — connectivity (proxy; lower priority, advanced)
+     *  数据 — archives
+     */
   }> = [
     {
-      id: "personal",
-      labelKey: "settings.group.personal",
+      id: "general",
+      labelKey: "settings.group.general",
       items: [
         {
           section: "general",
@@ -555,7 +564,7 @@ function SettingsRail(props: {
           section: "piSettings",
           testId: "settings-nav-agent",
           labelKey: "section.piSettings",
-          icon: <SlidersHorizontal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+          icon: <Boxes className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
           section: "usage",
@@ -566,8 +575,20 @@ function SettingsRail(props: {
       ],
     },
     {
-      id: "archive",
-      labelKey: "settings.group.archive",
+      id: "network",
+      labelKey: "settings.group.network",
+      items: [
+        {
+          section: "proxy",
+          testId: "settings-nav-proxy",
+          labelKey: "section.proxy",
+          icon: <Network className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+      ],
+    },
+    {
+      id: "data",
+      labelKey: "settings.group.data",
       items: [
         {
           section: "archived",

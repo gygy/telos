@@ -22,10 +22,13 @@ function Marker({
   className,
   variant = "default",
   asChild = false,
+  shimmer = false,
   ...props
 }: React.ComponentProps<"div"> &
   VariantProps<typeof markerVariants> & {
     asChild?: boolean;
+    /** Soft gradient sweep on MarkerContent (live status / processing). */
+    shimmer?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : "div";
 
@@ -33,6 +36,7 @@ function Marker({
     <Comp
       data-slot="marker"
       data-variant={variant}
+      data-shimmer={shimmer ? "true" : undefined}
       className={cn(markerVariants({ variant, className }))}
       {...props}
     />
@@ -56,6 +60,8 @@ function MarkerContent({ className, ...props }: React.ComponentProps<"span">) {
       data-slot="marker-content"
       className={cn(
         "min-w-0 wrap-break-word group-data-[variant=separator]/marker:flex-none group-data-[variant=separator]/marker:text-center *:[a]:text-[var(--link,#379cfc)] *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-[var(--link,#379cfc)]/90",
+        // Live/processing markers: sweep text like attachment upload shimmer.
+        "group-data-[shimmer=true]/marker:shimmer",
         className,
       )}
       {...props}

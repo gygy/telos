@@ -50,7 +50,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Lightweight shimmer for attachment upload/processing states. */
+/*
+ * Lightweight text shimmer — attachment upload/processing, timeline process
+ * markers (thinking / processing / executing / live status), running tool verbs.
+ * Uses currentColor so it inherits muted / foreground from the parent.
+ */
 @keyframes pix-shimmer {
   0% {
     background-position: 100% 0;
@@ -68,6 +72,7 @@
   );
   background-size: 200% 100%;
   background-clip: text;
+  -webkit-background-clip: text;
   color: transparent;
   animation: pix-shimmer 1.4s linear infinite;
 }
@@ -843,10 +848,16 @@ html[data-custom-window-controls="true"] .page-header {
   opacity: 0 !important;
 }
 .composer-dock {
+  /* Positioning context for jump-to-bottom (absolute, bottom: calc(100% + gap)). */
+  position: sticky;
   /* Keep solid canvas under the sticky input so scrolling messages don't show through. */
   background: var(--canvas, var(--background));
   /* Sit closer to the window bottom (was pb-6 via utility on the dock). */
   padding-bottom: 0.5rem; /* 8px */
+}
+/* Scroll-to-bottom: always just above the composer card, never over the textarea. */
+.composer-dock [data-slot="message-scroller-button"][data-direction="end"] {
+  bottom: calc(100% + 12px);
 }
 
 /* Prompt textarea: min 2 lines (just enough), grow to 12, then unified overlay scroll. */
@@ -898,115 +909,38 @@ html[data-custom-window-controls="true"] .page-header {
   border-top-right-radius: var(--radius-field);
 }
 
-.composer-attachment-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  gap: 8px;
-  padding: 10px 12px 2px;
-}
-
-.composer-attachment-card {
-  --attachment-color: var(--muted-foreground);
-  position: relative;
-  display: flex;
+/*
+ * Attachment strip: horizontal scroll when chips overflow (shadcn AttachmentGroup).
+ * Override default scrollbar-none so users can actually scroll the row.
+ */
+.composer-attachments,
+.timeline-attachment-group {
   min-width: 0;
-  min-height: 60px;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--attachment-color) 18%, var(--border));
-  border-radius: calc(var(--radius-control) + 2px);
-  background: color-mix(in srgb, var(--attachment-color) 4%, var(--surface-panel));
-  padding: 8px 32px 8px 8px;
-  transition:
-    border-color 0.14s ease,
-    background-color 0.14s ease;
+  max-width: 100%;
 }
-
-.composer-attachment-card:hover {
-  border-color: color-mix(in srgb, var(--attachment-color) 34%, var(--border));
-  background: color-mix(in srgb, var(--attachment-color) 7%, var(--surface-panel));
+.composer-attachment-group,
+.timeline-attachment-group {
+  max-width: 100%;
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
 }
-
-.composer-attachment-icon {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--attachment-color) 14%, transparent);
-  color: var(--attachment-color);
+.composer-attachment-group::-webkit-scrollbar,
+.timeline-attachment-group::-webkit-scrollbar {
+  height: 6px;
 }
-
-.composer-attachment-remove {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
+.composer-attachment-group::-webkit-scrollbar-thumb,
+.timeline-attachment-group::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: transparent;
-  color: var(--text-subtle);
-  opacity: 0.55;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    background-color 0.12s ease;
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
 }
-
-.composer-attachment-card:hover .composer-attachment-remove,
-.composer-attachment-remove:focus-visible {
-  opacity: 1;
-}
-
-.composer-attachment-remove:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-
-.composer-attachment-remove:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--attachment-color) 60%, transparent);
-  outline-offset: 1px;
-}
-
-.composer-attachment-card[data-kind="spreadsheet"] {
-  --attachment-color: #239764;
-}
-.composer-attachment-card[data-kind="image"] {
-  --attachment-color: #168fc7;
-}
-.composer-attachment-card[data-kind="pdf"] {
-  --attachment-color: #dc4f55;
-}
-.composer-attachment-card[data-kind="presentation"] {
-  --attachment-color: #df7627;
-}
-.composer-attachment-card[data-kind="document"] {
-  --attachment-color: #3b78d2;
-}
-.composer-attachment-card[data-kind="archive"] {
-  --attachment-color: #b9841e;
-}
-.composer-attachment-card[data-kind="text"] {
-  --attachment-color: #718096;
-}
-.composer-attachment-card[data-kind="code"] {
-  --attachment-color: #168f86;
-}
-.composer-attachment-card[data-kind="folder"] {
-  --attachment-color: #c99024;
-}
-
-@media (max-width: 540px) {
-  .composer-attachment-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* Image media fill the tile (AttachmentMedia variant="image"). */
+[data-slot="attachment-media"][data-variant="image"] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .composer-queue-card {
@@ -1462,8 +1396,13 @@ html[data-custom-window-controls="true"] .page-header {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Active process header (“思考中… / 处理中…”) — slightly stronger base for shimmer. */
 .timeline-process[data-active="true"] .timeline-process-summary {
   color: var(--muted-foreground);
+}
+.timeline-process[data-active="true"] .timeline-process-label {
+  /* Keep ellipsis while shimmer paints via background-clip:text. */
+  display: block;
 }
 /* Collapsed → right; open → down */
 .timeline-process-chevron {
@@ -1489,10 +1428,11 @@ html[data-custom-window-controls="true"] .page-header {
   padding: 2px 0 6px;
   margin: 0;
 }
+/* Narrative / thinking text inside “已处理” — always readable (not the quiet tool-row gray). */
 .process-step-thinking {
   margin: 8px 0 10px;
   padding: 0;
-  color: var(--muted-foreground);
+  color: var(--foreground);
   font-size: 13.5px;
   line-height: 1.55;
 }
@@ -1500,6 +1440,12 @@ html[data-custom-window-controls="true"] .page-header {
   color: inherit;
   font-size: inherit;
   line-height: inherit;
+}
+.process-step-thinking-body,
+.process-step-thinking-body p,
+.process-step-thinking-body li,
+.process-step-thinking-body code {
+  color: inherit;
 }
 .process-step-thinking-body p {
   margin: 0.35em 0;
@@ -1520,6 +1466,11 @@ html[data-custom-window-controls="true"] .page-header {
   text-align: left;
   cursor: pointer;
 }
+/*
+ * Tool / command / group rows (“运行了多个命令”, “已运行 …”, “已编辑 …”):
+ * quiet by default (same family as “已处理” header), full color on hover.
+ * Narrative thinking above stays --foreground always.
+ */
 .process-step-row {
   /* Icon column starts at the same left edge as thinking prose. */
   box-sizing: border-box;
@@ -1528,7 +1479,7 @@ html[data-custom-window-controls="true"] .page-header {
   border-radius: 8px;
   padding: 5px 4px 5px 0;
   gap: 8px;
-  color: var(--muted-foreground);
+  color: var(--text-subtle);
   transition:
     background-color 0.12s ease,
     color 0.12s ease;
@@ -1539,15 +1490,37 @@ html[data-custom-window-controls="true"] .page-header {
   color: var(--foreground);
 }
 .process-step-row.is-running {
-  color: var(--muted-foreground);
+  color: var(--text-subtle);
 }
 .process-step-row.is-error {
   color: var(--destructive, #ef4444);
 }
-/* Nested rows indent under the group label, not past the icon column of the group. */
+.process-step-row.is-error:hover,
+.process-step-trigger:hover .process-step-row.is-error {
+  color: var(--destructive, #ef4444);
+}
+/* Expanded tool I/O under a step: readable body, not forced gray. */
+.process-step-body,
+.process-step-body-nested {
+  color: var(--foreground);
+}
+/*
+ * Nested rows live inside .process-step-group-body, which already pads by
+ * icon+gap so content lines up with the group label (“运…” / “Ran…”).
+ * Do not add a second margin here — that pushed verbs past the label.
+ */
 .process-step-row-nested {
+  position: relative;
   padding-left: 0;
-  margin-left: calc(0.875rem + 8px); /* icon size-3.5 + gap */
+  margin-left: 0;
+}
+/* Spinner for nested running rows: sit in the group’s icon column, not the text. */
+.process-step-row-nested .process-step-icon-nested {
+  position: absolute;
+  left: calc(-1 * (0.875rem + 8px));
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
 }
 .process-step-icon {
   display: inline-flex;
@@ -1556,7 +1529,8 @@ html[data-custom-window-controls="true"] .page-header {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  opacity: 0.75;
+  opacity: 0.85;
+  color: inherit;
 }
 .process-step-row:hover .process-step-icon,
 .process-step-trigger:hover .process-step-icon {
@@ -1573,39 +1547,64 @@ html[data-custom-window-controls="true"] .page-header {
   color: inherit;
 }
 .process-step-detail {
-  color: color-mix(in srgb, var(--muted-foreground) 88%, var(--foreground));
+  color: inherit;
+  opacity: 0.92;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.92em;
 }
 .process-step-row:hover .process-step-detail,
 .process-step-trigger:hover .process-step-detail {
-  color: var(--foreground);
+  opacity: 1;
+  color: inherit;
 }
+/* Paths stay subtle with the row; link accent only when the row (or path) is hovered. */
 .process-step-path {
   display: inline;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--link, #379cfc);
+  color: inherit;
   font: inherit;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.92em;
   text-decoration: underline;
   text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   cursor: pointer;
 }
+.process-step-row:hover .process-step-path,
+.process-step-trigger:hover .process-step-path,
 .process-step-path:hover {
-  color: color-mix(in srgb, var(--link, #379cfc) 85%, white);
+  color: var(--link, #379cfc);
+  text-decoration-color: currentColor;
 }
 .process-step-expand {
   color: inherit;
   margin-left: auto;
 }
-.process-step-body,
+
+/* Expand body under a top-level tool row: align with that row’s verb (after icon+gap). */
+.process-step-body {
+  margin: 2px 0 6px;
+  padding-left: calc(0.875rem + 8px); /* size-3.5 + gap-2 */
+}
+/*
+ * Nested child under “运行了多个命令”:
+ * group-body already shifted to the text column — do NOT pad another icon+gap.
+ * No tree rails / connector lines — only indent alignment.
+ */
+.process-step-body-nested {
+  margin: 2px 0 8px;
+  padding-left: 0;
+  border-left: none;
+}
+.process-step-group {
+  margin: 1px 0;
+}
 .process-step-group-body {
   margin: 2px 0 6px;
-  padding-left: calc(0.875rem + 8px);
+  padding-left: calc(0.875rem + 8px); /* size-3.5 + gap-2 → align with “运” */
 }
 .process-step-pre {
   margin: 4px 0;
@@ -1614,16 +1613,16 @@ html[data-custom-window-controls="true"] .page-header {
   border-radius: 8px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--muted) 55%, transparent);
-  padding: 8px 10px;
-  color: var(--muted-foreground);
+  /* Tool output body: normal readable tone (not the quiet tool-row gray). */
+  color: var(--foreground);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11.5px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.process-step-group {
-  margin: 1px 0;
+.process-step-body-nested .process-step-pre {
+  margin-left: 0;
 }
 .timeline-live-status {
   margin: 2px 0 14px;
@@ -1663,69 +1662,6 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .timeline-assistant-label strong {
   font-weight: 550;
-}
-
-.timeline-attachment-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.timeline-attachment-card {
-  --attachment-color: var(--muted-foreground);
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--attachment-color) 18%, var(--border));
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--attachment-color) 5%, var(--surface-panel));
-  color: var(--foreground);
-  padding: 7px;
-  transition:
-    border-color 0.14s ease,
-    background-color 0.14s ease;
-}
-.timeline-attachment-card:hover {
-  border-color: color-mix(in srgb, var(--attachment-color) 38%, var(--border));
-  background: color-mix(in srgb, var(--attachment-color) 9%, var(--surface-panel));
-}
-.timeline-attachment-icon {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--attachment-color) 14%, transparent);
-  color: var(--attachment-color);
-}
-.timeline-attachment-card[data-kind="spreadsheet"] {
-  --attachment-color: #239764;
-}
-.timeline-attachment-card[data-kind="image"] {
-  --attachment-color: #168fc7;
-}
-.timeline-attachment-card[data-kind="pdf"] {
-  --attachment-color: #dc4f55;
-}
-.timeline-attachment-card[data-kind="presentation"] {
-  --attachment-color: #df7627;
-}
-.timeline-attachment-card[data-kind="document"] {
-  --attachment-color: #3b78d2;
-}
-.timeline-attachment-card[data-kind="archive"] {
-  --attachment-color: #b9841e;
-}
-.timeline-attachment-card[data-kind="text"] {
-  --attachment-color: #718096;
-}
-.timeline-attachment-card[data-kind="code"] {
-  --attachment-color: #168f86;
-}
-.timeline-attachment-card[data-kind="folder"] {
-  --attachment-color: #c99024;
 }
 
 .content-thinking-wrap,

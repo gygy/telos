@@ -66,6 +66,15 @@ import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { ensurePiCli, type PiCliProgressEvent } from "./pi-cli-ensure.ts";
+import {
+  applyProxyChannelToEnv,
+  electronProxyConfig,
+  normalizeProxyPrefs,
+  withNodeEnvProxyFlag,
+  type ProxyChannelPrefs,
+  type ProxyPrefs,
+} from "./proxy-prefs.ts";
+import { discoverLocalProxies } from "./proxy-discover.ts";
 
 const execFileAsync = promisify(execFile);
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -1350,6 +1359,12 @@ interface DesktopPrefs {
   /** Model used for AI-assisted git ops (commit message / PR helpers). Empty = session default. */
   gitModelProvider?: string;
   gitModelId?: string;
+  /**
+   * Independent proxies:
+   * - ai: agent-host / models / OAuth (Node fetch)
+   * - app: Electron session (renderer loads, shell.openExternal helpers, etc.)
+   */
+  proxy?: ProxyPrefs;
 }
 
 const WINDOW_MIN_WIDTH = 760;
@@ -1697,12 +1712,39 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
+/** Snapshot at module load so AI “system” mode is not polluted by app proxy mutations. */
+const LAUNCH_ENV: NodeJS.ProcessEnv = { ...process.env };
+
 function processEnvironment(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
-    ),
+  const base = Object.fromEntries(
+    Object.entries(LAUNCH_ENV).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
+  const proxy = getProxyPrefs();
+  // AI channel only — app proxy uses Electron session, not agent-host env.
+  return withNodeEnvProxyFlag(applyProxyChannelToEnv(base, proxy.ai, LAUNCH_ENV));
+}
+
+function getProxyPrefs(): ProxyPrefs {
+  return normalizeProxyPrefs(loadDesktopPrefs().proxy);
+}
+
+function setProxyPrefs(next: ProxyPrefs): ProxyPrefs {
+  const normalized = normalizeProxyPrefs(next);
+  const prefs = loadDesktopPrefs();
+  saveDesktopPrefs({ ...prefs, proxy: normalized });
+  return normalized;
+}
+
+/** Apply app-channel proxy to Chromium network stack only (not agent-host). */
+async function applyAppSessionProxy(channel?: ProxyChannelPrefs): Promise<void> {
+  const prefs = channel ?? getProxyPrefs().app;
+  const config = electronProxyConfig(prefs);
+  try {
+    const { session } = await import("electron");
+    await session.defaultSession.setProxy(config);
+  } catch (error) {
+    console.warn("[pix] applyAppSessionProxy failed:", error);
+  }
 }
 
 function normalizeHostCwd(path: string): string {
@@ -3942,6 +3984,8 @@ void app
   .then(async () => {
     // Name + About/Dock icon (must be after ready for About panel iconPath on some builds).
     applyAppBranding();
+    // App-channel proxy before any network from Chromium / main.
+    await applyAppSessionProxy();
     // Default Electron File/Edit/View/Window menu is English-only and not product chrome.
     // macOS keeps a minimal app menu (required for standard shortcuts / system UX).
     if (process.platform === "darwin") {
@@ -3967,9 +4011,26 @@ void app
       enableTestCommands:
         process.env.PIX_ENABLE_TEST_COMMANDS === "1" ||
         process.env.PIX_ENABLE_TEST_COMMANDS === "true",
+      appVersion: app.getVersion(),
       /** Windows uses native titleBarOverlay buttons; Linux needs renderer caption buttons. */
       customWindowControls: process.platform === "linux",
     }));
+    ipcMain.handle("pix:proxy:get", () => getProxyPrefs());
+    ipcMain.handle("pix:proxy:set", async (_event, next: unknown) => {
+      const prev = getProxyPrefs();
+      const saved = setProxyPrefs(normalizeProxyPrefs(next));
+      await applyAppSessionProxy(saved.app);
+      // AI proxy is applied at agent-host spawn; recycle host so new env takes effect.
+      if (JSON.stringify(prev.ai) !== JSON.stringify(saved.ai) && supervisor) {
+        try {
+          await supervisor.stop();
+        } catch (error) {
+          console.warn("[pix] stop host after AI proxy change failed:", error);
+        }
+      }
+      return saved;
+    });
+    ipcMain.handle("pix:proxy:discover-local", () => discoverLocalProxies());
     ipcMain.handle("pix:window:minimize", () => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
     });
@@ -4171,13 +4232,28 @@ void app
       if (result.canceled || !result.filePaths[0]) return undefined;
       return result.filePaths[0];
     });
-    ipcMain.handle("pix:workspace:pick-attachments", async () => {
-      if (!mainWindow) return [];
-      const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ["openFile", "openDirectory", "multiSelections"],
-      });
-      return result.canceled ? [] : result.filePaths;
-    });
+    // Windows/Linux: Electron cannot open a dialog that is both a file picker and a
+    // directory picker. Combining openFile+openDirectory forces directory-only UI, so
+    // users could not select files. Callers pass mode explicitly.
+    ipcMain.handle(
+      "pix:workspace:pick-attachments",
+      async (_event, options?: { mode?: "files" | "folders" }) => {
+        if (!mainWindow) return [];
+        const mode = options?.mode === "folders" ? "folders" : "files";
+        const properties: Array<"openFile" | "openDirectory" | "multiSelections"> =
+          mode === "folders"
+            ? ["openDirectory", "multiSelections"]
+            : ["openFile", "multiSelections"];
+        const result = await dialog.showOpenDialog(mainWindow, {
+          properties,
+          // Keep the dialog on top of our frameless/custom window on Windows.
+          ...(process.platform === "win32"
+            ? { title: mode === "folders" ? "选择文件夹" : "选择文件" }
+            : {}),
+        });
+        return result.canceled ? [] : result.filePaths;
+      },
+    );
     ipcMain.handle(
       "pix:workspace:search-paths",
       async (_event, query?: string, options?: { cwd?: string; limit?: number }) => {
@@ -4214,6 +4290,41 @@ void app
         return filePath;
       },
     );
+    /** Local image → small data-URL thumbnail for AttachmentMedia variant="image". */
+    ipcMain.handle("pix:workspace:read-attachment-preview", async (_event, filePath?: string) => {
+      if (typeof filePath !== "string" || !filePath.trim()) return undefined;
+      const abs = isAbsolute(filePath) ? resolve(filePath) : resolve(filePath);
+      if (!existsSync(abs)) return undefined;
+      try {
+        if (!lstatSync(abs).isFile()) return undefined;
+      } catch {
+        return undefined;
+      }
+      const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase();
+      if (![".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(ext)) {
+        return undefined;
+      }
+      try {
+        const image = nativeImage.createFromPath(abs);
+        if (image.isEmpty()) return undefined;
+        const { width, height } = image.getSize();
+        const maxEdge = 160;
+        let out = image;
+        if (width > maxEdge || height > maxEdge) {
+          const scale = Math.min(maxEdge / Math.max(width, 1), maxEdge / Math.max(height, 1));
+          out = image.resize({
+            width: Math.max(1, Math.round(width * scale)),
+            height: Math.max(1, Math.round(height * scale)),
+            quality: "good",
+          });
+        }
+        const png = out.toPNG();
+        if (!png.length || png.length > 1_500_000) return undefined;
+        return `data:image/png;base64,${png.toString("base64")}`;
+      } catch {
+        return undefined;
+      }
+    });
     ipcMain.handle("pix:trust:get", () => supervisor?.getTrust());
     ipcMain.handle("pix:trust:set", (_event, trusted: boolean) => supervisor?.setTrust(trusted));
     ipcMain.handle("pix:models:list", () => supervisor?.listModels());

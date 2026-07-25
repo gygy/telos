@@ -55,6 +55,8 @@ export interface ModelsJsonProviderView {
   baseUrl?: string;
   api?: string;
   authHeader?: boolean;
+  /** HTTP User-Agent from models.json headers (if set). */
+  userAgent?: string;
   models: ModelsJsonModelView[];
   /** True when models.json declares an apiKey field (value is never exposed). */
   hasApiKeyField: boolean;
@@ -83,6 +85,11 @@ export interface UpsertCustomProviderInput {
   apiKey?: string;
   /** When true, pi sends `Authorization: Bearer <apiKey>`. */
   authHeader?: boolean;
+  /**
+   * HTTP User-Agent for this provider (written to models.json headers).
+   * Prefer a product UA (e.g. PixDesktop/0.2.0) — OpenAI SDK defaults are often blocked by proxies.
+   */
+  userAgent?: string;
   modelId: string;
   modelName?: string;
   reasoning?: boolean;
@@ -1194,6 +1201,32 @@ export interface PiCliEnsureResult {
   error?: string;
 }
 
+/** Independent proxy channels (desktop prefs). */
+export type DesktopProxyMode = "off" | "system" | "custom";
+
+export interface DesktopProxyChannel {
+  mode: DesktopProxyMode;
+  /** e.g. http://127.0.0.1:7890 when mode is custom. */
+  server?: string;
+  /** Comma-separated bypass hosts (NO_PROXY) when mode is custom. */
+  bypass?: string;
+}
+
+export interface DesktopProxyPrefs {
+  /** Agent-host / models / OAuth (Node fetch). */
+  ai: DesktopProxyChannel;
+  /** Electron session / main-process Chromium network. */
+  app: DesktopProxyChannel;
+}
+
+/** Result of probing common local proxy ports / env (settings auto-discover). */
+export interface DesktopLocalProxyCandidate {
+  url: string;
+  port: number;
+  label: string;
+  source: "probe" | "env";
+}
+
 export interface PixDesktopApi {
   app: {
     /** OS platform + packaging flags for chrome layout / dev tools. */
@@ -1201,12 +1234,21 @@ export interface PixDesktopApi {
       platform: string;
       isPackaged: boolean;
       enableTestCommands: boolean;
+      /** Desktop app version (package / electron-builder). */
+      appVersion: string;
       /**
        * When true, renderer should paint min/max/close (Linux custom titlebar).
        * Windows uses native titleBarOverlay; macOS uses traffic lights.
        */
       customWindowControls: boolean;
     }>;
+  };
+  /** System proxy prefs: AI traffic vs app network, independently. */
+  proxy: {
+    get(): Promise<DesktopProxyPrefs>;
+    set(prefs: DesktopProxyPrefs): Promise<DesktopProxyPrefs>;
+    /** Probe loopback ports + env for running local proxies (Clash, V2RayN, …). */
+    discoverLocal(): Promise<DesktopLocalProxyCandidate[]>;
   };
   window: {
     minimize(): Promise<void>;
@@ -1246,8 +1288,12 @@ export interface PixDesktopApi {
       options?: { resumeRecent?: boolean; sessionFile?: string },
     ): Promise<HostSnapshot>;
     pickFolder(): Promise<string | undefined>;
-    /** Select readable files or folders to pass to pi as path context. */
-    pickAttachments(): Promise<string[]>;
+    /**
+     * Select files and/or folders to pass to pi as path context.
+     * On Windows/Linux, Electron cannot combine file + directory pickers in one
+     * dialog — pass `mode: "files"` or `"folders"` explicitly (default `"files"`).
+     */
+    pickAttachments(options?: { mode?: "files" | "folders" }): Promise<string[]>;
     /** Resolve a dropped browser File to its native path without exposing file contents. */
     pathForFile(file: File): string;
     /**
@@ -1263,6 +1309,11 @@ export interface PixDesktopApi {
      * so Composer can attach it like a picked image.
      */
     saveClipboardImage(options?: { bytes?: number[]; ext?: string }): Promise<string | undefined>;
+    /**
+     * Thumbnail data URL for local image attachments (composer / timeline preview).
+     * Returns undefined for non-images or unreadable paths.
+     */
+    readAttachmentPreview(path: string): Promise<string | undefined>;
     /**
      * Ensure a default project folder under Documents/Pix/YYYY-MM-DD
      * (reuse today's folder if it already exists). Returns absolute path.
@@ -1657,6 +1708,7 @@ function isUpsertCustomProviderInput(value: unknown): value is UpsertCustomProvi
   if (typeof value.modelId !== "string" || !value.modelId.trim()) return false;
   if (value.apiKey !== undefined && typeof value.apiKey !== "string") return false;
   if (value.authHeader !== undefined && typeof value.authHeader !== "boolean") return false;
+  if (value.userAgent !== undefined && typeof value.userAgent !== "string") return false;
   if (value.modelName !== undefined && typeof value.modelName !== "string") return false;
   if (value.reasoning !== undefined && typeof value.reasoning !== "boolean") return false;
   if (value.input !== undefined && value.input !== "text" && value.input !== "text-image") {
@@ -1704,6 +1756,7 @@ function isModelsJsonConfigView(value: unknown): value is ModelsJsonConfigView {
     if (row.baseUrl !== undefined && typeof row.baseUrl !== "string") return false;
     if (row.api !== undefined && typeof row.api !== "string") return false;
     if (row.authHeader !== undefined && typeof row.authHeader !== "boolean") return false;
+    if (row.userAgent !== undefined && typeof row.userAgent !== "string") return false;
     if (typeof row.hasApiKeyField !== "boolean") return false;
     if (!Array.isArray(row.models)) return false;
     return row.models.every(isModelsJsonModelView);

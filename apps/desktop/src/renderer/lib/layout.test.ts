@@ -15,8 +15,8 @@ describe("shell layout constants (ui-spec / Codex-like density)", () => {
     expect(SHELL_WINDOW.defaultWidth).toBe(1440);
     expect(SHELL_WINDOW.defaultHeight).toBe(900);
     expect(SHELL_WINDOW.minWidth).toBe(760);
-    expect(SHELL_SIDEBAR.defaultPx).toBe(272);
-    expect(isValidSidebarWidth(272)).toBe(true);
+    expect(SHELL_SIDEBAR.defaultPx).toBe(300);
+    expect(isValidSidebarWidth(300)).toBe(true);
     expect(isValidSidebarWidth(200)).toBe(false);
     expect(isValidSidebarWidth(400)).toBe(false);
   });

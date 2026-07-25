@@ -13,7 +13,7 @@ export const SHELL_WINDOW = {
 
 /** Sidebar width band (ui-spec §4.1). */
 export const SHELL_SIDEBAR = {
-  defaultPx: 272,
+  defaultPx: 300,
   minPx: 232,
   maxPx: 360,
 } as const;

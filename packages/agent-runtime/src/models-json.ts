@@ -15,6 +15,21 @@ import type {
 
 const MODELS_FILE = "models.json";
 
+/**
+ * Default User-Agent for custom providers written via Pix settings.
+ * OpenAI JS SDK defaults to `OpenAI/JS …`, which some gateways (e.g. Cloudflare
+ * in front of Grok proxies) block with HTTP 403. A product UA avoids that.
+ */
+export function defaultCustomProviderUserAgent(version?: string): string {
+  const raw =
+    (typeof version === "string" && version.trim()) || process.env.npm_package_version || "0.0.0";
+  const v = raw.replace(/^v/i, "").trim() || "0.0.0";
+  return `PixDesktop/${v}`;
+}
+
+/** @deprecated Prefer defaultCustomProviderUserAgent(appVersion). */
+export const DEFAULT_CUSTOM_PROVIDER_USER_AGENT = defaultCustomProviderUserAgent();
+
 const EMPTY_TEMPLATE = `{
   "providers": {}
 }
@@ -102,6 +117,14 @@ function projectProvider(providerId: string, raw: unknown): ModelsJsonProviderVi
   if (typeof row.baseUrl === "string" && row.baseUrl.trim()) view.baseUrl = row.baseUrl;
   if (typeof row.api === "string" && row.api.trim()) view.api = row.api;
   if (row.authHeader === true) view.authHeader = true;
+  if (isRecord(row.headers)) {
+    for (const [key, value] of Object.entries(row.headers)) {
+      if (key.toLowerCase() === "user-agent" && typeof value === "string" && value.trim()) {
+        view.userAgent = value.trim();
+        break;
+      }
+    }
+  }
   return view;
 }
 
@@ -256,6 +279,22 @@ export async function upsertCustomProviderInModelsJson(
   } else if (input.authHeader === false) {
     delete providerBlock.authHeader;
   }
+
+  // User-Agent: form value, else keep existing, else product default (avoid OpenAI/JS 403s).
+  const existingHeaders = isRecord(existing.headers)
+    ? { ...(existing.headers as Record<string, unknown>) }
+    : {};
+  let previousUa = "";
+  for (const [key, value] of Object.entries(existingHeaders)) {
+    if (key.toLowerCase() === "user-agent") {
+      if (!previousUa && typeof value === "string") previousUa = value.trim();
+      delete existingHeaders[key];
+    }
+  }
+  const ua = input.userAgent?.trim() || previousUa || defaultCustomProviderUserAgent();
+  existingHeaders["User-Agent"] = ua;
+  providerBlock.headers = existingHeaders;
+
   providers[providerId] = providerBlock;
   root.providers = providers;
 

@@ -4,6 +4,9 @@
  */
 import type {
   CustomModelApi,
+  DesktopProxyChannel,
+  DesktopProxyMode,
+  DesktopProxyPrefs,
   HostSnapshot,
   ModelSummary,
   PiSettingsPatch,
@@ -27,7 +30,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t, thinkingLevelLabel, type Locale, type MessageKey } from "../../lib/i18n.ts";
@@ -162,6 +165,8 @@ export function SettingsPage(props: SettingsPageProps) {
           <NotificationsSection {...props} tr={tr} />
         ) : props.section === "shortcuts" ? (
           <ShortcutsSection {...props} tr={tr} />
+        ) : props.section === "proxy" ? (
+          <ProxySection {...props} tr={tr} />
         ) : props.section === "providers" ? (
           <ProvidersSection {...props} tr={tr} />
         ) : props.section === "models" ? (
@@ -192,6 +197,205 @@ function formatArchivedDate(iso: string | undefined, locale: Locale): string {
   } catch {
     return iso;
   }
+}
+
+const DEFAULT_PROXY_CHANNEL: DesktopProxyChannel = { mode: "system" };
+
+function proxyPrefsEqual(a: DesktopProxyPrefs, b: DesktopProxyPrefs): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function ProxySection(
+  props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
+) {
+  const { tr } = props;
+  const [prefs, setPrefs] = useState<DesktopProxyPrefs>({
+    ai: { ...DEFAULT_PROXY_CHANNEL },
+    app: { ...DEFAULT_PROXY_CHANNEL },
+  });
+  const [saved, setSaved] = useState<DesktopProxyPrefs>({
+    ai: { ...DEFAULT_PROXY_CHANNEL },
+    app: { ...DEFAULT_PROXY_CHANNEL },
+  });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [discovering, setDiscovering] = useState<"ai" | "app" | null>(null);
+  const showAppError = useShellStore((s) => s.showAppError);
+  const dirty = !proxyPrefsEqual(prefs, saved);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.pix.proxy
+      .get()
+      .then((value) => {
+        if (cancelled) return;
+        setPrefs(value);
+        setSaved(value);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          showAppError(err instanceof Error ? err.message : tr("proxy.saveFailed"));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAppError, tr]);
+
+  async function save() {
+    if (busy || loading) return;
+    setBusy(true);
+    try {
+      const value = await window.pix.proxy.set(prefs);
+      setPrefs(value);
+      setSaved(value);
+      useShellStore.getState().setStatus(tr("proxy.saved"));
+    } catch (err) {
+      showAppError(err instanceof Error ? err.message : tr("proxy.saveFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function patchChannel(key: "ai" | "app", patch: Partial<DesktopProxyChannel>) {
+    setPrefs((current) => ({
+      ...current,
+      [key]: { ...current[key], ...patch },
+    }));
+  }
+
+  async function discoverLocal(key: "ai" | "app") {
+    if (loading || busy || discovering) return;
+    setDiscovering(key);
+    try {
+      const found = await window.pix.proxy.discoverLocal();
+      if (found.length === 0) {
+        useShellStore.getState().setStatus(tr("proxy.discoverNone"));
+        return;
+      }
+      const best = found[0]!;
+      patchChannel(key, { server: best.url });
+      useShellStore.getState().setStatus(
+        found.length === 1
+          ? tr("proxy.discoverFilled", { url: best.url })
+          : tr("proxy.discoverFilledMany", {
+              count: String(found.length),
+              url: best.url,
+            }),
+      );
+    } catch (err) {
+      showAppError(err instanceof Error ? err.message : tr("proxy.discoverFailed"));
+    } finally {
+      setDiscovering(null);
+    }
+  }
+
+  function onProxyFieldKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void save();
+  }
+
+  const modeOptions = [
+    { value: "off", label: tr("proxy.mode.off") },
+    { value: "system", label: tr("proxy.mode.system") },
+    { value: "custom", label: tr("proxy.mode.custom") },
+  ];
+
+  function renderChannel(key: "ai" | "app", titleKey: MessageKey, hintKey: MessageKey) {
+    const channel = prefs[key];
+    const prefix = key === "ai" ? "proxy-ai" : "proxy-app";
+    const custom = channel.mode === "custom";
+    const disabled = loading || busy;
+    const discoverBusy = discovering === key;
+
+    return (
+      <SettingsSectionBlock label={tr(titleKey)} testId={`${prefix}-card`}>
+        <SettingsRow
+          title={tr("proxy.mode")}
+          description={tr(hintKey)}
+          control={
+            <SettingsSelect
+              testId={`${prefix}-mode`}
+              value={channel.mode}
+              disabled={disabled}
+              onChange={(v) => patchChannel(key, { mode: v as DesktopProxyMode })}
+              options={modeOptions}
+            />
+          }
+          last={!custom}
+        />
+        {custom ? (
+          <>
+            <div className="settings-row !flex-col !items-stretch gap-2.5">
+              <div>
+                <div className="settings-row-title">{tr("proxy.server")}</div>
+                <div className="settings-row-desc">{tr("proxy.serverHint")}</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <SettingsInput
+                  data-testid={`${prefix}-server`}
+                  mono
+                  className="min-w-0 flex-1"
+                  value={channel.server ?? ""}
+                  disabled={disabled || discoverBusy}
+                  placeholder={tr("proxy.serverPh")}
+                  onChange={(e) => patchChannel(key, { server: e.target.value })}
+                  onKeyDown={onProxyFieldKeyDown}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <SettingsPillButton
+                  label={discoverBusy ? tr("proxy.discovering") : tr("proxy.discover")}
+                  testId={`${prefix}-discover`}
+                  disabled={disabled || discovering !== null}
+                  onClick={() => void discoverLocal(key)}
+                />
+              </div>
+            </div>
+            <div className="settings-row settings-row-last !flex-col !items-stretch gap-2.5">
+              <div>
+                <div className="settings-row-title">{tr("proxy.bypass")}</div>
+                <div className="settings-row-desc">{tr("proxy.bypassHint")}</div>
+              </div>
+              <SettingsInput
+                data-testid={`${prefix}-bypass`}
+                mono
+                value={channel.bypass ?? ""}
+                disabled={disabled}
+                placeholder={tr("proxy.bypassPh")}
+                onChange={(e) => patchChannel(key, { bypass: e.target.value })}
+                onKeyDown={onProxyFieldKeyDown}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          </>
+        ) : null}
+      </SettingsSectionBlock>
+    );
+  }
+
+  return (
+    <SettingsPageShell
+      title={tr("section.proxy")}
+      testId="settings-proxy"
+      titleAction={
+        <SettingsPillButton
+          label={busy ? tr("proxy.saving") : tr("proxy.save")}
+          testId="proxy-save"
+          disabled={loading || busy || !dirty}
+          onClick={() => void save()}
+        />
+      }
+    >
+      {renderChannel("ai", "proxy.ai.title", "proxy.ai.hint")}
+      {renderChannel("app", "proxy.app.title", "proxy.app.hint")}
+    </SettingsPageShell>
+  );
 }
 
 function normalizeCwdKey(path: string): string {
@@ -888,66 +1092,114 @@ function EnvironmentSection(
   );
 }
 
+type WorktreeDraft = {
+  rootConfigured: string;
+  autoDelete: boolean;
+  autoDeleteLimit: number;
+};
+
+function worktreeDraftEqual(a: WorktreeDraft, b: WorktreeDraft): boolean {
+  return (
+    a.rootConfigured.trim() === b.rootConfigured.trim() &&
+    a.autoDelete === b.autoDelete &&
+    a.autoDeleteLimit === b.autoDeleteLimit
+  );
+}
+
 function WorktreeSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
-  const [wtRoot, setWtRoot] = useState("");
-  /** Last persisted configured value — avoid blur/save when unchanged. */
-  const [wtRootSaved, setWtRootSaved] = useState("");
+  const [prefs, setPrefs] = useState<WorktreeDraft>({
+    rootConfigured: "",
+    autoDelete: true,
+    autoDeleteLimit: 10,
+  });
+  const [saved, setSaved] = useState<WorktreeDraft>({
+    rootConfigured: "",
+    autoDelete: true,
+    autoDeleteLimit: 10,
+  });
   const [wtDefaultRoot, setWtDefaultRoot] = useState("");
-  const [wtAutoDelete, setWtAutoDelete] = useState(true);
-  const [wtLimit, setWtLimit] = useState(10);
-  const [wtLoading, setWtLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const dirty = !worktreeDraftEqual(prefs, saved);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     void window.pix.workspace
       .getWorktreePrefs(props.snapshot?.cwd)
       .then((p) => {
         if (cancelled) return;
-        setWtRoot(p.rootConfigured);
-        setWtRootSaved(p.rootConfigured);
+        const next: WorktreeDraft = {
+          rootConfigured: p.rootConfigured,
+          autoDelete: p.autoDelete,
+          autoDeleteLimit: p.autoDeleteLimit,
+        };
+        setPrefs(next);
+        setSaved(next);
         setWtDefaultRoot(p.defaultRoot);
-        setWtAutoDelete(p.autoDelete);
-        setWtLimit(p.autoDeleteLimit);
       })
       .catch(() => {
         /* host may be stopped */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [props.snapshot?.cwd]);
 
-  async function persistWorktree(patch: {
-    rootConfigured?: string;
-    autoDelete?: boolean;
-    autoDeleteLimit?: number;
-  }) {
-    setWtLoading(true);
+  async function save() {
+    if (busy || loading || !dirty) return;
+    setBusy(true);
     try {
-      const p = await window.pix.workspace.setWorktreePrefs(patch);
-      // Only rewrite root field when this save touched it — empty field must stay empty
-      // and not flip when auto-delete / limit saves recompute defaultRoot for another cwd.
-      if (patch.rootConfigured !== undefined) {
-        setWtRoot(p.rootConfigured);
-        setWtRootSaved(p.rootConfigured);
-      }
-      setWtAutoDelete(p.autoDelete);
-      setWtLimit(p.autoDeleteLimit);
+      const p = await window.pix.workspace.setWorktreePrefs({
+        rootConfigured: prefs.rootConfigured,
+        autoDelete: prefs.autoDelete,
+        autoDeleteLimit: prefs.autoDeleteLimit,
+      });
+      const next: WorktreeDraft = {
+        rootConfigured: p.rootConfigured,
+        autoDelete: p.autoDelete,
+        autoDeleteLimit: p.autoDeleteLimit,
+      };
+      setPrefs(next);
+      setSaved(next);
       if (p.defaultRoot) setWtDefaultRoot(p.defaultRoot);
+      useShellStore.getState().setStatus(tr("worktree.saved"));
     } catch (error) {
       useShellStore
         .getState()
-        .showAppError(error instanceof Error ? error.message : "Failed to save worktree prefs");
+        .showAppError(error instanceof Error ? error.message : tr("worktree.saveFailed"));
     } finally {
-      setWtLoading(false);
+      setBusy(false);
     }
   }
 
+  function onFieldKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void save();
+  }
+
+  const disabled = loading || busy;
+
   return (
-    <SettingsPageShell title={tr("section.worktree")} testId="settings-worktree">
+    <SettingsPageShell
+      title={tr("section.worktree")}
+      testId="settings-worktree"
+      titleAction={
+        <SettingsPillButton
+          label={busy ? tr("worktree.saving") : tr("worktree.save")}
+          testId="worktree-save"
+          disabled={disabled || !dirty}
+          onClick={() => void save()}
+        />
+      }
+    >
       <SettingsSectionBlock label={tr("worktree.settings")} testId="settings-worktree-options">
         <div className="settings-row settings-row-last !flex-col !items-stretch gap-3">
           <div>
@@ -957,35 +1209,30 @@ function WorktreeSection(
                 data-testid="worktree-root-input"
                 mono
                 className="min-w-0 flex-1"
-                value={wtRoot}
+                value={prefs.rootConfigured}
                 placeholder={wtDefaultRoot || tr("worktree.rootPlaceholder")}
-                disabled={wtLoading}
-                onChange={(e) => setWtRoot(e.target.value)}
-                onBlur={() => {
-                  if (wtRoot.trim() === wtRootSaved.trim()) return;
-                  void persistWorktree({ rootConfigured: wtRoot });
-                }}
+                disabled={disabled}
+                onChange={(e) =>
+                  setPrefs((current) => ({ ...current, rootConfigured: e.target.value }))
+                }
+                onKeyDown={onFieldKeyDown}
               />
               <SettingsPillButton
                 label={tr("worktree.pickRoot")}
                 testId="worktree-root-pick"
-                disabled={wtLoading}
+                disabled={disabled}
                 onClick={() => {
                   void window.pix.workspace.pickFolder().then((folder) => {
                     if (!folder) return;
-                    setWtRoot(folder);
-                    void persistWorktree({ rootConfigured: folder });
+                    setPrefs((current) => ({ ...current, rootConfigured: folder }));
                   });
                 }}
               />
               <SettingsPillButton
                 label={tr("worktree.clearRoot")}
                 testId="worktree-root-clear"
-                disabled={wtLoading || !wtRoot.trim()}
-                onClick={() => {
-                  setWtRoot("");
-                  void persistWorktree({ rootConfigured: "" });
-                }}
+                disabled={disabled || !prefs.rootConfigured.trim()}
+                onClick={() => setPrefs((current) => ({ ...current, rootConfigured: "" }))}
               />
             </div>
           </div>
@@ -995,13 +1242,10 @@ function WorktreeSection(
               <div className="settings-row-desc">{tr("worktree.autoDeleteHint")}</div>
             </div>
             <SettingsToggle
-              checked={wtAutoDelete}
-              onChange={(on) => {
-                setWtAutoDelete(on);
-                void persistWorktree({ autoDelete: on });
-              }}
+              checked={prefs.autoDelete}
+              onChange={(on) => setPrefs((current) => ({ ...current, autoDelete: on }))}
               testId="worktree-auto-delete"
-              disabled={wtLoading}
+              disabled={disabled}
               aria-label={tr("worktree.autoDelete")}
             />
           </div>
@@ -1016,10 +1260,15 @@ function WorktreeSection(
               max={100}
               data-testid="worktree-auto-delete-limit"
               className="w-20 text-right"
-              value={wtLimit}
-              disabled={wtLoading || !wtAutoDelete}
-              onChange={(e) => setWtLimit(Number(e.target.value) || 1)}
-              onBlur={() => void persistWorktree({ autoDeleteLimit: wtLimit })}
+              value={prefs.autoDeleteLimit}
+              disabled={disabled || !prefs.autoDelete}
+              onChange={(e) =>
+                setPrefs((current) => ({
+                  ...current,
+                  autoDeleteLimit: Number(e.target.value) || 1,
+                }))
+              }
+              onKeyDown={onFieldKeyDown}
             />
           </div>
         </div>
@@ -1028,36 +1277,92 @@ function WorktreeSection(
   );
 }
 
+type GitDraft = {
+  branchPrefix: string;
+  pullMode: "merge" | "squash";
+  forcePush: boolean;
+  draftPr: boolean;
+  customCommit: string;
+  customPr: string;
+  modelKey: string;
+};
+
+function gitDraftEqual(a: GitDraft, b: GitDraft): boolean {
+  return (
+    a.branchPrefix === b.branchPrefix &&
+    a.pullMode === b.pullMode &&
+    a.forcePush === b.forcePush &&
+    a.draftPr === b.draftPr &&
+    a.customCommit === b.customCommit &&
+    a.customPr === b.customPr &&
+    a.modelKey === b.modelKey
+  );
+}
+
+function gitPrefsToDraft(p: {
+  branchPrefix: string;
+  pullMode: "merge" | "squash";
+  forcePush: boolean;
+  draftPr: boolean;
+  customCommitCommand: string;
+  customPrCommand: string;
+  modelProvider: string;
+  modelId: string;
+}): GitDraft {
+  return {
+    branchPrefix: p.branchPrefix,
+    pullMode: p.pullMode,
+    forcePush: p.forcePush,
+    draftPr: p.draftPr,
+    customCommit: p.customCommitCommand,
+    customPr: p.customPrCommand,
+    modelKey: p.modelProvider && p.modelId ? `${p.modelProvider}/${p.modelId}` : "",
+  };
+}
+
 function GitSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
-  const [branchPrefix, setBranchPrefix] = useState("pix/");
-  const [pullMode, setPullMode] = useState<"merge" | "squash">("merge");
-  const [forcePush, setForcePush] = useState(false);
-  const [draftPr, setDraftPr] = useState(false);
-  const [customCommit, setCustomCommit] = useState("");
-  const [customPr, setCustomPr] = useState("");
-  const [modelKey, setModelKey] = useState("");
+  const [prefs, setPrefs] = useState<GitDraft>({
+    branchPrefix: "pix/",
+    pullMode: "merge",
+    forcePush: false,
+    draftPr: false,
+    customCommit: "",
+    customPr: "",
+    modelKey: "",
+  });
+  const [saved, setSaved] = useState<GitDraft>({
+    branchPrefix: "pix/",
+    pullMode: "merge",
+    forcePush: false,
+    draftPr: false,
+    customCommit: "",
+    customPr: "",
+    modelKey: "",
+  });
   const [models, setModels] = useState<ModelSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const dirty = !gitDraftEqual(prefs, saved);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     void window.pix.workspace
       .getGitPrefs()
       .then((p) => {
         if (cancelled) return;
-        setBranchPrefix(p.branchPrefix);
-        setPullMode(p.pullMode);
-        setForcePush(p.forcePush);
-        setDraftPr(p.draftPr);
-        setCustomCommit(p.customCommitCommand);
-        setCustomPr(p.customPrCommand);
-        setModelKey(p.modelProvider && p.modelId ? `${p.modelProvider}/${p.modelId}` : "");
+        const next = gitPrefsToDraft(p);
+        setPrefs(next);
+        setSaved(next);
       })
       .catch(() => {
         /* host may be stopped */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     void (async () => {
       try {
@@ -1073,24 +1378,44 @@ function GitSection(
     };
   }, [props.onEnsureHost]);
 
-  async function persist(patch: Parameters<typeof window.pix.workspace.setGitPrefs>[0]) {
-    setLoading(true);
+  async function save() {
+    if (busy || loading || !dirty) return;
+    setBusy(true);
     try {
-      const p = await window.pix.workspace.setGitPrefs(patch);
-      setBranchPrefix(p.branchPrefix);
-      setPullMode(p.pullMode);
-      setForcePush(p.forcePush);
-      setDraftPr(p.draftPr);
-      setCustomCommit(p.customCommitCommand);
-      setCustomPr(p.customPrCommand);
-      setModelKey(p.modelProvider && p.modelId ? `${p.modelProvider}/${p.modelId}` : "");
+      let modelProvider = "";
+      let modelId = "";
+      if (prefs.modelKey) {
+        const slash = prefs.modelKey.indexOf("/");
+        modelProvider = slash >= 0 ? prefs.modelKey.slice(0, slash) : prefs.modelKey;
+        modelId = slash >= 0 ? prefs.modelKey.slice(slash + 1) : "";
+      }
+      const p = await window.pix.workspace.setGitPrefs({
+        branchPrefix: prefs.branchPrefix,
+        pullMode: prefs.pullMode,
+        forcePush: prefs.forcePush,
+        draftPr: prefs.draftPr,
+        customCommitCommand: prefs.customCommit,
+        customPrCommand: prefs.customPr,
+        modelProvider,
+        modelId,
+      });
+      const next = gitPrefsToDraft(p);
+      setPrefs(next);
+      setSaved(next);
+      useShellStore.getState().setStatus(tr("git.saved"));
     } catch (error) {
       useShellStore
         .getState()
-        .showAppError(error instanceof Error ? error.message : "Failed to save git prefs");
+        .showAppError(error instanceof Error ? error.message : tr("git.saveFailed"));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
+  }
+
+  function onFieldKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void save();
   }
 
   const modelOptions = useMemo(() => {
@@ -1102,14 +1427,27 @@ function GitSection(
       })),
     ];
     // Keep current selection visible even if host list is empty temporarily.
-    if (modelKey && !opts.some((o) => o.value === modelKey)) {
-      opts.push({ value: modelKey, label: modelKey });
+    if (prefs.modelKey && !opts.some((o) => o.value === prefs.modelKey)) {
+      opts.push({ value: prefs.modelKey, label: prefs.modelKey });
     }
     return opts;
-  }, [models, modelKey, tr]);
+  }, [models, prefs.modelKey, tr]);
+
+  const disabled = loading || busy;
 
   return (
-    <SettingsPageShell title={tr("section.git")} testId="settings-git">
+    <SettingsPageShell
+      title={tr("section.git")}
+      testId="settings-git"
+      titleAction={
+        <SettingsPillButton
+          label={busy ? tr("git.saving") : tr("git.save")}
+          testId="git-save"
+          disabled={disabled || !dirty}
+          onClick={() => void save()}
+        />
+      }
+    >
       <SettingsSectionBlock label={tr("git.settings")} testId="settings-git-options">
         <div className="settings-row items-center justify-between gap-4">
           <div className="min-w-0">
@@ -1118,20 +1456,10 @@ function GitSection(
           </div>
           <SettingsSelect
             testId="git-model"
-            value={modelKey}
-            onChange={(v) => {
-              setModelKey(v);
-              if (!v) {
-                void persist({ modelProvider: "", modelId: "" });
-                return;
-              }
-              const slash = v.indexOf("/");
-              const provider = slash >= 0 ? v.slice(0, slash) : v;
-              const id = slash >= 0 ? v.slice(slash + 1) : "";
-              void persist({ modelProvider: provider, modelId: id });
-            }}
+            value={prefs.modelKey}
+            onChange={(v) => setPrefs((current) => ({ ...current, modelKey: v }))}
             options={modelOptions}
-            disabled={loading}
+            disabled={disabled}
           />
         </div>
         <div className="settings-row !flex-col !items-stretch gap-2.5">
@@ -1143,14 +1471,16 @@ function GitSection(
             <SettingsInput
               data-testid="git-branch-prefix"
               mono
-              value={branchPrefix}
+              value={prefs.branchPrefix}
               placeholder={tr("git.branchPrefixPlaceholder")}
-              disabled={loading}
+              disabled={disabled}
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
-              onChange={(e) => setBranchPrefix(e.target.value)}
-              onBlur={() => void persist({ branchPrefix })}
+              onChange={(e) =>
+                setPrefs((current) => ({ ...current, branchPrefix: e.target.value }))
+              }
+              onKeyDown={onFieldKeyDown}
             />
           </div>
         </div>
@@ -1161,17 +1491,18 @@ function GitSection(
           </div>
           <SettingsSelect
             testId="git-pull-mode"
-            value={pullMode}
-            onChange={(v) => {
-              const mode = v === "squash" ? "squash" : "merge";
-              setPullMode(mode);
-              void persist({ pullMode: mode });
-            }}
+            value={prefs.pullMode}
+            onChange={(v) =>
+              setPrefs((current) => ({
+                ...current,
+                pullMode: v === "squash" ? "squash" : "merge",
+              }))
+            }
             options={[
               { value: "merge", label: tr("git.pullMerge") },
               { value: "squash", label: tr("git.pullSquash") },
             ]}
-            disabled={loading}
+            disabled={disabled}
           />
         </div>
         <SettingsRow
@@ -1179,13 +1510,10 @@ function GitSection(
           description={tr("git.forcePushHint")}
           control={
             <SettingsToggle
-              checked={forcePush}
-              onChange={(on) => {
-                setForcePush(on);
-                void persist({ forcePush: on });
-              }}
+              checked={prefs.forcePush}
+              onChange={(on) => setPrefs((current) => ({ ...current, forcePush: on }))}
               testId="git-force-push"
-              disabled={loading}
+              disabled={disabled}
               aria-label={tr("git.forcePush")}
             />
           }
@@ -1195,13 +1523,10 @@ function GitSection(
           description={tr("git.draftPrHint")}
           control={
             <SettingsToggle
-              checked={draftPr}
-              onChange={(on) => {
-                setDraftPr(on);
-                void persist({ draftPr: on });
-              }}
+              checked={prefs.draftPr}
+              onChange={(on) => setPrefs((current) => ({ ...current, draftPr: on }))}
               testId="git-draft-pr"
-              disabled={loading}
+              disabled={disabled}
               aria-label={tr("git.draftPr")}
             />
           }
@@ -1213,12 +1538,11 @@ function GitSection(
           </div>
           <SettingsTextarea
             data-testid="git-custom-commit"
-            value={customCommit}
+            value={prefs.customCommit}
             placeholder={tr("git.customCommitPlaceholder")}
-            disabled={loading}
+            disabled={disabled}
             rows={4}
-            onChange={(e) => setCustomCommit(e.target.value)}
-            onBlur={() => void persist({ customCommitCommand: customCommit })}
+            onChange={(e) => setPrefs((current) => ({ ...current, customCommit: e.target.value }))}
           />
         </div>
         <div className="settings-row settings-row-last !flex-col !items-stretch gap-2.5">
@@ -1228,12 +1552,11 @@ function GitSection(
           </div>
           <SettingsTextarea
             data-testid="git-custom-pr"
-            value={customPr}
+            value={prefs.customPr}
             placeholder={tr("git.customPrPlaceholder")}
-            disabled={loading}
+            disabled={disabled}
             rows={4}
-            onChange={(e) => setCustomPr(e.target.value)}
-            onBlur={() => void persist({ customPrCommand: customPr })}
+            onChange={(e) => setPrefs((current) => ({ ...current, customPr: e.target.value }))}
           />
         </div>
       </SettingsSectionBlock>
@@ -2370,6 +2693,9 @@ function ModelsSection(
   const [api, setApi] = useState<CustomModelApi>("openai-completions");
   const [apiKey, setApiKey] = useState("");
   const [authHeader, setAuthHeader] = useState(false);
+  /** HTTP User-Agent for proxy providers; default PixDesktop/{appVersion}. */
+  const [userAgent, setUserAgent] = useState("PixDesktop/0.0.0");
+  const [appVersion, setAppVersion] = useState("0.0.0");
   const [modelId, setModelId] = useState("");
   const [modelName, setModelName] = useState("");
   const [reasoning, setReasoning] = useState(false);
@@ -2401,6 +2727,11 @@ function ModelsSection(
     return Number.isFinite(n) ? n : undefined;
   }
 
+  function defaultUserAgent(version = appVersion): string {
+    const v = version.replace(/^v/i, "").trim() || "0.0.0";
+    return `PixDesktop/${v}`;
+  }
+
   function resetCustomForm() {
     setEditingOrigin(null);
     setProviderId("");
@@ -2408,6 +2739,7 @@ function ModelsSection(
     setApi("openai-completions");
     setApiKey("");
     setAuthHeader(false);
+    setUserAgent(defaultUserAgent());
     setModelId("");
     setModelName("");
     setReasoning(false);
@@ -2473,6 +2805,18 @@ function ModelsSection(
 
   useEffect(() => {
     void refresh();
+    void window.pix.app
+      .getRuntime()
+      .then((runtime) => {
+        const v = (runtime.appVersion || "0.0.0").replace(/^v/i, "").trim() || "0.0.0";
+        setAppVersion(v);
+        setUserAgent((current) =>
+          !current || current === "PixDesktop/0.0.0" ? `PixDesktop/${v}` : current,
+        );
+      })
+      .catch(() => {
+        // keep fallback version
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2490,6 +2834,7 @@ function ModelsSection(
 
   function openCustomDialog() {
     resetCustomForm();
+    setUserAgent(defaultUserAgent());
     setDialogOpen(true);
   }
 
@@ -2500,6 +2845,7 @@ function ModelsSection(
     setModelId(model.id);
     setModelName(model.name || model.id);
     setReasoning(Boolean(model.reasoning));
+    setUserAgent(defaultUserAgent());
     setDialogOpen(true);
     setDialogBusy(true);
     try {
@@ -2515,6 +2861,7 @@ function ModelsSection(
         setApi(provider.api as CustomModelApi);
       }
       setAuthHeader(provider.authHeader === true);
+      setUserAgent(provider.userAgent?.trim() || defaultUserAgent());
       const entry = provider.models.find((row) => row.id === model.id);
       if (entry) {
         if (entry.name) setModelName(entry.name);
@@ -2587,6 +2934,7 @@ function ModelsSection(
       if (apiKey.trim()) payload.apiKey = apiKey.trim();
       // Always persist authHeader when editing so unchecking clears models.json flag.
       payload.authHeader = authHeader;
+      payload.userAgent = userAgent.trim() || defaultUserAgent();
       if (reasoning) payload.reasoning = true;
       const ctx = parseOptionalNumber(contextWindow);
       if (ctx != null) payload.contextWindow = ctx;
@@ -3052,6 +3400,20 @@ function ModelsSection(
                       <details className="models-custom-advanced">
                         <summary>{tr("models.customSectionAdvanced")}</summary>
                         <div className="models-custom-advanced-body">
+                          <label className="models-custom-field models-custom-field-span">
+                            <span>{tr("models.customUserAgent")}</span>
+                            <SettingsInput
+                              data-testid="models-custom-user-agent"
+                              value={userAgent}
+                              onChange={(e) => setUserAgent(e.target.value)}
+                              placeholder={defaultUserAgent()}
+                              disabled={dialogBusy}
+                              autoComplete="off"
+                            />
+                            <p className="m-0 text-[11px] leading-snug text-[var(--text-subtle)]">
+                              {tr("models.customUserAgentHint")}
+                            </p>
+                          </label>
                           <label className="models-custom-field">
                             <span>{tr("models.customCostInput")}</span>
                             <SettingsInput
@@ -3181,21 +3543,74 @@ function httpIdleTimeoutOptions(
  * CLI/TUI-only options (theme, quietStartup, skill commands, free-text model ids)
  * stay in ~/.pi/agent and the Models page.
  */
+type PiDraft = {
+  defaultThinkingLevel: string;
+  defaultProjectTrust: "ask" | "always" | "never";
+  compactionEnabled: boolean;
+  compactionReserveTokens: number;
+  compactionKeepRecentTokens: number;
+  retryEnabled: boolean;
+  retryMaxRetries: number;
+  retryBaseDelayMs: number;
+  hideThinkingBlock: boolean;
+  steeringMode: "all" | "one-at-a-time";
+  followUpMode: "all" | "one-at-a-time";
+  doubleEscapeAction: "fork" | "tree" | "none";
+  treeFilterMode: "default" | "no-tools" | "user-only" | "labeled-only" | "all";
+  httpIdleTimeoutMs: number;
+  enableInstallTelemetry: boolean;
+  enableAnalytics: boolean;
+};
+
+function piViewToDraft(view: PiSettingsView): PiDraft {
+  return {
+    defaultThinkingLevel: view.defaultThinkingLevel ?? "off",
+    defaultProjectTrust: view.defaultProjectTrust ?? "ask",
+    compactionEnabled: Boolean(view.compactionEnabled),
+    compactionReserveTokens: view.compactionReserveTokens ?? 16384,
+    compactionKeepRecentTokens: view.compactionKeepRecentTokens ?? 20000,
+    retryEnabled: Boolean(view.retryEnabled),
+    retryMaxRetries: view.retryMaxRetries ?? 3,
+    retryBaseDelayMs: view.retryBaseDelayMs ?? 2000,
+    hideThinkingBlock: Boolean(view.hideThinkingBlock),
+    steeringMode: view.steeringMode ?? "all",
+    followUpMode: view.followUpMode ?? "all",
+    doubleEscapeAction: view.doubleEscapeAction ?? "fork",
+    treeFilterMode: view.treeFilterMode ?? "default",
+    // Pix product default: 60 minutes (pi upstream default is 5 minutes / 300000).
+    httpIdleTimeoutMs: view.httpIdleTimeoutMs ?? 3_600_000,
+    enableInstallTelemetry: view.enableInstallTelemetry === true,
+    enableAnalytics: view.enableAnalytics === true,
+  };
+}
+
+function piDraftEqual(a: PiDraft, b: PiDraft): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function PiSettingsSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
   const [view, setView] = useState<PiSettingsView | undefined>();
-  const [loading, setLoading] = useState(false);
+  const [prefs, setPrefs] = useState<PiDraft | undefined>();
+  const [saved, setSaved] = useState<PiDraft | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const showAppError = useShellStore((s) => s.showAppError);
+  const dirty = Boolean(prefs && saved && !piDraftEqual(prefs, saved));
 
   async function refresh() {
     setLoading(true);
     try {
       await props.onEnsureHost();
-      setView(await window.pix.settings.get());
+      const next = await window.pix.settings.get();
+      const draft = piViewToDraft(next);
+      setView(next);
+      setPrefs(draft);
+      setSaved(draft);
     } catch (err) {
-      showAppError(err instanceof Error ? err.message : "Failed to load settings");
+      showAppError(err instanceof Error ? err.message : tr("piSettings.saveFailed"));
     } finally {
       setLoading(false);
     }
@@ -3206,26 +3621,54 @@ function PiSettingsSection(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function apply(patch: PiSettingsPatch) {
-    setLoading(true);
+  async function save() {
+    if (!prefs || busy || loading || !dirty) return;
+    setBusy(true);
     try {
+      const patch: PiSettingsPatch = { ...prefs };
       const result = await window.pix.settings.patch(patch);
+      const draft = piViewToDraft(result.settings);
       setView(result.settings);
+      setPrefs(draft);
+      setSaved(draft);
       props.onSnapshot(result.snapshot);
+      useShellStore.getState().setStatus(tr("piSettings.saved"));
     } catch (err) {
-      showAppError(err instanceof Error ? err.message : "Failed to save settings");
+      showAppError(err instanceof Error ? err.message : tr("piSettings.saveFailed"));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
+  }
+
+  function onFieldKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void save();
+  }
+
+  function patchPrefs(patch: Partial<PiDraft>) {
+    setPrefs((current) => (current ? { ...current, ...patch } : current));
   }
 
   // Default thinking is a global settings.json field — always offer the full pi ThinkingLevel
   // set (docs/custom-provider thinkingLevelMap). Do not use the current session model's
   // availableThinkingLevels (often only "off" for models without mapped reasoning).
   const thinkingLevels = PI_THINKING_LEVELS;
+  const disabled = loading || busy || !prefs;
 
   return (
-    <SettingsPageShell title={tr("section.piSettings")} testId="settings-pi">
+    <SettingsPageShell
+      title={tr("section.piSettings")}
+      testId="settings-pi"
+      titleAction={
+        <SettingsPillButton
+          label={busy ? tr("piSettings.saving") : tr("piSettings.save")}
+          testId="pi-settings-save"
+          disabled={disabled || !dirty}
+          onClick={() => void save()}
+        />
+      }
+    >
       <SettingsSectionBlock label={tr("piSettings.sessionDefaults")}>
         <SettingsRow
           title={tr("piSettings.defaultThinking")}
@@ -3234,13 +3677,13 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-default-thinking"
               size="md"
-              value={String(view?.defaultThinkingLevel ?? "off")}
-              onChange={(v) => void apply({ defaultThinkingLevel: v })}
+              value={String(prefs?.defaultThinkingLevel ?? "off")}
+              onChange={(v) => patchPrefs({ defaultThinkingLevel: v })}
               options={thinkingLevels.map((level) => ({
                 value: level,
                 label: thinkingLevelLabel(props.locale, level),
               }))}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3251,14 +3694,14 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-default-trust"
               size="md"
-              value={String(view?.defaultProjectTrust ?? "ask")}
-              onChange={(v) => void apply({ defaultProjectTrust: v as "ask" | "always" | "never" })}
+              value={String(prefs?.defaultProjectTrust ?? "ask")}
+              onChange={(v) => patchPrefs({ defaultProjectTrust: v as "ask" | "always" | "never" })}
               options={[
                 { value: "ask", label: tr("piSettings.trustAsk") },
                 { value: "always", label: tr("piSettings.trustAlways") },
                 { value: "never", label: tr("piSettings.trustNever") },
               ]}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
           last
@@ -3271,10 +3714,10 @@ function PiSettingsSection(
           description={tr("piSettings.compactionHint")}
           control={
             <SettingsToggle
-              checked={Boolean(view?.compactionEnabled)}
-              onChange={(on) => void apply({ compactionEnabled: on })}
+              checked={Boolean(prefs?.compactionEnabled)}
+              onChange={(on) => patchPrefs({ compactionEnabled: on })}
               testId="pi-compaction"
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3288,13 +3731,14 @@ function PiSettingsSection(
               step={1024}
               className="w-24 text-right tabular-nums"
               data-testid="pi-compaction-reserve"
-              disabled={loading || !view}
-              value={view?.compactionReserveTokens ?? 16384}
+              disabled={disabled}
+              value={prefs?.compactionReserveTokens ?? 16384}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                void apply({ compactionReserveTokens: n });
+                patchPrefs({ compactionReserveTokens: n });
               }}
+              onKeyDown={onFieldKeyDown}
             />
           }
         />
@@ -3308,13 +3752,14 @@ function PiSettingsSection(
               step={1024}
               className="w-24 text-right tabular-nums"
               data-testid="pi-compaction-keep"
-              disabled={loading || !view}
-              value={view?.compactionKeepRecentTokens ?? 20000}
+              disabled={disabled}
+              value={prefs?.compactionKeepRecentTokens ?? 20000}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                void apply({ compactionKeepRecentTokens: n });
+                patchPrefs({ compactionKeepRecentTokens: n });
               }}
+              onKeyDown={onFieldKeyDown}
             />
           }
         />
@@ -3323,10 +3768,10 @@ function PiSettingsSection(
           description={tr("piSettings.retryHint")}
           control={
             <SettingsToggle
-              checked={Boolean(view?.retryEnabled)}
-              onChange={(on) => void apply({ retryEnabled: on })}
+              checked={Boolean(prefs?.retryEnabled)}
+              onChange={(on) => patchPrefs({ retryEnabled: on })}
               testId="pi-retry"
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3341,13 +3786,14 @@ function PiSettingsSection(
               step={1}
               className="w-20 text-right tabular-nums"
               data-testid="pi-retry-max"
-              disabled={loading || !view}
-              value={view?.retryMaxRetries ?? 3}
+              disabled={disabled}
+              value={prefs?.retryMaxRetries ?? 3}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                void apply({ retryMaxRetries: n });
+                patchPrefs({ retryMaxRetries: n });
               }}
+              onKeyDown={onFieldKeyDown}
             />
           }
         />
@@ -3362,13 +3808,14 @@ function PiSettingsSection(
               step={100}
               className="w-24 text-right tabular-nums"
               data-testid="pi-retry-base-delay"
-              disabled={loading || !view}
-              value={view?.retryBaseDelayMs ?? 2000}
+              disabled={disabled}
+              value={prefs?.retryBaseDelayMs ?? 2000}
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n)) return;
-                void apply({ retryBaseDelayMs: n });
+                patchPrefs({ retryBaseDelayMs: n });
               }}
+              onKeyDown={onFieldKeyDown}
             />
           }
         />
@@ -3377,10 +3824,10 @@ function PiSettingsSection(
           description={tr("piSettings.hideThinkingHint")}
           control={
             <SettingsToggle
-              checked={Boolean(view?.hideThinkingBlock)}
-              onChange={(on) => void apply({ hideThinkingBlock: on })}
+              checked={Boolean(prefs?.hideThinkingBlock)}
+              onChange={(on) => patchPrefs({ hideThinkingBlock: on })}
               testId="pi-hide-thinking"
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3404,13 +3851,13 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-steering-mode"
               size="md"
-              value={String(view?.steeringMode ?? "all")}
-              onChange={(v) => void apply({ steeringMode: v as "all" | "one-at-a-time" })}
+              value={String(prefs?.steeringMode ?? "all")}
+              onChange={(v) => patchPrefs({ steeringMode: v as "all" | "one-at-a-time" })}
               options={[
                 { value: "all", label: tr("piSettings.queueModeAll") },
                 { value: "one-at-a-time", label: tr("piSettings.queueModeOne") },
               ]}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3421,13 +3868,13 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-followup-mode"
               size="md"
-              value={String(view?.followUpMode ?? "all")}
-              onChange={(v) => void apply({ followUpMode: v as "all" | "one-at-a-time" })}
+              value={String(prefs?.followUpMode ?? "all")}
+              onChange={(v) => patchPrefs({ followUpMode: v as "all" | "one-at-a-time" })}
               options={[
                 { value: "all", label: tr("piSettings.queueModeAll") },
                 { value: "one-at-a-time", label: tr("piSettings.queueModeOne") },
               ]}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
           last
@@ -3442,14 +3889,14 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-double-escape"
               size="md"
-              value={String(view?.doubleEscapeAction ?? "fork")}
-              onChange={(v) => void apply({ doubleEscapeAction: v as "fork" | "tree" | "none" })}
+              value={String(prefs?.doubleEscapeAction ?? "fork")}
+              onChange={(v) => patchPrefs({ doubleEscapeAction: v as "fork" | "tree" | "none" })}
               options={[
                 { value: "fork", label: tr("piSettings.doubleEscapeFork") },
                 { value: "tree", label: tr("piSettings.doubleEscapeTree") },
                 { value: "none", label: tr("piSettings.doubleEscapeNone") },
               ]}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3460,9 +3907,9 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-tree-filter"
               size="lg"
-              value={String(view?.treeFilterMode ?? "default")}
+              value={String(prefs?.treeFilterMode ?? "default")}
               onChange={(v) =>
-                void apply({
+                patchPrefs({
                   treeFilterMode: v as
                     | "default"
                     | "no-tools"
@@ -3478,7 +3925,7 @@ function PiSettingsSection(
                 { value: "labeled-only", label: tr("piSettings.treeFilterLabeledOnly") },
                 { value: "all", label: tr("piSettings.treeFilterAll") },
               ]}
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
           last
@@ -3493,12 +3940,11 @@ function PiSettingsSection(
             <SettingsSelect
               testId="pi-http-idle"
               size="lg"
-              // Pix product default: 60 minutes (pi upstream default is 5 minutes / 300000).
               // Options cover pi HTTP_IDLE_TIMEOUT_CHOICES + longer product presets.
-              value={String(view?.httpIdleTimeoutMs ?? 3_600_000)}
-              onChange={(v) => void apply({ httpIdleTimeoutMs: Number(v) })}
-              options={httpIdleTimeoutOptions(tr, view?.httpIdleTimeoutMs)}
-              disabled={loading || !view}
+              value={String(prefs?.httpIdleTimeoutMs ?? 3_600_000)}
+              onChange={(v) => patchPrefs({ httpIdleTimeoutMs: Number(v) })}
+              options={httpIdleTimeoutOptions(tr, prefs?.httpIdleTimeoutMs)}
+              disabled={disabled}
             />
           }
         />
@@ -3508,10 +3954,10 @@ function PiSettingsSection(
           control={
             <SettingsToggle
               // Product default off (pi upstream defaults install telemetry on when unset).
-              checked={view?.enableInstallTelemetry === true}
-              onChange={(on) => void apply({ enableInstallTelemetry: on })}
+              checked={prefs?.enableInstallTelemetry === true}
+              onChange={(on) => patchPrefs({ enableInstallTelemetry: on })}
               testId="pi-install-telemetry"
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
         />
@@ -3520,10 +3966,10 @@ function PiSettingsSection(
           description={tr("piSettings.analyticsHint")}
           control={
             <SettingsToggle
-              checked={view?.enableAnalytics === true}
-              onChange={(on) => void apply({ enableAnalytics: on })}
+              checked={prefs?.enableAnalytics === true}
+              onChange={(on) => patchPrefs({ enableAnalytics: on })}
               testId="pi-analytics"
-              disabled={loading || !view}
+              disabled={disabled}
             />
           }
           last

@@ -171,8 +171,14 @@ export function attachmentPresentation(path: string): AttachmentPresentation {
   );
 }
 
+/** Images that can be sent as multimodal prompt content. */
 export function isPromptImagePath(path: string): boolean {
   return /\.(?:png|jpe?g|gif|webp)$/i.test(attachmentLabel(path));
+}
+
+/** Images we can show as AttachmentMedia variant="image" thumbnails. */
+export function isPreviewableImagePath(path: string): boolean {
+  return /\.(?:png|jpe?g|gif|webp|bmp)$/i.test(attachmentLabel(path));
 }
 
 function escapeXml(value: string): string {

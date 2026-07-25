@@ -5,6 +5,11 @@ const api: PixDesktopApi = {
   app: {
     getRuntime: () => ipcRenderer.invoke("pix:app:get-runtime"),
   },
+  proxy: {
+    get: () => ipcRenderer.invoke("pix:proxy:get"),
+    set: (prefs) => ipcRenderer.invoke("pix:proxy:set", prefs),
+    discoverLocal: () => ipcRenderer.invoke("pix:proxy:discover-local"),
+  },
   window: {
     minimize: () => ipcRenderer.invoke("pix:window:minimize"),
     toggleMaximize: () => ipcRenderer.invoke("pix:window:toggle-maximize"),
@@ -44,12 +49,14 @@ const api: PixDesktopApi = {
     listRecent: () => ipcRenderer.invoke("pix:workspace:list-recent"),
     openPath: (cwd, options) => ipcRenderer.invoke("pix:workspace:open-path", cwd, options),
     pickFolder: () => ipcRenderer.invoke("pix:workspace:pick-folder"),
-    pickAttachments: () => ipcRenderer.invoke("pix:workspace:pick-attachments"),
+    pickAttachments: (options) => ipcRenderer.invoke("pix:workspace:pick-attachments", options),
     pathForFile: (file) => webUtils.getPathForFile(file),
     searchPaths: (query, options) =>
       ipcRenderer.invoke("pix:workspace:search-paths", query ?? "", options),
     saveClipboardImage: (options) =>
       ipcRenderer.invoke("pix:workspace:save-clipboard-image", options),
+    readAttachmentPreview: (path) =>
+      ipcRenderer.invoke("pix:workspace:read-attachment-preview", path),
     ensureDefault: () => ipcRenderer.invoke("pix:workspace:ensure-default"),
     ensureConversation: () => ipcRenderer.invoke("pix:workspace:ensure-conversation"),
     removeRecent: (cwd) => ipcRenderer.invoke("pix:workspace:remove-recent", cwd),

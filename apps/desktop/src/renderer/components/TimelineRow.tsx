@@ -136,46 +136,94 @@ function liveStatusIcon(phase: ProcessActivityPhase): ReactNode {
   return <LoaderCircle {...common} className="size-3.5 animate-spin opacity-80" />;
 }
 
+/** Monochrome kind glyph — matches composer chips / shadcn Attachment. */
 function attachmentIcon(kind: AttachmentKind) {
-  const props = { className: "size-4", strokeWidth: 1.7 };
-  if (kind === "spreadsheet") return <FileSpreadsheet {...props} />;
-  if (kind === "image") return <FileImage {...props} />;
-  if (kind === "presentation") return <Presentation {...props} />;
-  if (kind === "archive") return <FileArchive {...props} />;
-  if (kind === "code") return <FileCode2 {...props} />;
+  const props = { className: "size-3.5", strokeWidth: 1.75 } as const;
   if (kind === "folder") return <Folder {...props} />;
+  if (kind === "image") return <FileImage {...props} />;
+  if (kind === "code") return <FileCode2 {...props} />;
+  if (kind === "archive") return <FileArchive {...props} />;
+  if (kind === "spreadsheet") return <FileSpreadsheet {...props} />;
+  if (kind === "presentation") return <Presentation {...props} />;
   if (kind === "document" || kind === "pdf" || kind === "text") {
     return <FileText {...props} />;
   }
   return <File {...props} />;
 }
 
+function useTimelineAttachmentPreviews(paths: string[]): Record<string, string> {
+  const [map, setMap] = useState<Record<string, string>>({});
+  const key = paths.join("\0");
+  useEffect(() => {
+    let cancelled = false;
+    const images = paths.filter((p) => /\.(?:png|jpe?g|gif|webp|bmp)$/i.test(p));
+    if (images.length === 0) {
+      setMap({});
+      return;
+    }
+    void Promise.all(
+      images.map(async (path) => {
+        try {
+          const url = await window.pix.workspace.readAttachmentPreview(path);
+          return url ? ([path, url] as const) : undefined;
+        } catch {
+          return undefined;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      const next: Record<string, string> = {};
+      for (const e of entries) if (e) next[e[0]] = e[1];
+      setMap(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // paths joined into key
+  }, [key]);
+  return map;
+}
+
 function AttachmentList(props: { paths: string[] }) {
+  const previews = useTimelineAttachmentPreviews(props.paths);
   return (
-    <AttachmentGroup className="timeline-attachment-grid" data-testid="timeline-attachments">
+    <AttachmentGroup
+      className="timeline-attachment-group max-w-full gap-2 py-0"
+      data-testid="timeline-attachments"
+    >
       {props.paths.map((path) => {
         const presentation = attachmentPresentation(path);
+        const preview = previews[path];
         return (
           <Attachment
             key={path}
             state="done"
             size="sm"
+            orientation={preview ? "vertical" : "horizontal"}
             data-kind={presentation.kind}
-            className="timeline-attachment-card relative cursor-pointer"
+            className={
+              preview
+                ? "w-[7.5rem] max-w-[7.5rem] shrink-0 cursor-pointer"
+                : "max-w-[min(220px,100%)] shrink-0 cursor-pointer"
+            }
             title={path}
           >
             <AttachmentTrigger
               onClick={() => void window.pix.workspace.openFile(path)}
               aria-label={attachmentLabel(path)}
             />
-            <AttachmentMedia variant="icon" className="timeline-attachment-icon">
-              {attachmentIcon(presentation.kind)}
-            </AttachmentMedia>
+            {preview ? (
+              <AttachmentMedia variant="image">
+                <img src={preview} alt="" draggable={false} />
+              </AttachmentMedia>
+            ) : (
+              <AttachmentMedia variant="icon">{attachmentIcon(presentation.kind)}</AttachmentMedia>
+            )}
             <AttachmentContent>
-              <AttachmentTitle className="text-[11.5px]">{attachmentLabel(path)}</AttachmentTitle>
-              <AttachmentDescription className="text-[9.5px] font-medium uppercase tracking-[0.04em]">
-                {presentation.typeLabel}
-              </AttachmentDescription>
+              <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
+              {!preview ? (
+                <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
+              ) : null}
             </AttachmentContent>
           </Attachment>
         );
@@ -769,6 +817,10 @@ function ProcessToolRow(props: {
   const [open, setOpen] = useState(false);
   const hasBody = props.item.args !== undefined || Boolean(props.item.output);
 
+  const running = props.item.status === "running";
+  // Nested under a group (“运行了多个命令”): no in-flow icon so the verb shares
+  // the left edge with the group label (group-body already pads icon+gap).
+  // Running spinner sits in the left gutter via CSS, not the text column.
   const row = (
     <Marker
       variant="default"
@@ -776,21 +828,31 @@ function ProcessToolRow(props: {
         "process-step-row min-h-0 gap-2 text-[13px]",
         props.nested && "process-step-row-nested",
         props.item.status === "error" && "is-error",
-        props.item.status === "running" && "is-running",
+        running && "is-running",
       )}
       data-kind="tool"
       data-tool-kind={view.kind}
       data-status={props.item.status}
+      data-nested={props.nested ? "true" : undefined}
     >
-      <MarkerIcon className="process-step-icon size-3.5 text-muted-foreground">
-        {props.item.status === "running" ? (
-          <LoaderCircle className="size-3.5 animate-spin" strokeWidth={1.75} />
-        ) : (
-          processToolIcon(view.kind)
-        )}
-      </MarkerIcon>
+      {props.nested ? (
+        running ? (
+          <MarkerIcon className="process-step-icon process-step-icon-nested size-3.5 text-muted-foreground">
+            <LoaderCircle className="size-3.5 animate-spin" strokeWidth={1.75} />
+          </MarkerIcon>
+        ) : null
+      ) : (
+        <MarkerIcon className="process-step-icon size-3.5 text-muted-foreground">
+          {running ? (
+            <LoaderCircle className="size-3.5 animate-spin" strokeWidth={1.75} />
+          ) : (
+            processToolIcon(view.kind)
+          )}
+        </MarkerIcon>
+      )}
       <MarkerContent className="process-step-content min-w-0 flex-1">
-        <span className="process-step-verb">{parts.verb}</span>
+        {/* Only the status verb shimmers while running — path/detail stay solid. */}
+        <span className={cn("process-step-verb", running && "shimmer")}>{parts.verb}</span>
         {parts.path ? (
           <>
             {" "}
@@ -800,7 +862,7 @@ function ProcessToolRow(props: {
         {parts.mid ? (
           <>
             {" "}
-            <span className="process-step-verb">{parts.mid}</span>
+            <span className={cn("process-step-verb", running && "shimmer")}>{parts.mid}</span>
           </>
         ) : null}
         {parts.detail ? (
@@ -825,11 +887,22 @@ function ProcessToolRow(props: {
   if (!hasBody) return row;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="process-step-collapsible">
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className={cn("process-step-collapsible", props.nested && "process-step-collapsible-nested")}
+      data-nested={props.nested ? "true" : undefined}
+    >
       <CollapsibleTrigger className="process-step-trigger w-full text-left">
         {row}
       </CollapsibleTrigger>
-      <CollapsibleContent className="process-step-body">
+      {/*
+        Nested under “运行了多个命令”: body must share the child row’s text edge
+        (no second icon+gap pad). Top-level tools keep icon-column indent.
+      */}
+      <CollapsibleContent
+        className={cn("process-step-body", props.nested && "process-step-body-nested")}
+      >
         {props.item.args !== undefined ? (
           <pre className="process-step-pre">{structuredText(props.item.args)}</pre>
         ) : null}
@@ -854,6 +927,7 @@ function ProcessToolGroup(props: {
       <CollapsibleTrigger className="process-step-trigger w-full text-left">
         <Marker
           variant="default"
+          shimmer={anyRunning}
           className={cn(
             "process-step-row process-step-group-row min-h-0 gap-2 text-[13px]",
             anyError && "is-error",
@@ -968,11 +1042,17 @@ function ProcessSteps(props: {
   return <div className="process-steps">{nodes}</div>;
 }
 
+/** Brief pause so “已处理” paints before the body collapses. */
+const PROCESS_AUTO_COLLAPSE_MS = 280;
+
 /**
  * Collapsible process block.
  * Header is text-only (“已处理 12 秒” / live phase labels) — no leading icon.
  * Duration is this reply segment only (first thinking/tool → done / now).
  * Body: Codex-style narrative + compact tool activity rows.
+ *
+ * Open while the turn is live; auto-collapses once content is complete (“已处理”).
+ * User can still expand/collapse manually afterward.
  */
 export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
   locale: Locale;
@@ -1002,16 +1082,52 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
     props.durationLabel;
   const label = activityLabel(props.locale, activity, liveDuration);
 
+  // Controlled details: expand while live; auto-collapse when becoming “已处理”.
+  // History loads with active=false → starts collapsed.
+  const [detailsOpen, setDetailsOpen] = useState(active);
+  const prevActiveRef = useRef(active);
+
+  useEffect(() => {
+    const wasActive = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (active === wasActive) return;
+
+    if (active) {
+      setDetailsOpen(true);
+      return;
+    }
+
+    // Process steps finished → show “已处理”, then fold the body.
+    const timer = window.setTimeout(() => {
+      setDetailsOpen(false);
+    }, PROCESS_AUTO_COLLAPSE_MS);
+    return () => window.clearTimeout(timer);
+  }, [active]);
+
   return (
     <div
       className="timeline-process"
       data-testid="timeline-process"
       data-phase={activity.phase}
       data-active={active ? "true" : "false"}
+      data-details-open={detailsOpen ? "true" : "false"}
     >
-      <Collapsible className="timeline-process-details" defaultOpen={active}>
+      <Collapsible
+        className="timeline-process-details"
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+      >
         <CollapsibleTrigger className="timeline-process-summary group/process-trigger w-full text-left">
-          <span className="timeline-process-label min-w-0 flex-1 truncate">{label}</span>
+          <span
+            className={cn(
+              "timeline-process-label min-w-0 flex-1 truncate",
+              // Live phases (thinking / processing / executing / …) get the soft sweep;
+              // completed “已处理 …” stays static muted text.
+              active && "shimmer",
+            )}
+          >
+            {label}
+          </span>
           <ChevronRight
             className="timeline-process-chevron size-3.5 shrink-0 opacity-60"
             strokeWidth={2}
@@ -1046,6 +1162,7 @@ export const TimelineLiveStatus = memo(function TimelineLiveStatus(props: {
   return (
     <Marker
       variant="default"
+      shimmer={active}
       className="timeline-live-status min-h-0 gap-1.5 py-1 text-[13px]"
       data-testid="timeline-live-status"
       data-phase={props.activity.phase}

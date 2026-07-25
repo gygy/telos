@@ -1416,13 +1416,14 @@ function App() {
     }
   }
 
-  async function pickComposerAttachments() {
+  async function pickComposerAttachments(mode: "files" | "folders" = "files") {
     try {
-      const paths = await window.pix.workspace.pickAttachments();
+      // Windows/Linux require separate dialogs for files vs folders (Electron limitation).
+      const paths = await window.pix.workspace.pickAttachments({ mode });
       if (paths.length === 0) return;
       setAttachments((current) => [...new Set([...current, ...paths])].slice(0, 12));
     } catch (error) {
-      reportAppError(error, "添加文件失败");
+      reportAppError(error, mode === "folders" ? "添加文件夹失败" : "添加文件失败");
     }
   }
 
@@ -2433,6 +2434,33 @@ function App() {
                           data-mode="sticky"
                           data-testid="composer-dock"
                         >
+                          {/*
+                            Jump-to-bottom is anchored to the dock top (not the scrollport
+                            bottom). Measuring dock height and using bottom:Npx was fragile —
+                            a low floor (72px) parked the control inside the composer card.
+                          */}
+                          {timelineReady && hasActivity ? (
+                            <MessageScrollerButton
+                              data-testid="scroll-to-bottom"
+                              direction="end"
+                              behavior="smooth"
+                              title={t(locale, "thread.scrollToBottom")}
+                              aria-label={t(locale, "thread.scrollToBottom")}
+                              className={cn(
+                                "pointer-events-auto z-20 size-7 rounded-full border border-border bg-popover text-foreground",
+                                "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
+                                // Defeat MessageScrollerButton’s default data-[direction=end]:bottom-4.
+                                "data-[direction=end]:bottom-[calc(100%+12px)]",
+                              )}
+                              style={{
+                                left: "50%",
+                                marginLeft: -14, // half of size-7 (28px)
+                              }}
+                            >
+                              <ArrowDown className="size-3.5" strokeWidth={2.25} />
+                              <span className="sr-only">{t(locale, "thread.scrollToBottom")}</span>
+                            </MessageScrollerButton>
+                          ) : null}
                           {hasActivity && timelineReady ? (
                             <div
                               className="composer-dock-fade pointer-events-none absolute inset-x-0 top-0 z-[1] h-10 -translate-y-full"
@@ -2518,29 +2546,6 @@ function App() {
                         </div>
                       </MessageScrollerContent>
                     </MessageScrollerViewport>
-                    {timelineReady && hasActivity ? (
-                      <MessageScrollerButton
-                        data-testid="scroll-to-bottom"
-                        direction="end"
-                        behavior="smooth"
-                        title={t(locale, "thread.scrollToBottom")}
-                        aria-label={t(locale, "thread.scrollToBottom")}
-                        className={cn(
-                          // Position via style only — avoid transform fights with enter/exit animation.
-                          "z-20 size-7 rounded-full border border-border bg-popover text-foreground",
-                          "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
-                        )}
-                        style={{
-                          left: "50%",
-                          marginLeft: -14, // half of size-7 (28px) for true center
-                          // Sit above sticky composer dock (not the default bottom-4).
-                          bottom: Math.max(composerDockHeight + 12, 72),
-                        }}
-                      >
-                        <ArrowDown className="size-3.5" strokeWidth={2.25} />
-                        <span className="sr-only">{t(locale, "thread.scrollToBottom")}</span>
-                      </MessageScrollerButton>
-                    ) : null}
                   </MessageScroller>
                 </MessageScrollerProvider>
               </div>
