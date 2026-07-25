@@ -416,12 +416,40 @@ export function projectSessionHistory(
         history.push(item);
       }
     } else if (row.role === "toolResult") {
+      const raw = message as {
+        args?: unknown;
+        arguments?: unknown;
+        input?: unknown;
+        command?: string;
+      };
+      const args =
+        raw.args !== undefined
+          ? raw.args
+          : raw.arguments !== undefined
+            ? raw.arguments
+            : raw.input !== undefined
+              ? raw.input
+              : undefined;
+      let command: string | undefined =
+        typeof raw.command === "string" && raw.command.trim() ? raw.command.trim() : undefined;
+      if (!command && args && typeof args === "object" && !Array.isArray(args)) {
+        const bag = args as Record<string, unknown>;
+        for (const key of ["command", "cmd"] as const) {
+          const v = bag[key];
+          if (typeof v === "string" && v.trim()) {
+            command = v.trim();
+            break;
+          }
+        }
+      }
       const item: SessionHistoryMessage = {
         role: "tool",
         text: textFromMessageContent(row.content).trim() || "Tool result",
         toolName: typeof row.toolName === "string" ? row.toolName : "tool",
         isError: row.isError === true,
       };
+      if (args !== undefined) item.args = args;
+      if (command) item.command = command;
       if (entryId) item.entryId = entryId;
       history.push(item);
     } else if (row.role === "bashExecution") {

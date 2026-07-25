@@ -4,6 +4,7 @@
  */
 import type {
   CustomModelApi,
+  DesktopLocalProxyCandidate,
   DesktopProxyChannel,
   DesktopProxyMode,
   DesktopProxyPrefs,
@@ -220,6 +221,11 @@ function ProxySection(
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [discovering, setDiscovering] = useState<"ai" | "app" | null>(null);
+  /** Multi-hit auto-discover results per channel — pick via dropdown. */
+  const [discovered, setDiscovered] = useState<{
+    ai: DesktopLocalProxyCandidate[];
+    app: DesktopLocalProxyCandidate[];
+  }>({ ai: [], app: [] });
   const showAppError = useShellStore((s) => s.showAppError);
   const dirty = !proxyPrefsEqual(prefs, saved);
 
@@ -267,25 +273,38 @@ function ProxySection(
     }));
   }
 
+  function clearDiscovered(key: "ai" | "app") {
+    setDiscovered((current) => ({ ...current, [key]: [] }));
+  }
+
+  function candidateLabel(c: DesktopLocalProxyCandidate): string {
+    const tag = c.source === "env" ? "env" : c.label;
+    return `${tag} · ${c.url}`;
+  }
+
   async function discoverLocal(key: "ai" | "app") {
     if (loading || busy || discovering) return;
     setDiscovering(key);
     try {
       const found = await window.pix.proxy.discoverLocal();
       if (found.length === 0) {
+        clearDiscovered(key);
         useShellStore.getState().setStatus(tr("proxy.discoverNone"));
         return;
       }
+      if (found.length === 1) {
+        const only = found[0]!;
+        clearDiscovered(key);
+        patchChannel(key, { server: only.url });
+        useShellStore.getState().setStatus(tr("proxy.discoverFilled", { url: only.url }));
+        return;
+      }
+      // Multiple: keep list for dropdown; do not force a pick until the user chooses
+      // (pre-select first so the field is not empty if they just want the top hit).
+      setDiscovered((current) => ({ ...current, [key]: found }));
       const best = found[0]!;
       patchChannel(key, { server: best.url });
-      useShellStore.getState().setStatus(
-        found.length === 1
-          ? tr("proxy.discoverFilled", { url: best.url })
-          : tr("proxy.discoverFilledMany", {
-              count: String(found.length),
-              url: best.url,
-            }),
-      );
+      useShellStore.getState().setStatus(tr("proxy.discoverMany", { count: String(found.length) }));
     } catch (err) {
       showAppError(err instanceof Error ? err.message : tr("proxy.discoverFailed"));
     } finally {
@@ -311,6 +330,10 @@ function ProxySection(
     const custom = channel.mode === "custom";
     const disabled = loading || busy;
     const discoverBusy = discovering === key;
+    const candidates = discovered[key];
+    const multi = candidates.length > 1;
+    const serverUrl = (channel.server ?? "").trim();
+    const pickValue = multi ? serverUrl || candidates[0]!.url : "";
 
     return (
       <SettingsSectionBlock label={tr(titleKey)} testId={`${prefix}-card`}>
@@ -322,7 +345,11 @@ function ProxySection(
               testId={`${prefix}-mode`}
               value={channel.mode}
               disabled={disabled}
-              onChange={(v) => patchChannel(key, { mode: v as DesktopProxyMode })}
+              onChange={(v) => {
+                const mode = v as DesktopProxyMode;
+                patchChannel(key, { mode });
+                if (mode !== "custom") clearDiscovered(key);
+              }}
               options={modeOptions}
             />
           }
@@ -355,6 +382,25 @@ function ProxySection(
                   onClick={() => void discoverLocal(key)}
                 />
               </div>
+              {multi ? (
+                <div className="flex flex-col gap-1.5" data-testid={`${prefix}-discover-pick`}>
+                  <div className="settings-row-desc">{tr("proxy.discoverPick")}</div>
+                  <SettingsSelect
+                    testId={`${prefix}-discover-select`}
+                    fullWidth
+                    value={pickValue}
+                    disabled={disabled || discoverBusy}
+                    onChange={(url) => {
+                      const hit = candidates.find((c) => c.url === url);
+                      if (hit) patchChannel(key, { server: hit.url });
+                    }}
+                    options={candidates.map((c) => ({
+                      value: c.url,
+                      label: candidateLabel(c),
+                    }))}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="settings-row settings-row-last !flex-col !items-stretch gap-2.5">
               <div>

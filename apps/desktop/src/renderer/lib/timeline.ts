@@ -156,12 +156,16 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
       continue;
     }
     if (item.role === "tool") {
+      // Prefer explicit command / args so process rows show "已运行 rg …" not bare "bash".
+      const args =
+        item.args !== undefined ? item.args : item.command ? { command: item.command } : undefined;
       items.push({
         id: `history-tool-${index}`,
         kind: "tool",
         toolName: item.toolName ?? "tool",
         status: item.isError === true ? "error" : "completed",
         output: item.text,
+        ...(args !== undefined ? { args } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
       });
       continue;

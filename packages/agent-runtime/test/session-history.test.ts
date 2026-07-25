@@ -48,6 +48,32 @@ describe("session history projection", () => {
     ]);
   });
 
+  it("projects tool results with args/command when present", () => {
+    expect(
+      projectSessionHistory(
+        [
+          {
+            role: "toolResult",
+            toolName: "bash",
+            content: "ok",
+            args: { command: "rg -n foo" },
+          },
+        ],
+        ["entry-tool"],
+      ),
+    ).toEqual([
+      {
+        role: "tool",
+        text: "ok",
+        toolName: "bash",
+        isError: false,
+        args: { command: "rg -n foo" },
+        command: "rg -n foo",
+        entryId: "entry-tool",
+      },
+    ]);
+  });
+
   it("projects compaction entries instead of dropping them", () => {
     expect(
       projectHistoryFromSessionManager({

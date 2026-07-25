@@ -38,10 +38,60 @@ function basename(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
-function truncate(text: string, max = 96): string {
+function truncate(text: string, max = 120): string {
   const one = text.replace(/\s+/g, " ").trim();
   if (one.length <= max) return one;
   return `${one.slice(0, max - 1)}…`;
+}
+
+function joinArgv(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  if (!value.every((item) => typeof item === "string" || typeof item === "number")) return "";
+  return value.map(String).join(" ").trim();
+}
+
+/**
+ * Pull a runnable command string from common tool arg shapes
+ * (pi bash/shell, nested input, argv arrays, plain string).
+ */
+export function extractCommandFromArgs(args: unknown): string {
+  if (typeof args === "string") return args.trim();
+  const row = asRecord(args);
+  if (!row) return "";
+
+  const direct = firstString(row, ["command", "cmd", "script", "shell", "code", "input"]);
+  if (direct) return direct;
+
+  const fromArgv = joinArgv(row.argv) || joinArgv(row.args);
+  if (fromArgv) return fromArgv;
+
+  for (const nestKey of ["input", "parameters", "arguments", "params"]) {
+    const nested = asRecord(row[nestKey]);
+    if (!nested) continue;
+    const nestedCmd = firstString(nested, ["command", "cmd", "script", "shell", "code", "input"]);
+    if (nestedCmd) return nestedCmd;
+    const nestedArgv = joinArgv(nested.argv) || joinArgv(nested.args);
+    if (nestedArgv) return nestedArgv;
+  }
+  return "";
+}
+
+/** Best-effort: recover a command from tool output when args were not persisted. */
+export function extractCommandFromOutput(output: string | undefined): string {
+  if (!output) return "";
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (const line of lines.slice(0, 4)) {
+    const shell = /^[$>]\s+(.+)$/.exec(line);
+    if (shell?.[1]) return shell[1].trim();
+    const labeled =
+      /^(?:command|cmd|ran|running|执行|命令)[:：]\s*(.+)$/i.exec(line) ??
+      /^(?:\$)\s*(.+)$/.exec(line);
+    if (labeled?.[1]) return labeled[1].trim();
+  }
+  return "";
 }
 
 export function classifyToolName(toolName: string): ProcessToolKind {
@@ -56,21 +106,38 @@ export function classifyToolName(toolName: string): ProcessToolKind {
   return "generic";
 }
 
+export type ProcessToolViewOptions = {
+  /** Tool result text — used when args lack a command (history reload). */
+  output?: string;
+  /** Explicit command from history projection when available. */
+  command?: string;
+};
+
 /** Build a compact view model for a tool call row. */
-export function processToolView(toolName: string, args: unknown): ProcessToolView {
+export function processToolView(
+  toolName: string,
+  args: unknown,
+  options?: ProcessToolViewOptions,
+): ProcessToolView {
   const kind = classifyToolName(toolName);
   const row = asRecord(args);
-  const path = firstString(row, ["path", "file_path", "file", "filename", "target"]);
-  const command = firstString(row, ["command", "cmd"]);
+  const path = firstString(row, ["path", "file_path", "file", "filename", "target", "glob"]);
+  const command =
+    str(options?.command) ||
+    extractCommandFromArgs(args) ||
+    extractCommandFromOutput(options?.output);
   const query = firstString(row, ["query", "pattern", "regex", "search"]);
-  const description = firstString(row, ["description", "content"]);
+  const description = firstString(row, ["description"]);
+  // Avoid using raw "content" as description when it is huge file body for write tools.
+  const content = firstString(row, ["content"]);
+  const shortContent = content && content.length <= 80 ? content : "";
 
   if (kind === "run") {
-    const detail = command || description || toolName;
+    const detail = command || description || shortContent || toolName;
     return { kind, detail, preview: truncate(detail), ...(path ? { path } : {}) };
   }
   if (kind === "search") {
-    const detail = query || description || toolName;
+    const detail = query || description || command || toolName;
     return {
       kind,
       detail,
@@ -79,7 +146,7 @@ export function processToolView(toolName: string, args: unknown): ProcessToolVie
     };
   }
   if (kind === "read" || kind === "edit" || kind === "write" || kind === "list") {
-    const detail = path || description || toolName;
+    const detail = path || description || shortContent || toolName;
     return {
       kind,
       detail,
@@ -93,6 +160,7 @@ export function processToolView(toolName: string, args: unknown): ProcessToolVie
     path ||
     query ||
     description ||
+    shortContent ||
     (args !== undefined ? JSON.stringify(args) : toolName);
   return {
     kind: "generic",

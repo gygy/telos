@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { classifyToolName, groupConsecutiveTools, processToolView } from "./process-activity.ts";
+import {
+  classifyToolName,
+  extractCommandFromArgs,
+  extractCommandFromOutput,
+  groupConsecutiveTools,
+  processToolView,
+} from "./process-activity.ts";
 
 describe("process activity", () => {
   it("classifies common tool names", () => {
@@ -20,12 +26,30 @@ describe("process activity", () => {
     expect(processToolView("bash", { command: "rg -n foo" })).toMatchObject({
       kind: "run",
       detail: "rg -n foo",
+      preview: "rg -n foo",
     });
     expect(processToolView("grep", { path: "a.ts", query: "render" })).toMatchObject({
       kind: "search",
       path: "a.ts",
       detail: "render",
     });
+  });
+
+  it("extracts commands from nested / argv arg shapes", () => {
+    expect(extractCommandFromArgs("pnpm test")).toBe("pnpm test");
+    expect(extractCommandFromArgs({ cmd: "ls -la" })).toBe("ls -la");
+    expect(extractCommandFromArgs({ input: { command: "git status" } })).toBe("git status");
+    expect(extractCommandFromArgs({ argv: ["npm", "run", "build"] })).toBe("npm run build");
+    expect(processToolView("bash", { input: { command: "echo hi" } }).preview).toBe("echo hi");
+  });
+
+  it("recovers command from output when args are missing (history)", () => {
+    expect(extractCommandFromOutput("$ git status\non branch main")).toBe("git status");
+    expect(extractCommandFromOutput("Command: pnpm check\nok")).toBe("pnpm check");
+    expect(processToolView("bash", undefined, { output: "$ rg -n process\n1:match" }).preview).toBe(
+      "rg -n process",
+    );
+    expect(processToolView("bash", undefined, { command: "ls" }).preview).toBe("ls");
   });
 
   it("groups consecutive tools of the same kind", () => {

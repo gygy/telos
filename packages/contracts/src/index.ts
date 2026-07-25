@@ -368,6 +368,8 @@ export interface SessionHistoryMessage {
   toolName?: string;
   isError?: boolean;
   command?: string;
+  /** Tool call args when persisted on the session message (for process-row previews). */
+  args?: unknown;
   exitCode?: number;
   excludeFromContext?: boolean;
   title?: string;

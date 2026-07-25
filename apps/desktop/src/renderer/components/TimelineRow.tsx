@@ -21,10 +21,10 @@ import {
   Pencil,
   Presentation,
   Search,
-  Square,
   SquarePen,
   GitFork,
   Terminal,
+  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -686,7 +686,7 @@ function processToolIcon(kind: ProcessToolKind): ReactNode {
     case "read":
       return <BookOpen {...props} />;
     case "run":
-      return <Square {...props} />;
+      return <Terminal {...props} />;
     case "search":
       return <Search {...props} />;
     case "edit":
@@ -696,7 +696,7 @@ function processToolIcon(kind: ProcessToolKind): ReactNode {
     case "list":
       return <List {...props} />;
     default:
-      return <Terminal {...props} />;
+      return <Wrench {...props} />;
   }
 }
 
@@ -714,6 +714,8 @@ type ToolRowParts = {
   mid?: string;
   /** Trailing detail (command / query / free text) */
   detail?: string;
+  /** Visual weight for the detail span. */
+  detailTone?: "command" | "query" | "plain";
 };
 
 function toolRowParts(
@@ -727,9 +729,15 @@ function toolRowParts(
   if (view.kind === "read") {
     parts = view.path
       ? { verb: tr("timeline.process.read"), path: view.path }
-      : { verb: tr("timeline.process.read"), detail: view.preview };
+      : { verb: tr("timeline.process.read"), detail: view.preview, detailTone: "plain" };
   } else if (view.kind === "run") {
-    parts = { verb: tr("timeline.process.run"), detail: view.preview };
+    // Prefer full command detail over tool name alone ("bash").
+    const cmd = view.preview && view.preview !== toolName ? view.preview : view.detail;
+    parts = {
+      verb: tr("timeline.process.run"),
+      detail: cmd && cmd !== toolName ? cmd : view.preview || toolName,
+      detailTone: "command",
+    };
   } else if (view.kind === "search") {
     parts = view.path
       ? {
@@ -737,24 +745,29 @@ function toolRowParts(
           path: view.path,
           mid: locale === "zh" ? "中搜索" : "for",
           detail: `“${view.detail}”`,
+          detailTone: "query",
         }
-      : { verb: tr("timeline.process.search"), detail: `“${view.detail}”` };
+      : {
+          verb: tr("timeline.process.search"),
+          detail: `“${view.detail}”`,
+          detailTone: "query",
+        };
   } else if (view.kind === "edit") {
     parts = view.path
       ? { verb: tr("timeline.process.edit"), path: view.path }
-      : { verb: tr("timeline.process.edit"), detail: view.preview };
+      : { verb: tr("timeline.process.edit"), detail: view.preview, detailTone: "plain" };
   } else if (view.kind === "write") {
     parts = view.path
       ? { verb: tr("timeline.process.write"), path: view.path }
-      : { verb: tr("timeline.process.write"), detail: view.preview };
+      : { verb: tr("timeline.process.write"), detail: view.preview, detailTone: "plain" };
   } else if (view.kind === "list") {
     parts = view.path
       ? { verb: tr("timeline.process.list"), path: view.path }
-      : { verb: tr("timeline.process.list"), detail: view.preview };
+      : { verb: tr("timeline.process.list"), detail: view.preview, detailTone: "plain" };
   } else {
     parts = {
       verb: tr("timeline.process.generic", { tool: toolName }),
-      ...(view.preview !== toolName ? { detail: view.preview } : {}),
+      ...(view.preview !== toolName ? { detail: view.preview, detailTone: "plain" as const } : {}),
     };
   }
 
@@ -812,7 +825,11 @@ function ProcessToolRow(props: {
   workspacePath?: string | undefined;
   nested?: boolean | undefined;
 }) {
-  const view = processToolView(props.item.toolName, props.item.args);
+  const view = processToolView(
+    props.item.toolName,
+    props.item.args,
+    props.item.output ? { output: props.item.output } : undefined,
+  );
   const parts = toolRowParts(props.locale, props.item.toolName, view, props.item.status);
   const [open, setOpen] = useState(false);
   const hasBody = props.item.args !== undefined || Boolean(props.item.output);
@@ -868,7 +885,15 @@ function ProcessToolRow(props: {
         {parts.detail ? (
           <>
             {" "}
-            <span className="process-step-detail">{parts.detail}</span>
+            <span
+              className={cn(
+                "process-step-detail",
+                parts.detailTone === "command" && "process-step-detail-command",
+                parts.detailTone === "query" && "process-step-detail-query",
+              )}
+            >
+              {parts.detail}
+            </span>
           </>
         ) : null}
       </MarkerContent>
