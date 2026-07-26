@@ -12,6 +12,7 @@
     "build": "vp run -r build",
     "test": "vp run --no-cache -r test",
     "dev": "vp run --no-cache @pix/desktop#dev",
+    "dev:landing": "vp run --no-cache @pix/landing#dev",
     "electron:install": "vp run --no-cache @pix/desktop#electron:install",
     "smoke": "vp run --no-cache @pix/desktop#smoke",
     "smoke:packaged": "vp run --no-cache @pix/desktop#smoke:packaged",
