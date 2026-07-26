@@ -12,7 +12,7 @@ type Feature = {
 const features: Feature[] = [
   {
     title: "Sessions that stick.",
-    body: "Projects and threads stay organized in the sidebar. Pick up where you left off — workspace, model, and history restore with the desktop shell.",
+    body: "Projects and threads stay organized in the sidebar. Pick up where you left off — workspace, model, and history restore with the desktop app.",
     delay: "0ms",
     icon: (
       <svg
@@ -89,7 +89,7 @@ const features: Feature[] = [
   },
   {
     title: "Native pi, not a fork.",
-    body: "Models, API keys, settings, packages, and tools live where pi expects them. Pix is a shell around the agent — not a parallel config universe.",
+    body: "Models, API keys, settings, packages, and tools live where pi expects them. Pix is a desktop app for the agent — not a parallel config universe.",
     delay: "180ms",
     icon: (
       <svg

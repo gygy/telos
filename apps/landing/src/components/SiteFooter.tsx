@@ -27,7 +27,7 @@ export function SiteFooter() {
                 <span className="text-[15px] font-semibold tracking-tight">Pix</span>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                A desktop shell for the pi coding agent. Built for Windows, macOS, and Linux.
+                A better desktop app for the pi agent. Built for Windows, macOS, and Linux.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-x-10 gap-y-8 text-sm md:grid-cols-3 md:gap-x-12">
@@ -88,7 +88,7 @@ export function SiteFooter() {
           </div>
           <div className="border-t border-border/60">
             <div className="flex w-full flex-col gap-2 px-6 py-4 text-sm text-muted-foreground/60 sm:flex-row sm:items-center sm:justify-between sm:py-5">
-              <span>© Pix · shell for pi</span>
+              <span>© Pix · for the pi agent</span>
               <span className="inline-flex items-center gap-1.5">Win · macOS · Linux</span>
             </div>
           </div>

@@ -10,9 +10,9 @@ export function AlwaysRunning() {
             Close the noise. Keep the agent.
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-            Pix is a view onto pi — not a harness that reimplements the agent. When you need focus,
-            collapse to the session that matters; when you need the CLI, open terminal mode on the
-            same thread.
+            Pix is a better desktop app for the pi agent — not a harness that reimplements it. When
+            you need focus, collapse to the session that matters; when you need the CLI, open
+            terminal mode on the same thread.
           </p>
         </div>
         <div data-reveal="" style={{ ["--reveal-delay" as string]: "100ms" }}>

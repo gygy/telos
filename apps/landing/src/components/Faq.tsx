@@ -5,7 +5,7 @@ const faqs = [
   },
   {
     q: "Which agent does it work with?",
-    a: "Pix is a desktop shell for the pi coding agent. Configuration, packages, sessions, and tools stay on the native pi side (~/.pi/agent).",
+    a: "Pix is a better desktop app for the pi coding agent. Configuration, packages, sessions, and tools stay on the native pi side (~/.pi/agent).",
   },
   {
     q: "Is it just a chat UI?",
@@ -13,14 +13,14 @@ const faqs = [
   },
   {
     q: "Does it replace pi?",
-    a: "No. Pix is a shell around pi. Models, API keys, settings, packages, and tools match interactive pi — not a forked agent runtime with its own secrets store.",
+    a: "No. Pix is a desktop app for pi, not a fork. Models, API keys, settings, packages, and tools match interactive pi — not a parallel agent runtime with its own secrets store.",
   },
   {
     q: "Which platforms are supported?",
     a: "Windows, macOS, and Linux installers are built in CI (NSIS, DMG arm64+Intel, AppImage + deb). Releases are published on GitHub.",
   },
   {
-    q: "Why a desktop shell, not only the terminal?",
+    q: "Why a desktop app, not only the terminal?",
     a: "Because sessions, projects, and timelines need a calm dashboard — while the terminal remains available when you want the full CLI. Two surfaces, one agent.",
   },
 ];

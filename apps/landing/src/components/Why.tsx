@@ -8,7 +8,7 @@ export function Why() {
           <div data-reveal="" style={{ ["--reveal-delay" as string]: "0ms" }}>
             <p className="font-mono text-xs tracking-wide text-muted-foreground/70">Why Pix</p>
             <p className="mt-4 text-balance text-2xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
-              The shell around pi — not a replacement for it.
+              Built for pi — not a fork of it.
             </p>
           </div>
           <div
@@ -17,9 +17,9 @@ export function Why() {
             className="mt-8 space-y-6 text-lg leading-relaxed text-muted-foreground"
           >
             <p>
-              Coding agents improve fastest as CLIs. Pix gives pi a calm desktop home: sessions,
-              projects, composer, and terminal mode — while configuration stays on the native agent
-              side.
+              Coding agents improve fastest as CLIs. Pix is a better desktop app for the pi agent:
+              sessions, projects, composer, and terminal mode — while configuration stays on the
+              native agent side.
             </p>
             <p>
               Keys, models, packages, and tools match interactive{" "}
