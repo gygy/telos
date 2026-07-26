@@ -1411,15 +1411,16 @@ function WorktreeSection(
             />
           </button>
         </div>
-        {listEmpty ? (
-          <p
-            className="m-0 px-0.5 text-[12px] leading-relaxed text-[var(--muted-foreground)]"
-            data-testid="worktree-list-empty"
-          >
-            {tr("worktree.listEmptyHint")}
-          </p>
-        ) : (
-          <div className="settings-card">
+        {/*
+          Always use settings-card (surface-panel) like other preference groups.
+          Empty state: hint text only — no extra fill on the paragraph itself.
+        */}
+        <div className="settings-card">
+          {listEmpty ? (
+            <div className="settings-row settings-row-last" data-testid="worktree-list-empty">
+              <div className="settings-row-desc">{tr("worktree.listEmptyHint")}</div>
+            </div>
+          ) : (
             <ul className="m-0 list-none p-0" data-testid="worktree-list-items">
               {linkedWorktrees.map((item, index) => {
                 const name = worktreeFolderName(item.path);
@@ -1465,8 +1466,8 @@ function WorktreeSection(
                 );
               })}
             </ul>
-          </div>
-        )}
+          )}
+        </div>
       </section>
     </SettingsPageShell>
   );

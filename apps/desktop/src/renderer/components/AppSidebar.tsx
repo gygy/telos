@@ -479,7 +479,7 @@ function SettingsRail(props: {
     /*
      * Settings IA (product-facing):
      *  通用 — shell prefs (look & feel, confirmations, hotkeys)
-     *  工作区 — Git → worktree → environment → terminal
+     *  工作区 — Git → environment → terminal → worktree
      *  模型 — providers, catalog, agent, usage
      *  网络 — connectivity (proxy; lower priority, advanced)
      *  数据 — archives
@@ -532,12 +532,6 @@ function SettingsRail(props: {
           icon: <GitBranch className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
-          section: "worktree",
-          testId: "settings-nav-worktree",
-          labelKey: "section.worktree",
-          icon: <FolderGit2 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-        {
           section: "environment",
           testId: "settings-nav-environment",
           labelKey: "section.environment",
@@ -548,6 +542,12 @@ function SettingsRail(props: {
           testId: "settings-nav-terminal",
           labelKey: "section.terminal",
           icon: <Terminal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "worktree",
+          testId: "settings-nav-worktree",
+          labelKey: "section.worktree",
+          icon: <FolderGit2 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
       ],
     },

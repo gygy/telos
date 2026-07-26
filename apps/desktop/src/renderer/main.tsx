@@ -291,7 +291,7 @@ function App() {
   const setReviewOpen = useShellStore((s) => s.setReviewOpen);
   const setEnvPanelOpen = useShellStore((s) => s.setEnvPanelOpen);
   /** Whether env panel can be shown at current thread-column width. */
-  const [envPanelFits, setEnvPanelFits] = useState(true);
+
   /** float = overlay without squeeze; dock = flex squeeze. */
   const [envPanelLayout, setEnvPanelLayout] = useState<Exclude<EnvPanelLayoutMode, "none">>("dock");
   const [sessionTreeOpen, setSessionTreeOpen] = useState(false);
@@ -576,19 +576,16 @@ function App() {
   useEffect(() => installOverlayScroll(), []);
 
   // Env panel: float in free right gutter when it would not cover conversation;
-  // dock (squeeze) when it would cover; auto-hide when min widths no longer fit both.
+  // dock (squeeze) when it would cover. Prefer dock over hiding the chrome entirely
+  // so chat view keeps a reachable env toggle on medium widths.
   useEffect(() => {
     if (view !== "thread") return;
     const el = threadColumnRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const apply = (width: number) => {
       const mode = envPanelLayoutForWidth(width);
-      const fits = mode !== "none";
-      setEnvPanelFits(fits);
-      if (mode === "float" || mode === "dock") setEnvPanelLayout(mode);
-      if (!fits && useShellStore.getState().envPanelOpen) {
-        useShellStore.getState().setEnvPanelOpen(false);
-      }
+      // "none" still docks — never hide the header toggle for medium widths.
+      setEnvPanelLayout(mode === "float" ? "float" : "dock");
     };
     apply(el.clientWidth);
     const ro = new ResizeObserver((entries) => {
@@ -2421,7 +2418,9 @@ function App() {
           forkThread: () => void forkThread(),
           toggleReview: () => setReviewOpen((open) => !open),
           toggleEnvPanel: () => {
-            if (!envPanelFits || !workspacePath || !hasActivity) return;
+            // Chat / content view only — terminal mode hides env chrome.
+            if (useShellStore.getState().contentMode === "terminal") return;
+            if (!workspacePath || !hasActivity) return;
             setEnvPanelOpen((open) => !open);
           },
           toggleContentMode: () => void toggleContentModeSurface(),
@@ -2429,17 +2428,7 @@ function App() {
         locale,
       ),
     // handlers close over latest store setters; recompute lightly when mode/view/locale changes
-    [
-      colorMode,
-      view,
-      running,
-      envPanelFits,
-      workspacePath,
-      hasActivity,
-      shortcutRevision,
-      locale,
-      contentMode,
-    ],
+    [colorMode, view, running, workspacePath, hasActivity, shortcutRevision, locale, contentMode],
   );
 
   useEffect(() => {
@@ -2488,8 +2477,9 @@ function App() {
           toggleColorMode();
           break;
         case "toggle-env-panel":
-          // Ignore when empty session, no project, or viewport cannot fit panel.
-          if (!envPanelFits || !workspacePath || !hasActivity) break;
+          // Chat / content view only — terminal mode hides env chrome.
+          if (useShellStore.getState().contentMode === "terminal") break;
+          if (!workspacePath || !hasActivity) break;
           setEnvPanelOpen((open) => !open);
           break;
         case "toggle-content-mode":
@@ -2637,7 +2627,8 @@ function App() {
                 sessionId={snapshot?.sessionId}
                 collapsed={sidebarCollapsed}
                 envToggleVisible={
-                  contentMode !== "terminal" && Boolean(workspacePath) && envPanelFits
+                  // Content (chat) view only; terminal mode never shows env chrome.
+                  contentMode !== "terminal" && Boolean(workspacePath)
                 }
                 onToggleContentMode={() => void toggleContentModeSurface()}
               />
@@ -2941,8 +2932,7 @@ function App() {
                   contentMode !== "terminal" &&
                   hasActivity &&
                   Boolean(workspacePath) &&
-                  envPanelOpen &&
-                  envPanelFits
+                  envPanelOpen
                 }
                 onOpenSettings={() => {
                   setSettingsSection("environment");
