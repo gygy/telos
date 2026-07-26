@@ -1253,6 +1253,18 @@ export interface DesktopLocalProxyCandidate {
   source: "probe" | "env";
 }
 
+/** PTY output is tagged so a queued event from a previous session cannot paint a new surface. */
+export type TerminalDataEvent = {
+  data: string;
+  sessionFile: string;
+};
+
+export type TerminalExitEvent = {
+  exitCode: number;
+  signal?: number;
+  sessionFile: string;
+};
+
 export interface PixDesktopApi {
   app: {
     /** OS platform + packaging flags for chrome layout / dev tools. */
@@ -1313,8 +1325,10 @@ export interface PixDesktopApi {
     /** Kill PTY; returns the sessionFile that was bound (for history re-projection). */
     dispose(): Promise<{ sessionFile?: string }>;
     status(): Promise<{ open: boolean; suspended?: boolean; sessionFile?: string }>;
-    onData(listener: (data: string) => void): () => void;
-    onExit(listener: (event: { exitCode: number; signal?: number }) => void): () => void;
+    /** Stream bytes tagged with the owning session to reject queued stale output. */
+    onData(listener: (event: TerminalDataEvent) => void): () => void;
+    /** Exit events are tagged for the same stale-event protection. */
+    onExit(listener: (event: TerminalExitEvent) => void): () => void;
   };
   appearance: {
     /** Keep native window materials aligned with the renderer theme. */

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { HostEvent, PiCliProgressEvent, PixDesktopApi } from "@pix/contracts";
+import type {
+  HostEvent,
+  PiCliProgressEvent,
+  PixDesktopApi,
+  TerminalDataEvent,
+  TerminalExitEvent,
+} from "@pix/contracts";
 
 const api: PixDesktopApi = {
   app: {
@@ -39,15 +45,14 @@ const api: PixDesktopApi = {
     dispose: () => ipcRenderer.invoke("pix:terminal:dispose"),
     status: () => ipcRenderer.invoke("pix:terminal:status"),
     onData(listener) {
-      const handler = (_event: Electron.IpcRendererEvent, data: string) => listener(data);
+      const handler = (_event: Electron.IpcRendererEvent, value: TerminalDataEvent) =>
+        listener(value);
       ipcRenderer.on("pix:terminal:data", handler);
       return () => ipcRenderer.removeListener("pix:terminal:data", handler);
     },
     onExit(listener) {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        value: { exitCode: number; signal?: number },
-      ) => listener(value);
+      const handler = (_event: Electron.IpcRendererEvent, value: TerminalExitEvent) =>
+        listener(value);
       ipcRenderer.on("pix:terminal:exit", handler);
       return () => ipcRenderer.removeListener("pix:terminal:exit", handler);
     },

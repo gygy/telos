@@ -23,13 +23,13 @@ function normSession(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
-/** After first verified output (cold spawn). */
-const READY_SETTLE_MS = 120;
-/** After resume/promote (process already warm — just need canvas paint). */
-const READY_SETTLE_RESUMED_MS = 48;
-/** Absolute max wait after open. */
-const READY_MAX_MS = 900;
-const READY_MAX_RESUMED_MS = 220;
+/** Quiet window after the last output frame; TUI startup often paints in bursts. */
+const READY_SETTLE_MS = 360;
+/** A resumed process still needs to redraw after its resize before it is revealed. */
+const READY_SETTLE_RESUMED_MS = 280;
+/** Fallback for a quiet/empty session; output-driven readiness remains preferred. */
+const READY_MAX_MS = 2_400;
+const READY_MAX_RESUMED_MS = 1_500;
 
 export function PiTuiTerminal(props: {
   sessionFile: string;
@@ -77,7 +77,8 @@ export function PiTuiTerminal(props: {
     let readyFired = false;
     /** Only accept data after open returns the *expected* session. */
     let acceptSessionKey: string | null = null;
-    let sawVerifiedOutput = false;
+    /** PTY output can arrive before the open IPC promise resolves; retain it in order. */
+    const pendingData: string[] = [];
     setSurfaceReady(false);
     surfaceReadyRef.current = false;
 
@@ -188,11 +189,13 @@ export function PiTuiTerminal(props: {
       term = next;
       fit = nextFit;
 
-      unsubData = window.pix.terminal.onData((data) => {
-        if (cancelled) return;
-        // Drop every byte until open has verified this mount owns the session.
-        if (acceptSessionKey !== expectedKey) return;
-        next.write(data);
+      function writeTerminalOutput(data: string) {
+        next.write(data, () => {
+          if (cancelled) return;
+          // The callback is scheduled after Ghostty's next render frame, so the
+          // settle window starts only after this output is actually paintable.
+          scheduleReadyAfterVerifiedOutput();
+        });
         if (prefsRef.current.scrollOnOutput) {
           try {
             next.scrollToBottom();
@@ -200,12 +203,22 @@ export function PiTuiTerminal(props: {
             // ignore
           }
         }
-        if (!sawVerifiedOutput) {
-          sawVerifiedOutput = true;
+      }
+
+      unsubData = window.pix.terminal.onData((event) => {
+        if (cancelled) return;
+        // Ignore queued bytes belonging to a PTY that was disposed during a hop.
+        if (event.sessionFile && normSession(event.sessionFile) !== expectedKey) return;
+        // Keep target bytes that race the open acknowledgement; dropping them
+        // can reveal a blank or partially drawn session after the mask lifts.
+        if (acceptSessionKey !== expectedKey) {
+          pendingData.push(event.data);
+          return;
         }
-        scheduleReadyAfterVerifiedOutput();
+        writeTerminalOutput(event.data);
       });
       unsubExit = window.pix.terminal.onExit((event) => {
+        if (event.sessionFile && normSession(event.sessionFile) !== expectedKey) return;
         onExitRef.current?.(event);
       });
       onDataDisp = next.onData((data) => {
@@ -276,6 +289,7 @@ export function PiTuiTerminal(props: {
       applyPrefsToTerminal(next, prefsRef.current);
       // Only now may PTY bytes hit the canvas.
       acceptSessionKey = expectedKey;
+      for (const data of pendingData.splice(0)) writeTerminalOutput(data);
 
       fitId = window.requestAnimationFrame(() => {
         if (cancelled) return;
@@ -285,10 +299,6 @@ export function PiTuiTerminal(props: {
           next.focus();
         } catch {
           // ignore
-        }
-        // Resume: reveal almost immediately after resize (warm process already painted).
-        if (opened.resumed) {
-          scheduleReadyAfterVerifiedOutput();
         }
         maxTimer = window.setTimeout(() => {
           maxTimer = null;

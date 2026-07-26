@@ -4548,10 +4548,12 @@ void app
             mainWindow.webContents.send(channel, payload);
           };
           const opened = await controller.open(plan, {
-            onData: (data) => send("pix:terminal:data", data),
+            // Tag every stream event. Electron can deliver a queued event from the
+            // disposed PTY after the next session has already mounted.
+            onData: (data) => send("pix:terminal:data", { data, sessionFile: plan.sessionFile }),
             onExit: (event) => {
               piTuiGuard.release(plan.sessionKey);
-              send("pix:terminal:exit", event);
+              send("pix:terminal:exit", { ...event, sessionFile: plan.sessionFile });
             },
           });
           return {

@@ -255,7 +255,7 @@ function App() {
 
   /**
    * Sync paint: cover + unmount old TUI in this call stack (before any await).
-   * Real unmask is only onReady for the expected session (or error / safety).
+   * Real terminal unmask is only onReady for the expected session (or an error).
    */
   function showSurfaceMask(kind: "view" | "session" = "view", expectsSession?: string) {
     clearSurfaceMaskTimer();
@@ -270,12 +270,12 @@ function App() {
     surfaceMaskTimerRef.current = window.setTimeout(() => {
       if (surfaceMaskGenRef.current !== gen) return;
       surfaceMaskTimerRef.current = null;
+      // Never expose a terminal surface from the watchdog. The target TUI must
+      // close this mask through its session-tagged onReady callback; otherwise
+      // an incomplete canvas can still flash the previous session.
+      if (useShellStore.getState().contentMode === "terminal") return;
       maskExpectsSessionRef.current = null;
       setSurfaceMask(false);
-      // Do not force-remount here if still mid-switch — restore/enter will remount.
-      if (useShellStore.getState().contentMode === "terminal") {
-        setTerminalSurfaceActive(true);
-      }
     }, 12_000);
   }
 
