@@ -32,13 +32,36 @@ pnpm electron:install
 
 ## Develop
 
+Apps have **independent** `dev` / `build` entry points at the repo root:
+
+| App                          | Dev                | Build                | Notes                                  |
+| ---------------------------- | ------------------ | -------------------- | -------------------------------------- |
+| **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop     |
+| **Landing** (`apps/landing`) | `pnpm dev:landing` | `pnpm build:landing` | Preview: `pnpm preview:landing`        |
+| **All packages**             | —                  | `pnpm build`         | Recursive `build` across the workspace |
+
+### Desktop
+
 ```bash
-pnpm dev
+pnpm dev:desktop   # or: pnpm dev
 ```
 
 Builds renderer / preload / main / agent-host, then launches Electron. Restart after source changes.
 
 Product launch uses your real `HOME` and the same agent dir as the CLI (`~/.pi/agent` / `PI_CODING_AGENT_DIR`). Models, API keys, settings, packages, and tools match interactive `pi`. The last workspace is restored from desktop prefs; no temp workspace is created on every start.
+
+```bash
+pnpm build:desktop   # compile only (no Electron launch)
+pnpm start:desktop   # launch previously built dist/
+```
+
+### Landing page
+
+```bash
+pnpm dev:landing      # http://localhost:5174
+pnpm build:landing    # static site → apps/landing/dist
+pnpm preview:landing  # serve the production build
+```
 
 ## Validate
 
@@ -47,7 +70,7 @@ pnpm check        # lint + types + format (same as Linux CI)
 pnpm check:types  # lint + types only (same as Windows/macOS CI)
 pnpm fmt          # auto-fix formatting
 pnpm test
-pnpm build
+pnpm build        # all workspace packages (desktop + landing + libs)
 pnpm smoke
 pnpm ready        # check + test + build
 ```
@@ -57,7 +80,7 @@ Isolated smoke (temp home + fixture workspace + fake model):
 ```bash
 pnpm smoke
 # or
-PIX_ISOLATED=1 pnpm start
+PIX_ISOLATED=1 pnpm start:desktop
 ```
 
 Packaged smoke (unsigned app directory):
@@ -67,11 +90,12 @@ pnpm package:dir
 pnpm smoke:packaged
 ```
 
-## Package
+## Package (desktop)
 
 ```bash
-pnpm package       # platform installers (NSIS / DMG / AppImage+deb)
-pnpm package:dir   # unpacked app directory only (for local smoke)
+pnpm package          # alias → package:desktop
+pnpm package:desktop  # platform installers (NSIS / DMG / AppImage+deb)
+pnpm package:dir      # unpacked app directory only (for local smoke)
 ```
 
 Installers land under `apps/desktop/release/app/` (unsigned in CI — no code-signing certs yet).
