@@ -191,7 +191,7 @@ const messages = {
     "terminal.color.dark": "深色",
     "terminal.color.light": "浅色",
     "terminal.convertEol": "转换换行",
-    "terminal.convertEolHint": "将单独的 LF 转为 CRLF，改善部分 TUI 绘制",
+    "terminal.convertEolHint": "将单独的 LF 转为 CRLF（行模式 shell 用；全屏 TUI 请关闭）",
     "proxy.intro": "AI 与应用网络独立配置。改 AI 代理后需重新连接会话以生效",
     "proxy.ai.title": "AI 代理",
     "proxy.ai.hint": "模型 API、OAuth、Agent Host 请求，修改后会重启 Agent 连接",
@@ -1134,7 +1134,8 @@ const messages = {
     "terminal.color.dark": "Dark",
     "terminal.color.light": "Light",
     "terminal.convertEol": "Convert line endings",
-    "terminal.convertEolHint": "Map bare LF to CRLF for cleaner TUI paints",
+    "terminal.convertEolHint":
+      "Map bare LF to CRLF (for line-mode shells; leave off for full-screen TUIs)",
     "proxy.intro":
       "AI and app networking are configured separately. Restart the session after changing AI proxy",
     "proxy.ai.title": "AI proxy",

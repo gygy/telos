@@ -4,6 +4,7 @@
  * - Parent may keep SurfaceTransitionOverlay until onReady (mode changes only).
  * - Canvas stays visibility:hidden until ready.
  * - open() resumes/promotes warm PTYs when possible (do not dispose before open).
+ * - Hidden IME textarea is pinned to the VT cursor so composition tracks the prompt.
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -19,8 +20,89 @@ type GhosttyModule = typeof import("ghostty-web");
 type GhosttyTerminal = InstanceType<GhosttyModule["Terminal"]>;
 type GhosttyFitAddon = InstanceType<GhosttyModule["FitAddon"]>;
 
+type GhosttyMetrics = { width: number; height: number };
+
 function normSession(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * ghostty-web parks its IME helper at (0,0). Without tracking, Chinese/Japanese
+ * composition and the system caret sit at the top of the surface instead of the
+ * pi prompt. Pin the textarea over the active VT cell (xterm-style).
+ */
+function syncTerminalInputCaret(term: GhosttyTerminal): void {
+  const textarea = term.textarea;
+  const host = term.element;
+  if (!textarea || !host) return;
+  try {
+    const renderer = (term as unknown as { renderer?: { getMetrics?: () => GhosttyMetrics } })
+      .renderer;
+    const metrics = renderer?.getMetrics?.();
+    if (!metrics || metrics.width <= 0 || metrics.height <= 0) return;
+
+    const cursorX = term.buffer.active.cursorX;
+    const cursorY = term.buffer.active.cursorY;
+    const style = window.getComputedStyle(host);
+    const padL = Number.parseFloat(style.paddingLeft) || 0;
+    const padT = Number.parseFloat(style.paddingTop) || 0;
+    const left = Math.round(padL + cursorX * metrics.width);
+    const top = Math.round(padT + cursorY * metrics.height);
+    const w = Math.max(2, Math.round(metrics.width));
+    const h = Math.max(2, Math.round(metrics.height));
+    // Skip no-op writes — onRender fires every frame.
+    if (
+      textarea.dataset.caretX === String(left) &&
+      textarea.dataset.caretY === String(top) &&
+      textarea.dataset.caretW === String(w) &&
+      textarea.dataset.caretH === String(h)
+    ) {
+      return;
+    }
+    textarea.dataset.caretX = String(left);
+    textarea.dataset.caretY = String(top);
+    textarea.dataset.caretW = String(w);
+    textarea.dataset.caretH = String(h);
+
+    textarea.style.position = "absolute";
+    textarea.style.left = `${left}px`;
+    textarea.style.top = `${top}px`;
+    textarea.style.width = `${w}px`;
+    textarea.style.height = `${h}px`;
+    textarea.style.margin = "0";
+    textarea.style.padding = "0";
+    textarea.style.border = "none";
+    textarea.style.outline = "none";
+    textarea.style.resize = "none";
+    textarea.style.overflow = "hidden";
+    textarea.style.whiteSpace = "nowrap";
+    textarea.style.opacity = "0";
+    // clipPath:inset(50%) zeros the caret box and parks IME at the host origin.
+    textarea.style.clipPath = "none";
+    textarea.style.zIndex = "1";
+    // Clicks must hit the canvas for selection; keyboard stays on the focused caret.
+    textarea.style.pointerEvents = "none";
+  } catch {
+    // ignore — caret tracking is best-effort
+  }
+}
+
+function focusTerminalInput(term: GhosttyTerminal): void {
+  syncTerminalInputCaret(term);
+  try {
+    const textarea = term.textarea;
+    if (textarea) {
+      textarea.focus({ preventScroll: true });
+      return;
+    }
+  } catch {
+    // fall through
+  }
+  try {
+    term.focus();
+  } catch {
+    // ignore
+  }
 }
 
 /** Quiet window after the last output frame; TUI startup often paints in bursts. */
@@ -71,6 +153,9 @@ export function PiTuiTerminal(props: {
     let onDataDisp: { dispose(): void } | undefined;
     let onResizeDisp: { dispose(): void } | undefined;
     let onSelDisp: { dispose(): void } | undefined;
+    let onCursorDisp: { dispose(): void } | undefined;
+    let onRenderDisp: { dispose(): void } | undefined;
+    let onHostFocus: (() => void) | undefined;
     let fitId = 0;
     let settleTimer: number | null = null;
     let maxTimer: number | null = null;
@@ -113,6 +198,7 @@ export function PiTuiTerminal(props: {
       } catch {
         // ignore
       }
+      syncTerminalInputCaret(target);
     }
 
     function fireReady() {
@@ -132,7 +218,9 @@ export function PiTuiTerminal(props: {
       // Double rAF: composite themed canvas before parent lifts the logo mask.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          if (!cancelled) onReadyRef.current?.({ sessionFile });
+          if (cancelled) return;
+          if (term) focusTerminalInput(term);
+          onReadyRef.current?.({ sessionFile });
         });
       });
     }
@@ -195,6 +283,7 @@ export function PiTuiTerminal(props: {
           // The callback is scheduled after Ghostty's next render frame, so the
           // settle window starts only after this output is actually paintable.
           scheduleReadyAfterVerifiedOutput();
+          syncTerminalInputCaret(next);
         });
         if (prefsRef.current.scrollOnOutput) {
           try {
@@ -223,9 +312,12 @@ export function PiTuiTerminal(props: {
       });
       onDataDisp = next.onData((data) => {
         void window.pix.terminal.write(data).catch(() => undefined);
+        // Local keystrokes move the TUI caret before the next PTY frame arrives.
+        syncTerminalInputCaret(next);
       });
       onResizeDisp = next.onResize(({ cols, rows }) => {
         void window.pix.terminal.resize(cols, rows).catch(() => undefined);
+        syncTerminalInputCaret(next);
       });
       onSelDisp = next.onSelectionChange(() => {
         if (!prefsRef.current.copyOnSelect) return;
@@ -236,6 +328,21 @@ export function PiTuiTerminal(props: {
           // ignore
         }
       });
+      onCursorDisp = next.onCursorMove(() => {
+        if (!cancelled) syncTerminalInputCaret(next);
+      });
+      onRenderDisp = next.onRender(() => {
+        if (!cancelled) syncTerminalInputCaret(next);
+      });
+      // Initial pin before the first paint (prompt may already be at bottom).
+      syncTerminalInputCaret(next);
+      // ghostty focuses the contenteditable host; keep the IME caret on the VT cell.
+      onHostFocus = () => {
+        if (cancelled) return;
+        if (document.activeElement === next.textarea) return;
+        focusTerminalInput(next);
+      };
+      host.addEventListener("focusin", onHostFocus);
 
       let cols = next.cols;
       let rows = next.rows;
@@ -296,7 +403,7 @@ export function PiTuiTerminal(props: {
         try {
           nextFit.fit();
           void window.pix.terminal.resize(next.cols, next.rows).catch(() => undefined);
-          next.focus();
+          focusTerminalInput(next);
         } catch {
           // ignore
         }
@@ -329,6 +436,9 @@ export function PiTuiTerminal(props: {
       onDataDisp?.dispose();
       onResizeDisp?.dispose();
       onSelDisp?.dispose();
+      onCursorDisp?.dispose();
+      onRenderDisp?.dispose();
+      if (onHostFocus) host.removeEventListener("focusin", onHostFocus);
       try {
         fit?.dispose();
       } catch {

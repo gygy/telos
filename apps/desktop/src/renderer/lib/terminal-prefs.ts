@@ -19,7 +19,11 @@ export type TerminalPrefs = {
   scrollback: number;
   /** Smooth scroll duration in ms; 0 = instant. */
   smoothScrollMs: number;
-  /** Convert bare LF to CRLF (helps some TUI paints). */
+  /**
+   * Convert bare LF to CRLF on write.
+   * Off by default — full-screen TUIs (pi) control the cursor with VT sequences
+   * and LF→CRLF shifts columns. Enable only for line-oriented shells if needed.
+   */
   convertEol: boolean;
   /** Copy selection to the system clipboard as soon as it changes. */
   copyOnSelect: boolean;
@@ -39,7 +43,7 @@ export const DEFAULT_TERMINAL_PREFS: TerminalPrefs = {
   cursorStyle: "block",
   scrollback: 10_000,
   smoothScrollMs: 100,
-  convertEol: true,
+  convertEol: false,
   copyOnSelect: true,
   scrollOnOutput: true,
   colorScheme: "match",
@@ -104,7 +108,7 @@ export function normalizeTerminalPrefs(
       : DEFAULT_TERMINAL_PREFS.cursorStyle,
     scrollback: clamp(Number(base.scrollback), TERMINAL_SCROLLBACK_MIN, TERMINAL_SCROLLBACK_MAX),
     smoothScrollMs: clamp(Number(base.smoothScrollMs), 0, TERMINAL_SMOOTH_SCROLL_MAX),
-    convertEol: base.convertEol !== false,
+    convertEol: base.convertEol === true,
     copyOnSelect: base.copyOnSelect !== false,
     scrollOnOutput: base.scrollOnOutput !== false,
     colorScheme: isColorScheme(base.colorScheme)

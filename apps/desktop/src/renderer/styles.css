@@ -1917,11 +1917,15 @@ html[data-custom-window-controls="true"] .page-header {
   min-width: 0;
   padding: 4px 6px;
   overflow: hidden;
+  /* Keep outline off when the IME helper textarea steals focus. */
+  outline: none;
 }
+/*
+ * Let ghostty-web set exact cell-grid pixel sizes on the canvas.
+ * Stretching to 100% misaligns mouse hit-testing vs painted cells.
+ */
 .pi-tui-terminal-host canvas {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 .timeline-assistant-row {
   width: 100%;
