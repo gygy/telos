@@ -376,7 +376,8 @@ export const useShellStore = create<ShellState>((set, get) => ({
         saveContentMode(mode);
       }
     }
-    set({ contentMode: mode });
+    // Terminal never shows env chrome — drop the panel when leaving chat view.
+    set({ contentMode: mode, ...(mode === "terminal" ? { envPanelOpen: false } : {}) });
   },
   toggleContentMode: () => {
     const next = flipContentMode(get().contentMode);
@@ -386,7 +387,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
     } else {
       saveContentMode(next);
     }
-    set({ contentMode: next });
+    set({ contentMode: next, ...(next === "terminal" ? { envPanelOpen: false } : {}) });
   },
   setSnapshot: (snapshot) => set({ snapshot }),
   setEvents: (events) =>

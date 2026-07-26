@@ -58,8 +58,6 @@ export function ThreadHeader(props: {
   className?: string;
   style?: CSSProperties;
   collapsed?: boolean;
-  /** When false, env toggle is hidden (e.g. viewport too narrow for panel). */
-  envToggleVisible?: boolean;
   /** Enter/leave real pi TUI (exclusive with chat). */
   onToggleContentMode?: (() => void) | undefined;
 }) {
@@ -91,7 +89,11 @@ export function ThreadHeader(props: {
         parentFile ? tr("session.forkedFrom", { name: parentFile }) : tr("session.forked"),
       ].join("\n")
     : fullTitle;
-  const showEnvToggle = props.envToggleVisible !== false;
+  /**
+   * Invariant: chat/content view always shows the env control; terminal mode never does.
+   * Driven only by contentMode so session hops / restore cannot desync visibility.
+   */
+  const showEnvToggle = contentMode === "chat";
 
   useEffect(() => {
     const sync = () => {

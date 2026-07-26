@@ -2418,9 +2418,8 @@ function App() {
           forkThread: () => void forkThread(),
           toggleReview: () => setReviewOpen((open) => !open),
           toggleEnvPanel: () => {
-            // Chat / content view only — terminal mode hides env chrome.
-            if (useShellStore.getState().contentMode === "terminal") return;
-            if (!workspacePath || !hasActivity) return;
+            // Chat / content view only — terminal mode never exposes env chrome.
+            if (useShellStore.getState().contentMode !== "chat") return;
             setEnvPanelOpen((open) => !open);
           },
           toggleContentMode: () => void toggleContentModeSurface(),
@@ -2477,9 +2476,8 @@ function App() {
           toggleColorMode();
           break;
         case "toggle-env-panel":
-          // Chat / content view only — terminal mode hides env chrome.
-          if (useShellStore.getState().contentMode === "terminal") break;
-          if (!workspacePath || !hasActivity) break;
+          // Chat / content view only — terminal mode never exposes env chrome.
+          if (useShellStore.getState().contentMode !== "chat") break;
           setEnvPanelOpen((open) => !open);
           break;
         case "toggle-content-mode":
@@ -2626,10 +2624,6 @@ function App() {
                 workspacePath={workspacePath}
                 sessionId={snapshot?.sessionId}
                 collapsed={sidebarCollapsed}
-                envToggleVisible={
-                  // Content (chat) view only; terminal mode never shows env chrome.
-                  contentMode !== "terminal" && Boolean(workspacePath)
-                }
                 onToggleContentMode={() => void toggleContentModeSurface()}
               />
             ) : null}
@@ -2926,14 +2920,9 @@ function App() {
 
               <EnvPanel
                 locale={locale}
-                cwd={workspacePath}
+                cwd={workspacePath ?? snapshot?.cwd}
                 layout={envPanelLayout}
-                open={
-                  contentMode !== "terminal" &&
-                  hasActivity &&
-                  Boolean(workspacePath) &&
-                  envPanelOpen
-                }
+                open={contentMode === "chat" && envPanelOpen}
                 onOpenSettings={() => {
                   setSettingsSection("environment");
                   setView("settings");

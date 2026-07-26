@@ -82,6 +82,22 @@ describe("contentMode presentation", () => {
     expect(useShellStore.getState().history).toEqual(history);
   });
 
+  it("closes the env panel when entering terminal mode", () => {
+    useShellStore.setState({
+      contentMode: "chat",
+      envPanelOpen: true,
+      snapshot: { sessionFile: "/tmp/session-env.jsonl" } as never,
+    });
+    useShellStore.getState().setContentMode("terminal");
+    expect(useShellStore.getState().contentMode).toBe("terminal");
+    expect(useShellStore.getState().envPanelOpen).toBe(false);
+
+    useShellStore.setState({ contentMode: "chat", envPanelOpen: true });
+    useShellStore.getState().toggleContentMode();
+    expect(useShellStore.getState().contentMode).toBe("terminal");
+    expect(useShellStore.getState().envPanelOpen).toBe(false);
+  });
+
   it("persist:false does not overwrite the session's stored mode", () => {
     useShellStore.setState({
       contentMode: "terminal",
