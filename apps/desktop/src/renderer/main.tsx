@@ -43,9 +43,8 @@ import {
 import { BootstrapOverlay } from "./components/BootstrapOverlay.tsx";
 
 import { PixLogo } from "./components/PixLogo.tsx";
-import { SurfaceTransitionOverlay } from "./components/SurfaceTransitionOverlay.tsx";
 import { ThreadHeader } from "./components/ThreadHeader.tsx";
-import { PiTuiTerminal } from "./components/PiTuiTerminal.tsx";
+import { PiTuiTerminal, preloadPiTuiTerminal } from "./components/PiTuiTerminal.tsx";
 import { WindowCaptionButtons } from "./components/WindowCaptionButtons.tsx";
 import {
   TimelineLiveStatus,
@@ -224,85 +223,49 @@ function App() {
   const paletteOpen = useShellStore((s) => s.paletteOpen);
   const contentMode = useShellStore((s) => s.contentMode);
   const setContentMode = useShellStore((s) => s.setContentMode);
-  /**
-   * Opaque cover while landing on terminal (chat→terminal or terminal→terminal).
-   * Chat→chat and terminal→chat: no mask.
-   *
-   * Critical: under the mask we fully unmount PiTuiTerminal so the previous
-   * session canvas cannot paint. Remount only after the *new* session identity
-   * is applied; lift the mask only from that mount's onReady.
-   */
-  const [surfaceMask, setSurfaceMask] = useState(false);
-  const [surfaceMaskKind, setSurfaceMaskKind] = useState<"view" | "session">("view");
   /** When false, PiTuiTerminal is unmounted (no previous-session canvas). */
   const [terminalSurfaceActive, setTerminalSurfaceActive] = useState(true);
-  const surfaceMaskTimerRef = useRef<number | null>(null);
-  /** Bumps on every show; stale onReady / safety timeout cannot lift a newer mask. */
-  const surfaceMaskGenRef = useRef(0);
-  /** Session file the current mask is waiting for (normed path). */
-  const maskExpectsSessionRef = useRef<string | null>(null);
+  /** Session file the mounted terminal is waiting for (normed path). */
+  const transitionSessionRef = useRef<string | null>(null);
 
   function normSessionPath(path: string): string {
     return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
   }
 
-  function clearSurfaceMaskTimer() {
-    if (surfaceMaskTimerRef.current != null) {
-      window.clearTimeout(surfaceMaskTimerRef.current);
-      surfaceMaskTimerRef.current = null;
-    }
-  }
-
   /**
-   * Sync paint: cover + unmount old TUI in this call stack (before any await).
-   * Real terminal unmask is only onReady for the expected session (or an error).
+   * Sync paint: unmount the old TUI in this call stack (before any await).
+   * PiTuiTerminal keeps its host hidden until the expected session is ready.
    */
-  function showSurfaceMask(kind: "view" | "session" = "view", expectsSession?: string) {
-    clearSurfaceMaskTimer();
-    const gen = ++surfaceMaskGenRef.current;
-    maskExpectsSessionRef.current = expectsSession?.trim() ? normSessionPath(expectsSession) : null;
-    // flushSync: mask must cover before the previous session can paint another frame.
-    flushSync(() => {
-      setSurfaceMaskKind(kind);
-      setSurfaceMask(true);
-      setTerminalSurfaceActive(false);
-    });
-    surfaceMaskTimerRef.current = window.setTimeout(() => {
-      if (surfaceMaskGenRef.current !== gen) return;
-      surfaceMaskTimerRef.current = null;
-      // Never expose a terminal surface from the watchdog. The target TUI must
-      // close this mask through its session-tagged onReady callback; otherwise
-      // an incomplete canvas can still flash the previous session.
-      if (useShellStore.getState().contentMode === "terminal") return;
-      maskExpectsSessionRef.current = null;
-      setSurfaceMask(false);
-    }, 12_000);
+  function beginSurfaceTransition(expectsSession?: string) {
+    transitionSessionRef.current = expectsSession?.trim() ? normSessionPath(expectsSession) : null;
+    flushSync(() => setTerminalSurfaceActive(false));
   }
 
-  function hideSurfaceMask(fromSession?: string) {
-    const expects = maskExpectsSessionRef.current;
+  function endSurfaceTransition(fromSession?: string) {
+    const expects = transitionSessionRef.current;
     if (expects && fromSession?.trim()) {
       if (normSessionPath(fromSession) !== expects) return;
     }
-    clearSurfaceMaskTimer();
-    maskExpectsSessionRef.current = null;
-    setSurfaceMask(false);
+    transitionSessionRef.current = null;
   }
 
   /**
    * Restore chat vs terminal for a session after open/switch.
-   * Terminal: contentMode + remount TUI for the *already applied* sessionFile under mask.
+   * Terminal: contentMode + remount TUI for the *already applied* sessionFile.
    */
   function restoreSessionContentMode(sessionFile: string | undefined) {
     const desired = loadContentModeForSession(sessionFile);
     const busy = useShellStore.getState().running;
     if (desired === "terminal" && !busy && sessionFile?.trim()) {
+      // Warm Ghostty before mounting the surface so WASM startup overlaps the
+      // session/layout work instead of delaying the first visible frame.
+      preloadPiTuiTerminal();
       holdBlankRef.current = false;
       pendingScrollBottomRef.current = false;
       setTimelineReady(true);
-      // Snapshot already has the new sessionFile — mount only that identity under mask.
+      // Snapshot already has the new sessionFile; mount only that identity.
       setContentMode("terminal", { persist: false });
-      maskExpectsSessionRef.current = normSessionPath(sessionFile);
+      transitionSessionRef.current = normSessionPath(sessionFile);
       window.requestAnimationFrame(() => {
         if (useShellStore.getState().contentMode !== "terminal") return;
         setTerminalSurfaceActive(true);
@@ -646,6 +609,13 @@ function App() {
   useEffect(() => {
     void refreshRecentWorkspaces();
   }, [snapshot?.cwd]);
+
+  // The persisted mode is available on the first render, before the host
+  // snapshot arrives. Start Ghostty immediately so cold startup can proceed
+  // in parallel with host/session restoration.
+  useLayoutEffect(() => {
+    if (contentMode === "terminal") preloadPiTuiTerminal();
+  }, [contentMode]);
 
   // Load sessions for every known project so expand shows chats without switching first.
   useEffect(() => {
@@ -1901,6 +1871,12 @@ function App() {
     // Do not abort a generating session — main parks the busy host for tab-like switching.
     if (gen !== newBlankTaskGenRef.current) return;
 
+    if (useShellStore.getState().contentMode === "terminal") {
+      beginSurfaceTransition();
+      setContentMode("chat", { persist: false });
+      await window.pix.terminal.suspend().catch(() => undefined);
+    }
+
     setView("thread");
     setSidebarOpen(false);
     setPrompt("");
@@ -1939,6 +1915,7 @@ function App() {
       markSessionOpenForBottomScroll();
       applySessionOpen(opened);
       requestContentReveal();
+      restoreSessionContentMode(opened.snapshot.sessionFile);
       selectWorkspacePath(undefined);
       pendingPureConversationRef.current = false;
       setPendingPureConversation(false);
@@ -1977,6 +1954,11 @@ function App() {
   async function newThreadForProject(path: string) {
     // Do not abort a generating session — main parks the busy host.
     try {
+      if (useShellStore.getState().contentMode === "terminal") {
+        beginSurfaceTransition();
+        setContentMode("chat", { persist: false });
+        await window.pix.terminal.suspend().catch(() => undefined);
+      }
       setView("thread");
       setSidebarOpen(false);
       setPrompt("");
@@ -1999,6 +1981,7 @@ function App() {
       markSessionOpenForBottomScroll();
       applySessionOpen(opened);
       requestContentReveal();
+      restoreSessionContentMode(opened.snapshot.sessionFile);
       setStatus("Agent Host ready");
       await refreshThreads();
     } catch (error) {
@@ -2090,26 +2073,31 @@ function App() {
     const stayTerminal = fromMode === "terminal" && targetModePref === "terminal";
     const landTerminal = targetModePref === "terminal";
 
-    // Mask only when landing on terminal (chat→terminal or terminal→terminal).
-    // Sync cover + unmount previous TUI so old session canvas cannot paint.
-    // Mask stays until the *new* session's PiTuiTerminal onReady.
+    // Unmount an outgoing TUI synchronously so Chromium cannot retain its
+    // canvas layer while either destination surface is being prepared.
     if (landTerminal) {
-      showSurfaceMask(fromMode === "terminal" ? "session" : "view", sessionPath);
+      beginSurfaceTransition(sessionPath);
+    } else if (fromMode === "terminal") {
+      beginSurfaceTransition();
     }
 
-    // Terminal → chat: leave TUI (no mask). Terminal → terminal: chrome stays; TUI already unmounted.
+    // Keep the chat viewport hidden until the target history is applied and
+    // pinned. Terminal-to-terminal hops keep the terminal background instead.
+    if (!stayTerminal) {
+      markSessionOpenForBottomScroll();
+    }
+
+    // Terminal → chat: suspend the source TUI for a later tab hop. Terminal → terminal:
+    // controller.open parks/promotes after the target session has landed.
     if (fromMode === "terminal" && !stayTerminal) {
       setContentMode("chat", { persist: false });
       try {
-        await window.pix.terminal.dispose();
+        await window.pix.terminal.suspend();
       } catch {
         // ignore
       }
     }
-    // Chat blank-hold only when landing in (or passing through) chat — not terminal hops.
-    if (!stayTerminal) {
-      markSessionOpenForBottomScroll();
-    } else {
+    if (stayTerminal) {
       holdBlankRef.current = false;
       pendingScrollBottomRef.current = false;
       setTimelineReady(true);
@@ -2217,11 +2205,11 @@ function App() {
       // Restore this session's remembered surface (chat vs terminal).
       const landedFile = opened.snapshot.sessionFile?.trim() || sessionPath;
       restoreSessionContentMode(landedFile);
-      // Chat landings never need a mask (and landTerminal false never showed one).
-      // If we expected terminal but restored chat (e.g. busy), drop any cover.
-      // Terminal: mask stays until PiTuiTerminal onReady.
+      // Chat landings never need a terminal surface transition.
+      // If we expected terminal but restored chat (e.g. busy), clear the
+      // session identity gate; terminal landings clear it from onReady.
       if (useShellStore.getState().contentMode !== "terminal") {
-        window.requestAnimationFrame(() => hideSurfaceMask());
+        window.requestAnimationFrame(() => endSurfaceTransition());
       }
     } catch (error) {
       reportAppError(error, "无法打开会话");
@@ -2229,7 +2217,7 @@ function App() {
       pendingScrollBottomRef.current = false;
       setTimelineReady(true);
       void refreshThreads();
-      hideSurfaceMask();
+      endSurfaceTransition();
     } finally {
       switchingSessionRef.current = false;
     }
@@ -2237,8 +2225,8 @@ function App() {
 
   /**
    * Terminal mode = real pi TUI via PTY (`pi --session <file>`), not CSS skin.
-   * Enter only flips contentMode + mask; PiTuiTerminal opens the PTY after it
-   * has subscribed to data (avoids previous-session flash).
+   * PiTuiTerminal subscribes to data before opening the PTY and owns first-frame
+   * readiness, so a previous-session canvas cannot flash during the transition.
    */
   async function enterTerminalMode() {
     const store = useShellStore.getState();
@@ -2258,12 +2246,12 @@ function App() {
     }
     // Do not dispose here — open() resumes a suspended same-session PTY for instant enter.
     // Cross-session replace/park is handled inside terminal.open.
-    showSurfaceMask("view", sessionFile);
+    beginSurfaceTransition(sessionFile);
     holdBlankRef.current = false;
     pendingScrollBottomRef.current = false;
     setTimelineReady(true);
     setContentMode("terminal");
-    // Mount under mask; onReady lifts it.
+    // Mount on the next frame after contentMode is applied.
     window.requestAnimationFrame(() => {
       if (useShellStore.getState().contentMode !== "terminal") return;
       setTerminalSurfaceActive(true);
@@ -2271,9 +2259,13 @@ function App() {
   }
 
   async function leaveTerminalMode() {
-    // No mask: chat paints fast enough. Drop TUI first so the canvas cannot flash.
-    setTerminalSurfaceActive(false);
+    // Hold chat until the same session has been reloaded from disk. The sync
+    // unmount removes the canvas from Chromium's compositor before mode flips.
+    switchingSessionRef.current = true;
+    beginSurfaceTransition();
+    markSessionOpenForBottomScroll();
     setContentMode("chat");
+    let contentReloaded = false;
     try {
       // Suspend (keep process warm) so re-entering this session is instant.
       const suspended = await window.pix.terminal.suspend();
@@ -2283,7 +2275,7 @@ function App() {
       if (sessionFile) {
         const opened = await window.pix.session.switch(sessionFile);
         applySessionOpen(opened);
-        requestContentReveal();
+        contentReloaded = true;
       }
     } catch (error) {
       reportAppError(error, t(locale, "contentMode.closeFailed"));
@@ -2292,6 +2284,11 @@ function App() {
       } catch {
         // ignore
       }
+    } finally {
+      switchingSessionRef.current = false;
+      if (contentReloaded) requestContentReveal();
+      else finishBlankHold();
+      endSurfaceTransition();
     }
   }
 
@@ -2311,7 +2308,7 @@ function App() {
     const cwd = snapshot?.cwd?.trim() || workspacePath?.trim();
     if (!sessionFile || !cwd) {
       setContentMode("chat");
-      hideSurfaceMask();
+      endSurfaceTransition();
     }
   }, [contentMode, snapshot?.sessionFile, snapshot?.cwd, workspacePath, setContentMode]);
 
@@ -2615,7 +2612,7 @@ function App() {
                     background: resolveTerminalTheme(loadTerminalPrefs(), colorMode).background,
                   }}
                 >
-                  {/* Unmounted while switching so previous session canvas is gone under the mask. */}
+                  {/* Unmounted while switching so the previous session canvas is gone. */}
                   {terminalSurfaceActive ? (
                     <PiTuiTerminal
                       key={snapshot.sessionFile}
@@ -2623,13 +2620,13 @@ function App() {
                       cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
                       colorMode={colorMode}
                       className="min-h-0 flex-1 p-2"
-                      onReady={(info) => hideSurfaceMask(info.sessionFile)}
+                      onReady={(info) => endSurfaceTransition(info.sessionFile)}
                       onOpenError={(error) => {
                         reportAppError(error, t(locale, "contentMode.openFailed"));
                         // Keep per-session terminal preference so the user can retry.
                         setContentMode("chat", { persist: false });
                         setTerminalSurfaceActive(false);
-                        hideSurfaceMask();
+                        endSurfaceTransition();
                       }}
                       onProcessExit={() => void leaveTerminalMode()}
                     />
@@ -2882,17 +2879,6 @@ function App() {
                   </MessageScrollerProvider>
                 </div>
               )}
-
-              {surfaceMask ? (
-                <SurfaceTransitionOverlay
-                  status={
-                    surfaceMaskKind === "session"
-                      ? t(locale, "contentMode.switchingSession")
-                      : t(locale, "contentMode.switching")
-                  }
-                  variant={contentMode === "terminal" ? "terminal" : "chat"}
-                />
-              ) : null}
 
               <EnvPanel
                 locale={locale}

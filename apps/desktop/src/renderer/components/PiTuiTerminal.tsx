@@ -1,7 +1,7 @@
 /**
  * Embedded pi TUI — ghostty-web + main-process node-pty (`pi --session`).
  *
- * - Parent may keep SurfaceTransitionOverlay until onReady (mode changes only).
+ * - Parent gates mounting during session transitions; this component owns readiness.
  * - Canvas stays visibility:hidden until ready.
  * - open() resumes/promotes warm PTYs when possible (do not dispose before open).
  * - Hidden IME textarea is pinned to the VT cursor so composition tracks the prompt.
@@ -20,10 +20,60 @@ type GhosttyModule = typeof import("ghostty-web");
 type GhosttyTerminal = InstanceType<GhosttyModule["Terminal"]>;
 type GhosttyFitAddon = InstanceType<GhosttyModule["FitAddon"]>;
 
+// Keep the expensive module/WASM initialization shared across terminal mounts.
+// This also lets the app warm Ghostty while the host/session is restoring.
+let ghosttyReadyPromise: Promise<GhosttyModule> | null = null;
+
+function loadGhostty(): Promise<GhosttyModule> {
+  ghosttyReadyPromise ??= import("ghostty-web")
+    .then(async (module) => {
+      await module.init();
+      return module;
+    })
+    .catch((error) => {
+      // Allow a later terminal attempt to retry after a transient load failure.
+      ghosttyReadyPromise = null;
+      throw error;
+    });
+  return ghosttyReadyPromise;
+}
+
+/** Start Ghostty's WASM load before a terminal surface needs to be painted. */
+export function preloadPiTuiTerminal(): void {
+  void loadGhostty().catch(() => undefined);
+}
+
 type GhosttyMetrics = { width: number; height: number };
+
+/**
+ * Pi paints its editor caret with reverse-video SGR while also positioning a
+ * hardware cursor for IME support. The hardware cursor is the only visible
+ * caret in the embedded surface, so remove the duplicate styling but keep the
+ * text and all cursor movement sequences intact.
+ */
+function stripPiEditorCursorStyle(data: string): string {
+  return data.replaceAll("\x1b[7m", "").replaceAll("\x1b[27m", "");
+}
 
 function normSession(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * pi draws the prompt separator with a full-width box-drawing row before its
+ * input state settles. Ghostty can leave its cursor on that row's final cell;
+ * move only the local VT cursor to the next row's head so the first caret is
+ * presented at the prompt without sending a synthetic key to pi.
+ */
+function normalizeInitialPromptCursor(term: GhosttyTerminal): void {
+  const active = term.buffer.active;
+  const cursorX = active.cursorX;
+  const cursorY = active.cursorY;
+  if (cursorX !== term.cols - 1 || cursorY >= term.rows - 1) return;
+  const line = active.getLine(cursorY)?.translateToString(true).trim() ?? "";
+  if (line.length < Math.max(8, Math.floor(term.cols * 0.5))) return;
+  if (!Array.from(line).every((char) => /[\u2500-\u257f\u2014=-]/u.test(char))) return;
+  term.write("\x1b[B\r");
 }
 
 /**
@@ -36,6 +86,9 @@ function syncTerminalInputCaret(term: GhosttyTerminal): void {
   const host = term.element;
   if (!textarea || !host) return;
   try {
+    // SelectionManager temporarily moves the textarea for the native context menu.
+    if (textarea.style.pointerEvents === "auto") return;
+
     const renderer = (term as unknown as { renderer?: { getMetrics?: () => GhosttyMetrics } })
       .renderer;
     const metrics = renderer?.getMetrics?.();
@@ -43,19 +96,36 @@ function syncTerminalInputCaret(term: GhosttyTerminal): void {
 
     const cursorX = term.buffer.active.cursorX;
     const cursorY = term.buffer.active.cursorY;
-    const style = window.getComputedStyle(host);
-    const padL = Number.parseFloat(style.paddingLeft) || 0;
-    const padT = Number.parseFloat(style.paddingTop) || 0;
-    const left = Math.round(padL + cursorX * metrics.width);
-    const top = Math.round(padT + cursorY * metrics.height);
-    const w = Math.max(2, Math.round(metrics.width));
+    const w = 1;
     const h = Math.max(2, Math.round(metrics.height));
-    // Skip no-op writes — onRender fires every frame.
+    const cellKey = `${cursorX}:${cursorY}:${metrics.width}:${metrics.height}`;
+    const cachedLeft = Number(textarea.dataset.caretX);
+    const cachedTop = Number(textarea.dataset.caretY);
+    const hasCachedPosition =
+      textarea.dataset.caretCell === cellKey &&
+      Number.isFinite(cachedLeft) &&
+      Number.isFinite(cachedTop);
+    const style = hasCachedPosition ? null : window.getComputedStyle(host);
+    const padL = style ? Number.parseFloat(style.paddingLeft) || 0 : 0;
+    const padT = style ? Number.parseFloat(style.paddingTop) || 0 : 0;
+    const left = hasCachedPosition ? cachedLeft : Math.round(padL + cursorX * metrics.width);
+    const top = hasCachedPosition ? cachedTop : Math.round(padT + cursorY * metrics.height);
+    const cssLeft = `${left}px`;
+    const cssTop = `${top}px`;
+    const cssWidth = `${w}px`;
+    const cssHeight = `${h}px`;
+    // Ghostty can temporarily rewrite these styles, so the cache alone is not authoritative.
     if (
+      textarea.dataset.caretCell === cellKey &&
       textarea.dataset.caretX === String(left) &&
       textarea.dataset.caretY === String(top) &&
       textarea.dataset.caretW === String(w) &&
-      textarea.dataset.caretH === String(h)
+      textarea.dataset.caretH === String(h) &&
+      textarea.style.position === "absolute" &&
+      textarea.style.left === cssLeft &&
+      textarea.style.top === cssTop &&
+      textarea.style.width === cssWidth &&
+      textarea.style.height === cssHeight
     ) {
       return;
     }
@@ -63,12 +133,13 @@ function syncTerminalInputCaret(term: GhosttyTerminal): void {
     textarea.dataset.caretY = String(top);
     textarea.dataset.caretW = String(w);
     textarea.dataset.caretH = String(h);
+    textarea.dataset.caretCell = cellKey;
 
     textarea.style.position = "absolute";
-    textarea.style.left = `${left}px`;
-    textarea.style.top = `${top}px`;
-    textarea.style.width = `${w}px`;
-    textarea.style.height = `${h}px`;
+    textarea.style.left = cssLeft;
+    textarea.style.top = cssTop;
+    textarea.style.width = cssWidth;
+    textarea.style.height = cssHeight;
     textarea.style.margin = "0";
     textarea.style.padding = "0";
     textarea.style.border = "none";
@@ -77,6 +148,10 @@ function syncTerminalInputCaret(term: GhosttyTerminal): void {
     textarea.style.overflow = "hidden";
     textarea.style.whiteSpace = "nowrap";
     textarea.style.opacity = "0";
+    // The canvas owns the visible cursor. Keep the native textarea caret
+    // invisible while retaining its geometry as the IME anchor.
+    textarea.style.caretColor = "transparent";
+    textarea.style.color = "transparent";
     // clipPath:inset(50%) zeros the caret box and parks IME at the host origin.
     textarea.style.clipPath = "none";
     textarea.style.zIndex = "1";
@@ -92,6 +167,10 @@ function focusTerminalInput(term: GhosttyTerminal): void {
   try {
     const textarea = term.textarea;
     if (textarea) {
+      // Composition text belongs to the PTY, not this helper textarea. Start
+      // each focus with its native selection at the anchor edge.
+      textarea.setSelectionRange(0, 0);
+      textarea.scrollLeft = 0;
       textarea.focus({ preventScroll: true });
       return;
     }
@@ -106,9 +185,9 @@ function focusTerminalInput(term: GhosttyTerminal): void {
 }
 
 /** Quiet window after the last output frame; TUI startup often paints in bursts. */
-const READY_SETTLE_MS = 360;
+const READY_SETTLE_MS = 160;
 /** A resumed process still needs to redraw after its resize before it is revealed. */
-const READY_SETTLE_RESUMED_MS = 280;
+const READY_SETTLE_RESUMED_MS = 80;
 /** Fallback for a quiet/empty session; output-driven readiness remains preferred. */
 const READY_MAX_MS = 2_400;
 const READY_MAX_RESUMED_MS = 1_500;
@@ -153,10 +232,9 @@ export function PiTuiTerminal(props: {
     let onDataDisp: { dispose(): void } | undefined;
     let onResizeDisp: { dispose(): void } | undefined;
     let onSelDisp: { dispose(): void } | undefined;
-    let onCursorDisp: { dispose(): void } | undefined;
-    let onRenderDisp: { dispose(): void } | undefined;
     let onHostFocus: (() => void) | undefined;
     let fitId = 0;
+    let caretFrameId = 0;
     let settleTimer: number | null = null;
     let maxTimer: number | null = null;
     let readyFired = false;
@@ -214,8 +292,12 @@ export function PiTuiTerminal(props: {
         window.clearTimeout(maxTimer);
         maxTimer = null;
       }
+      if (term) {
+        normalizeInitialPromptCursor(term);
+        syncTerminalInputCaret(term);
+      }
       setSurfaceReady(true);
-      // Double rAF: composite themed canvas before parent lifts the logo mask.
+      // Double rAF: composite the themed canvas before reporting readiness.
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           if (cancelled) return;
@@ -240,8 +322,7 @@ export function PiTuiTerminal(props: {
     void (async () => {
       let ghostty: GhosttyModule;
       try {
-        ghostty = await import("ghostty-web");
-        await ghostty.init();
+        ghostty = await loadGhostty();
       } catch (err) {
         if (!cancelled) {
           console.error("[pi-tui] ghostty-web WASM init failed", err);
@@ -273,12 +354,13 @@ export function PiTuiTerminal(props: {
       } catch {
         // ignore
       }
-
       term = next;
       fit = nextFit;
 
       function writeTerminalOutput(data: string) {
-        next.write(data, () => {
+        // Pi's TUI positions the hardware cursor after each render. Keep that
+        // cursor visible and remove only the duplicate reverse-video styling.
+        next.write(stripPiEditorCursorStyle(data), () => {
           if (cancelled) return;
           // The callback is scheduled after Ghostty's next render frame, so the
           // settle window starts only after this output is actually paintable.
@@ -299,7 +381,7 @@ export function PiTuiTerminal(props: {
         // Ignore queued bytes belonging to a PTY that was disposed during a hop.
         if (event.sessionFile && normSession(event.sessionFile) !== expectedKey) return;
         // Keep target bytes that race the open acknowledgement; dropping them
-        // can reveal a blank or partially drawn session after the mask lifts.
+        // can reveal a blank or partially drawn session after the transition.
         if (acceptSessionKey !== expectedKey) {
           pendingData.push(event.data);
           return;
@@ -328,14 +410,14 @@ export function PiTuiTerminal(props: {
           // ignore
         }
       });
-      onCursorDisp = next.onCursorMove(() => {
-        if (!cancelled) syncTerminalInputCaret(next);
-      });
-      onRenderDisp = next.onRender(() => {
-        if (!cancelled) syncTerminalInputCaret(next);
-      });
-      // Initial pin before the first paint (prompt may already be at bottom).
-      syncTerminalInputCaret(next);
+      // ghostty-web 0.4 does not emit onRender from its frame loop and only
+      // reports vertical cursor moves. Track both axes after each VT render.
+      const trackInputCaret = () => {
+        if (cancelled) return;
+        syncTerminalInputCaret(next);
+        caretFrameId = window.requestAnimationFrame(trackInputCaret);
+      };
+      trackInputCaret();
       // ghostty focuses the contenteditable host; keep the IME caret on the VT cell.
       onHostFocus = () => {
         if (cancelled) return;
@@ -436,8 +518,7 @@ export function PiTuiTerminal(props: {
       onDataDisp?.dispose();
       onResizeDisp?.dispose();
       onSelDisp?.dispose();
-      onCursorDisp?.dispose();
-      onRenderDisp?.dispose();
+      window.cancelAnimationFrame(caretFrameId);
       if (onHostFocus) host.removeEventListener("focusin", onHostFocus);
       try {
         fit?.dispose();

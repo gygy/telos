@@ -1324,7 +1324,15 @@ export interface PixDesktopApi {
     suspend(): Promise<{ sessionFile?: string }>;
     /** Kill PTY; returns the sessionFile that was bound (for history re-projection). */
     dispose(): Promise<{ sessionFile?: string }>;
-    status(): Promise<{ open: boolean; suspended?: boolean; sessionFile?: string }>;
+    status(): Promise<{
+      open: boolean;
+      suspended?: boolean;
+      sessionFile?: string;
+      /** Warm background TUI processes, oldest first. */
+      parkedSessionFiles: string[];
+      /** Live/suspended foreground plus parked processes. */
+      sessionCount: number;
+    }>;
     /** Stream bytes tagged with the owning session to reject queued stale output. */
     onData(listener: (event: TerminalDataEvent) => void): () => void;
     /** Exit events are tagged for the same stale-event protection. */

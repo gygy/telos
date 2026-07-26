@@ -77,6 +77,10 @@ export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<
   env.Path = pathValue;
   env.TERM = env.TERM || "xterm-256color";
   env.COLORTERM = env.COLORTERM || "truecolor";
+  // The embedded renderer uses Ghostty's hardware cursor as the single
+  // visible input caret. Pi's reverse-video editor caret is stripped before
+  // the bytes reach the canvas.
+  env.PI_HARDWARE_CURSOR = "1";
 
   return env;
 }

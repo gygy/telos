@@ -14,6 +14,7 @@ describe("pi-tui-env", () => {
     expect(String(agentDir).replace(/\\/g, "/")).toMatch(/\.pi\/agent$/);
     const path = env.Path || env.PATH || "";
     expect(path.toLowerCase().replace(/\\/g, "/")).toContain(".pi/agent/bin");
+    expect(env.PI_HARDWARE_CURSOR).toBe("1");
   });
 
   it("respects an existing PI_CODING_AGENT_DIR", () => {

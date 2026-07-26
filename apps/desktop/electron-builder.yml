@@ -3,6 +3,10 @@ productName: Pix
 # package.json name is @pix/desktop — override so AppImage/deb paths stay valid.
 executableName: Pix
 asar: true
+# Native dependencies ship N-API/prebuilt binaries and are exercised under the
+# target Electron runtime. Rebuilding node-pty discards those prebuilds and adds
+# a Visual Studio Spectre-library requirement to packaging.
+npmRebuild: false
 files:
   - dist/**
   - package.json

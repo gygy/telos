@@ -53,6 +53,7 @@ import {
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
+  appendFileSync,
   readFileSync,
   writeFileSync,
   existsSync,
@@ -1849,6 +1850,10 @@ class HostSupervisor {
       process.env.PIX_WORKSPACE ?? durableWorkspacePath(prefs.lastWorkspace) ?? undefined;
   }
 
+  activeSessionFile(): string | undefined {
+    return this.#snapshot?.sessionFile?.trim() || undefined;
+  }
+
   #isForegroundBusy(): boolean {
     return pendingHasPrompt(this.#pending);
   }
@@ -3640,6 +3645,15 @@ class HostSupervisor {
 let mainWindow: BrowserWindow | undefined;
 let supervisor: HostSupervisor | undefined;
 
+function emitSmokeReport(report: { type: string; [key: string]: unknown }): void {
+  const line = JSON.stringify(report);
+  console.log(line);
+  const reportPath = process.env.PIX_SMOKE_REPORT_PATH?.trim();
+  if (!reportPath) return;
+  mkdirSync(dirname(reportPath), { recursive: true });
+  appendFileSync(reportPath, `${line}\n`, "utf8");
+}
+
 async function waitForEventCount(
   hostSupervisor: HostSupervisor,
   eventType: string,
@@ -3716,7 +3730,97 @@ async function runCrashRecoveryProbe(
   ) {
     throw new Error("Crash recovery invariants failed");
   }
-  console.log(JSON.stringify(report));
+  emitSmokeReport(report);
+}
+
+async function runTerminalSmokeProbe(snapshot: {
+  sessionFile: string | undefined;
+  cwd: string | undefined;
+}): Promise<void> {
+  const sessionFile = snapshot.sessionFile?.trim();
+  const cwd = snapshot.cwd?.trim();
+  if (!sessionFile || !cwd) {
+    throw new Error("Terminal smoke requires an active sessionFile and cwd");
+  }
+
+  const plan = planPiTuiLaunch({ sessionFile, cwd, cols: 80, rows: 24 });
+  const controller = await getPiTuiController();
+  const acquired = piTuiGuard.tryAcquire(plan.sessionKey);
+  if (!acquired.ok) throw new Error(acquired.reason);
+
+  let outputBytes = 0;
+  let resolveOutput!: () => void;
+  let rejectOutput!: (error: Error) => void;
+  let outputSettled = false;
+  const firstOutput = new Promise<void>((resolve, reject) => {
+    resolveOutput = resolve;
+    rejectOutput = reject;
+  });
+  let openedSessionFile: string | undefined;
+  let open = false;
+  let disposed = false;
+
+  try {
+    const opened = await controller.open(plan, {
+      onData: (data) => {
+        outputBytes += Buffer.byteLength(data, "utf8");
+        if (!outputSettled && outputBytes > 0) {
+          outputSettled = true;
+          resolveOutput();
+        }
+      },
+      onExit: (event) => {
+        if (!outputSettled) {
+          outputSettled = true;
+          rejectOutput(new Error(`Terminal smoke PTY exited before output (${event.exitCode})`));
+        }
+      },
+    });
+    openedSessionFile = opened.sessionFile;
+    controller.resize(100, 30);
+    controller.write("\u001b");
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        firstOutput,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("Timed out waiting for packaged pi TUI output")),
+            20_000,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+
+    const status = controller.status();
+    open = controller.isOpen();
+    if (!open || status.live?.sessionFile !== sessionFile || openedSessionFile !== sessionFile) {
+      throw new Error("Terminal smoke session identity invariant failed");
+    }
+  } finally {
+    disposed = controller.disposeSession(sessionFile);
+    piTuiGuard.release(plan.sessionKey);
+  }
+
+  const report = {
+    type: "pix.smoke.terminal",
+    platform: process.platform,
+    conpty: process.platform === "win32",
+    sessionFile,
+    sessionFileMatches: openedSessionFile === sessionFile,
+    outputBytes,
+    resized: true,
+    wroteInput: true,
+    open,
+    disposed,
+  };
+  if (!report.sessionFileMatches || report.outputBytes <= 0 || !report.open || !report.disposed) {
+    throw new Error("Terminal smoke invariants failed");
+  }
+  emitSmokeReport(report);
 }
 
 /** App package root (apps/desktop) whether running from src or dist/main. */
@@ -4215,7 +4319,11 @@ void app
         supervisor?.start(options),
     );
     ipcMain.handle("pix:host:snapshot", () => supervisor?.snapshot());
-    ipcMain.handle("pix:host:stop", () => supervisor?.stop());
+    ipcMain.handle("pix:host:stop", () => {
+      piTuiController?.disposeAll();
+      piTuiGuard.release();
+      return supervisor?.stop();
+    });
     ipcMain.handle("pix:workspace:get-cwd", () => supervisor?.getWorkspaceCwd());
     ipcMain.handle("pix:workspace:list-recent", () => supervisor?.listRecentWorkspaces());
     ipcMain.handle(
@@ -4500,9 +4608,12 @@ void app
         streamingBehavior?: "steer" | "followUp",
         imagePaths?: string[],
       ) => {
-        // If a TUI was only suspended (chat UI showing), kill it before host prompts
-        // so we never dual-write the same session file.
-        if (piTuiController?.isAlive()) {
+        // A warm TUI for this session must stop before the Host writes the same JSONL.
+        // Other parked sessions remain isolated and can be promoted later.
+        const sessionFile = supervisor?.activeSessionFile();
+        if (sessionFile && piTuiController?.disposeSession(sessionFile)) {
+          piTuiGuard.release(sessionFile);
+        } else if (!sessionFile && piTuiController?.isAlive()) {
           piTuiController.dispose();
           piTuiGuard.release();
         }
@@ -4532,12 +4643,10 @@ void app
           ...(typeof options.rows === "number" ? { rows: options.rows } : {}),
         });
         const controller = await getPiTuiController();
-        // Session switch while a prior TUI is suspended/open: drop it before acquire so
-        // the renderer never paints the previous session's stream for a frame.
+        // Transfer interactive ownership before open() parks the previous session.
         const liveKey = controller.sessionKey();
         if (liveKey && liveKey !== plan.sessionKey) {
-          controller.dispose();
-          piTuiGuard.release();
+          piTuiGuard.release(liveKey);
         }
         const acquired = piTuiGuard.tryAcquire(plan.sessionKey);
         if (!acquired.ok) throw new Error(acquired.reason);
@@ -4595,12 +4704,17 @@ void app
       return sessionFile ? { sessionFile } : {};
     });
     ipcMain.handle("pix:terminal:status", async () => {
-      if (!piTuiController?.isAlive()) return { open: false };
-      const sessionFile = piTuiController.sessionFile() ?? undefined;
+      if (!piTuiController) {
+        return { open: false, parkedSessionFiles: [], sessionCount: 0 };
+      }
+      const status = piTuiController.status();
+      const sessionFile = status.live?.sessionFile;
       return {
         open: piTuiController.isOpen(),
         suspended: piTuiController.isSuspended(),
         ...(sessionFile ? { sessionFile } : {}),
+        parkedSessionFiles: status.parkedSessionFiles,
+        sessionCount: status.parkedSessionFiles.length + (status.live ? 1 : 0),
       };
     });
     ipcMain.handle("pix:agent:queue-clear", () => supervisor?.clearQueue());
@@ -4702,15 +4816,15 @@ void app
       openSystemNotificationSettings();
     });
 
+    let autoStartSnapshot: HostSnapshot | undefined;
     if (process.env.PIX_AUTO_START === "1") {
       const snapshot = await supervisor?.start();
-      console.log(
-        JSON.stringify({
-          type: "pix.smoke.ready",
-          runtimeId: snapshot?.runtimeId,
-          resourceCounts: snapshot?.resources,
-        }),
-      );
+      autoStartSnapshot = snapshot;
+      emitSmokeReport({
+        type: "pix.smoke.ready",
+        runtimeId: snapshot?.runtimeId,
+        resourceCounts: snapshot?.resources,
+      });
 
       if (process.env.PIX_PHOTON_PROBE_IMAGE && supervisor) {
         const result = await supervisor.photonProbe(process.env.PIX_PHOTON_PROBE_IMAGE);
@@ -4725,7 +4839,7 @@ void app
         ) {
           throw new Error("Photon probe invariants failed");
         }
-        console.log(JSON.stringify({ type: "pix.smoke.photon", ...result }));
+        emitSmokeReport({ type: "pix.smoke.photon", ...result });
       }
 
       if (process.env.PIX_AUTO_PROMPT && supervisor) {
@@ -4739,13 +4853,11 @@ void app
           completed = await abortPrompt;
         }
 
-        console.log(
-          JSON.stringify({
-            type: "pix.smoke.runtime",
-            sequence: completed.sequence,
-            eventCounts: supervisor.eventCounts(),
-          }),
-        );
+        emitSmokeReport({
+          type: "pix.smoke.runtime",
+          sequence: completed.sequence,
+          eventCounts: supervisor.eventCounts(),
+        });
 
         if (process.env.PIX_AUTO_CRASH_PROBE === "1")
           await runCrashRecoveryProbe(supervisor, completed);
@@ -4775,6 +4887,13 @@ void app
       }
     }
 
+    if (process.env.PIX_AUTO_TERMINAL_PROBE === "1") {
+      await runTerminalSmokeProbe({
+        sessionFile: autoStartSnapshot?.sessionFile ?? process.env.PIX_TERMINAL_PROBE_SESSION_FILE,
+        cwd: autoStartSnapshot?.cwd ?? process.env.PIX_WORKSPACE,
+      });
+    }
+
     const autoCloseMs = Number.parseInt(process.env.PIX_AUTO_CLOSE_MS ?? "", 10);
     if (Number.isFinite(autoCloseMs) && autoCloseMs > 0) setTimeout(() => app.quit(), autoCloseMs);
   })
@@ -4784,6 +4903,8 @@ void app
   });
 
 app.on("before-quit", (event) => {
+  piTuiController?.disposeAll();
+  piTuiGuard.release();
   if (!supervisor) return;
   event.preventDefault();
   const activeSupervisor = supervisor;

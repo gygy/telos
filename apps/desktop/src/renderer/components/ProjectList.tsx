@@ -585,6 +585,7 @@ export function ProjectList(props: ProjectListProps) {
             )}
             data-active={thread.active ? "true" : "false"}
             data-kind={kind}
+            data-session-path={thread.path}
             data-fork={isFork ? "true" : "false"}
             data-state={runMarker?.state ?? "idle"}
             data-testid={

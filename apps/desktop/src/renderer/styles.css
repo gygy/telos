@@ -1834,66 +1834,6 @@ html[data-custom-window-controls="true"] .page-header {
   color: var(--muted-foreground);
 }
 
-/*
- * Chat ⇄ terminal transition cover — hides the outgoing surface until the next
- * one is ready (prevents previous-session TUI flash).
- */
-/*
- * Chat ⇄ terminal cover — full opaque gate (logo + status), same language as bootstrap.
- * Must fully hide incomplete / wrong-session TUI paints underneath.
- */
-.surface-transition-mask {
-  position: absolute;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: var(--background);
-  color: var(--foreground);
-  opacity: 1;
-  pointer-events: auto;
-  user-select: none;
-  isolation: isolate;
-}
-.surface-transition-mask-terminal,
-.surface-transition-mask[data-for="terminal"] {
-  background: #191919;
-  color: #e8e8e8;
-}
-.surface-transition-inner {
-  display: flex;
-  max-width: min(28rem, 100%);
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: center;
-}
-.surface-transition-logo-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.25rem;
-  filter: drop-shadow(0 10px 28px color-mix(in srgb, currentColor 12%, transparent));
-}
-.surface-transition-logo {
-  width: 3.5rem !important;
-  height: 3.5rem !important;
-  border-radius: 0.95rem;
-}
-.surface-transition-brand {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.surface-transition-status {
-  min-height: 1.35em;
-  max-width: 22rem;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  opacity: 0.72;
-}
 /* Canvas stays invisible until PiTuiTerminal marks ready (second line of defense). */
 .pi-tui-terminal[data-surface-ready="false"] .pi-tui-terminal-host {
   visibility: hidden;

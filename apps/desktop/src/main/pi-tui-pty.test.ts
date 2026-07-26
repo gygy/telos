@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { planPiTuiLaunch } from "./pi-tui-session.ts";
-import { PiTuiPtyController, type PtyHandle, type PtySpawnFn } from "./pi-tui-pty.ts";
+import {
+  MAX_PARKED_PTYS,
+  PiTuiPtyController,
+  type PtyHandle,
+  type PtySpawnFn,
+} from "./pi-tui-pty.ts";
 
 type SpawnRecord = {
   file: string;
@@ -103,6 +108,10 @@ describe("PiTuiPtyController", () => {
     // A parked (not killed), B spawned
     expect(tracker.spawns).toHaveLength(2);
     expect(tracker.kills).toBe(0);
+    expect(controller.status()).toEqual({
+      live: { sessionFile: "/work/b.jsonl", suspended: false },
+      parkedSessionFiles: ["/work/a.jsonl"],
+    });
 
     handles[0]?.emitData("from-parked-A");
     handles[1]?.emitData("from-live-B");
@@ -118,6 +127,39 @@ describe("PiTuiPtyController", () => {
     expect(tracker.spawns).toHaveLength(2);
     handles[0]?.emitData("from-promoted-A");
     expect(received).toContain("A2:from-promoted-A");
+  });
+
+  it("disposes one parked session without disturbing the live session", async () => {
+    const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
+    const controller = new PiTuiPtyController(fakeSpawn(tracker), async () => "pi");
+    const planA = planPiTuiLaunch({ sessionFile: "/a.jsonl", cwd: "/cwd" });
+    const planB = planPiTuiLaunch({ sessionFile: "/b.jsonl", cwd: "/cwd" });
+
+    await controller.open(planA, { onData: () => undefined, onExit: () => undefined });
+    await controller.open(planB, { onData: () => undefined, onExit: () => undefined });
+
+    expect(controller.disposeSession("/a.jsonl")).toBe(true);
+    expect(controller.sessionFile()).toBe("/b.jsonl");
+    expect(controller.isOpen()).toBe(true);
+    expect(controller.status().parkedSessionFiles).toEqual([]);
+    expect(tracker.kills).toBe(1);
+  });
+
+  it("bounds the warm session park and evicts the oldest process", async () => {
+    const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
+    const controller = new PiTuiPtyController(fakeSpawn(tracker), async () => "pi");
+
+    for (let i = 0; i < MAX_PARKED_PTYS + 2; i += 1) {
+      await controller.open(planPiTuiLaunch({ sessionFile: `/s-${i}.jsonl`, cwd: "/cwd" }), {
+        onData: () => undefined,
+        onExit: () => undefined,
+      });
+    }
+
+    expect(controller.status().parkedSessionFiles).toHaveLength(MAX_PARKED_PTYS);
+    expect(controller.status().parkedSessionFiles).not.toContain("/s-0.jsonl");
+    expect(controller.sessionFile()).toBe(`/s-${MAX_PARKED_PTYS + 1}.jsonl`);
+    expect(tracker.kills).toBe(1);
   });
 
   it("write requires an active (non-suspended) PTY", async () => {

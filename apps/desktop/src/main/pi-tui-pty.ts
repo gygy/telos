@@ -9,7 +9,7 @@
  * - Data is bound to the live handle + generation (stale processes never feed the UI).
  * - open() for a different session parks the current one instead of always killing.
  */
-import type { PiTuiLaunchPlan } from "./pi-tui-session.ts";
+import { normalizeSessionKey, type PiTuiLaunchPlan } from "./pi-tui-session.ts";
 import { buildPiTuiEnv } from "./pi-tui-env.ts";
 
 export type PtyExitEvent = { exitCode: number; signal?: number };
@@ -62,8 +62,16 @@ type ParkedPty = {
   parkedAt: number;
 };
 
-/** Max warm pi processes kept for instant terminal session hops. */
-const MAX_PARKED = 4;
+/** Max background pi processes kept for instant terminal session hops. */
+export const MAX_PARKED_PTYS = 4;
+
+export type PiTuiPtyStatus = {
+  live?: {
+    sessionFile: string;
+    suspended: boolean;
+  };
+  parkedSessionFiles: string[];
+};
 
 /**
  * Manages one live pi TUI PTY plus a small park of warm sessions.
@@ -105,6 +113,20 @@ export class PiTuiPtyController {
 
   generation(): number {
     return this.#generation;
+  }
+
+  status(): PiTuiPtyStatus {
+    return {
+      ...(this.#live
+        ? {
+            live: {
+              sessionFile: this.#live.sessionFile,
+              suspended: this.#suspended,
+            },
+          }
+        : {}),
+      parkedSessionFiles: [...this.#parked.values()].map((entry) => entry.sessionFile),
+    };
   }
 
   async open(plan: PiTuiLaunchPlan, callbacks: PiTuiPtyCallbacks): Promise<PiTuiPtyOpenResult> {
@@ -254,7 +276,7 @@ export class PiTuiPtyController {
   }
 
   #trimPark(): void {
-    while (this.#parked.size > MAX_PARKED) {
+    while (this.#parked.size > MAX_PARKED_PTYS) {
       let oldestKey: string | null = null;
       let oldestAt = Number.POSITIVE_INFINITY;
       for (const [key, entry] of this.#parked) {
@@ -309,6 +331,25 @@ export class PiTuiPtyController {
       }
     }
     return { sessionFile: file };
+  }
+
+  /** Kill the PTY bound to one session, whether it is live, suspended, or parked. */
+  disposeSession(sessionFile: string): boolean {
+    const key = normalizeSessionKey(sessionFile);
+    if (!key) return false;
+    if (this.#live?.sessionKey === key) {
+      this.dispose();
+      return true;
+    }
+    const parked = this.#parked.get(key);
+    if (!parked) return false;
+    this.#parked.delete(key);
+    try {
+      parked.pty.kill();
+    } catch {
+      // ignore
+    }
+    return true;
   }
 
   /** Kill live + all parked processes (app quit / hard reset). */
