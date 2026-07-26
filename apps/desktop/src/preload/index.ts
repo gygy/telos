@@ -97,8 +97,11 @@ const api: PixDesktopApi = {
     createGitBranch: (branch, options) =>
       ipcRenderer.invoke("pix:workspace:create-git-branch", branch, options),
     listGitWorktrees: (cwd) => ipcRenderer.invoke("pix:workspace:list-git-worktrees", cwd),
+    listManagedWorktrees: () => ipcRenderer.invoke("pix:workspace:list-managed-worktrees"),
     createGitWorktree: (options) =>
       ipcRenderer.invoke("pix:workspace:create-git-worktree", options),
+    removeGitWorktree: (worktreePath, cwd) =>
+      ipcRenderer.invoke("pix:workspace:remove-git-worktree", worktreePath, cwd),
     getWorktreePrefs: (cwd) => ipcRenderer.invoke("pix:workspace:get-worktree-prefs", cwd),
     setWorktreePrefs: (patch) => ipcRenderer.invoke("pix:workspace:set-worktree-prefs", patch),
     getGitPrefs: () => ipcRenderer.invoke("pix:workspace:get-git-prefs"),

@@ -395,9 +395,125 @@ async function listGitWorktrees(cwd: string): Promise<GitWorktreeInfo[]> {
   return items;
 }
 
+/** True when dir is a linked git worktree (`.git` is a `gitdir:` file). */
+function isLinkedWorktreeDirectory(dir: string): boolean {
+  try {
+    const gitEntry = join(dir, ".git");
+    if (!existsSync(gitEntry)) return false;
+    if (!lstatSync(gitEntry).isFile()) return false;
+    const raw = readFileSync(gitEntry, "utf8");
+    return /^gitdir:\s*/m.test(raw);
+  } catch {
+    return false;
+  }
+}
+
+function pixWorktreesBaseDir(): string {
+  return join(app.getPath("documents"), "Pix", "worktrees");
+}
+
+/**
+ * All linked worktrees Pix manages: under the configured root and/or
+ * Documents/Pix/worktrees[/<repo>]/… — not limited to the currently open project.
+ */
+async function listAllManagedWorktrees(): Promise<GitWorktreeInfo[]> {
+  const prefs = loadDesktopPrefs();
+  const scanRoots: string[] = [];
+  const configured = prefs.worktreeRoot?.trim();
+  if (configured) scanRoots.push(configured);
+  const defaultBase = pixWorktreesBaseDir();
+  if (!configured || normalizeRecentPathKey(configured) !== normalizeRecentPathKey(defaultBase)) {
+    scanRoots.push(defaultBase);
+  }
+
+  const byKey = new Map<string, GitWorktreeInfo>();
+  const addDir = (dir: string) => {
+    if (!isLinkedWorktreeDirectory(dir)) return;
+    const key = normalizeRecentPathKey(dir);
+    if (byKey.has(key)) return;
+    const ctx = readGitContext(dir);
+    byKey.set(key, {
+      path: dir,
+      main: false,
+      ...(ctx.branch ? { branch: ctx.branch } : {}),
+    });
+  };
+
+  const scanOneLevel = (root: string) => {
+    if (!existsSync(root)) return;
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      const child = join(root, name);
+      try {
+        if (!lstatSync(child).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      // Direct child is a worktree, or a per-repo folder containing worktrees.
+      if (isLinkedWorktreeDirectory(child)) {
+        addDir(child);
+        continue;
+      }
+      let nested: string[] = [];
+      try {
+        nested = readdirSync(child);
+      } catch {
+        continue;
+      }
+      for (const n of nested) {
+        const deep = join(child, n);
+        try {
+          if (lstatSync(deep).isDirectory()) addDir(deep);
+        } catch {
+          // skip
+        }
+      }
+    }
+  };
+
+  for (const root of scanRoots) scanOneLevel(root);
+
+  // Also harvest from every known project via `git worktree list`.
+  const cwdHints = [
+    ...prefs.recentWorkspaces,
+    ...(typeof prefs.lastWorkspace === "string" ? [prefs.lastWorkspace] : []),
+  ];
+  for (const cwd of cwdHints) {
+    if (!cwd?.trim() || isNonProjectWorkspacePath(cwd)) continue;
+    try {
+      const items = await listGitWorktrees(cwd);
+      for (const w of items) {
+        if (w.main || w.bare || !w.path) continue;
+        const key = normalizeRecentPathKey(w.path);
+        if (byKey.has(key)) continue;
+        // Prefer managed roots; still include linked worktrees discovered via git.
+        if (isLinkedWorktreeDirectory(w.path)) {
+          byKey.set(key, {
+            path: w.path,
+            main: false,
+            ...(w.branch ? { branch: w.branch } : {}),
+          });
+        }
+      }
+    } catch {
+      // skip dead cwd
+    }
+  }
+
+  return [...byKey.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function repoFolderName(repoCwd: string): string {
+  return basename(repoCwd.replace(/\\/g, "/").replace(/\/+$/, "")) || "repo";
+}
+
 function defaultWorktreeRootForRepo(repoCwd: string): string {
-  const repoName = basename(repoCwd.replace(/\\/g, "/").replace(/\/+$/, "")) || "repo";
-  return join(app.getPath("documents"), "Pix", "worktrees", repoName);
+  return join(app.getPath("documents"), "Pix", "worktrees", repoFolderName(repoCwd));
 }
 
 function resolveWorktreeRoot(repoCwd: string, configured?: string): string {
@@ -406,11 +522,38 @@ function resolveWorktreeRoot(repoCwd: string, configured?: string): string {
   return defaultWorktreeRootForRepo(repoCwd);
 }
 
+function sanitizeWorktreeFolderName(raw: string): string {
+  return raw.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
+}
+
+/**
+ * Auto name: `<main-project>-1`, `<main-project>-2`, …
+ * Uses the primary worktree folder name when cwd is already a linked worktree.
+ */
+function nextSequencedWorktreeName(repoCwd: string, root: string): string {
+  const ctx = readGitContext(repoCwd);
+  const mainRoot = ctx.mainWorktreePath?.trim() || repoCwd;
+  const base = sanitizeWorktreeFolderName(repoFolderName(mainRoot));
+  mkdirSync(root, { recursive: true });
+  let n = 1;
+  while (existsSync(join(root, `${base}-${n}`))) n += 1;
+  return `${base}-${n}`;
+}
+
 function uniqueWorktreePath(root: string, baseName: string): string {
   mkdirSync(root, { recursive: true });
-  const safe = baseName.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || localDateFolderName();
+  const safe = sanitizeWorktreeFolderName(baseName) || localDateFolderName();
+  // Already sequenced as name-N and free → use as-is.
   let path = join(root, safe);
   if (!existsSync(path)) return path;
+  // Collision: bump numeric suffix (foo → foo-2, foo-1 → foo-2, …).
+  const sequenced = /^(.*)-(\d+)$/.exec(safe);
+  if (sequenced) {
+    const stem = sequenced[1] || safe;
+    let n = Math.max(1, Number(sequenced[2]) || 1) + 1;
+    while (existsSync(join(root, `${stem}-${n}`))) n += 1;
+    return join(root, `${stem}-${n}`);
+  }
   let n = 2;
   while (existsSync(join(root, `${safe}-${n}`))) n += 1;
   return join(root, `${safe}-${n}`);
@@ -559,29 +702,74 @@ async function pruneManagedWorktrees(repoCwd: string): Promise<void> {
 
 async function createGitWorktree(
   cwd: string,
-  options: { path?: string; branch?: string; newBranch?: string },
+  options: { path?: string; branch?: string; newBranch?: string; name?: string },
 ): Promise<{ path: string; context: GitContextInfo }> {
   const prefs = loadDesktopPrefs();
+  const root = resolveWorktreeRoot(cwd, prefs.worktreeRoot);
   let target = options.path?.trim() ?? "";
+  // Folder + default branch stem: explicit name → newBranch → sequenced project-N.
+  const autoName = nextSequencedWorktreeName(cwd, root);
+  const folderStem = options.name?.trim() || options.newBranch?.trim() || autoName;
   if (!target) {
-    const root = resolveWorktreeRoot(cwd, prefs.worktreeRoot);
-    const base = options.newBranch?.trim() || options.branch?.trim() || localDateFolderName();
-    target = uniqueWorktreePath(root, base);
+    target = uniqueWorktreePath(root, folderStem);
   }
   if (!target) throw new Error("工作树路径不能为空");
   mkdirSync(dirname(target), { recursive: true });
   const args = ["worktree", "add"];
-  if (options.newBranch?.trim()) {
-    args.push("-b", applyBranchPrefix(options.newBranch), target);
-    if (options.branch?.trim()) args.push(options.branch.trim());
-  } else if (options.branch?.trim()) {
-    args.push(target, options.branch.trim());
-  } else {
-    args.push(target);
-  }
+  const startPoint = options.branch?.trim();
+  // Literal "HEAD" (or omit) = current tip of the source checkout — not the same as master/main.
+  const explicitStart = startPoint && startPoint.toUpperCase() !== "HEAD" ? startPoint : undefined;
+  // Always create a new branch for the worktree (folder stem / auto project-N).
+  const newBranchName = (options.newBranch?.trim() || options.name?.trim() || autoName).trim();
+  args.push("-b", applyBranchPrefix(newBranchName), target);
+  if (explicitStart) args.push(explicitStart);
   await runGit(cwd, args);
   await pruneManagedWorktrees(cwd);
+  // Surface in the sidebar project rail immediately (even before openPath).
+  rememberWorkspace(target);
   return { path: target, context: readGitContext(target) };
+}
+
+/** Remove a linked worktree. Never removes the primary worktree. */
+async function removeGitWorktree(
+  worktreePath: string,
+  cwdHint?: string,
+): Promise<{ removed: string }> {
+  const targetRaw = worktreePath.trim();
+  if (!targetRaw) throw new Error("工作树路径不能为空");
+  const targetKey = normalizeRecentPathKey(targetRaw);
+  if (!isLinkedWorktreeDirectory(targetRaw) && !existsSync(targetRaw)) {
+    throw new Error("未找到该工作树");
+  }
+  const ctx = readGitContext(targetRaw);
+  if (ctx.isMainWorktree !== false) {
+    // If .git is a directory, this is a primary checkout — refuse.
+    const gitEntry = join(targetRaw, ".git");
+    if (existsSync(gitEntry) && lstatSync(gitEntry).isDirectory()) {
+      throw new Error("不能删除主工作树");
+    }
+  }
+  // Run remove from the worktree itself or any repo path that shares the gitdir.
+  const gitCwd =
+    (cwdHint?.trim() && existsSync(cwdHint) ? cwdHint : undefined) ||
+    ctx.mainWorktreePath ||
+    targetRaw;
+  await runGit(gitCwd, ["worktree", "remove", "--force", targetRaw]);
+  // Drop from recent rail if present.
+  try {
+    const prefs = loadDesktopPrefs();
+    const recent = prefs.recentWorkspaces.filter(
+      (item) => normalizeRecentPathKey(item) !== targetKey,
+    );
+    const next: DesktopPrefs = { ...prefs, recentWorkspaces: recent };
+    if (prefs.lastWorkspace && normalizeRecentPathKey(prefs.lastWorkspace) === targetKey) {
+      delete next.lastWorkspace;
+    }
+    saveDesktopPrefs(next);
+  } catch {
+    // best-effort
+  }
+  return { removed: targetRaw };
 }
 
 async function gitStatus(cwd: string): Promise<GitStatusSummary> {
@@ -1546,11 +1734,17 @@ function loadDesktopPrefs(): DesktopPrefs {
     const rawRecent = Array.isArray(parsed.recentWorkspaces)
       ? parsed.recentWorkspaces.filter((item) => typeof item === "string")
       : [];
-    const recentWorkspaces = rawRecent
-      .map((item) => durableWorkspacePath(item))
-      .filter((item): item is string => Boolean(item))
-      .filter((item, index, all) => all.indexOf(item) === index)
-      .slice(0, 8);
+    const recentSeen = new Set<string>();
+    const recentWorkspaces: string[] = [];
+    for (const item of rawRecent) {
+      const durable = durableWorkspacePath(item);
+      if (!durable) continue;
+      const key = normalizeRecentPathKey(durable);
+      if (recentSeen.has(key)) continue;
+      recentSeen.add(key);
+      recentWorkspaces.push(durable);
+      if (recentWorkspaces.length >= 12) break;
+    }
     const lastWorkspace =
       durableWorkspacePath(
         typeof parsed.lastWorkspace === "string" ? parsed.lastWorkspace : undefined,
@@ -1575,19 +1769,28 @@ function loadDesktopPrefs(): DesktopPrefs {
   }
 }
 
+function normalizeRecentPathKey(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 function rememberWorkspace(cwd: string): void {
   const prefs = loadDesktopPrefs();
+  const key = normalizeRecentPathKey(cwd);
   // Keep lastWorkspace for resume; only grow "recent" with durable project paths.
-  const cleaned = prefs.recentWorkspaces.filter(
-    (item) => item !== cwd && !isNonProjectWorkspacePath(item),
-  );
+  // Compare with normalized keys so Windows slash/trailing variants do not fork entries
+  // or drop siblings when switching projects from the composer picker.
+  const cleaned = prefs.recentWorkspaces.filter((item) => {
+    if (typeof item !== "string" || !item.trim()) return false;
+    if (isNonProjectWorkspacePath(item)) return false;
+    return normalizeRecentPathKey(item) !== key;
+  });
   // Fixture / temp / auto date folders must not become the cold-start resume target
   // or pollute the sidebar 项目 list (e.g. Documents/Pix/2026-07-21).
   if (isNonProjectWorkspacePath(cwd)) {
     const last = durableWorkspacePath(prefs.lastWorkspace) ?? cleaned[0];
     const next: DesktopPrefs = {
       ...prefs,
-      recentWorkspaces: cleaned.slice(0, 8),
+      recentWorkspaces: cleaned.slice(0, 12),
     };
     if (last) next.lastWorkspace = last;
     else delete next.lastWorkspace;
@@ -1596,7 +1799,7 @@ function rememberWorkspace(cwd: string): void {
   }
   saveDesktopPrefs({
     ...prefs,
-    recentWorkspaces: [cwd, ...cleaned].slice(0, 8),
+    recentWorkspaces: [cwd, ...cleaned].slice(0, 12),
     lastWorkspace: cwd,
   });
 }
@@ -2064,19 +2267,29 @@ class HostSupervisor {
 
   removeRecentWorkspace(cwd: string): string[] {
     const prefs = loadDesktopPrefs();
-    const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
-    const samePath = (item: string) => item.replace(/\\/g, "/").replace(/\/+$/, "") === normalized;
-    const recent = prefs.recentWorkspaces.filter((item) => !samePath(item));
+    const normalized = normalizeRecentPathKey(cwd);
+    const samePath = (item: string) => normalizeRecentPathKey(item) === normalized;
+    // Case-insensitive on Windows so D:\a and d:\a both drop.
+    const samePathWin =
+      process.platform === "win32"
+        ? (item: string) => normalizeRecentPathKey(item).toLowerCase() === normalized.toLowerCase()
+        : samePath;
+    const match = process.platform === "win32" ? samePathWin : samePath;
+    const recent = prefs.recentWorkspaces.filter((item) => !match(item));
     const next: DesktopPrefs = {
       ...prefs,
       recentWorkspaces: recent,
     };
-    if (prefs.lastWorkspace && samePath(prefs.lastWorkspace)) {
+    if (prefs.lastWorkspace && match(prefs.lastWorkspace)) {
       delete next.lastWorkspace;
     }
     // If removing the live project, detach so it leaves the sidebar "current" slot.
-    const active = this.#workspaceCwd?.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (active === normalized) {
+    const active = this.#workspaceCwd ? normalizeRecentPathKey(this.#workspaceCwd) : "";
+    const activeMatch =
+      process.platform === "win32"
+        ? active.toLowerCase() === normalized.toLowerCase()
+        : active === normalized;
+    if (activeMatch) {
       void this.clearActiveWorkspace().catch(() => undefined);
     }
     saveDesktopPrefs(next);
@@ -2085,18 +2298,23 @@ class HostSupervisor {
 
   listRecentWorkspaces(): string[] {
     const prefs = loadDesktopPrefs();
-    // Only hide the *live* open project (active host cwd). Never hide lastWorkspace when
-    // the user starts a global blank session — otherwise the project vanishes from the
-    // sidebar (it used to only appear as "current", not in recent).
-    const active = this.#workspaceCwd?.replace(/\\/g, "/").replace(/\/+$/, "");
-    return prefs.recentWorkspaces
-      .filter((item) => {
-        if (typeof item !== "string" || isNonProjectWorkspacePath(item)) return false;
-        if (!active) return true;
-        const path = item.replace(/\\/g, "/").replace(/\/+$/, "");
-        return path !== active;
-      })
-      .slice(0, 12);
+    // Return the full durable recent list **including** the live project.
+    // The renderer rail already dedupes with workspacePath; excluding "current" here
+    // caused sibling projects to vanish when switching from the composer project menu
+    // (refresh replaced state with a list that dropped the previous current before it
+    // was re-merged).
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of prefs.recentWorkspaces) {
+      if (typeof item !== "string" || !item.trim()) continue;
+      if (isNonProjectWorkspacePath(item)) continue;
+      const key = normalizeRecentPathKey(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+      if (out.length >= 12) break;
+    }
+    return out;
   }
 
   start(options?: {
@@ -4362,14 +4580,27 @@ void app
       const path = resolveWorkspaceCwd(cwd, supervisor?.getWorkspaceCwd());
       return listGitWorktrees(path);
     });
+    ipcMain.handle("pix:workspace:list-managed-worktrees", async () => listAllManagedWorktrees());
     ipcMain.handle(
       "pix:workspace:create-git-worktree",
       async (
         _event,
-        options: { path?: string; branch?: string; newBranch?: string; cwd?: string },
+        options: {
+          path?: string;
+          branch?: string;
+          newBranch?: string;
+          name?: string;
+          cwd?: string;
+        },
       ) => {
         const path = resolveWorkspaceCwd(options?.cwd, supervisor?.getWorkspaceCwd());
         return createGitWorktree(path, options);
+      },
+    );
+    ipcMain.handle(
+      "pix:workspace:remove-git-worktree",
+      async (_event, worktreePath: string, cwd?: string) => {
+        return removeGitWorktree(worktreePath, cwd);
       },
     );
     ipcMain.handle("pix:workspace:get-worktree-prefs", (_event, cwd?: string) => {

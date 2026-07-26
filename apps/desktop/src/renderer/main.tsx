@@ -87,12 +87,14 @@ import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
 import { matchShortcut, SHORTCUT_OVERRIDES_CHANGED_EVENT } from "./lib/shortcuts.ts";
 import { loadContentModeForSession } from "./lib/content-mode-prefs.ts";
 import { loadTerminalPrefs, resolveTerminalTheme } from "./lib/terminal-prefs.ts";
+import { loadPinnedProjects, savePinnedProjects } from "./lib/project-prefs.ts";
 import {
   filterRecentWorkspaces,
   firstLine,
   isNonProjectWorkspacePath,
   mergeRecentWithOpenProject,
   prependRecentPath,
+  unionRecentWorkspaces,
   workspaceLabel,
 } from "./lib/workspace.ts";
 import { appendHostEvent } from "./lib/host-events.ts";
@@ -1716,11 +1718,14 @@ function App() {
       const listed = await window.pix.workspace.listRecent();
       // Read from ref so callers that just cleared selection don't exclude the old project.
       const selected = asProjectPath(selectedWorkspacePathRef.current);
-      // Keep the open project inside `recent` as well (partitionProjects dedupes with
-      // workspacePath). Otherwise project→对话 switch clears selection while recent
-      // still excludes "current", and project sessions flash under 对话 for a frame.
-      const filtered = filterRecentWorkspaces(listed, { max: 12 });
-      setRecentWorkspaces(mergeRecentWithOpenProject(filtered, selected, 12));
+      // Union with in-memory rail: never let a prefs refresh drop siblings that were
+      // visible (composer project switch used to replace state with a short list).
+      setRecentWorkspaces((prev) =>
+        unionRecentWorkspaces(filterRecentWorkspaces(listed, { max: 12 }), prev, {
+          ...(selected ? { selected } : {}),
+          max: 12,
+        }),
+      );
     } catch {
       // Keep the previous list — never wipe the rail on a transient listRecent failure.
     }
@@ -1735,7 +1740,20 @@ function App() {
     setSentPrompts([]);
     useShellStore.getState().setHistory([]);
     useShellStore.getState().clearLiveStream();
+    // Promote the project we are leaving into recent *before* clearing selection,
+    // same rationale as newBlankTask — otherwise it only lived as workspacePath and
+    // vanishes from 项目 when the composer picker switches away.
+    const previous = asProjectPath(selectedWorkspacePathRef.current);
+    if (previous && normalizeCwdKey(previous) !== normalizeCwdKey(cwd)) {
+      setRecentWorkspaces((prev) => prependRecentPath(prev, previous, 12));
+    }
     selectWorkspacePath(cwd);
+    // Optimistic rail update so the target appears immediately (worktree / project).
+    if (!isNonProjectWorkspacePath(cwd)) {
+      setRecentWorkspaces((prev) =>
+        mergeRecentWithOpenProject(prependRecentPath([...prev], cwd, 12), cwd, 12),
+      );
+    }
     const snap = await window.pix.workspace.openPath(cwd, {
       resumeRecent: options?.resumeRecent === true && !options?.sessionFile,
       ...(options?.sessionFile ? { sessionFile: options.sessionFile } : {}),
@@ -1994,13 +2012,33 @@ function App() {
   async function removeRecentWorkspace(path: string) {
     try {
       const pathKey = normalizeCwdKey(path);
-      const wasActive = Boolean(workspacePath) && normalizeCwdKey(workspacePath!) === pathKey;
-      const listed = await window.pix.workspace.removeRecent(path);
+      const selectedKey = selectedWorkspacePathRef.current
+        ? normalizeCwdKey(selectedWorkspacePathRef.current)
+        : "";
+      const snapCwd = useShellStore.getState().snapshot?.cwd;
+      const openCwd = asProjectPath(selectedWorkspacePathRef.current) ?? asProjectPath(snapCwd);
+      const wasActive =
+        (Boolean(openCwd) && normalizeCwdKey(openCwd!) === pathKey) ||
+        selectedKey === pathKey ||
+        (Boolean(snapCwd) && normalizeCwdKey(snapCwd!) === pathKey);
+
+      // Optimistic drop so the card vanishes before IPC returns (and survives
+      // refreshRecentWorkspaces union races that used to re-add from memory).
+      setRecentWorkspaces((prev) => prev.filter((p) => normalizeCwdKey(p) !== pathKey));
+      // Drop pin so 置顶 cannot keep a deleted worktree/project visible.
+      try {
+        const nextPinned = loadPinnedProjects().filter((p) => normalizeCwdKey(p) !== pathKey);
+        savePinnedProjects(nextPinned);
+        window.dispatchEvent(new Event("pix-project-rail-changed"));
+      } catch {
+        // ignore
+      }
+
       // Removing the open project must clear UI current workspace, otherwise
       // ProjectList keeps injecting workspacePath into allPaths and it never disappears.
       if (wasActive) {
-        await window.pix.workspace.clearActive().catch(() => undefined);
         selectWorkspacePath(undefined);
+        await window.pix.workspace.clearActive().catch(() => undefined);
         useShellStore.getState().setSnapshot(undefined);
         setRuntimeId(undefined);
         setLastSequence(0);
@@ -2008,11 +2046,13 @@ function App() {
         setEvents([]);
         setSentPrompts([]);
         useShellStore.getState().setHistory([]);
+        useShellStore.getState().clearLiveStream();
         setModelOptions([]);
       }
-      const cwd = useShellStore.getState().snapshot?.cwd;
+
+      const listed = await window.pix.workspace.removeRecent(path);
       setRecentWorkspaces(
-        filterRecentWorkspaces(listed, cwd ? { current: cwd, max: 12 } : { max: 12 }),
+        filterRecentWorkspaces(listed, { max: 12 }).filter((p) => normalizeCwdKey(p) !== pathKey),
       );
       // Drop cached sessions for the removed project.
       setThreadsByCwd((prev) => {
@@ -2026,6 +2066,19 @@ function App() {
       reportAppError(error, "Failed to remove project");
     }
   }
+
+  // Settings → worktree delete: drop from sidebar project list + clear if active.
+  const removeRecentWorkspaceRef = useRef(removeRecentWorkspace);
+  removeRecentWorkspaceRef.current = removeRecentWorkspace;
+  useEffect(() => {
+    const onWorktreeRemoved = (event: Event) => {
+      const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+      if (typeof path !== "string" || !path.trim()) return;
+      void removeRecentWorkspaceRef.current(path);
+    };
+    window.addEventListener("pix-worktree-removed", onWorktreeRemoved);
+    return () => window.removeEventListener("pix-worktree-removed", onWorktreeRemoved);
+  }, []);
 
   async function revealWorkspace(path: string) {
     try {

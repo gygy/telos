@@ -134,15 +134,17 @@ export function filterRecentWorkspaces(
   return out;
 }
 
-/** Put path first in a recent list, dedupe, cap length (desktop preference only). */
+/** Put path first in a recent list, dedupe (normalized keys), cap length. */
 export function prependRecentPath(paths: string[], path: string, max = 12): string[] {
   const normalized = path.trim();
   if (!normalized) return paths;
   if (isNonProjectWorkspacePath(normalized)) {
     // Scratch / fixture dirs must not grow the recent projects list.
-    return paths.filter((item) => item !== normalized).slice(0, max);
+    const dropKey = normalizeWorkspaceKey(normalized);
+    return paths.filter((item) => normalizeWorkspaceKey(item) !== dropKey).slice(0, max);
   }
-  return [normalized, ...paths.filter((item) => item !== normalized)].slice(0, max);
+  const key = normalizeWorkspaceKey(normalized);
+  return [normalized, ...paths.filter((item) => normalizeWorkspaceKey(item) !== key)].slice(0, max);
 }
 
 /**
@@ -159,4 +161,44 @@ export function mergeRecentWithOpenProject(
     return recent.slice(0, max);
   }
   return prependRecentPath([...recent], openProject, max);
+}
+
+/**
+ * Merge main-process recent with the open selection for the sidebar rail.
+ *
+ * - Prefer `listed` order from prefs (source of truth after remove/open).
+ * - Keep `selected` even if briefly missing from listed (switch race).
+ * - Do **not** resurrect paths that only exist in `previous` — that undoes
+ *   explicit「移除」and leaves projects stuck on the rail.
+ * - `exclude` drops paths that were just removed (normalized keys).
+ */
+export function unionRecentWorkspaces(
+  listed: readonly string[],
+  previous: readonly string[],
+  options?: { selected?: string; max?: number; exclude?: readonly string[] },
+): string[] {
+  const max = options?.max ?? 12;
+  const selected = options?.selected?.trim();
+  const excluded = new Set(
+    (options?.exclude ?? []).map((p) => normalizeWorkspaceKey(p)).filter(Boolean),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (raw: string | undefined) => {
+    if (!raw?.trim() || isNonProjectWorkspacePath(raw)) return;
+    const key = normalizeWorkspaceKey(raw);
+    if (!key || seen.has(key) || excluded.has(key)) return;
+    seen.add(key);
+    out.push(raw);
+  };
+  // Selected first so the open project stays stable on the rail.
+  if (selected) push(selected);
+  for (const p of listed) {
+    push(p);
+    if (out.length >= max) break;
+  }
+  // Only re-use previous for the *selected* project when listed lagged (already
+  // handled above). Do not walk the full previous list — that re-adds removals.
+  void previous;
+  return out;
 }

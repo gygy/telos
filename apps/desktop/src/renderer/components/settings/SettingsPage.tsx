@@ -8,6 +8,7 @@ import type {
   DesktopProxyChannel,
   DesktopProxyMode,
   DesktopProxyPrefs,
+  GitWorktreeInfo,
   HostSnapshot,
   ModelSummary,
   PiSettingsPatch,
@@ -32,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t, thinkingLevelLabel, type Locale, type MessageKey } from "../../lib/i18n.ts";
 import { groupModelsByProvider } from "../../lib/model-groups.ts";
@@ -1176,6 +1177,12 @@ function worktreeDraftEqual(a: WorktreeDraft, b: WorktreeDraft): boolean {
   );
 }
 
+function worktreeFolderName(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.at(-1) || path;
+}
+
 function WorktreeSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
@@ -1190,16 +1197,19 @@ function WorktreeSection(
     autoDelete: true,
     autoDeleteLimit: 10,
   });
-  const [wtDefaultRoot, setWtDefaultRoot] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [linkedWorktrees, setLinkedWorktrees] = useState<GitWorktreeInfo[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const dirty = !worktreeDraftEqual(prefs, saved);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // Prefs are global — do not pass cwd so the form does not rebind when the project changes.
     void window.pix.workspace
-      .getWorktreePrefs(props.snapshot?.cwd)
+      .getWorktreePrefs()
       .then((p) => {
         if (cancelled) return;
         const next: WorktreeDraft = {
@@ -1209,7 +1219,6 @@ function WorktreeSection(
         };
         setPrefs(next);
         setSaved(next);
-        setWtDefaultRoot(p.defaultRoot);
       })
       .catch(() => {
         /* host may be stopped */
@@ -1220,7 +1229,24 @@ function WorktreeSection(
     return () => {
       cancelled = true;
     };
-  }, [props.snapshot?.cwd]);
+  }, []);
+
+  const refreshLinkedWorktrees = useCallback(async () => {
+    setListLoading(true);
+    try {
+      // All Pix-managed linked worktrees across projects (not only the open cwd).
+      const items = await window.pix.workspace.listManagedWorktrees();
+      setLinkedWorktrees(items.filter((w) => !w.main && !w.bare));
+    } catch {
+      setLinkedWorktrees([]);
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshLinkedWorktrees();
+  }, [refreshLinkedWorktrees]);
 
   async function save() {
     if (busy || loading || !dirty) return;
@@ -1238,7 +1264,6 @@ function WorktreeSection(
       };
       setPrefs(next);
       setSaved(next);
-      if (p.defaultRoot) setWtDefaultRoot(p.defaultRoot);
       useShellStore.getState().setStatus(tr("worktree.saved"));
     } catch (error) {
       useShellStore
@@ -1255,7 +1280,29 @@ function WorktreeSection(
     void save();
   }
 
+  async function deleteWorktree(worktreePath: string) {
+    if (deletingPath) return;
+    setDeletingPath(worktreePath);
+    try {
+      await window.pix.workspace.removeGitWorktree(worktreePath);
+      await refreshLinkedWorktrees();
+      // Notify shell to drop the path from the project rail (recent / current).
+      window.dispatchEvent(
+        new CustomEvent("pix-worktree-removed", { detail: { path: worktreePath } }),
+      );
+    } catch (error) {
+      useShellStore
+        .getState()
+        .showAppError(error instanceof Error ? error.message : tr("worktree.listDeleteFailed"));
+    } finally {
+      setDeletingPath(null);
+    }
+  }
+
   const disabled = loading || busy;
+  const listEmpty = linkedWorktrees.length === 0;
+  // Empty: 「尚无工作树」; with items: 「已创建工作树」
+  const listLabel = listEmpty ? tr("worktree.listEmptyTitle") : tr("worktree.listTitle");
 
   return (
     <SettingsPageShell
@@ -1270,17 +1317,19 @@ function WorktreeSection(
         />
       }
     >
+      {/* Preferences first, then linked-worktree list below. */}
       <SettingsSectionBlock label={tr("worktree.settings")} testId="settings-worktree-options">
         <div className="settings-row settings-row-last !flex-col !items-stretch gap-3">
           <div>
             <div className="settings-row-title">{tr("worktree.root")}</div>
+            <div className="settings-row-desc mt-1">{tr("worktree.rootHint")}</div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <SettingsInput
                 data-testid="worktree-root-input"
                 mono
                 className="min-w-0 flex-1"
                 value={prefs.rootConfigured}
-                placeholder={wtDefaultRoot || tr("worktree.rootPlaceholder")}
+                placeholder={tr("worktree.rootPlaceholder")}
                 disabled={disabled}
                 onChange={(e) =>
                   setPrefs((current) => ({ ...current, rootConfigured: e.target.value }))
@@ -1343,6 +1392,82 @@ function WorktreeSection(
           </div>
         </div>
       </SettingsSectionBlock>
+
+      <section className="settings-section-block" data-testid="settings-worktree-list">
+        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+          <h2 className="settings-section-label m-0 min-w-0 flex-1 truncate">{listLabel}</h2>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--foreground)] disabled:opacity-50"
+            title={tr("worktree.listRefresh")}
+            aria-label={tr("worktree.listRefresh")}
+            data-testid="worktree-list-refresh"
+            disabled={listLoading}
+            onClick={() => void refreshLinkedWorktrees()}
+          >
+            <RotateCcw
+              className={cn("size-3.5", listLoading && "animate-spin")}
+              strokeWidth={1.75}
+            />
+          </button>
+        </div>
+        {listEmpty ? (
+          <p
+            className="m-0 px-0.5 text-[12px] leading-relaxed text-[var(--muted-foreground)]"
+            data-testid="worktree-list-empty"
+          >
+            {tr("worktree.listEmptyHint")}
+          </p>
+        ) : (
+          <div className="settings-card">
+            <ul className="m-0 list-none p-0" data-testid="worktree-list-items">
+              {linkedWorktrees.map((item, index) => {
+                const name = worktreeFolderName(item.path);
+                const last = index === linkedWorktrees.length - 1;
+                const deleting = deletingPath === item.path;
+                return (
+                  <li
+                    key={item.path}
+                    className={cn(
+                      "settings-row group/wt items-center gap-3",
+                      last && "settings-row-last",
+                    )}
+                    data-testid="worktree-list-item"
+                    data-path={item.path}
+                  >
+                    <div className="settings-row-copy min-w-0 flex-1">
+                      <div className="settings-row-title truncate">{name}</div>
+                      <div className="settings-row-desc truncate font-mono text-[11px]">
+                        {item.path}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+                        "text-[var(--muted-foreground)] transition-colors",
+                        "hover:bg-red-500/15 hover:text-red-400",
+                        "disabled:pointer-events-none disabled:opacity-50",
+                      )}
+                      title={tr("worktree.listDelete")}
+                      aria-label={tr("worktree.listDelete")}
+                      data-testid={`worktree-list-delete-${index}`}
+                      disabled={deleting || Boolean(deletingPath)}
+                      onClick={() => void deleteWorktree(item.path)}
+                    >
+                      {deleting ? (
+                        <LoaderCircle className="size-3.5 animate-spin" strokeWidth={1.75} />
+                      ) : (
+                        <Trash2 className="size-3.5" strokeWidth={1.75} />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </section>
     </SettingsPageShell>
   );
 }
@@ -1416,6 +1541,10 @@ function GitSection(
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const dirty = !gitDraftEqual(prefs, saved);
+  // Parent passes `onEnsureHost={() => ensureHost()}` — new identity every render.
+  // Keep a stable ref so this page never re-enters a load loop (status/snapshot flicker).
+  const ensureHostRef = useRef(props.onEnsureHost);
+  ensureHostRef.current = props.onEnsureHost;
 
   useEffect(() => {
     let cancelled = false;
@@ -1436,8 +1565,15 @@ function GitSection(
       });
     void (async () => {
       try {
-        await props.onEnsureHost();
-        const list = await window.pix.models.list();
+        let list: ModelSummary[] = [];
+        try {
+          list = await window.pix.models.list();
+        } catch {
+          // Host may be cold — start once, then list. Do not put ensureHost in deps.
+          await ensureHostRef.current();
+          if (cancelled) return;
+          list = await window.pix.models.list();
+        }
         if (!cancelled) setModels(list);
       } catch {
         if (!cancelled) setModels([]);
@@ -1446,7 +1582,9 @@ function GitSection(
     return () => {
       cancelled = true;
     };
-  }, [props.onEnsureHost]);
+    // Mount-only: re-running on every parent render caused infinite host.start + UI flash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function save() {
     if (busy || loading || !dirty) return;
@@ -1490,7 +1628,7 @@ function GitSection(
 
   const modelOptions = useMemo(() => {
     const opts = [
-      { value: "", label: tr("git.modelDefault") },
+      { value: "", label: t(props.locale, "git.modelDefault") },
       ...models.map((m) => ({
         value: `${m.provider}/${m.id}`,
         label: `${m.name || m.id} (${m.provider})`,
@@ -1501,7 +1639,7 @@ function GitSection(
       opts.push({ value: prefs.modelKey, label: prefs.modelKey });
     }
     return opts;
-  }, [models, prefs.modelKey, tr]);
+  }, [models, prefs.modelKey, props.locale]);
 
   const disabled = loading || busy;
 

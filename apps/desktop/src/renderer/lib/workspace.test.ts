@@ -9,6 +9,7 @@ import {
   mergeRecentWithOpenProject,
   prependRecentPath,
   projectThreadIdsFromCwdMap,
+  unionRecentWorkspaces,
   workspaceLabel,
 } from "./workspace.ts";
 
@@ -22,6 +23,33 @@ describe("workspace helpers", () => {
     expect(prependRecentPath(["/a", "/b"], "/c")).toEqual(["/c", "/a", "/b"]);
     expect(prependRecentPath(["/a", "/b"], "/b")).toEqual(["/b", "/a"]);
     expect(prependRecentPath(["/1", "/2", "/3"], "/4", 3)).toEqual(["/4", "/1", "/2"]);
+    // Normalized key dedupe (trailing slash).
+    expect(prependRecentPath(["/a/b", "/c"], "/a/b/")).toEqual(["/a/b/", "/c"]);
+  });
+
+  it("merges listed recent with selection without resurrecting removed paths", () => {
+    // Prefs list is source of truth — do not pull /Users/me/a back from previous.
+    expect(
+      unionRecentWorkspaces(["/Users/me/b", "/Users/me/c"], ["/Users/me/a", "/Users/me/c"], {
+        selected: "/Users/me/b",
+        max: 12,
+      }),
+    ).toEqual(["/Users/me/b", "/Users/me/c"]);
+    // Selected wins even when missing from listed briefly.
+    expect(
+      unionRecentWorkspaces(["/Users/me/c"], ["/Users/me/c"], {
+        selected: "/Users/me/b",
+        max: 12,
+      }),
+    ).toEqual(["/Users/me/b", "/Users/me/c"]);
+    // Explicit exclude (just-removed) stays out even if still in listed/previous.
+    expect(
+      unionRecentWorkspaces(["/Users/me/a", "/Users/me/b"], ["/Users/me/a"], {
+        selected: "/Users/me/b",
+        exclude: ["/Users/me/a"],
+        max: 12,
+      }),
+    ).toEqual(["/Users/me/b"]);
   });
 
   it("filters e2e/tmp workspaces and current cwd from recent list", () => {

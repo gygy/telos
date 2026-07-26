@@ -78,6 +78,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
+import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
 import { groupModelsByProvider } from "../lib/model-groups.ts";
 import {
@@ -597,6 +598,8 @@ export function Composer(props: ComposerProps) {
   const [gitBusy, setGitBusy] = useState(false);
   /** Hover tip for local-menu options (description bubble outside the menu). */
   const [localTip, setLocalTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  /** Create-worktree dialog (same as project ⋯ menu). */
+  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
   const showAppError = useShellStore((s) => s.showAppError);
   /** Which model-submenu flyout is open: thinking | speed */
   const [modelFlyout, setModelFlyout] = useState<"thinking" | "speed" | null>(null);
@@ -1163,24 +1166,11 @@ export function Composer(props: ComposerProps) {
     }
   }
 
-  async function handleNewWorktree() {
+  function handleNewWorktree() {
     if (!props.workspacePath || gitBusy) return;
-    setGitBusy(true);
-    try {
-      // Path comes from worktree prefs root + date/branch name (no project- prefix).
-      const stamp = new Date().toISOString().slice(0, 10);
-      const result = await window.pix.workspace.createGitWorktree({
-        cwd: props.workspacePath,
-        newBranch: stamp,
-      });
-      closeMenu();
-      props.onOpenProject(result.path);
-      void refreshGitContext(result.path);
-    } catch (error) {
-      showAppError(error instanceof Error ? error.message : tr("composer.local.failed"));
-    } finally {
-      setGitBusy(false);
-    }
+    closeMenu();
+    // Same dialog as project ⋯ → create worktree.
+    window.setTimeout(() => setWorktreeDialogOpen(true), 0);
   }
 
   const projectMenuOpen = menu === "project";
@@ -1827,11 +1817,11 @@ export function Composer(props: ComposerProps) {
               });
             }}
             onMouseLeave={() => setLocalTip(null)}
-            onClick={() => void handleNewWorktree()}
+            onClick={() => handleNewWorktree()}
           >
             <FolderGit2 className="size-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--foreground)]">
-              {gitBusy ? tr("composer.local.creating") : tr("composer.local.menuNewWorktree")}
+              {tr("composer.local.menuNewWorktree")}
             </span>
           </button>
         </div>
@@ -2067,6 +2057,19 @@ export function Composer(props: ComposerProps) {
           </FlyoutRow>
         </div>
       </FloatingMenu>
+
+      <CreateWorktreeDialog
+        open={worktreeDialogOpen && Boolean(props.workspacePath)}
+        locale={props.locale}
+        projectPath={props.workspacePath ?? ""}
+        onCancel={() => setWorktreeDialogOpen(false)}
+        onError={(message) => showAppError(message)}
+        onConfirm={({ path }) => {
+          setWorktreeDialogOpen(false);
+          props.onOpenProject(path);
+          void refreshGitContext(path);
+        }}
+      />
     </div>
   );
 }

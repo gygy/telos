@@ -479,7 +479,7 @@ function SettingsRail(props: {
     /*
      * Settings IA (product-facing):
      *  通用 — shell prefs (look & feel, confirmations, hotkeys)
-     *  工作区 — project / git surface
+     *  工作区 — Git → worktree → environment → terminal
      *  模型 — providers, catalog, agent, usage
      *  网络 — connectivity (proxy; lower priority, advanced)
      *  数据 — archives
@@ -500,12 +500,6 @@ function SettingsRail(props: {
           testId: "settings-nav-appearance",
           labelKey: "section.appearance",
           icon: <Palette className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-        {
-          section: "terminal",
-          testId: "settings-nav-terminal",
-          labelKey: "section.terminal",
-          icon: <Terminal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
           section: "behavior",
@@ -532,10 +526,10 @@ function SettingsRail(props: {
       labelKey: "settings.group.workspace",
       items: [
         {
-          section: "environment",
-          testId: "settings-nav-environment",
-          labelKey: "section.environment",
-          icon: <SlidersHorizontal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+          section: "git",
+          testId: "settings-nav-git",
+          labelKey: "section.git",
+          icon: <GitBranch className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
           section: "worktree",
@@ -544,10 +538,16 @@ function SettingsRail(props: {
           icon: <FolderGit2 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
         {
-          section: "git",
-          testId: "settings-nav-git",
-          labelKey: "section.git",
-          icon: <GitBranch className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+          section: "environment",
+          testId: "settings-nav-environment",
+          labelKey: "section.environment",
+          icon: <SlidersHorizontal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "terminal",
+          testId: "settings-nav-terminal",
+          labelKey: "section.terminal",
+          icon: <Terminal className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
       ],
     },

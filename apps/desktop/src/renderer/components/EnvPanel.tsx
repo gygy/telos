@@ -34,6 +34,7 @@ import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import { loadEnvPanelVisibility, type EnvPanelVisibility } from "../lib/env-panel-prefs.ts";
 import { cn } from "../lib/utils.ts";
 import { useShellStore } from "../store/shell-store.ts";
+import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { anchorFromEvent, FloatingMenu, type AnchorRect } from "./FloatingMenu.tsx";
 
 export const ENV_PANEL_WIDTH_PX = 300;
@@ -92,6 +93,7 @@ export function EnvPanel(props: {
   const layout = props.layout ?? "dock";
   const tr = (key: MessageKey, vars?: Record<string, string>) => t(props.locale, key, vars);
   const showAppError = useShellStore((s) => s.showAppError);
+  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
   const [visibility, setVisibility] = useState<EnvPanelVisibility>(loadEnvPanelVisibility);
   const [status, setStatus] = useState<GitStatusSummary | undefined>();
   const [gitContext, setGitContext] = useState<GitContextInfo>({
@@ -282,25 +284,12 @@ export function EnvPanel(props: {
         <ActionRow
           icon={<Folder className="size-3.5" strokeWidth={1.75} />}
           label={tr("composer.local.menuNewWorktree")}
-          disabled={busy}
+          disabled={busy || !props.cwd}
           onClick={() => {
-            void (async () => {
-              if (!props.cwd || busy) return;
-              setBusy(true);
-              try {
-                const stamp = new Date().toISOString().slice(0, 10);
-                const result = await window.pix.workspace.createGitWorktree({
-                  cwd: props.cwd,
-                  newBranch: stamp,
-                });
-                closeFlyout();
-                props.onOpenProject?.(result.path);
-              } catch (error) {
-                showAppError(error instanceof Error ? error.message : tr("composer.local.failed"));
-              } finally {
-                setBusy(false);
-              }
-            })();
+            if (!props.cwd) return;
+            closeFlyout();
+            // Same create dialog as project ⋯ / composer local menu.
+            window.setTimeout(() => setWorktreeDialogOpen(true), 0);
           }}
         />
         {props.cwd ? (
@@ -663,6 +652,18 @@ export function EnvPanel(props: {
           } else {
             await runGit(() => window.pix.workspace.gitCommit(msg, props.cwd));
           }
+        }}
+      />
+
+      <CreateWorktreeDialog
+        open={worktreeDialogOpen && Boolean(props.cwd)}
+        locale={props.locale}
+        projectPath={props.cwd ?? ""}
+        onCancel={() => setWorktreeDialogOpen(false)}
+        onError={(message) => showAppError(message)}
+        onConfirm={({ path }) => {
+          setWorktreeDialogOpen(false);
+          props.onOpenProject?.(path);
         }}
       />
     </aside>

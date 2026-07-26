@@ -1424,17 +1424,27 @@ export interface PixDesktopApi {
     /** List worktrees for the repo containing cwd. */
     listGitWorktrees(cwd?: string): Promise<GitWorktreeInfo[]>;
     /**
+     * All linked worktrees managed by Pix (under worktree root / Documents/Pix/worktrees),
+     * across projects — not limited to the currently open workspace.
+     */
+    listManagedWorktrees(): Promise<GitWorktreeInfo[]>;
+    /**
      * Create a linked worktree at `path`.
      * - `newBranch`: create and check out a new branch in the worktree
-     * - `branch`: check out an existing branch in the worktree
+     * - `branch`: existing branch to check out, or start-point when `newBranch` is set
+     * - `name`: folder base under worktree root (defaults to newBranch / branch / date)
      */
     createGitWorktree(options: {
-      /** Optional absolute path; when omitted, uses worktree root prefs + branch/date name. */
+      /** Optional absolute path; when omitted, uses worktree root prefs + name/branch/date. */
       path?: string;
       branch?: string;
       newBranch?: string;
+      /** Directory name under the worktree root (not the git branch prefix). */
+      name?: string;
       cwd?: string;
     }): Promise<{ path: string; context: GitContextInfo }>;
+    /** Remove a linked worktree (never the main worktree). */
+    removeGitWorktree(worktreePath: string, cwd?: string): Promise<{ removed: string }>;
     getWorktreePrefs(cwd?: string): Promise<{
       root: string;
       rootConfigured: string;

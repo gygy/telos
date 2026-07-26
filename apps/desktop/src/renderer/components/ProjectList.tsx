@@ -14,6 +14,7 @@ import {
   Copy,
   ExternalLink,
   Folder,
+  FolderGit2,
   Mail,
   MailOpen,
   MoreHorizontal,
@@ -34,9 +35,11 @@ import {
 } from "react";
 import { anchorFromEvent, FloatingMenu, type AnchorRect } from "./FloatingMenu.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
+import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { RenameDialog } from "./RenameDialog.tsx";
 import { loadConfirmArchive, loadConfirmDelete } from "../lib/behavior-prefs.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
+import { useShellStore } from "../store/shell-store.ts";
 import {
   PROJECT_THREADS_PAGE,
   archiveProject,
@@ -92,6 +95,7 @@ import { cn } from "../lib/utils.ts";
 import {
   belongsInConversationsSection,
   isNonProjectWorkspacePath,
+  normalizeWorkspaceKey,
   projectThreadIdsFromCwdMap,
   workspaceLabel,
 } from "../lib/workspace.ts";
@@ -160,6 +164,10 @@ export function ProjectList(props: ProjectListProps) {
     | { kind: "remove-project"; path: string; name: string }
     | null
   >(null);
+  const [worktreeTarget, setWorktreeTarget] = useState<string | null>(null);
+  /** path key → linked git worktree (not main). */
+  const [worktreeFlags, setWorktreeFlags] = useState<Record<string, boolean>>({});
+  const showAppError = useShellStore((s) => s.showAppError);
 
   // Keep pin/archive/alias in sync when header (or other) mutates prefs.
   useEffect(() => {
@@ -172,6 +180,16 @@ export function ProjectList(props: ProjectListProps) {
     };
     window.addEventListener("pix-thread-prefs", sync);
     return () => window.removeEventListener("pix-thread-prefs", sync);
+  }, []);
+
+  // Settings worktree delete / external rail changes: reload pin list.
+  useEffect(() => {
+    const syncRail = () => {
+      setPinned(loadPinnedProjects());
+      setArchived(loadArchivedProjects());
+    };
+    window.addEventListener("pix-project-rail-changed", syncRail);
+    return () => window.removeEventListener("pix-project-rail-changed", syncRail);
   }, []);
 
   const allPaths = useMemo(() => {
@@ -189,6 +207,44 @@ export function ProjectList(props: ProjectListProps) {
     }
     return list;
   }, [props.workspacePath, props.recentWorkspaces, pinned]);
+
+  const allPathsKey = useMemo(
+    () =>
+      allPaths
+        .map((p) => normalizeWorkspaceKey(p))
+        .filter(Boolean)
+        .sort()
+        .join("\n"),
+    [allPaths],
+  );
+
+  // Detect linked git worktrees for badge (filesystem .git file — no git binary).
+  useEffect(() => {
+    if (!allPaths.length) return;
+    let cancelled = false;
+    void Promise.all(
+      allPaths.map(async (path) => {
+        try {
+          const ctx = await window.pix.workspace.getGitContext(path);
+          return [normalizeWorkspaceKey(path), ctx.isMainWorktree === false] as const;
+        } catch {
+          return [normalizeWorkspaceKey(path), false] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setWorktreeFlags((prev) => {
+        const next = { ...prev };
+        for (const [key, isWt] of entries) {
+          if (key) next[key] = isWt;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allPathsKey, allPaths]);
 
   const { pinned: pinnedPaths, rest: restPathsRaw } = useMemo(
     () => partitionProjects(allPaths, pinned, archived),
@@ -321,6 +377,26 @@ export function ProjectList(props: ProjectListProps) {
   function handleReveal(path: string) {
     closeMenus();
     props.onRevealInFolder(path);
+  }
+
+  function handleCreateWorktree(path: string) {
+    closeMenus();
+    window.setTimeout(() => {
+      setWorktreeTarget(path);
+    }, 0);
+  }
+
+  function isWorktreeProject(path: string): boolean {
+    return worktreeFlags[normalizeWorkspaceKey(path)] === true;
+  }
+
+  function markWorktreeAndExpand(path: string) {
+    const key = normalizeWorkspaceKey(path);
+    setWorktreeFlags((prev) => ({ ...prev, [key]: true }));
+    // Ensure the new card is expanded under 项目 so it is visible immediately.
+    if (groupMode === "project" && !isExpandedProject(path, expanded)) {
+      setExpanded(toggleExpandedProject(path));
+    }
   }
 
   function handleRenameThread(thread: SessionThreadSummary) {
@@ -721,11 +797,20 @@ export function ProjectList(props: ProjectListProps) {
         data-kind="session"
       >
         {threadsForProject.length === 0 ? (
-          <p className="sidebar-list-row !h-auto py-1.5 text-[12px] text-[var(--text-subtle)]">
-            {/* Match project name x: same as folder icon + gap-2 under project row */}
+          <div
+            className="flex h-8 w-full min-w-0 items-center gap-2 px-2.5"
+            data-testid="session-empty"
+            aria-hidden={false}
+          >
+            {/* Spacer = Folder icon width so「无会话」lines up with the project name. */}
             <span className="inline-block size-4 shrink-0" aria-hidden />
-            <span className="min-w-0">{tr("session.empty")}</span>
-          </p>
+            <span
+              className="min-w-0 text-left text-[12px] leading-relaxed"
+              style={{ color: "#535458" }}
+            >
+              {tr("session.empty")}
+            </span>
+          </div>
         ) : null}
         {visibleThreads.map((t) => renderThreadButton(t, { indent: true, kind: "session" }))}
         {hasMore ? (
@@ -749,6 +834,7 @@ export function ProjectList(props: ProjectListProps) {
     const name = displayName(path);
     const projectMenuId = `project:${path}`;
     const showMenu = menuKey === projectMenuId;
+    const worktree = isWorktreeProject(path);
 
     return (
       <div
@@ -758,6 +844,7 @@ export function ProjectList(props: ProjectListProps) {
         data-path={path}
         data-active={active ? "true" : "false"}
         data-expanded={open ? "true" : "false"}
+        data-worktree={worktree ? "true" : "false"}
       >
         {/* group/item only on project row — nested threads are siblings, not inside this group */}
         {/* Project row: hover only — never data-active (highlight the session, not the project). */}
@@ -780,7 +867,17 @@ export function ProjectList(props: ProjectListProps) {
               }
             }}
           >
-            <Folder className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />
+            {worktree ? (
+              <span
+                className="inline-flex shrink-0"
+                title={tr("project.worktreeBadge")}
+                data-testid="project-worktree-icon"
+              >
+                <FolderGit2 className="size-4 opacity-70" strokeWidth={1.75} aria-hidden />
+              </span>
+            ) : (
+              <Folder className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />
+            )}
             <span
               className="sidebar-title-fade min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-4"
               data-testid={active ? "workspace-name" : undefined}
@@ -1044,6 +1141,12 @@ export function ProjectList(props: ProjectListProps) {
                     testId="project-menu-reveal"
                   />
                   <MenuItem
+                    icon={<FolderGit2 className="size-3.5" strokeWidth={1.75} />}
+                    label={tr("project.createWorktree")}
+                    onClick={() => handleCreateWorktree(path)}
+                    testId="project-menu-create-worktree"
+                  />
+                  <MenuItem
                     icon={<Pencil className="size-3.5" strokeWidth={1.75} />}
                     label={tr("project.rename")}
                     onClick={() => handleRename(path)}
@@ -1280,6 +1383,19 @@ export function ProjectList(props: ProjectListProps) {
         testId="rename-dialog"
         onConfirm={confirmRename}
         onCancel={() => setRenameTarget(null)}
+      />
+
+      <CreateWorktreeDialog
+        open={Boolean(worktreeTarget)}
+        locale={props.locale}
+        projectPath={worktreeTarget ?? ""}
+        onCancel={() => setWorktreeTarget(null)}
+        onError={(message) => showAppError(message)}
+        onConfirm={({ path }) => {
+          setWorktreeTarget(null);
+          markWorktreeAndExpand(path);
+          props.onOpenRecent(path);
+        }}
       />
     </div>
   );
