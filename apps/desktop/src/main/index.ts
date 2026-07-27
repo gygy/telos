@@ -74,6 +74,7 @@ import {
   pickParkedEvictionKey,
   shouldParkForeground,
 } from "./host-park-policy.ts";
+import { createAutoUpdateController, type AutoUpdateController } from "./auto-update.ts";
 import { ensurePiCli, type PiCliProgressEvent } from "./pi-cli-ensure.ts";
 import { createNodePtySpawn, PiTuiPtyController } from "./pi-tui-pty.ts";
 import { PiTuiExclusiveGuard, planPiTuiLaunch } from "./pi-tui-session.ts";
@@ -117,6 +118,7 @@ const execFileAsync = promisify(execFile);
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const HOST_EVENT_CHANNEL = "pix:host:event";
 const PI_PROGRESS_CHANNEL = "pix:pi:progress";
+const APP_UPDATE_CHANNEL = "pix:app:update-status";
 
 /** Best-effort branch / worktree labels for composer chrome (no git binary required). */
 function readGitContext(cwd: string | undefined): GitContextInfo {
@@ -3861,6 +3863,7 @@ class HostSupervisor {
 }
 
 let mainWindow: BrowserWindow | undefined;
+let autoUpdate: AutoUpdateController | undefined;
 let supervisor: HostSupervisor | undefined;
 
 function emitSmokeReport(report: { type: string; [key: string]: unknown }): void {
@@ -4463,6 +4466,40 @@ void app
       /** Windows uses native titleBarOverlay buttons; Linux needs renderer caption buttons. */
       customWindowControls: process.platform === "linux",
     }));
+    ipcMain.handle("pix:app:get-update-status", () => {
+      if (!autoUpdate) {
+        return {
+          state: "idle" as const,
+          currentVersion: app.getVersion(),
+          canCheck: app.isPackaged,
+        };
+      }
+      return autoUpdate.getStatus();
+    });
+    ipcMain.handle("pix:app:check-for-updates", () => {
+      if (!autoUpdate) {
+        return {
+          state: "not-available" as const,
+          currentVersion: app.getVersion(),
+          canCheck: false,
+        };
+      }
+      return autoUpdate.checkForUpdates();
+    });
+    ipcMain.handle("pix:app:download-update", () => {
+      if (!autoUpdate) {
+        return {
+          state: "error" as const,
+          currentVersion: app.getVersion(),
+          canCheck: false,
+          error: "Auto-updater is not initialized",
+        };
+      }
+      return autoUpdate.downloadUpdate();
+    });
+    ipcMain.handle("pix:app:quit-and-install", () => {
+      autoUpdate?.quitAndInstall();
+    });
     ipcMain.handle("pix:proxy:get", () => getProxyPrefs());
     ipcMain.handle("pix:proxy:set", async (_event, next: unknown) => {
       const prev = getProxyPrefs();
@@ -4525,6 +4562,12 @@ void app
     ipcMain.handle("pix:pi:ensure", () => runEnsurePiCli());
 
     await createWindow();
+    autoUpdate = createAutoUpdateController({
+      broadcast: (status) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send(APP_UPDATE_CHANNEL, status);
+      },
+    });
     // Do not wait for the renderer effect — start ensure as soon as the window exists
     // so `pnpm dev` installs even if React remounts cancel the first UI call.
     void runEnsurePiCli().catch((error) => {
@@ -5134,6 +5177,8 @@ void app
   });
 
 app.on("before-quit", (event) => {
+  autoUpdate?.dispose();
+  autoUpdate = undefined;
   piTuiController?.disposeAll();
   piTuiGuard.release();
   if (!supervisor) return;

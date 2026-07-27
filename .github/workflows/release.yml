@@ -1,5 +1,5 @@
 # Tag-driven multi-platform installers + GitHub Release.
-# Push a tag like v0.1.0 → build NSIS / DMG / AppImage+deb → attach to the release.
+# Push a tag like v0.1.0 → build NSIS / DMG+zip / AppImage+deb + update metadata → attach to the release.
 name: Release
 
 on:
@@ -69,7 +69,7 @@ jobs:
         if: runner.os == 'Windows'
         run: pnpm smoke:packaged
 
-      - name: Collect installers
+      - name: Collect installers and update metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -80,15 +80,32 @@ jobs:
           fi
           mkdir -p artifacts
           shopt -s nullglob
-          matched=("$out"/*.exe "$out"/*.dmg "$out"/*.AppImage "$out"/*.deb)
+          # Installers + electron-updater metadata (yml/blockmap) + mac zip feed.
+          matched=(
+            "$out"/*.exe
+            "$out"/*.dmg
+            "$out"/*.AppImage
+            "$out"/*.deb
+            "$out"/*.zip
+            "$out"/*.yml
+            "$out"/*.yaml
+            "$out"/*.blockmap
+          )
           if [[ ${#matched[@]} -eq 0 ]]; then
             echo "No installer artifacts under $out" >&2
             ls -la "$out" >&2 || true
             exit 1
           fi
           for file in "${matched[@]}"; do
-            cp -f "$file" artifacts/
-            ls -lh "artifacts/$(basename "$file")"
+            base="$(basename "$file")"
+            # Arch-split mac runners each emit latest-mac.yml — rename so publish can merge.
+            if [[ "$base" == "latest-mac.yml" || "$base" == "latest-mac.yaml" ]]; then
+              cp -f "$file" "artifacts/latest-mac-${{ runner.arch }}.yml"
+              ls -lh "artifacts/latest-mac-${{ runner.arch }}.yml"
+              continue
+            fi
+            cp -f "$file" "artifacts/$base"
+            ls -lh "artifacts/$base"
           done
 
       - name: Upload package artifact
@@ -107,12 +124,31 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download all platform archives
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           pattern: pix-*
           merge-multiple: true
+
+      - name: Merge latest-mac.yml for multi-arch
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mac_yml=(release-assets/latest-mac-*.yml)
+          if [[ ${#mac_yml[@]} -eq 0 ]]; then
+            echo "No mac update yml found (ok if mac packaging skipped)"
+            ls -la release-assets || true
+            exit 0
+          fi
+          node scripts/merge-latest-mac-yml.mjs release-assets release-assets/latest-mac.yml
+          # Keep only the merged feed name on the release.
+          rm -f release-assets/latest-mac-*.yml
+          ls -lh release-assets/latest-mac.yml
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

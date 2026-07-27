@@ -23,17 +23,25 @@ directories:
   output: release/app
   buildResources: build
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-publish: null
+# electron-updater reads GitHub Releases (latest.yml / latest-mac.yml / latest-linux.yml).
+# CI still packages with `--publish never`; softprops uploads artifacts + update metadata.
+publish:
+  provider: github
+  owner: num-scope
+  repo: pix
+  releaseType: release
 mac:
   identity: null
   icon: icon.icns
+  # zip is required for electron-updater on macOS; dmg remains the manual installer.
   target:
     - dmg
+    - zip
   category: public.app-category.developer-tools
   hardenedRuntime: false
   gatekeeperAssess: false
 dmg:
-  writeUpdateInfo: false
+  writeUpdateInfo: true
 win:
   icon: icon.ico
   # Keep true so rcedit writes icon.ico into Pix.exe (taskbar + Start Menu).

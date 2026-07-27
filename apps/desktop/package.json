@@ -29,6 +29,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "catalog:",
+    "electron-updater": "catalog:",
     "ghostty-web": "catalog:",
     "highlight.js": "catalog:",
     "katex": "catalog:",

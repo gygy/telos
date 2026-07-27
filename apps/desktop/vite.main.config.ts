@@ -11,6 +11,7 @@ const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:$
  */
 function isExternal(id: string): boolean {
   if (id === "electron") return true;
+  if (id === "electron-updater" || id.startsWith("electron-updater/")) return true;
   if (id === "node-pty" || id.startsWith("node-pty/")) return true;
   if (id.startsWith("@earendil-works/")) return true;
   if (id.startsWith("node:")) return true;

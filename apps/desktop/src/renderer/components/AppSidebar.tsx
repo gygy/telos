@@ -4,21 +4,24 @@
  * Full collapse (width 0, no icon rail) + drag resize; expand control stays
  * fixed after macOS traffic lights. Settings mode swaps menu content.
  */
-import type { HostSnapshot, SessionThreadSummary } from "@pix/contracts";
+import type { AppUpdateStatus, HostSnapshot, SessionThreadSummary } from "@pix/contracts";
 import {
   Archive,
   ArrowLeft,
   Bell,
   Boxes,
+  Download,
   FolderGit2,
   GitBranch,
   Keyboard,
   KeyRound,
+  LoaderCircle,
   Network,
   Package,
   Palette,
   PanelLeft,
   PanelLeftClose,
+  RefreshCw,
   Search,
   Settings as SettingsIcon,
   Shield,
@@ -377,13 +380,18 @@ function ProductRail(
       />
 
       <div className="mt-auto flex min-w-0 flex-col gap-1 border-t border-[var(--sidebar-border)] pt-2">
-        <NavBtn
-          testId="nav-settings"
-          active={props.view === "settings"}
-          icon={<SettingsIcon className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />}
-          label={tr("nav.settings")}
-          onClick={props.onOpenSettings}
-        />
+        <div className="flex min-w-0 items-center gap-0.5" data-testid="nav-settings-row">
+          <div className="min-w-0 flex-1">
+            <NavBtn
+              testId="nav-settings"
+              active={props.view === "settings"}
+              icon={<SettingsIcon className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />}
+              label={tr("nav.settings")}
+              onClick={props.onOpenSettings}
+            />
+          </div>
+          <SidebarUpdateButton locale={props.locale} tr={tr} />
+        </div>
         {props.showDeveloperChrome ? (
           <details
             className="group rounded-lg border border-transparent open:border-[var(--sidebar-border)] open:bg-[var(--hover-fill)]/40"
@@ -685,6 +693,156 @@ function hostPillClass(state: string): string {
   if (state === "running") return "bg-blue-500/15 text-blue-500";
   if (state === "error" || state === "crashed") return "bg-red-500/15 text-red-500";
   return "bg-[var(--accent)] text-[var(--muted-foreground)]";
+}
+
+const GITHUB_REPO_URL = "https://github.com/num-scope/pix";
+
+/** GitHub mark (lucide has no brand icons). */
+function GitHubMark(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={props.className}>
+      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z" />
+    </svg>
+  );
+}
+
+type SidebarUpdatePhase = "github" | "available" | "downloading" | "downloaded";
+
+function sidebarUpdatePhase(status: AppUpdateStatus): SidebarUpdatePhase {
+  if (status.state === "downloading") return "downloading";
+  if (status.state === "downloaded") return "downloaded";
+  if (
+    status.state === "available" ||
+    (status.state === "error" && Boolean(status.availableVersion))
+  ) {
+    return "available";
+  }
+  return "github";
+}
+
+/**
+ * Right of 系统设置: GitHub by default; blue download when an update exists;
+ * progress while downloading; restart icon when ready to install.
+ */
+function SidebarUpdateButton(props: {
+  locale: Locale;
+  tr: (key: MessageKey, vars?: Record<string, string>) => string;
+}) {
+  const { tr } = props;
+  const [status, setStatus] = useState<AppUpdateStatus>({
+    state: "idle",
+    currentVersion: "",
+    canCheck: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const phase = sidebarUpdatePhase(status);
+  const percent =
+    status.percent !== undefined && Number.isFinite(status.percent)
+      ? Math.max(0, Math.min(100, Math.round(status.percent)))
+      : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.pix.app.getUpdateStatus().then((next) => {
+      if (!cancelled) setStatus(next);
+    });
+    const unsubscribe = window.pix.app.onUpdateStatus((next) => {
+      if (!cancelled) setStatus(next);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  async function onClick() {
+    if (busy) return;
+    if (phase === "github") {
+      void window.pix.workspace.openExternal(GITHUB_REPO_URL).catch(() => undefined);
+      return;
+    }
+    if (phase === "available") {
+      setBusy(true);
+      try {
+        setStatus(await window.pix.app.downloadUpdate());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus((prev) => ({ ...prev, state: "error", error: message }));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (phase === "downloading") {
+      // Already in progress — no-op (status stream updates the glyph).
+      return;
+    }
+    if (phase === "downloaded") {
+      setBusy(true);
+      try {
+        await window.pix.app.quitAndInstall();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus((prev) => ({ ...prev, state: "error", error: message }));
+        setBusy(false);
+      }
+    }
+  }
+
+  const title =
+    phase === "available"
+      ? tr("nav.update.available", { version: status.availableVersion ?? "?" })
+      : phase === "downloading"
+        ? percent === undefined
+          ? tr("nav.update.downloading")
+          : tr("nav.update.downloadingPct", { percent: String(percent) })
+        : phase === "downloaded"
+          ? tr("nav.update.restartInstall", {
+              version: status.availableVersion ?? "?",
+            })
+          : tr("nav.update.github");
+
+  const accent = phase !== "github";
+
+  return (
+    <button
+      type="button"
+      data-testid="sidebar-update-btn"
+      data-phase={phase}
+      data-percent={percent === undefined ? undefined : String(percent)}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 transition-colors",
+        accent
+          ? "text-blue-500 hover:bg-blue-500/10 hover:text-blue-600"
+          : "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]",
+        phase === "downloading" && "cursor-default",
+      )}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void onClick();
+      }}
+    >
+      {phase === "github" ? (
+        <GitHubMark className="size-4" />
+      ) : phase === "available" ? (
+        <Download className="size-4" strokeWidth={1.85} />
+      ) : phase === "downloading" ? (
+        percent !== undefined ? (
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none">
+            <LoaderCircle className="size-3 animate-spin" strokeWidth={2} />
+            {percent}
+          </span>
+        ) : (
+          <LoaderCircle className="size-4 animate-spin" strokeWidth={1.85} />
+        )
+      ) : (
+        <RefreshCw className="size-4" strokeWidth={1.85} />
+      )}
+    </button>
+  );
 }
 
 function IconBtn(props: {

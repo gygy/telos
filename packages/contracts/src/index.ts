@@ -1265,6 +1265,30 @@ export type TerminalExitEvent = {
   sessionFile: string;
 };
 
+/** Desktop app auto-update state (electron-updater + GitHub Releases). */
+export type AppUpdateState =
+  | "idle"
+  | "checking"
+  | "available"
+  | "not-available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export type AppUpdateStatus = {
+  state: AppUpdateState;
+  /** Running app version (semver). */
+  currentVersion: string;
+  /** True only for packaged builds — unpackaged/dev cannot auto-update. */
+  canCheck: boolean;
+  availableVersion?: string;
+  /** Download progress 0–100 when state is downloading/downloaded. */
+  percent?: number;
+  error?: string;
+  /** ISO timestamp of the last successful check. */
+  checkedAt?: string;
+};
+
 export interface PixDesktopApi {
   app: {
     /** OS platform + packaging flags for chrome layout / dev tools. */
@@ -1280,6 +1304,16 @@ export interface PixDesktopApi {
        */
       customWindowControls: boolean;
     }>;
+    /** Current auto-update status snapshot. */
+    getUpdateStatus(): Promise<AppUpdateStatus>;
+    /** Check GitHub Releases for a newer version (also runs once at startup when packaged). */
+    checkForUpdates(): Promise<AppUpdateStatus>;
+    /** Download the available update in the background. */
+    downloadUpdate(): Promise<AppUpdateStatus>;
+    /** Quit and install a downloaded update (restarts the app). */
+    quitAndInstall(): Promise<void>;
+    /** Subscribe to update status changes from main. */
+    onUpdateStatus(listener: (status: AppUpdateStatus) => void): () => void;
   };
   /** System proxy prefs: AI traffic vs app network, independently. */
   proxy: {

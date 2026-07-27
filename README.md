@@ -126,7 +126,9 @@ git tag v0.1.0
 git push origin main --tags
 ```
 
-Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` for arm64 + Intel, Linux `.AppImage` + `.deb`) and publishes them on the GitHub Release. Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Format check runs only on Linux CI; lint and typecheck run on all three OSes. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
+Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (and from **Settings → General → Updates**). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Format check runs only on Linux CI; lint and typecheck run on all three OSes. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
+
+> **macOS note:** auto-update works best with a signed/notarized app. Unsigned builds may fail code-signature verification when installing updates; Windows NSIS and Linux AppImage are the more reliable unsigned paths today.
 
 ## Architecture
 

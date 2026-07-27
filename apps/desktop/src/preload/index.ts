@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
+  AppUpdateStatus,
   HostEvent,
   PiCliProgressEvent,
   PixDesktopApi,
@@ -10,6 +11,16 @@ import type {
 const api: PixDesktopApi = {
   app: {
     getRuntime: () => ipcRenderer.invoke("pix:app:get-runtime"),
+    getUpdateStatus: () => ipcRenderer.invoke("pix:app:get-update-status"),
+    checkForUpdates: () => ipcRenderer.invoke("pix:app:check-for-updates"),
+    downloadUpdate: () => ipcRenderer.invoke("pix:app:download-update"),
+    quitAndInstall: () => ipcRenderer.invoke("pix:app:quit-and-install"),
+    onUpdateStatus(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, status: AppUpdateStatus) =>
+        listener(status);
+      ipcRenderer.on("pix:app:update-status", handler);
+      return () => ipcRenderer.removeListener("pix:app:update-status", handler);
+    },
   },
   proxy: {
     get: () => ipcRenderer.invoke("pix:proxy:get"),

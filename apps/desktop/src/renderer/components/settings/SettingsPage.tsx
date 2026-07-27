@@ -3,6 +3,7 @@
  * Large left-aligned title · section labels · grouped cards with rows.
  */
 import type {
+  AppUpdateStatus,
   CustomModelApi,
   DesktopLocalProxyCandidate,
   DesktopProxyChannel,
@@ -2288,21 +2289,151 @@ function UsageLimitsSection(
   );
 }
 
+function updateStatusDescription(
+  tr: (key: MessageKey, vars?: Record<string, string>) => string,
+  status: AppUpdateStatus,
+): string {
+  switch (status.state) {
+    case "idle":
+      return status.canCheck ? tr("settings.update.idle") : tr("settings.update.devOnly");
+    case "checking":
+      return tr("settings.update.checking");
+    case "available":
+      return tr("settings.update.available", {
+        version: status.availableVersion ?? "?",
+      });
+    case "not-available":
+      return tr("settings.update.upToDate");
+    case "downloading": {
+      const pct =
+        status.percent !== undefined && Number.isFinite(status.percent)
+          ? Math.max(0, Math.min(100, Math.round(status.percent)))
+          : undefined;
+      return pct === undefined
+        ? tr("settings.update.downloading")
+        : tr("settings.update.downloadingPct", { percent: String(pct) });
+    }
+    case "downloaded":
+      return tr("settings.update.downloaded", {
+        version: status.availableVersion ?? "?",
+      });
+    case "error":
+      return status.error
+        ? tr("settings.update.errorDetail", { error: status.error })
+        : tr("settings.update.error");
+    default:
+      return tr("settings.update.idle");
+  }
+}
+
 function GeneralSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
   const [preventSleep, setPreventSleep] = useState(loadPreventSleep);
   const [suggestions, setSuggestions] = useState(loadSuggestions);
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>({
+    state: "idle",
+    currentVersion: "…",
+    canCheck: false,
+  });
+  const [updateBusy, setUpdateBusy] = useState(false);
   const visibility = props.accessVisibility;
   const trusted = Boolean(props.snapshot?.projectTrusted);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.pix.app.getUpdateStatus().then((status) => {
+      if (!cancelled) setUpdateStatus(status);
+    });
+    const unsubscribe = window.pix.app.onUpdateStatus((status) => {
+      if (!cancelled) setUpdateStatus(status);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   function setVisibility(key: keyof AccessVisibility, on: boolean) {
     props.onAccessVisibility({ ...visibility, [key]: on });
   }
 
+  async function runUpdateAction(action: "check" | "download" | "install") {
+    setUpdateBusy(true);
+    try {
+      if (action === "check") {
+        setUpdateStatus(await window.pix.app.checkForUpdates());
+      } else if (action === "download") {
+        setUpdateStatus(await window.pix.app.downloadUpdate());
+      } else {
+        await window.pix.app.quitAndInstall();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setUpdateStatus((prev) => ({
+        ...prev,
+        state: "error",
+        error: message,
+      }));
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   return (
     <SettingsPageShell title={tr("section.general")} testId="settings-general">
+      <SettingsSectionBlock label={tr("settings.section.updates")} testId="settings-updates">
+        <SettingsRow
+          title={tr("settings.update.currentVersion")}
+          description={updateStatus.currentVersion}
+          control={
+            <SettingsPillButton
+              label={tr("settings.update.check")}
+              testId="settings-check-updates"
+              disabled={updateBusy || updateStatus.state === "checking"}
+              onClick={() => void runUpdateAction("check")}
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("settings.update.status")}
+          description={updateStatusDescription(tr, updateStatus)}
+          control={
+            updateStatus.state === "available" ||
+            (updateStatus.state === "error" && Boolean(updateStatus.availableVersion)) ? (
+              <SettingsPillButton
+                label={tr("settings.update.download")}
+                testId="settings-download-update"
+                disabled={updateBusy}
+                onClick={() => void runUpdateAction("download")}
+              />
+            ) : updateStatus.state === "downloading" ? (
+              <SettingsPillButton
+                label={tr("settings.update.downloading")}
+                testId="settings-download-update-busy"
+                disabled
+              />
+            ) : updateStatus.state === "downloaded" ? (
+              <SettingsPillButton
+                label={tr("settings.update.restartInstall")}
+                testId="settings-install-update"
+                disabled={updateBusy}
+                onClick={() => void runUpdateAction("install")}
+              />
+            ) : (
+              <span
+                className="text-xs text-[var(--text-subtle)]"
+                data-testid="settings-update-idle"
+              >
+                {updateStatus.canCheck ? "" : tr("settings.update.devOnlyShort")}
+              </span>
+            )
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
       <SettingsSectionBlock label={tr("settings.permissions")} testId="settings-permissions">
         <SettingsRow
           title={tr("settings.defaultAccess")}
