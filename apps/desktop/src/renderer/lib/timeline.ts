@@ -35,6 +35,8 @@ export type TimelineItem =
       status: "running" | "completed" | "error";
       args?: unknown;
       output?: string;
+      /** Tool result details (e.g. edit `diff` with real file line numbers). */
+      details?: unknown;
       /** ISO start (usually tool.started). */
       timestamp?: string;
       /** ISO end when tool.completed was observed. */
@@ -305,6 +307,7 @@ export function projectEventsToTimeline(
           tool.status = runtimeEvent.isError ? "error" : "completed";
           tool.output = runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done");
           tool.endedAt = endTs;
+          if (runtimeEvent.details !== undefined) tool.details = runtimeEvent.details;
         } else {
           items.push({
             id: `tool-end-${runtimeEvent.toolCallId}`,
@@ -313,6 +316,7 @@ export function projectEventsToTimeline(
             toolName: runtimeEvent.toolName,
             status: runtimeEvent.isError ? "error" : "completed",
             output: runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done"),
+            ...(runtimeEvent.details !== undefined ? { details: runtimeEvent.details } : {}),
             timestamp: endTs,
             endedAt: endTs,
           });

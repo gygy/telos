@@ -283,6 +283,274 @@ export function processToolView(
   };
 }
 
+type EditReplacement = { oldText: string; newText: string };
+
+function normalizeEditPair(row: Record<string, unknown>): EditReplacement | undefined {
+  const oldText =
+    str(row.oldText) ||
+    str(row.old_string) ||
+    str(row.old_str) ||
+    str(row.before) ||
+    str(row.original);
+  const newText =
+    str(row.newText) ||
+    str(row.new_string) ||
+    str(row.new_str) ||
+    str(row.after) ||
+    str(row.replacement);
+  // Allow empty newText (delete), but oldText must be present for a meaningful edit.
+  if (!oldText && !newText) return undefined;
+  if (!oldText && newText) return { oldText: "", newText };
+  return { oldText, newText: newText || "" };
+}
+
+function parseEditsArray(value: unknown): EditReplacement[] {
+  let raw: unknown = value;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      raw = JSON.parse(raw) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  const out: EditReplacement[] = [];
+  for (const item of raw) {
+    const row = asRecord(item);
+    if (!row) continue;
+    const pair = normalizeEditPair(row);
+    if (pair) out.push(pair);
+  }
+  return out;
+}
+
+function splitContentLines(text: string): string[] {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+
+/**
+ * Pi TUI / edit-diff display format: "+12 content", "- 3 content", " 10 content".
+ * Embeds 1-based file line numbers after the prefix.
+ */
+function prefixLinesNumbered(text: string, sign: "+" | "-", startLine: number): string {
+  const lines = text ? splitContentLines(text) : [""];
+  const end = startLine + Math.max(lines.length, 1) - 1;
+  const width = String(Math.max(end, 1)).length;
+  return lines
+    .map((line, i) => `${sign}${String(startLine + i).padStart(width, " ")} ${line}`)
+    .join("\n");
+}
+
+/**
+ * Build a display-oriented diff from edit/write tool args (pi-style line numbers).
+ * - edit: path + edits[{oldText,newText}] or legacy oldText/newText / old_string/new_string
+ * - write: path + content as all-addition lines starting at file line 1
+ *
+ * Prefer {@link extractToolDiffDetails} when the tool result includes `details.diff`
+ * (real file line numbers from the agent).
+ */
+export function formatEditToolAsDiff(args: unknown, toolName?: string): string | undefined {
+  const kind = toolName ? classifyToolName(toolName) : "edit";
+  const row = asRecord(args);
+  if (!row) return undefined;
+
+  const path = firstString(row, ["path", "file_path", "file", "filename", "target"]) || "file";
+
+  let edits = parseEditsArray(row.edits);
+  if (edits.length === 0) {
+    const single = normalizeEditPair(row);
+    if (single) edits = [single];
+  }
+  // write (and create_file): full body as additions only
+  if (edits.length === 0 && (kind === "write" || kind === "edit")) {
+    const content = firstString(row, ["content", "text", "newText", "new_string", "contents"]);
+    if (content) {
+      // write → all +; bare content on edit without oldText treated the same
+      edits = [{ oldText: kind === "write" ? "" : "", newText: content }];
+    }
+  }
+  if (edits.length === 0) return undefined;
+
+  // write with only new content: --- /dev/null style header for clarity
+  const isCreateOnly = kind === "write" || edits.every((e) => !e.oldText && Boolean(e.newText));
+  const chunks: string[] = isCreateOnly
+    ? [`--- /dev/null`, `+++ b/${path}`]
+    : [`--- a/${path}`, `+++ b/${path}`];
+  for (let i = 0; i < edits.length; i++) {
+    const edit = edits[i]!;
+    const oldCount = edit.oldText ? splitContentLines(edit.oldText).length : 0;
+    const newCount = edit.newText ? splitContentLines(edit.newText).length : edit.oldText ? 0 : 1;
+    // Without reading the file we only know write starts at 1; edit snippets fall back to 1.
+    // Live tool results should supply details.diff with true offsets.
+    const oldStart = isCreateOnly ? 0 : 1;
+    const newStart = 1;
+    if (edits.length > 1) {
+      chunks.push(
+        `@@ edit ${i + 1}/${edits.length} -${oldStart},${oldCount} +${newStart},${newCount} @@`,
+      );
+    } else if (isCreateOnly) {
+      chunks.push(`@@ -0,0 +1,${newCount} @@`);
+    } else {
+      chunks.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    }
+    if (edit.oldText) chunks.push(prefixLinesNumbered(edit.oldText, "-", oldStart || 1));
+    if (edit.newText) chunks.push(prefixLinesNumbered(edit.newText, "+", newStart));
+    else if (!edit.oldText) chunks.push(prefixLinesNumbered("", "+", newStart));
+  }
+  return chunks.join("\n");
+}
+
+/** Pull pi `details.diff` (numbered display) or `details.patch` from tool result details. */
+export function extractToolDiffDetails(details: unknown): string | undefined {
+  const row = asRecord(details);
+  if (!row) return undefined;
+  const diff = typeof row.diff === "string" ? row.diff.trim() : "";
+  if (diff && looksLikeDiffText(diff)) return row.diff as string;
+  const patch = typeof row.patch === "string" ? row.patch.trim() : "";
+  if (patch && looksLikeDiffText(patch)) return row.patch as string;
+  return undefined;
+}
+
+export type DiffDisplayLine = {
+  /** add / remove / hunk / meta (file headers); undefined = context. */
+  kind?: "add" | "remove" | "hunk" | "meta";
+  /** 1-based file line number when known (omitted for headers / ellipsis). */
+  lineNo?: number;
+  /** Visible text including leading +/-/space marker. */
+  text: string;
+};
+
+/**
+ * Parse unified patches and pi display diffs into rows with real file line numbers.
+ * - Pi: `+12 body`, `- 3 body`, ` 10 body`
+ * - Unified: `@@ -10,2 +12,3 @@` then `+/-/ ` lines counted from the hunk starts
+ */
+export function parseDiffDisplayLines(code: string): DiffDisplayLine[] {
+  const rawLines = code.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const rows: DiffDisplayLine[] = [];
+  let oldLn = 0;
+  let newLn = 0;
+  let tracking = false;
+
+  for (const line of rawLines) {
+    if (
+      line.startsWith("diff ") ||
+      line.startsWith("index ") ||
+      line.startsWith("---") ||
+      line.startsWith("+++")
+    ) {
+      rows.push({ kind: "meta", text: line || " " });
+      continue;
+    }
+
+    if (line.startsWith("@@")) {
+      const unified = /^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@/.exec(line);
+      if (unified) {
+        oldLn = Number(unified[1]);
+        newLn = Number(unified[2]);
+        tracking = true;
+      } else {
+        // Bare / edit-label hunk — start content at line 1 until a real header appears.
+        oldLn = 1;
+        newLn = 1;
+        tracking = true;
+      }
+      rows.push({ kind: "hunk", text: line || " " });
+      continue;
+    }
+
+    // Pi numbered display: "+12 content" / "- 3 content" / " 10 content" / "     ..."
+    const pi = /^([+\- ])(\s*\d*)\s(.*)$/.exec(line);
+    if (pi && pi[2] !== undefined && pi[2].trim() !== "") {
+      const prefix = pi[1] as "+" | "-" | " ";
+      const lineNo = Number(pi[2].trim());
+      const body = pi[3] ?? "";
+      if (prefix === "+") {
+        rows.push({ kind: "add", lineNo, text: `+${body}` });
+        newLn = lineNo + 1;
+        tracking = true;
+      } else if (prefix === "-") {
+        rows.push({ kind: "remove", lineNo, text: `-${body}` });
+        oldLn = lineNo + 1;
+        tracking = true;
+      } else {
+        // Context or ellipsis row
+        if (body.trim() === "...") {
+          rows.push({ kind: "meta", text: ` ${body}` });
+        } else {
+          rows.push({ lineNo, text: body.length ? ` ${body}` : " " });
+          oldLn = lineNo + 1;
+          newLn = lineNo + 1;
+          tracking = true;
+        }
+      }
+      continue;
+    }
+
+    // Standard unified body (no embedded numbers)
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      const lineNo = tracking ? newLn : undefined;
+      if (tracking) newLn += 1;
+      rows.push({
+        kind: "add",
+        ...(lineNo !== undefined ? { lineNo } : {}),
+        text: line.length ? line : "+",
+      });
+      continue;
+    }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      const lineNo = tracking ? oldLn : undefined;
+      if (tracking) oldLn += 1;
+      rows.push({
+        kind: "remove",
+        ...(lineNo !== undefined ? { lineNo } : {}),
+        text: line.length ? line : "-",
+      });
+      continue;
+    }
+    if (line.startsWith(" ") || line === "") {
+      const lineNo = tracking ? newLn : undefined;
+      if (tracking) {
+        oldLn += 1;
+        newLn += 1;
+      }
+      rows.push({
+        ...(lineNo !== undefined ? { lineNo } : {}),
+        text: line.length ? line : " ",
+      });
+      continue;
+    }
+
+    rows.push({ kind: "meta", text: line || " " });
+  }
+
+  return rows;
+}
+
+/** True when text already looks like a unified / display / pi-numbered diff. */
+export function looksLikeDiffText(text: string): boolean {
+  const sample = text.trim();
+  if (!sample) return false;
+  if (/^---\s/m.test(sample) && /^\+\+\+\s/m.test(sample)) return true;
+  // Pi display format with embedded line numbers
+  if (/^[+\- ]\s*\d+\s/m.test(sample) && /^[+-]/m.test(sample)) {
+    const lines = sample.split(/\r?\n/).slice(0, 40);
+    let numbered = 0;
+    for (const line of lines) {
+      if (/^[+\- ]\s*\d+\s/.test(line)) numbered += 1;
+    }
+    if (numbered >= 1) return true;
+  }
+  const lines = sample.split(/\r?\n/).slice(0, 40);
+  let plus = 0;
+  let minus = 0;
+  for (const line of lines) {
+    if (line.startsWith("+") && !line.startsWith("+++")) plus += 1;
+    if (line.startsWith("-") && !line.startsWith("---")) minus += 1;
+  }
+  return plus + minus >= 2 && (plus > 0 || minus > 0);
+}
+
 /**
  * Consecutive tools with the same kind collapse into one group (including shell/run).
  * Expand the group to see each step; per-step duration stays on each nested row.

@@ -18,6 +18,7 @@
     "dev:landing": "vp run --no-cache @pix/landing#dev",
     "build:landing": "vp run --no-cache @pix/landing#build",
     "preview:landing": "vp run --no-cache @pix/landing#preview",
+    "demo:session-content": "vp run --no-cache @pix/desktop#demo:session-content",
     "electron:install": "vp run --no-cache @pix/desktop#electron:install",
     "smoke": "vp run --no-cache @pix/desktop#smoke",
     "smoke:packaged": "vp run --no-cache @pix/desktop#smoke:packaged",

@@ -206,9 +206,9 @@ function MarkdownLink(props: {
     }
     event.preventDefault();
     if (target.kind === "external") {
-      void window.pix.workspace.openExternal(target.href);
+      void window.pix?.workspace?.openExternal?.(target.href);
     } else if (target.kind === "file") {
-      void window.pix.workspace.openFile(target.path, {
+      void window.pix?.workspace?.openFile?.(target.path, {
         ...(target.line ? { line: target.line } : {}),
         ...(target.column ? { column: target.column } : {}),
       });

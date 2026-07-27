@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
 import {
   attachmentLabel,
@@ -48,9 +49,13 @@ import {
 } from "../lib/composer-suggestions.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import {
+  classifyToolName,
   extractCommandFromArgs,
+  extractToolDiffDetails,
+  formatEditToolAsDiff,
   groupConsecutiveTools,
   isWeakToolLabel,
+  looksLikeDiffText,
   processToolView,
   type ProcessToolKind,
   type ProcessToolView,
@@ -170,7 +175,7 @@ function useTimelineAttachmentPreviews(paths: string[]): Record<string, string> 
     void Promise.all(
       images.map(async (path) => {
         try {
-          const url = await window.pix.workspace.readAttachmentPreview(path);
+          const url = await window.pix?.workspace?.readAttachmentPreview?.(path);
           return url ? ([path, url] as const) : undefined;
         } catch {
           return undefined;
@@ -215,7 +220,7 @@ function AttachmentList(props: { paths: string[] }) {
             title={path}
           >
             <AttachmentTrigger
-              onClick={() => void window.pix.workspace.openFile(path)}
+              onClick={() => void window.pix?.workspace?.openFile?.(path)}
               aria-label={attachmentLabel(path)}
             />
             {preview ? (
@@ -922,7 +927,7 @@ function ProcessPathLink(props: {
       title={props.path}
       onClick={(e) => {
         e.stopPropagation();
-        void window.pix.workspace.openFile(props.path);
+        void window.pix?.workspace?.openFile?.(props.path);
       }}
     >
       {fileName}
@@ -932,12 +937,40 @@ function ProcessPathLink(props: {
 
 /**
  * Expand body: command/args + result.
+ * Edit tools prefer a unified-style diff (rendered via ContentCodeBlock language=diff).
  * History often only has output — reconstruct a minimal input from path/command when args missing.
  */
 function processToolExpandBodies(
   item: Extract<TimelineItem, { kind: "tool" }>,
   view: ProcessToolView,
-): { input?: string; output?: string } {
+): { input?: string; output?: string; diff?: string } {
+  // edit / write / patch: render as ContentCodeBlock diff (not JSON dump).
+  // - edit: oldText → newText (red/green)
+  // - write: full new content as all-additions (+)
+  const toolKind = view.kind === "generic" ? classifyToolName(item.toolName) : view.kind;
+  if (toolKind === "edit" || toolKind === "write") {
+    const output = item.output?.trim() ? item.output : undefined;
+    // Prefer agent details.diff (pi display format with real file line numbers).
+    const fromDetails = extractToolDiffDetails(item.details);
+    if (fromDetails) {
+      return {
+        diff: fromDetails,
+        ...(output && !looksLikeDiffText(output) ? { output } : {}),
+      };
+    }
+    // Tool text output that is already a patch / numbered display diff.
+    if (output && looksLikeDiffText(output)) {
+      return { diff: output };
+    }
+    const fromArgs = formatEditToolAsDiff(item.args, item.toolName);
+    if (fromArgs) {
+      return {
+        diff: fromArgs,
+        ...(output ? { output } : {}),
+      };
+    }
+  }
+
   let input: string | undefined;
   if (item.args !== undefined) {
     // Prefer a single-line command string for shell tools when we can extract it.
@@ -954,6 +987,13 @@ function processToolExpandBodies(
     else if (view.detail.trim()) input = view.detail;
   }
   const output = item.output?.trim() ? item.output : undefined;
+  // Tool result that is already a patch (e.g. apply_patch output / git-style).
+  if (output && looksLikeDiffText(output) && (view.kind === "edit" || view.kind === "write")) {
+    return {
+      ...(input ? { input } : {}),
+      diff: output,
+    };
+  }
   return {
     ...(input ? { input } : {}),
     ...(output ? { output } : {}),
@@ -1029,7 +1069,7 @@ function ProcessToolRow(props: {
   const parts = toolRowParts(props.locale, props.item.toolName, view, props.item.status);
   const expand = processToolExpandBodies(props.item, view);
   const [open, setOpen] = useState(false);
-  const hasBody = Boolean(expand.input || expand.output);
+  const hasBody = Boolean(expand.input || expand.output || expand.diff);
 
   const running = props.item.status === "running";
   // Duration only from real tool timestamps (start + end, or start→now while running).
@@ -1176,7 +1216,12 @@ function ProcessToolRow(props: {
       <CollapsibleContent
         className={cn("process-step-body", props.nested && "process-step-body-nested")}
       >
-        {inputText ? (
+        {expand.diff ? (
+          <div className="process-step-diff" data-testid="process-step-diff">
+            <ContentCodeBlock code={expand.diff} language="diff" locale={props.locale} />
+          </div>
+        ) : null}
+        {!expand.diff && inputText ? (
           <ProcessStepPanel
             text={inputText}
             locale={props.locale}

@@ -17,7 +17,13 @@ describe("MarkdownContent", () => {
   it("renders math, highlighted code, diffs, tables, and Mermaid placeholders", () => {
     expect(render("$E = mc^2$")).toContain("katex");
     expect(render("```javascript\nconst answer = 42\n```")).toContain("content-code-block");
-    expect(render("```diff\n-old\n+new\n```")).toContain('data-diff="remove"');
+    const diffHtml = render("```diff\n@@ -5,1 +5,1 @@\n-old\n+new\n```");
+    expect(diffHtml).toContain('data-diff="remove"');
+    expect(diffHtml).toContain("content-diff-ln");
+    expect(diffHtml).toContain("content-diff-text");
+    expect(diffHtml).toContain("content-diff-line");
+    // File line numbers from the hunk (not 1..n display index)
+    expect(diffHtml).toContain(">5<");
     expect(render("| A | B |\n| - | - |\n| 1 | 2 |")).toContain("content-table-scroll");
     expect(render("```mermaid\ngraph TD; A--&gt;B\n```")).toContain("content-mermaid-loading");
   });

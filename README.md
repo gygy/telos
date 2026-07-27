@@ -34,11 +34,11 @@ pnpm electron:install
 
 Apps have **independent** `dev` / `build` entry points at the repo root:
 
-| App                          | Dev                | Build                | Notes                                  |
-| ---------------------------- | ------------------ | -------------------- | -------------------------------------- |
-| **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop     |
-| **Landing** (`apps/landing`) | `pnpm dev:landing` | `pnpm build:landing` | Preview: `pnpm preview:landing`        |
-| **All packages**             | —                  | `pnpm build`         | Recursive `build` across the workspace |
+| App                          | Dev                | Build                | Notes                                          |
+| ---------------------------- | ------------------ | -------------------- | ---------------------------------------------- |
+| **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop             |
+| **Landing** (`apps/landing`) | `pnpm dev:landing` | `pnpm build:landing` | Preview: `pnpm preview:landing`                |
+| **All packages**             | —                  | `pnpm build`         | Recursive `build` across the workspace         |
 
 ### Desktop
 
@@ -54,6 +54,15 @@ Product launch uses your real `HOME` and the same agent dir as the CLI (`~/.pi/a
 pnpm build:desktop   # compile only (no Electron launch)
 pnpm start:desktop   # launch previously built dist/
 ```
+
+Browser-only chat timeline preview (no Electron), for iterating on session content rendering:
+
+```bash
+pnpm demo:session-content
+# → http://127.0.0.1:4177/session-content-demo.html
+```
+
+Re-run after renderer changes. Do not open the built HTML via `file://`.
 
 ### Landing page
 

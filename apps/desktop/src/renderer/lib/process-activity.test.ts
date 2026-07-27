@@ -3,7 +3,11 @@ import {
   classifyToolName,
   extractCommandFromArgs,
   extractCommandFromOutput,
+  extractToolDiffDetails,
+  formatEditToolAsDiff,
   groupConsecutiveTools,
+  looksLikeDiffText,
+  parseDiffDisplayLines,
   processToolView,
 } from "./process-activity.ts";
 
@@ -100,5 +104,76 @@ describe("process activity", () => {
         args: ["-Command", "Get-Process"],
       }).preview,
     ).toContain("Get-Process");
+  });
+
+  it("formats edit tool args as a display diff with file line numbers", () => {
+    const diff = formatEditToolAsDiff({
+      path: "src/app.ts",
+      edits: [{ oldText: "return 42", newText: "return 43" }],
+    });
+    expect(diff).toContain("--- a/src/app.ts");
+    expect(diff).toContain("+++ b/src/app.ts");
+    expect(diff).toMatch(/^-1 return 42$/m);
+    expect(diff).toMatch(/^\+1 return 43$/m);
+
+    const legacy = formatEditToolAsDiff({
+      path: "a.ts",
+      old_string: "foo",
+      new_string: "bar",
+    });
+    expect(legacy).toMatch(/^-1 foo$/m);
+    expect(legacy).toMatch(/^\+1 bar$/m);
+
+    expect(looksLikeDiffText("--- a/x\n+++ b/x\n@@\n-old\n+new\n")).toBe(true);
+    expect(looksLikeDiffText("+12 old\n-11 new")).toBe(true);
+    expect(looksLikeDiffText("plain log line")).toBe(false);
+  });
+
+  it("formats write tool content as all-addition lines starting at file line 1", () => {
+    const diff = formatEditToolAsDiff(
+      {
+        path: "notes.md",
+        content: "# notes\nhello\n",
+      },
+      "write",
+    );
+    expect(diff).toContain("--- /dev/null");
+    expect(diff).toContain("+++ b/notes.md");
+    expect(diff).toContain("@@ -0,0 +1,2 @@");
+    expect(diff).toMatch(/^\+1 # notes$/m);
+    expect(diff).toMatch(/^\+2 hello$/m);
+    // No deletion body lines (headers --- /dev/null are fine).
+    expect(diff).not.toMatch(/^-[^-+]/m);
+  });
+
+  it("parses pi numbered diffs and unified hunks into file line numbers", () => {
+    const pi = parseDiffDisplayLines("+12 return 43\n-11 return 42\n 10 context");
+    expect(pi).toEqual([
+      { kind: "add", lineNo: 12, text: "+return 43" },
+      { kind: "remove", lineNo: 11, text: "-return 42" },
+      { lineNo: 10, text: " context" },
+    ]);
+
+    const unified = parseDiffDisplayLines(
+      ["--- a/x", "+++ b/x", "@@ -20,2 +20,2 @@", "-old", "+new", " keep"].join("\n"),
+    );
+    expect(unified.map((r) => [r.kind, r.lineNo, r.text])).toEqual([
+      ["meta", undefined, "--- a/x"],
+      ["meta", undefined, "+++ b/x"],
+      ["hunk", undefined, "@@ -20,2 +20,2 @@"],
+      ["remove", 20, "-old"],
+      ["add", 20, "+new"],
+      [undefined, 21, " keep"],
+    ]);
+  });
+
+  it("extracts details.diff from tool result payloads", () => {
+    expect(
+      extractToolDiffDetails({
+        diff: "+42 fixed\n-41 broken",
+        firstChangedLine: 42,
+      }),
+    ).toContain("+42 fixed");
+    expect(extractToolDiffDetails({ note: "nope" })).toBeUndefined();
   });
 });

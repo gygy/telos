@@ -181,6 +181,7 @@ export function applyRuntimeEventToLiveStream(
             status: event.isError ? "error" : "completed",
             output: event.output || (event.isError ? "Tool failed" : "Done"),
             toolName: event.toolName || row.toolName,
+            ...(event.details !== undefined ? { details: event.details } : {}),
           };
           found = true;
           break;
@@ -195,6 +196,7 @@ export function applyRuntimeEventToLiveStream(
         toolName: event.toolName,
         status: event.isError ? "error" : "completed",
         output: event.output || (event.isError ? "Tool failed" : "Done"),
+        ...(event.details !== undefined ? { details: event.details } : {}),
         timestamp: nowIso(),
       });
       return mark({ ...state, items, seq });

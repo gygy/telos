@@ -17,6 +17,7 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import { t, type Locale } from "../lib/i18n.ts";
+import { parseDiffDisplayLines } from "../lib/process-activity.ts";
 import { cn } from "../lib/utils.ts";
 
 hljs.registerLanguage("bash", bash);
@@ -111,24 +112,29 @@ function MermaidDiagram(props: { source: string; locale: Locale }) {
 }
 
 function DiffContent(props: { code: string }) {
+  const rows = useMemo(() => parseDiffDisplayLines(props.code), [props.code]);
+  const lnDigits = useMemo(() => {
+    let max = 1;
+    for (const row of rows) {
+      if (row.lineNo !== undefined) max = Math.max(max, row.lineNo);
+    }
+    return String(max).length;
+  }, [rows]);
+
   return (
-    <code className="content-diff-lines">
-      {props.code.split("\n").map((line, index) => {
-        const kind =
-          line.startsWith("+") && !line.startsWith("+++")
-            ? "add"
-            : line.startsWith("-") && !line.startsWith("---")
-              ? "remove"
-              : line.startsWith("@@")
-                ? "hunk"
-                : undefined;
-        return (
-          <span key={`${index}:${line}`} data-diff={kind}>
-            {line || " "}
-            {index < props.code.split("\n").length - 1 ? "\n" : null}
+    <code className="content-diff-lines" style={{ ["--diff-ln-ch" as string]: String(lnDigits) }}>
+      {rows.map((row, index) => (
+        <span
+          key={`${index}:${row.lineNo ?? ""}:${row.text}`}
+          className="content-diff-line"
+          data-diff={row.kind === "meta" ? undefined : row.kind}
+        >
+          <span className="content-diff-ln" aria-hidden="true">
+            {row.lineNo !== undefined ? row.lineNo : ""}
           </span>
-        );
-      })}
+          <span className="content-diff-text">{row.text || " "}</span>
+        </span>
+      ))}
     </code>
   );
 }

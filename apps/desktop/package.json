@@ -15,6 +15,7 @@
     "smoke:packaged": "node scripts/smoke-packaged.mjs",
     "e2e": "pnpm run build && playwright test",
     "e2e:ui": "pnpm run build && playwright test --ui",
+    "demo:session-content": "vp build --config vite.renderer.config.ts && vp preview --config vite.renderer.config.ts --host 127.0.0.1 --port 4177 --open /session-content-demo.html",
     "electron:install": "install-electron",
     "package": "pnpm run build && electron-builder --config electron-builder.yml --publish never",
     "package:dir": "pnpm run build && electron-builder --dir --config electron-builder.yml --publish never",

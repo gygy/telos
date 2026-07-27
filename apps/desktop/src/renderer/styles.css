@@ -1722,6 +1722,16 @@ html[data-custom-window-controls="true"] .page-header {
   flex-direction: column;
   gap: 6px;
 }
+/* Edit tool: oldText/newText → ContentCodeBlock language=diff */
+.process-step-diff {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden; /* confine scroll to the code block, not the timeline */
+}
+.process-step-diff .content-code-block {
+  margin: 0;
+  max-width: 100%;
+}
 .process-step-body-nested {
   margin: 2px 0 6px;
   padding-left: 0;
@@ -2094,11 +2104,12 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 .content-code-block {
+  --content-code-bg: color-mix(in srgb, var(--background) 84%, #0d1117);
   overflow: hidden;
   margin: 10px 0;
   border: 1px solid var(--border);
   border-radius: 11px;
-  background: color-mix(in srgb, var(--background) 84%, #0d1117);
+  background: var(--content-code-bg);
 }
 .content-code-header {
   display: flex;
@@ -2132,7 +2143,11 @@ html[data-custom-window-controls="true"] .page-header {
   background: var(--hover-fill);
   color: var(--foreground);
 }
-.pix-md .content-code-pre {
+/*
+ * Code body: scroll both axes (tool diffs live outside .pix-md too).
+ * Use .content-code-block prefix so these beat .pix-md pre / .pix-md code.
+ */
+.content-code-block .content-code-pre {
   max-height: 560px;
   overflow: auto;
   margin: 0;
@@ -2140,8 +2155,10 @@ html[data-custom-window-controls="true"] .page-header {
   border-radius: 0;
   background: transparent;
   padding: 12px 14px;
+  white-space: pre;
+  tab-size: 2;
 }
-.pix-md .content-code-pre code {
+.content-code-block .content-code-pre > code {
   display: block;
   min-width: max-content;
   border-radius: 0;
@@ -2151,11 +2168,24 @@ html[data-custom-window-controls="true"] .page-header {
   font-size: 12.25px;
   line-height: 1.62;
   tab-size: 2;
+  white-space: inherit;
+}
+/* Diff: vertical padding only; force code ≥ viewport so row tints always full-bleed. */
+.content-code-block .content-code-pre.content-code-diff {
+  padding: 8px 0;
+}
+.content-code-block .content-code-pre.content-code-diff > code {
+  /* Beat generic `min-width: max-content` so short lines still span the pre. */
+  display: inline-block;
+  min-width: 100%;
+  width: max-content;
+  vertical-align: top;
 }
 [data-theme="light"] .content-code-block {
-  background: color-mix(in srgb, var(--surface-panel) 88%, #eef1f5);
+  --content-code-bg: color-mix(in srgb, var(--surface-panel) 88%, #eef1f5);
+  background: var(--content-code-bg);
 }
-[data-theme="light"] .pix-md .content-code-pre code {
+[data-theme="light"] .content-code-block .content-code-pre > code {
   color: #273142;
 }
 .hljs-comment,
@@ -2218,31 +2248,72 @@ html[data-custom-window-controls="true"] .page-header {
   color: #0550ae;
 }
 
-.content-diff-lines > span {
-  display: block;
-  min-height: 1.62em;
-  margin: 0 -14px;
-  padding: 0 14px;
+/*
+ * Diff rows: each row is 100% of the (min 100% / max-content) code block so
+ * add/remove tints always paint edge-to-edge; sticky gutter keeps file line nos.
+ */
+.content-diff-lines {
+  box-sizing: border-box;
 }
-.content-diff-lines > span[data-diff="add"] {
+.content-diff-line {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 1.62em;
+  white-space: pre;
+}
+.content-diff-ln {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 calc(var(--diff-ln-ch, 2) * 1ch + 1.5rem);
+  width: calc(var(--diff-ln-ch, 2) * 1ch + 1.5rem);
+  box-sizing: border-box;
+  padding: 0 0.55rem 0 0.65rem;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.48;
+  text-align: right;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Opaque underlay so scrolled text does not show through. */
+  background: var(--content-code-bg);
+}
+.content-diff-line[data-diff="add"] .content-diff-ln {
+  background: color-mix(in srgb, #239764 16%, var(--content-code-bg));
+}
+.content-diff-line[data-diff="remove"] .content-diff-ln {
+  background: color-mix(in srgb, #dc4f55 16%, var(--content-code-bg));
+}
+.content-diff-line[data-diff="hunk"] .content-diff-ln {
+  background: color-mix(in srgb, #168fc7 13%, var(--content-code-bg));
+}
+.content-diff-text {
+  flex: 1 1 auto;
+  min-width: min-content;
+  padding-right: 14px;
+  white-space: pre;
+}
+.content-diff-line[data-diff="add"] {
   background: color-mix(in srgb, #239764 16%, transparent);
   color: color-mix(in srgb, #7ee2a8 86%, var(--foreground));
 }
-.content-diff-lines > span[data-diff="remove"] {
+.content-diff-line[data-diff="remove"] {
   background: color-mix(in srgb, #dc4f55 16%, transparent);
   color: color-mix(in srgb, #ff9b9f 86%, var(--foreground));
 }
-.content-diff-lines > span[data-diff="hunk"] {
+.content-diff-line[data-diff="hunk"] {
   background: color-mix(in srgb, #168fc7 13%, transparent);
   color: color-mix(in srgb, #78c8eb 82%, var(--foreground));
 }
-[data-theme="light"] .content-diff-lines > span[data-diff="add"] {
+[data-theme="light"] .content-diff-line[data-diff="add"] {
   color: #116329;
 }
-[data-theme="light"] .content-diff-lines > span[data-diff="remove"] {
+[data-theme="light"] .content-diff-line[data-diff="remove"] {
   color: #a40e26;
 }
-[data-theme="light"] .content-diff-lines > span[data-diff="hunk"] {
+[data-theme="light"] .content-diff-line[data-diff="hunk"] {
   color: #0550ae;
 }
 

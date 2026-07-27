@@ -18,6 +18,14 @@ export default defineConfig({
     // Mermaid's generated parser is a lazy 663 kB chunk (143 kB gzip); app entry chunks stay lower.
     chunkSizeWarningLimit: 700,
     rolldownOptions: {
+      // Real session-content demo page (same React stack as chat timeline).
+      input: {
+        main: resolve(import.meta.dirname, "src/renderer/index.html"),
+        "session-content-demo": resolve(
+          import.meta.dirname,
+          "src/renderer/session-content-demo.html",
+        ),
+      },
       output: {
         codeSplitting: {
           groups: [
