@@ -66,8 +66,8 @@ pnpm preview:landing  # serve the production build
 ## Validate
 
 ```bash
-pnpm check        # lint + types + format (same as Linux CI)
-pnpm check:types  # lint + types only (same as Windows/macOS CI)
+pnpm check        # lint + types + format (same as Ubuntu CI)
+pnpm check:types  # lint + types only
 pnpm fmt          # auto-fix formatting
 pnpm test
 pnpm build        # all workspace packages (desktop + landing + libs)
@@ -104,7 +104,7 @@ Installers land under `apps/desktop/release/app/` (unsigned in CI — no code-si
 
 | Workflow    | File                            | When                      | What                                                                                               |
 | ----------- | ------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | install → lint/types → unit tests → `pnpm build` on Linux, Windows, macOS                          |
+| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build; Windows: packaged ConPTY smoke only           |
 | **Release** | `.github/workflows/release.yml` | push `v*` tag (or manual) | multi-platform installers → **GitHub Release** (Win NSIS, mac DMG arm64+Intel, Linux AppImage+deb) |
 
 ### Versioning
@@ -126,7 +126,7 @@ git tag v0.1.0
 git push origin main --tags
 ```
 
-Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Format check runs only on Linux CI; lint and typecheck run on all three OSes. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
+Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build, plus a narrow Windows packaged ConPTY smoke; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
 
 > **macOS note:** auto-update works best with a signed/notarized app. Unsigned builds may fail code-signature verification when installing updates; Windows NSIS and Linux AppImage are the more reliable unsigned paths today.
 

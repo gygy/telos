@@ -1,4 +1,5 @@
-# Cross-platform validation plus a packaged Windows ConPTY smoke.
+# Daily gate on Ubuntu; Windows only for packaged ConPTY smoke.
+# Multi-platform installers stay in release.yml (tag-driven).
 name: CI
 
 on:
@@ -13,17 +14,9 @@ concurrency:
 
 jobs:
   check:
-    name: check (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-
+    name: check (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -42,14 +35,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Format is OS-sensitive (CRLF vs LF). Gate style only on Linux; always
-      # run lint + typecheck so logic stays covered on every platform.
-      - name: Lint / typecheck
-        if: runner.os != 'Linux'
-        run: pnpm check:types
-
       - name: Lint / typecheck / format
-        if: runner.os == 'Linux'
         run: pnpm check
 
       - name: Unit tests
@@ -58,14 +44,37 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Install Electron binary for packaged smoke
-        if: runner.os == 'Windows'
+  # node-pty / ConPTY paths are Windows-only; keep a narrow packaged smoke.
+  windows-smoke:
+    name: packaged smoke (windows)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.15.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Install Electron binary
         run: pnpm electron:install
 
-      - name: Package Windows app directory
-        if: runner.os == 'Windows'
+      - name: Package app directory
         run: pnpm --filter @pix/desktop package:dir
 
-      - name: Run packaged Windows ConPTY smoke
-        if: runner.os == 'Windows'
+      - name: Run packaged ConPTY smoke
         run: pnpm smoke:packaged
