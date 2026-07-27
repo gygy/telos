@@ -3,6 +3,7 @@
  * Format matches pi-coding-agent docs/models.md (providers → baseUrl/api/models).
  * Secrets are never projected outward.
  */
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import type {
@@ -54,6 +55,26 @@ const DEFAULT_MAX_TOKENS = 16_384;
 
 export function modelsJsonPath(agentDir: string): string {
   return join(agentDir, MODELS_FILE);
+}
+
+/**
+ * Provider ids declared in agentDir/models.json (Settings custom models).
+ * Sync so listModels() can classify without async.
+ */
+export function listModelsJsonProviderIds(agentDir: string): Set<string> {
+  const path = modelsJsonPath(agentDir);
+  if (!existsSync(path)) return new Set();
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (!isRecord(parsed) || !isRecord(parsed.providers)) return new Set();
+    return new Set(
+      Object.keys(parsed.providers)
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 async function fileExists(path: string): Promise<boolean> {

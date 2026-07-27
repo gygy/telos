@@ -80,6 +80,7 @@ import {
   buildPiSdkActivity,
   buildPiSdkStatus,
   defaultAgentDir,
+  fetchLatestPiSdkVersion,
   formatPiSdkBusyError,
   listPiConfigFiles,
   normalizePiSdkPrefs,
@@ -172,7 +173,9 @@ function collectPiSdkActivity(): import("@pix/contracts").PiSdkActivity {
   });
 }
 
-async function collectPiSdkStatus(): Promise<import("@pix/contracts").PiSdkStatus> {
+async function collectPiSdkStatus(options?: {
+  forceLatest?: boolean;
+}): Promise<import("@pix/contracts").PiSdkStatus> {
   const preference = getPiSdkPrefs();
   const builtin = resolveBuiltinSdkCached();
   const global = await resolveGlobalSdkCached(true);
@@ -183,6 +186,7 @@ async function collectPiSdkStatus(): Promise<import("@pix/contracts").PiSdkStatu
   } catch {
     // host may be down
   }
+  const latest = await fetchLatestPiSdkVersion({ force: options?.forceLatest === true });
   return buildPiSdkStatus({
     preference,
     appliedSource: appliedPiSdkSource,
@@ -190,6 +194,9 @@ async function collectPiSdkStatus(): Promise<import("@pix/contracts").PiSdkStatu
     global,
     agentDir,
     activity: collectPiSdkActivity(),
+    ...(latest.version ? { latestVersion: latest.version } : {}),
+    latestCheckedAt: latest.checkedAt,
+    ...(latest.error ? { latestError: latest.error } : {}),
   });
 }
 
@@ -4828,6 +4835,7 @@ void app
       if (error) throw new Error(error);
     });
     ipcMain.handle("pix:pi-sdk:install-global", () => runInstallGlobalPiCli());
+    ipcMain.handle("pix:pi-sdk:check-latest", () => collectPiSdkStatus({ forceLatest: true }));
 
     // Only resolve global package when user already prefers global SDK.
     // Default builtin: skip global pi probe entirely at startup.

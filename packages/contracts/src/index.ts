@@ -1272,6 +1272,16 @@ export interface PiSdkStatus {
   agentDir: string;
   /** Current interruptible work — UI should confirm before force switch. */
   activity: PiSdkActivity;
+  /** Latest version on npm (`@earendil-works/pi-coding-agent`). */
+  latestVersion?: string;
+  /** ISO time of the last registry check. */
+  latestCheckedAt?: string;
+  /** Registry/network error when latest could not be fetched. */
+  latestError?: string;
+  /** Global install exists and is older than `latestVersion`. */
+  globalUpdateAvailable?: boolean;
+  /** Builtin package is older than `latestVersion` (needs a Pix app update). */
+  builtinBehindLatest?: boolean;
 }
 
 export interface PiSdkSetSourceOptions {
@@ -1420,8 +1430,13 @@ export interface PixDesktopApi {
     listConfigFiles(): Promise<PiConfigFileInfo[]>;
     revealConfig(id: string): Promise<void>;
     openConfig(id: string): Promise<void>;
-    /** Ensure global `pi` CLI is installed (same as bootstrap ensure). */
+    /**
+     * Install or update the global `pi` CLI to npm `@latest`
+     * (`npm install -g @earendil-works/pi-coding-agent@latest`).
+     */
     installGlobal(): Promise<PiCliEnsureResult>;
+    /** Re-check npm registry for the latest package version (bypasses short cache). */
+    checkLatest(): Promise<PiSdkStatus>;
   };
   /**
    * Embedded pi TUI (terminal mode): real PTY running `pi --session <file>`.

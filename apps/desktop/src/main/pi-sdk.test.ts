@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   buildPiSdkActivity,
   buildPiSdkStatus,
+  clearLatestPiSdkVersionCache,
+  fetchLatestPiSdkVersion,
   formatPiSdkBusyError,
+  isSemverNewer,
   listPiConfigFiles,
   normalizePiSdkPrefs,
   normalizePiSdkSource,
@@ -158,5 +161,60 @@ describe("buildPiSdkStatus / spawn env", () => {
     expect(msg).toContain("agent");
     expect(msg).toContain("parked:2");
     expect(msg).toContain("terminal");
+  });
+
+  it("marks global update when latest is newer", () => {
+    const status = buildPiSdkStatus({
+      preference: { source: "global" },
+      appliedSource: "global",
+      builtin: {
+        source: "builtin",
+        available: true,
+        version: "0.80.10",
+        packageRoot: "/builtin",
+      },
+      global: {
+        source: "global",
+        available: true,
+        version: "0.81.0",
+        packageRoot: "/global",
+        cliPath: "/global/bin/pi",
+      },
+      agentDir: "/home/u/.pi/agent",
+      latestVersion: "0.82.1",
+      latestCheckedAt: "2026-07-27T00:00:00.000Z",
+    });
+    expect(status.globalUpdateAvailable).toBe(true);
+    expect(status.builtinBehindLatest).toBe(true);
+    expect(status.latestVersion).toBe("0.82.1");
+  });
+});
+
+describe("isSemverNewer", () => {
+  it("compares dotted versions", () => {
+    expect(isSemverNewer("0.82.1", "0.80.10")).toBe(true);
+    expect(isSemverNewer("0.80.10", "0.82.1")).toBe(false);
+    expect(isSemverNewer("0.82.1", "0.82.1")).toBe(false);
+    expect(isSemverNewer("1.0.0", "0.99.9")).toBe(true);
+  });
+});
+
+describe("fetchLatestPiSdkVersion", () => {
+  afterEach(() => {
+    clearLatestPiSdkVersionCache();
+  });
+
+  it("parses npm registry latest payload", async () => {
+    const fetchImpl = async () =>
+      ({
+        ok: true,
+        json: async () => ({ version: "0.82.1" }),
+      }) as Response;
+    const first = await fetchLatestPiSdkVersion({ force: true, fetchImpl });
+    expect(first.version).toBe("0.82.1");
+    expect(first.fromCache).toBe(false);
+    const second = await fetchLatestPiSdkVersion({ fetchImpl });
+    expect(second.version).toBe("0.82.1");
+    expect(second.fromCache).toBe(true);
   });
 });

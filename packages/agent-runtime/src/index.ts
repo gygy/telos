@@ -51,6 +51,7 @@ import {
 } from "./extension-ui-bridge.ts";
 import { deleteProviderCredential, persistProviderApiKey } from "./auth-json.ts";
 import {
+  listModelsJsonProviderIds,
   readModelsJsonConfig,
   removeCustomProviderFromModelsJson,
   upsertCustomProviderInModelsJson,
@@ -73,6 +74,7 @@ export {
 export { authJsonPath, deleteProviderCredential, persistProviderApiKey } from "./auth-json.ts";
 export {
   ensureModelsJsonTemplate,
+  listModelsJsonProviderIds,
   modelsJsonPath,
   readModelsJsonConfig,
   removeCustomProviderFromModelsJson,
@@ -1350,7 +1352,7 @@ export async function createPixRuntime(
       await reloadSessionResources();
       // Replace config diagnostics after reload so repaired files clear old errors.
       configDiagnostics.length = 0;
-      await runtime.services.modelRuntime.reloadConfig();
+      await runtime.services.modelRuntime.refresh();
       configDiagnostics.push(...collectConfigDiagnostics(runtime.services));
     },
     async listSessions() {
@@ -1473,12 +1475,13 @@ export async function createPixRuntime(
       );
     },
     listModels() {
+      const modelsJsonProviders = listModelsJsonProviderIds(runtime.services.agentDir);
       return runtime.services.modelRuntime.getModels().map((model) => ({
         provider: model.provider,
         id: model.id,
         name: model.name ?? model.id,
         reasoning: Boolean(model.reasoning),
-        source: classifyModelSource(model.provider, runtime.services),
+        source: classifyModelSource(model.provider, runtime.services, modelsJsonProviders),
       }));
     },
     async setModel(provider, id) {
@@ -1572,7 +1575,7 @@ export async function createPixRuntime(
           // ignore
         }
       }
-      await runtime.services.modelRuntime.reloadConfig();
+      await runtime.services.modelRuntime.refresh();
       // Keep current process configured even if AuthStorage has not re-read auth.json yet.
       if (apiKey) {
         await runtime.services.modelRuntime.setRuntimeApiKey(providerId, apiKey);
@@ -1591,7 +1594,7 @@ export async function createPixRuntime(
       } catch {
         // ignore
       }
-      await runtime.services.modelRuntime.reloadConfig();
+      await runtime.services.modelRuntime.refresh();
       return config;
     },
     getPiSettings() {
@@ -1812,13 +1815,14 @@ export async function createPixRuntime(
       });
     },
     async refreshModelCatalog() {
-      await runtime.services.modelRuntime.reloadConfig();
+      await runtime.services.modelRuntime.refresh();
+      const modelsJsonProviders = listModelsJsonProviderIds(runtime.services.agentDir);
       return runtime.services.modelRuntime.getModels().map((model) => ({
         provider: model.provider,
         id: model.id,
         name: model.name ?? model.id,
         reasoning: Boolean(model.reasoning),
-        source: classifyModelSource(model.provider, runtime.services),
+        source: classifyModelSource(model.provider, runtime.services, modelsJsonProviders),
       }));
     },
     async completeText(prompt, options) {
@@ -2126,11 +2130,21 @@ const PI_BUILTIN_PROVIDERS = new Set<string>([
 function classifyModelSource(
   provider: string,
   services: AgentSessionServices,
+  modelsJsonProviders?: Set<string>,
 ): "builtin" | "custom" {
-  // Extension-registered providers are always custom, even if they reuse a known id.
+  const id = provider.trim();
+  // models.json providers (Settings → custom) always surface as custom, even if the
+  // id collides with a known builtin name (e.g. user-defined "openai" gateway).
+  if (modelsJsonProviders?.has(id)) return "custom";
+  // Extension-registered providers are always custom.
   const extensionIds = services.modelRuntime.getRegisteredProviderIds();
-  if (extensionIds.includes(provider)) return "custom";
-  return PI_BUILTIN_PROVIDERS.has(provider) ? "builtin" : "custom";
+  if (extensionIds.includes(id)) return "custom";
+  try {
+    if (services.modelRuntime.getRegisteredProviderConfig(id)) return "custom";
+  } catch {
+    // older runtimes without the method
+  }
+  return PI_BUILTIN_PROVIDERS.has(id) ? "builtin" : "custom";
 }
 
 /**

@@ -61,27 +61,48 @@ function busySummary(
   return parts.length > 0 ? parts.join(" · ") : tr("piSdk.busyHint");
 }
 
-/** Stacked description: primary status, optional hint, mono path. */
+type DescTone = "default" | "muted" | "warn" | "ok" | "error";
+
+function toneClass(tone: DescTone | undefined): string {
+  switch (tone) {
+    case "warn":
+      return "text-amber-600 dark:text-amber-500";
+    case "ok":
+      return "text-emerald-600 dark:text-emerald-500";
+    case "error":
+      return "text-destructive";
+    case "muted":
+      return "text-[var(--text-subtle)]";
+    default:
+      // Version numbers / main status — same weight as settings description body.
+      return "text-[var(--muted-foreground)]";
+  }
+}
+
+/** Stacked description: primary (version/status), optional hint, mono path. */
 function DescStack(props: {
   primary?: string | undefined;
   hint?: string | undefined;
   path?: string | undefined;
-  tone?: "default" | "warn" | "ok" | undefined;
+  /** Color for the primary line (versions stay default/muted, not green). */
+  primaryTone?: DescTone | undefined;
+  /** Color for the secondary hint (warn only when action is needed). */
+  hintTone?: DescTone | undefined;
+  /** @deprecated use primaryTone */
+  tone?: DescTone | undefined;
 }) {
-  const primaryClass =
-    props.tone === "warn"
-      ? "text-amber-600 dark:text-amber-400"
-      : props.tone === "ok"
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-[var(--muted-foreground)]";
+  const primaryTone = props.primaryTone ?? props.tone ?? "default";
+  const hintTone = props.hintTone ?? "muted";
 
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
       {props.primary ? (
-        <span className={cn("text-[12px] leading-snug", primaryClass)}>{props.primary}</span>
+        <span className={cn("text-[12px] leading-snug", toneClass(primaryTone))}>
+          {props.primary}
+        </span>
       ) : null}
       {props.hint ? (
-        <span className="text-[11.5px] leading-snug text-[var(--text-subtle)]">{props.hint}</span>
+        <span className={cn("text-[11.5px] leading-snug", toneClass(hintTone))}>{props.hint}</span>
       ) : null}
       {props.path ? (
         <span
@@ -108,7 +129,12 @@ function sourceStatusLine(
   candidate: PiSdkCandidate,
   isActive: boolean,
   showBusyHint: boolean,
-): { primary: string | undefined; tone: "default" | "warn" | "ok" } {
+): {
+  primary: string | undefined;
+  primaryTone: DescTone;
+  hint?: string;
+  hintTone?: DescTone;
+} {
   if (!candidate.available) {
     // Button already says "Install"; only surface extra errors (e.g. missing npm).
     const detail =
@@ -116,17 +142,18 @@ function sourceStatusLine(
         ? candidate.error
         : undefined;
     return {
-      primary: [tr("piSdk.unavailable"), detail].filter(Boolean).join(" · "),
-      tone: "warn",
+      primary: tr("piSdk.unavailable"),
+      primaryTone: "muted",
+      ...(detail ? { hint: detail, hintTone: "warn" as const } : {}),
     };
   }
-  const bits = [
-    candidate.version ? `v${candidate.version}` : undefined,
-    !isActive && showBusyHint ? tr("piSdk.busyHintShort") : undefined,
-  ].filter(Boolean) as string[];
+  const version = candidate.version ? `v${candidate.version}` : undefined;
+  const busyHint = !isActive && showBusyHint ? tr("piSdk.busyHintShort") : undefined;
   return {
-    primary: bits.length > 0 ? bits.join(" · ") : undefined,
-    tone: isActive ? "ok" : "default",
+    primary: version,
+    // Version number stays neutral; "in use" is shown on the right control.
+    primaryTone: "default",
+    ...(busyHint ? { hint: busyHint, hintTone: "warn" as const } : {}),
   };
 }
 
@@ -216,12 +243,37 @@ export function PiSdkSection(props: { locale: Locale }) {
     }
   }
 
-  async function installGlobal() {
+  async function installOrUpdateGlobal(mode: "install" | "update") {
     setBusy(true);
     try {
       const result = await window.pix.piSdk.installGlobal();
-      if (result.error) showAppError(result.error);
+      if (result.error) {
+        showAppError(result.error);
+      } else {
+        const next = await window.pix.piSdk.checkLatest();
+        setSdkStatus(next);
+        setFiles(await window.pix.piSdk.listConfigFiles());
+        if (mode === "update" && (result.version || next.latestVersion)) {
+          setStatus(
+            tr("piSdk.updateDone", {
+              version: result.version ?? next.latestVersion ?? "",
+            }),
+          );
+        }
+      }
       await refresh();
+    } catch (error) {
+      showAppError(error instanceof Error ? error.message : tr("piSdk.switchFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkLatest() {
+    setBusy(true);
+    try {
+      const next = await window.pix.piSdk.checkLatest();
+      setSdkStatus(next);
     } catch (error) {
       showAppError(error instanceof Error ? error.message : tr("piSdk.switchFailed"));
     } finally {
@@ -240,67 +292,156 @@ export function PiSdkSection(props: { locale: Locale }) {
         ? tr("piSdk.loading")
         : undefined;
 
+  const latestPrimary = status?.latestVersion
+    ? `v${status.latestVersion}`
+    : status?.latestError
+      ? `${tr("piSdk.latestUnknown")} · ${status.latestError}`
+      : loading
+        ? tr("piSdk.loading")
+        : tr("piSdk.latestUnknown");
+  const latestHint = status?.globalUpdateAvailable
+    ? tr("piSdk.latestBehindGlobal", { version: status.latestVersion ?? "?" })
+    : status?.builtinBehindLatest
+      ? tr("piSdk.latestBehindBuiltin")
+      : status?.latestVersion
+        ? tr("piSdk.upToDate")
+        : undefined;
+
   return (
     <SettingsPageShell
       title={tr("section.pi")}
       testId="settings-pi-sdk"
       titleAction={
-        <SettingsPillButton
-          label={tr("piSdk.refresh")}
-          testId="pi-sdk-refresh"
-          disabled={loading || busy}
-          onClick={() => void refresh()}
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SettingsPillButton
+            label={tr("piSdk.checkLatest")}
+            testId="pi-sdk-check-latest"
+            disabled={loading || busy}
+            onClick={() => void checkLatest()}
+          />
+          <SettingsPillButton
+            label={tr("piSdk.refresh")}
+            testId="pi-sdk-refresh"
+            disabled={loading || busy}
+            onClick={() => void refresh()}
+          />
+        </div>
       }
     >
       <SettingsSectionBlock label={tr("piSdk.sources")} testId="pi-sdk-sources">
         {runtimeNotice ? (
           <SettingsRow
             title={tr("piSdk.status")}
-            description={<DescStack primary={runtimeNotice} tone="warn" />}
+            description={<DescStack primary={runtimeNotice} primaryTone="warn" />}
             control={emptyControl()}
             testId="pi-sdk-runtime-notice"
           />
         ) : null}
+        <SettingsRow
+          title={tr("piSdk.latest")}
+          description={
+            <DescStack
+              primary={latestPrimary}
+              primaryTone={
+                status?.latestError ? "warn" : status?.latestVersion ? "default" : "muted"
+              }
+              hint={latestHint}
+              hintTone={
+                status?.globalUpdateAvailable || status?.builtinBehindLatest ? "warn" : "muted"
+              }
+            />
+          }
+          control={
+            status?.globalUpdateAvailable ? (
+              <SettingsPillButton
+                label={busy ? tr("piSdk.updating") : tr("piSdk.updateGlobal")}
+                testId="pi-sdk-update-global-latest"
+                disabled={busy || loading}
+                onClick={() => void installOrUpdateGlobal("update")}
+              />
+            ) : (
+              emptyControl()
+            )
+          }
+          testId="pi-sdk-latest"
+        />
         {(status?.candidates ?? []).map((candidate) => {
           const isActive = status?.activeSource === candidate.source;
           const title = candidate.source === "builtin" ? tr("piSdk.builtin") : tr("piSdk.global");
-          const { primary, tone } = sourceStatusLine(
-            tr,
-            candidate,
-            isActive,
-            !isActive && uiBusyHint,
-          );
+          const line = sourceStatusLine(tr, candidate, isActive, !isActive && uiBusyHint);
           const path = candidate.cliPath || candidate.packageRoot;
+          const isGlobal = candidate.source === "global";
+          const globalNeedsInstall = isGlobal && !candidate.available;
+          const globalNeedsUpdate = isGlobal && Boolean(status?.globalUpdateAvailable);
+
+          let control: ReactNode;
+          if (globalNeedsInstall) {
+            control = (
+              <SettingsPillButton
+                label={busy ? tr("piSdk.installing") : tr("piSdk.installGlobal")}
+                testId="pi-sdk-install-global"
+                disabled={busy || loading}
+                onClick={() => void installOrUpdateGlobal("install")}
+              />
+            );
+          } else if (globalNeedsUpdate) {
+            control = (
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <SettingsPillButton
+                  label={busy ? tr("piSdk.updating") : tr("piSdk.updateGlobal")}
+                  testId="pi-sdk-update-global"
+                  disabled={busy || loading}
+                  onClick={() => void installOrUpdateGlobal("update")}
+                />
+                {!isActive ? (
+                  <SettingsPillButton
+                    label={tr("piSdk.use")}
+                    testId="pi-sdk-use-global"
+                    disabled={busy || loading}
+                    onClick={() => void switchTo("global")}
+                  />
+                ) : (
+                  <SettingsPillButton
+                    label={tr("piSdk.using")}
+                    testId="pi-sdk-global-active"
+                    disabled
+                  />
+                )}
+              </div>
+            );
+          } else if (isActive) {
+            control = (
+              <SettingsPillButton
+                label={tr("piSdk.using")}
+                testId={`pi-sdk-${candidate.source}-active`}
+                disabled
+              />
+            );
+          } else {
+            control = (
+              <SettingsPillButton
+                label={tr("piSdk.use")}
+                testId={`pi-sdk-use-${candidate.source}`}
+                disabled={busy || loading || !candidate.available}
+                onClick={() => void switchTo(candidate.source)}
+              />
+            );
+          }
+
           return (
             <SettingsRow
               key={candidate.source}
               title={title}
-              description={<DescStack primary={primary} path={path} tone={tone} />}
-              control={
-                isActive ? (
-                  <span
-                    className="text-xs font-medium text-emerald-600 dark:text-emerald-400"
-                    data-testid={`pi-sdk-${candidate.source}-active`}
-                  >
-                    {tr("piSdk.using")}
-                  </span>
-                ) : candidate.source === "global" && !candidate.available ? (
-                  <SettingsPillButton
-                    label={busy ? tr("piSdk.installing") : tr("piSdk.installGlobal")}
-                    testId="pi-sdk-install-global"
-                    disabled={busy || loading}
-                    onClick={() => void installGlobal()}
-                  />
-                ) : (
-                  <SettingsPillButton
-                    label={tr("piSdk.use")}
-                    testId={`pi-sdk-use-${candidate.source}`}
-                    disabled={busy || loading || !candidate.available}
-                    onClick={() => void switchTo(candidate.source)}
-                  />
-                )
+              description={
+                <DescStack
+                  primary={line.primary}
+                  primaryTone={line.primaryTone}
+                  hint={line.hint}
+                  hintTone={line.hintTone}
+                  path={path}
+                />
               }
+              control={control}
               last={false}
             />
           );

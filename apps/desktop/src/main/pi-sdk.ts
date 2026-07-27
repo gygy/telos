@@ -395,6 +395,100 @@ export function formatPiSdkBusyError(activity: PiSdkActivity): string {
   return `${PI_SDK_BUSY_ERROR_PREFIX}${parts.join(",") || "busy"}`;
 }
 
+/** Compare dotted semver-ish versions; true when `latest` is strictly newer than `current`. */
+export function isSemverNewer(latest: string, current: string): boolean {
+  const parse = (v: string): number[] => {
+    const core = v.trim().replace(/^v/i, "").split("-")[0] ?? "";
+    return core.split(".").map((p) => {
+      const n = Number.parseInt(p, 10);
+      return Number.isFinite(n) ? n : 0;
+    });
+  };
+  const a = parse(latest);
+  const b = parse(current);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+}
+
+const LATEST_CACHE_TTL_MS = 15 * 60 * 1000;
+let latestVersionCache: { version: string; at: number } | { error: string; at: number } | undefined;
+
+export type LatestPiSdkVersionResult = {
+  version?: string;
+  error?: string;
+  checkedAt: string;
+  fromCache: boolean;
+};
+
+/**
+ * Fetch latest `@earendil-works/pi-coding-agent` from the npm registry.
+ * Cached briefly so Settings refresh is snappy.
+ */
+export async function fetchLatestPiSdkVersion(
+  options: { force?: boolean; fetchImpl?: typeof fetch } = {},
+): Promise<LatestPiSdkVersionResult> {
+  const now = Date.now();
+  if (!options.force && latestVersionCache && now - latestVersionCache.at < LATEST_CACHE_TTL_MS) {
+    if ("version" in latestVersionCache) {
+      return {
+        version: latestVersionCache.version,
+        checkedAt: new Date(latestVersionCache.at).toISOString(),
+        fromCache: true,
+      };
+    }
+    return {
+      error: latestVersionCache.error,
+      checkedAt: new Date(latestVersionCache.at).toISOString(),
+      fromCache: true,
+    };
+  }
+
+  const checkedAt = new Date().toISOString();
+  const fetchFn = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchFn !== "function") {
+    const error = "fetch is unavailable";
+    latestVersionCache = { error, at: now };
+    return { error, checkedAt, fromCache: false };
+  }
+
+  try {
+    const url = `https://registry.npmjs.org/${encodeURIComponent(PI_SDK_PACKAGE)}/latest`;
+    const res = await fetchFn(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) {
+      const error = `npm registry HTTP ${res.status}`;
+      latestVersionCache = { error, at: now };
+      return { error, checkedAt, fromCache: false };
+    }
+    const body = (await res.json()) as { version?: unknown };
+    const version = typeof body.version === "string" ? body.version.trim() : "";
+    if (!version) {
+      const error = "npm registry returned no version";
+      latestVersionCache = { error, at: now };
+      return { error, checkedAt, fromCache: false };
+    }
+    latestVersionCache = { version, at: now };
+    return { version, checkedAt, fromCache: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    latestVersionCache = { error: message, at: now };
+    return { error: message, checkedAt, fromCache: false };
+  }
+}
+
+/** Test helper: clear latest-version cache. */
+export function clearLatestPiSdkVersionCache(): void {
+  latestVersionCache = undefined;
+}
+
 export function buildPiSdkStatus(input: {
   preference: PiSdkPrefs;
   appliedSource: PiSdkSource;
@@ -402,6 +496,9 @@ export function buildPiSdkStatus(input: {
   global: ResolvedPiSdk;
   agentDir: string;
   activity?: PiSdkActivity;
+  latestVersion?: string;
+  latestCheckedAt?: string;
+  latestError?: string;
 }): PiSdkStatus {
   const { preference, appliedSource, builtin, global, agentDir } = input;
   // If user prefers global but it's missing, still report preference as global
@@ -413,6 +510,14 @@ export function buildPiSdkStatus(input: {
     input.activity ??
     buildPiSdkActivity({ agentBusy: false, parkedBusyCount: 0, terminalLive: false });
 
+  const latest = input.latestVersion?.trim();
+  const globalUpdateAvailable = Boolean(
+    latest && global.available && global.version && isSemverNewer(latest, global.version),
+  );
+  const builtinBehindLatest = Boolean(
+    latest && builtin.available && builtin.version && isSemverNewer(latest, builtin.version),
+  );
+
   return {
     activeSource: preference.source,
     appliedSource,
@@ -422,6 +527,11 @@ export function buildPiSdkStatus(input: {
     candidates: [toCandidate(builtin), toCandidate(global)],
     agentDir,
     activity,
+    ...(latest ? { latestVersion: latest } : {}),
+    ...(input.latestCheckedAt ? { latestCheckedAt: input.latestCheckedAt } : {}),
+    ...(input.latestError ? { latestError: input.latestError } : {}),
+    ...(globalUpdateAvailable ? { globalUpdateAvailable: true } : {}),
+    ...(builtinBehindLatest ? { builtinBehindLatest: true } : {}),
   };
 }
 

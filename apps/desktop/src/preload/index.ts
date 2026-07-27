@@ -55,6 +55,7 @@ const api: PixDesktopApi = {
     revealConfig: (id) => ipcRenderer.invoke("pix:pi-sdk:reveal-config", id),
     openConfig: (id) => ipcRenderer.invoke("pix:pi-sdk:open-config", id),
     installGlobal: () => ipcRenderer.invoke("pix:pi-sdk:install-global"),
+    checkLatest: () => ipcRenderer.invoke("pix:pi-sdk:check-latest"),
   },
   terminal: {
     open: (options) => ipcRenderer.invoke("pix:terminal:open", options),
