@@ -80,6 +80,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
+import { modelSupportsServiceTier, type ServiceTierId } from "../lib/service-tier.ts";
+import { modelSupportsThinking } from "../lib/thinking-levels.ts";
 import { groupModelsByProvider } from "../lib/model-groups.ts";
 import {
   addResourceQuery,
@@ -95,7 +97,8 @@ import { workspaceLabel } from "../lib/workspace.ts";
 import { useShellStore } from "../store/shell-store.ts";
 
 export type { AccessMode, AccessVisibility };
-export type SpeedMode = "fast" | "balanced" | "quality";
+/** @deprecated Use ServiceTierId — legacy Pix labels mapped to OpenAI service_tier. */
+export type SpeedMode = ServiceTierId;
 
 export interface ComposerModelOption {
   provider: string;
@@ -128,8 +131,10 @@ export interface ComposerProps {
   thinkingLevel: string;
   thinkingLevels: string[];
   onThinkingChange: (level: string) => void;
-  speedMode: SpeedMode;
-  onSpeedMode: (mode: SpeedMode) => void;
+  /** OpenAI service_tier when model supports it; empty serviceTiers = unsupported. */
+  serviceTier: ServiceTierId;
+  serviceTiers: ServiceTierId[];
+  onServiceTierChange: (tier: ServiceTierId) => void;
   contextPercent: number | undefined;
   contextTokens: number | undefined;
   /** When false, hide context usage chip on the composer. */
@@ -326,16 +331,20 @@ function FlyoutRow(props: {
   testId?: string;
   flyoutTestId?: string;
   minWidth?: number;
+  /** When true, row is visible but does not open a flyout. */
+  disabled?: boolean;
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+  const disabled = props.disabled === true;
 
   useEffect(() => {
-    if (!props.open) return;
+    if (!props.open || disabled) return;
     setAnchor(anchorFromElement(rowRef.current));
-  }, [props.open]);
+  }, [props.open, disabled]);
 
   function show() {
+    if (disabled) return;
     setAnchor(anchorFromElement(rowRef.current));
     props.onHoverOpen();
   }
@@ -345,14 +354,17 @@ function FlyoutRow(props: {
       <div
         ref={rowRef}
         role="menuitem"
+        aria-disabled={disabled || undefined}
         data-testid={props.testId}
+        data-disabled={disabled ? "true" : undefined}
         className={cn(
           "flex w-full cursor-default items-center gap-2 px-2.5 py-2 text-left text-[13px] transition-colors",
-          "text-[var(--popover-foreground,var(--foreground))] hover:bg-[var(--hover-fill)]",
-          props.open && "bg-[var(--accent)]",
+          "text-[var(--popover-foreground,var(--foreground))]",
+          disabled ? "opacity-50" : "hover:bg-[var(--hover-fill)]",
+          !disabled && props.open && "bg-[var(--accent)]",
         )}
         onMouseEnter={show}
-        onMouseLeave={props.onHoverLeave}
+        onMouseLeave={disabled ? undefined : props.onHoverLeave}
       >
         {props.icon ? (
           <span className="inline-flex size-4 shrink-0 opacity-70">{props.icon}</span>
@@ -363,23 +375,27 @@ function FlyoutRow(props: {
             {props.valueLabel}
           </span>
         ) : null}
-        <ChevronRight className="size-3.5 shrink-0 opacity-50" strokeWidth={2} />
+        {!disabled ? (
+          <ChevronRight className="size-3.5 shrink-0 opacity-50" strokeWidth={2} />
+        ) : null}
       </div>
-      <FloatingMenu
-        open={props.open && Boolean(anchor)}
-        anchor={anchor}
-        onClose={props.onHoverLeave}
-        placement="right"
-        zIndex={10_050}
-        closeOnOutside={false}
-        minWidth={props.minWidth ?? 180}
-        className="py-1"
-        {...(props.flyoutTestId ? { testId: props.flyoutTestId } : {})}
-      >
-        <div onMouseEnter={props.onHoverOpen} onMouseLeave={props.onHoverLeave}>
-          {props.children}
-        </div>
-      </FloatingMenu>
+      {!disabled ? (
+        <FloatingMenu
+          open={props.open && Boolean(anchor)}
+          anchor={anchor}
+          onClose={props.onHoverLeave}
+          placement="right"
+          zIndex={10_050}
+          closeOnOutside={false}
+          minWidth={props.minWidth ?? 180}
+          className="py-1"
+          {...(props.flyoutTestId ? { testId: props.flyoutTestId } : {})}
+        >
+          <div onMouseEnter={props.onHoverOpen} onMouseLeave={props.onHoverLeave}>
+            {props.children}
+          </div>
+        </FloatingMenu>
+      ) : null}
     </>
   );
 }
@@ -735,6 +751,14 @@ export function Composer(props: ComposerProps) {
     () => groupModelsByProvider(props.modelOptions, tr("models.group.custom")),
     [props.modelOptions, props.locale],
   );
+  const thinkingSupported = modelSupportsThinking(props.thinkingLevels);
+  const serviceTierSupported = modelSupportsServiceTier(props.serviceTiers);
+
+  function serviceTierLabel(tier: string): string {
+    if (tier === "priority") return tr("composer.speed.priority");
+    if (tier === "flex") return tr("composer.speed.flex");
+    return tr("composer.speed.default");
+  }
 
   const slashQuery = slashCommandQuery(props.prompt);
   const resourceQuery = addResourceQuery(props.prompt);
@@ -1991,17 +2015,22 @@ export function Composer(props: ComposerProps) {
           )}
         </div>
         <div className="shrink-0 border-t border-[var(--border)] py-1">
-          {/* 思考强度 above 速度; hover flyout; current value left of › */}
+          {/* Thinking levels are model-specific (HostSnapshot.availableThinkingLevels). */}
           <FlyoutRow
             icon={<Sparkles className="size-3.5" strokeWidth={1.75} />}
             label={tr("composer.model.thinking")}
-            valueLabel={thinkingLevelLabel(props.locale, props.thinkingLevel)}
+            valueLabel={
+              thinkingSupported
+                ? thinkingLevelLabel(props.locale, props.thinkingLevel)
+                : tr("composer.model.thinkingUnsupported")
+            }
             open={modelFlyout === "thinking"}
             onHoverOpen={() => openModelFlyout("thinking")}
             onHoverLeave={scheduleCloseModelFlyout}
             testId="composer-thinking-flyout-trigger"
             flyoutTestId="composer-thinking-flyout"
             minWidth={160}
+            disabled={!thinkingSupported}
           >
             {props.thinkingLevels.map((level) => (
               <MenuRow
@@ -2018,15 +2047,14 @@ export function Composer(props: ComposerProps) {
             ))}
           </FlyoutRow>
 
+          {/* Real OpenAI service_tier only — hidden as disabled when model has no support. */}
           <FlyoutRow
             icon={<Gauge className="size-3.5" strokeWidth={1.75} />}
             label={tr("composer.model.speed")}
             valueLabel={
-              props.speedMode === "fast"
-                ? tr("composer.speed.fast")
-                : props.speedMode === "quality"
-                  ? tr("composer.speed.quality")
-                  : tr("composer.speed.balanced")
+              serviceTierSupported
+                ? serviceTierLabel(props.serviceTier)
+                : tr("composer.model.speedUnsupported")
             }
             open={modelFlyout === "speed"}
             onHoverOpen={() => openModelFlyout("speed")}
@@ -2034,21 +2062,16 @@ export function Composer(props: ComposerProps) {
             testId="composer-speed-flyout-trigger"
             flyoutTestId="composer-speed-flyout"
             minWidth={160}
+            disabled={!serviceTierSupported}
           >
-            {(
-              [
-                ["fast", tr("composer.speed.fast")],
-                ["balanced", tr("composer.speed.balanced")],
-                ["quality", tr("composer.speed.quality")],
-              ] as const
-            ).map(([mode, label]) => (
+            {props.serviceTiers.map((tier) => (
               <MenuRow
-                key={mode}
-                label={label}
-                active={props.speedMode === mode}
-                testId={`composer-speed-${mode}`}
+                key={tier}
+                label={serviceTierLabel(tier)}
+                active={props.serviceTier === tier}
+                testId={`composer-speed-${tier}`}
                 onClick={() => {
-                  props.onSpeedMode(mode);
+                  props.onServiceTierChange(tier);
                   clearModelFlyoutCloseTimer();
                   setModelFlyout(null);
                 }}

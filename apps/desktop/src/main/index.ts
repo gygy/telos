@@ -3510,6 +3510,20 @@ class HostSupervisor {
     return event.snapshot;
   }
 
+  async setServiceTier(tier: string): Promise<HostSnapshot> {
+    if (!this.#host) await this.start();
+    const event = await this.#request({
+      protocolVersion: IPC_PROTOCOL_VERSION,
+      type: "serviceTier.set",
+      requestId: randomUUID(),
+      tier,
+    });
+    if (event.type !== "runtime.snapshot")
+      throw new Error("Agent Host returned an unexpected serviceTier.set response");
+    this.#acceptSnapshot(event.snapshot);
+    return event.snapshot;
+  }
+
   async listProviders(): Promise<ProviderAuthSummary[]> {
     if (!this.#host) await this.start();
     const event = await this.#request({
@@ -5127,6 +5141,9 @@ void app
     ipcMain.handle("pix:models:reveal-config", () => supervisor?.revealModelsJson());
     ipcMain.handle("pix:thinking:set", (_event, level: string) =>
       supervisor?.setThinkingLevel(level),
+    );
+    ipcMain.handle("pix:service-tier:set", (_event, tier: string) =>
+      supervisor?.setServiceTier(tier),
     );
     ipcMain.handle("pix:providers:list", () => supervisor?.listProviders());
     ipcMain.handle("pix:providers:usage", () => supervisor?.listProviderUsage());

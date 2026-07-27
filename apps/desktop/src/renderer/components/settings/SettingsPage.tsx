@@ -37,6 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t, thinkingLevelLabel, type Locale, type MessageKey } from "../../lib/i18n.ts";
 import { groupModelsByProvider } from "../../lib/model-groups.ts";
+import type { ServiceTierId } from "../../lib/service-tier.ts";
 import {
   deleteThreadLocal,
   loadArchivedThreadMeta,
@@ -153,6 +154,9 @@ export interface SettingsPageProps {
   onAccessMode: (mode: AccessMode) => void;
   showContextUsage: boolean;
   onShowContextUsage: (value: boolean) => void;
+  /** Persisted request priority, applied to supported OpenAI Responses models. */
+  serviceTier: ServiceTierId;
+  onServiceTierChange: (tier: ServiceTierId) => void;
   onEnsureHost: () => Promise<HostSnapshot>;
   onSnapshot: (snapshot: HostSnapshot) => void;
   onLocale: (locale: Locale) => void;
@@ -3367,7 +3371,14 @@ function ModelsSection(
   async function useInSession(model: ModelSummary) {
     setLoading(true);
     try {
-      await window.pix.models.set(model.provider, model.id);
+      let snapshot = await window.pix.models.set(model.provider, model.id);
+      if (
+        (snapshot.availableServiceTiers?.length ?? 0) > 0 &&
+        snapshot.serviceTier !== props.serviceTier
+      ) {
+        snapshot = await window.pix.serviceTier.set(props.serviceTier);
+      }
+      props.onSnapshot(snapshot);
       await refresh();
     } catch (err) {
       showError(err, "Failed to set model");
@@ -4009,14 +4020,6 @@ function ModelsSection(
   );
 }
 
-/**
- * Full pi ThinkingLevel set (thinkingLevelMap keys + settings/rpc/usage).
- * Used for global defaultThinkingLevel — not the per-model available subset.
- * xhigh/max are opt-in per model map; UI still lists them so defaults can be set.
- * @see packages/coding-agent/docs/settings.md, custom-provider.md, rpc.md
- */
-const PI_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-
 /** pi HTTP_IDLE_TIMEOUT_CHOICES + Pix longer presets (ms → i18n). */
 const HTTP_IDLE_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; labelKey: MessageKey }> = [
   { ms: 30_000, labelKey: "piSettings.httpIdle30s" },
@@ -4210,10 +4213,10 @@ function PiSettingsSection(
     });
   }
 
-  // Default thinking is a global settings.json field — always offer the full pi ThinkingLevel
-  // set (docs/custom-provider thinkingLevelMap). Do not use the current session model's
-  // availableThinkingLevels (often only "off" for models without mapped reasoning).
-  const thinkingLevels = PI_THINKING_LEVELS;
+  // Host derives both lists from the configured default model's real API metadata.
+  const thinkingLevels = view?.availableThinkingLevels ?? ["off"];
+  const serviceTiers = view?.availableServiceTiers ?? [];
+  const serviceTierSupported = serviceTiers.length > 0;
   const disabled = loading || !prefs;
   const numFieldClass = "w-24 text-right tabular-nums";
 
@@ -4234,6 +4237,32 @@ function PiSettingsSection(
                 label: thinkingLevelLabel(props.locale, level),
               }))}
               disabled={disabled}
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("piSettings.defaultServiceTier")}
+          description={tr("piSettings.defaultServiceTierHint")}
+          control={
+            <SettingsSelect
+              testId="pi-default-service-tier"
+              size="md"
+              value={serviceTierSupported ? props.serviceTier : "unsupported"}
+              onChange={(v) => props.onServiceTierChange(v as ServiceTierId)}
+              options={
+                serviceTierSupported
+                  ? serviceTiers.map((tier) => ({
+                      value: tier,
+                      label:
+                        tier === "priority"
+                          ? tr("composer.speed.priority")
+                          : tier === "flex"
+                            ? tr("composer.speed.flex")
+                            : tr("composer.speed.default"),
+                    }))
+                  : [{ value: "unsupported", label: tr("composer.model.speedUnsupported") }]
+              }
+              disabled={disabled || !serviceTierSupported}
             />
           }
         />

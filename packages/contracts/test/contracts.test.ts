@@ -270,6 +270,7 @@ describe("host contract validation", () => {
           quietStartup: false,
           enableSkillCommands: true,
           availableThinkingLevels: ["off", "low"],
+          availableServiceTiers: [],
           steeringMode: "all",
           followUpMode: "one-at-a-time",
           doubleEscapeAction: "fork",

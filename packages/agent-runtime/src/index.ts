@@ -59,6 +59,17 @@ import {
 import { listProviderUsage } from "./provider-usage.ts";
 import { resolvePixSessionDir } from "./session-dir.ts";
 import {
+  availableServiceTiersForModel,
+  installServiceTierPayloadHook,
+  isServiceTier,
+  type ServiceTier,
+} from "./service-tier.ts";
+import {
+  availableThinkingLevelsForModel,
+  clampThinkingLevelForModel,
+  isThinkingLevel,
+} from "./thinking-levels.ts";
+import {
   listBuiltinSlashCommands,
   projectSessionTree,
   type TreeNodeLike,
@@ -93,8 +104,32 @@ export {
   parseShellInjection,
   projectSessionTree,
 } from "./session-parity.ts";
+export {
+  applyServiceTierToPayload,
+  availableServiceTiersForModel,
+  installServiceTierPayloadHook,
+  isServiceTier,
+  modelSupportsServiceTier,
+  type ServiceTier,
+} from "./service-tier.ts";
+export {
+  availableThinkingLevelsForModel,
+  clampThinkingLevelForModel,
+  isThinkingLevel,
+} from "./thinking-levels.ts";
 
 const MACOS_GITHUB_CLI_PATHS = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"] as const;
+
+/** Per-runtime OpenAI service_tier preference (not a pi session field). */
+const serviceTierByRuntime = new WeakMap<object, ServiceTier>();
+
+function getRuntimeServiceTier(runtime: object): ServiceTier {
+  return serviceTierByRuntime.get(runtime) ?? "default";
+}
+
+function setRuntimeServiceTier(runtime: object, tier: ServiceTier): void {
+  serviceTierByRuntime.set(runtime, tier);
+}
 
 export function resolveGitHubCliCommand(
   platform: NodeJS.Platform = process.platform,
@@ -210,6 +245,8 @@ export interface PixRuntimeHandle {
   listModels(): ModelSummary[];
   setModel(provider: string, id: string): Promise<HostSnapshot>;
   setThinkingLevel(level: string): HostSnapshot;
+  /** OpenAI Responses-family service_tier (flex | default | priority). */
+  setServiceTier(tier: string): HostSnapshot;
   listProviders(): ProviderAuthSummary[];
   listProviderUsage(): Promise<ProviderUsageSnapshot[]>;
   setProviderApiKey(provider: string, apiKey: string): Promise<ProviderAuthSummary[]>;
@@ -1161,11 +1198,24 @@ function createSnapshot(
   const sessionName =
     runtime.session.sessionName ?? runtime.session.sessionManager.getSessionName();
   if (sessionName) snapshot.sessionName = sessionName;
-  if (model) snapshot.model = { provider: model.provider, id: model.id };
+  if (model) {
+    snapshot.model = {
+      provider: model.provider,
+      id: model.id,
+      ...(model.api ? { api: String(model.api) } : {}),
+      reasoning: Boolean(model.reasoning),
+    };
+  }
   snapshot.thinkingLevel = String(runtime.session.thinkingLevel);
   snapshot.availableThinkingLevels = runtime.session
     .getAvailableThinkingLevels()
     .map((level) => String(level));
+  // Real OpenAI service_tier only — empty list means current model has no request-priority control.
+  const availableServiceTiers = availableServiceTiersForModel(model ?? undefined);
+  snapshot.availableServiceTiers = availableServiceTiers;
+  if (availableServiceTiers.length > 0) {
+    snapshot.serviceTier = getRuntimeServiceTier(runtime);
+  }
   snapshot.trust = resolvePixProjectTrust(services.cwd, services.agentDir);
   snapshot.builtinSlashCommands = listBuiltinSlashCommands();
   snapshot.steeringMode = runtime.session.steeringMode;
@@ -1317,11 +1367,15 @@ export async function createPixRuntime(
   });
 
   await bindExtensionUi();
+  // Install after extensions bind so the request hook remains the outermost payload transform.
+  installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
 
   async function afterSessionReplacement<T>(operation: () => Promise<T>): Promise<T> {
     extensionUi.reload();
     const result = await operation();
     await bindExtensionUi();
+    // New Agent instance after switch/fork/new — bind after extensions so this stays outermost.
+    installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
     return result;
   }
 
@@ -1332,6 +1386,7 @@ export async function createPixRuntime(
         extensionUi.reload();
       },
     });
+    installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
   }
 
   return {
@@ -1491,26 +1546,37 @@ export async function createPixRuntime(
       );
     },
     setThinkingLevel(level) {
-      // Full pi ThinkingLevel set (settings/rpc/usage + thinkingLevelMap keys).
-      const known = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
       const normalized = String(level).trim().toLowerCase();
-      if (!known.has(normalized)) {
+      if (!isThinkingLevel(normalized)) {
         throw new Error(`Unknown thinking level: ${level}`);
       }
-      // Allow full pi ThinkingLevel set even when the model reports a narrow subset
-      // (common for custom providers with reasoning:true but incomplete thinkingLevelMap).
-      try {
-        runtime.session.setThinkingLevel(normalized as never);
-      } catch (error) {
-        const available = runtime.session.getAvailableThinkingLevels().map((item) => String(item));
+      const available = runtime.session.getAvailableThinkingLevels().map((item) => String(item));
+      if (!available.includes(normalized)) {
         throw new Error(
-          available.length > 0
-            ? `Thinking level not available for this model: ${normalized} (supports: ${available.join(", ")})`
-            : error instanceof Error
-              ? error.message
-              : `Failed to set thinking level: ${normalized}`,
+          `Thinking level not available for this model: ${normalized} (supports: ${available.join(", ")})`,
         );
       }
+      runtime.session.setThinkingLevel(normalized);
+      if (String(runtime.session.thinkingLevel) !== normalized) {
+        throw new Error(`Model did not accept thinking level: ${normalized}`);
+      }
+      return createSnapshot(
+        runtimeId,
+        runtime,
+        runtime.services,
+        0,
+        extensionErrors,
+        configDiagnostics,
+      );
+    },
+    setServiceTier(tier) {
+      const normalized = String(tier).trim().toLowerCase();
+      if (!isServiceTier(normalized)) {
+        throw new Error(`Unknown service tier: ${tier} (use flex | default | priority)`);
+      }
+      // Keep the preference across model/session switches. The payload hook applies it only
+      // when the active API supports service_tier; unsupported models receive no extra field.
+      setRuntimeServiceTier(runtime, normalized);
       return createSnapshot(
         runtimeId,
         runtime,
@@ -1853,9 +1919,21 @@ export const PIX_DEFAULT_HTTP_IDLE_TIMEOUT_MS = 3_600_000;
 export const PIX_DEFAULT_ENABLE_INSTALL_TELEMETRY = false;
 export const PIX_DEFAULT_ENABLE_ANALYTICS = false;
 
+function resolveSettingsModel(
+  services: AgentSessionServices,
+  session?: AgentSessionRuntime["session"],
+) {
+  const provider = services.settingsManager.getDefaultProvider();
+  const modelId = services.settingsManager.getDefaultModel();
+  if (provider || modelId) {
+    return provider && modelId ? services.modelRuntime.getModel(provider, modelId) : undefined;
+  }
+  return session?.model;
+}
+
 function projectPiSettings(
   services: AgentSessionServices,
-  _session?: AgentSessionRuntime["session"],
+  session?: AgentSessionRuntime["session"],
 ): PiSettingsView {
   const sm = services.settingsManager;
   // Promote product defaults only when the key was never written (do not override user choice).
@@ -1885,7 +1963,12 @@ function projectPiSettings(
       // Ignore write failures (settings may be read-only in tests).
     }
   }
-  const thinking = sm.getDefaultThinkingLevel();
+  const configuredThinking = sm.getDefaultThinkingLevel();
+  const settingsModel = resolveSettingsModel(services, session);
+  const availableThinkingLevels = availableThinkingLevelsForModel(settingsModel);
+  const thinking = configuredThinking
+    ? clampThinkingLevelForModel(settingsModel, configuredThinking)
+    : undefined;
   const compaction = sm.getCompactionSettings();
   const retry = sm.getRetrySettings();
   const thinkingBudgets = sm.getThinkingBudgets();
@@ -1901,9 +1984,9 @@ function projectPiSettings(
     hideThinkingBlock: sm.getHideThinkingBlock(),
     quietStartup: sm.getQuietStartup(),
     enableSkillCommands: sm.getEnableSkillCommands(),
-    // Global settings UI needs the full pi ThinkingLevel set (incl. max).
-    // Session-model subsets (often just "off") are on HostSnapshot for the composer only.
-    availableThinkingLevels: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+    // Settings follow the configured default model; unsupported levels are not offered.
+    availableThinkingLevels,
+    availableServiceTiers: availableServiceTiersForModel(settingsModel),
     steeringMode: sm.getSteeringMode(),
     followUpMode: sm.getFollowUpMode(),
     doubleEscapeAction: sm.getDoubleEscapeAction(),
@@ -2234,16 +2317,15 @@ async function applyPiSettingsPatch(
     if (patch.defaultModel !== undefined) sm.setDefaultModel(patch.defaultModel);
   }
   if (patch.defaultThinkingLevel !== undefined) {
-    const level = String(patch.defaultThinkingLevel).trim().toLowerCase();
-    sm.setDefaultThinkingLevel(level as never);
-    // Sync current session so composer thinking chrome updates immediately.
-    if (session) {
-      try {
-        session.setThinkingLevel(level as never);
-      } catch {
-        // Model may reject the level; default remains saved for new sessions.
-      }
+    const requested = String(patch.defaultThinkingLevel).trim().toLowerCase();
+    if (!isThinkingLevel(requested)) {
+      throw new Error(`Unknown thinking level: ${patch.defaultThinkingLevel}`);
     }
+    const level = clampThinkingLevelForModel(resolveSettingsModel(services, session), requested);
+    sm.setDefaultThinkingLevel(level);
+    // The active model may differ from the configured default; only sync when it supports it.
+    const activeLevels = session?.getAvailableThinkingLevels().map((item) => String(item)) ?? [];
+    if (session && activeLevels.includes(level)) session.setThinkingLevel(level);
   }
   if (patch.defaultProjectTrust !== undefined) {
     sm.setDefaultProjectTrust(patch.defaultProjectTrust);

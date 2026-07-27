@@ -156,6 +156,9 @@ const api: PixDesktopApi = {
   thinking: {
     set: (level) => ipcRenderer.invoke("pix:thinking:set", level),
   },
+  serviceTier: {
+    set: (tier) => ipcRenderer.invoke("pix:service-tier:set", tier),
+  },
   providers: {
     list: () => ipcRenderer.invoke("pix:providers:list"),
     usage: () => ipcRenderer.invoke("pix:providers:usage"),

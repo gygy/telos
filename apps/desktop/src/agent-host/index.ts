@@ -300,6 +300,7 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
         toolName: projected.toolName,
         output: projected.content,
         isError: projected.isError,
+        ...(projected.details !== undefined ? { details: projected.details } : {}),
       };
     }
     default:
@@ -751,6 +752,17 @@ async function handleCommand(command: HostCommand): Promise<void> {
       case "thinking.set": {
         if (!handle) throw new Error("Agent Host is not ready");
         const snapshot = handle.setThinkingLevel(command.level);
+        post({
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          type: "runtime.snapshot",
+          requestId: command.requestId,
+          snapshot: { ...snapshot, sequence: ++sequence },
+        });
+        break;
+      }
+      case "serviceTier.set": {
+        if (!handle) throw new Error("Agent Host is not ready");
+        const snapshot = handle.setServiceTier(command.tier);
         post({
           protocolVersion: IPC_PROTOCOL_VERSION,
           type: "runtime.snapshot",

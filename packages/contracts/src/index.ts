@@ -241,9 +241,19 @@ export interface HostSnapshot {
   model?: {
     provider: string;
     id: string;
+    /** pi-ai model.api (e.g. openai-responses, anthropic-messages). */
+    api?: string;
+    /** Whether the model supports extended thinking / reasoning. */
+    reasoning?: boolean;
   };
   thinkingLevel?: string;
   availableThinkingLevels?: string[];
+  /**
+   * OpenAI Responses-family `service_tier` (flex | default | priority).
+   * Empty available list = current model does not support request priority.
+   */
+  serviceTier?: "flex" | "default" | "priority";
+  availableServiceTiers?: Array<"flex" | "default" | "priority">;
   usage?: SessionUsageSummary;
   slashCommands: SlashCommandSummary[];
   /** Built-in pi-aligned slash commands available on desktop. */
@@ -283,6 +293,8 @@ export type RuntimeEvent =
       toolName: string;
       output: string;
       isError: boolean;
+      /** Tool-specific payload (e.g. edit `details.diff` with file line numbers). */
+      details?: unknown;
     }
   | {
       type: "shell.completed";
@@ -534,7 +546,10 @@ export interface PiSettingsView {
   };
   quietStartup: boolean;
   enableSkillCommands: boolean;
+  /** Thinking levels supported by the configured default model. */
   availableThinkingLevels: string[];
+  /** Request priorities supported by the configured default model. */
+  availableServiceTiers: Array<"flex" | "default" | "priority">;
   steeringMode: QueueDeliveryMode;
   followUpMode: QueueDeliveryMode;
   doubleEscapeAction: DoubleEscapeAction;
@@ -857,6 +872,13 @@ export type HostCommand =
       type: "thinking.set";
       requestId: string;
       level: string;
+    }
+  | {
+      protocolVersion: typeof IPC_PROTOCOL_VERSION;
+      type: "serviceTier.set";
+      requestId: string;
+      /** OpenAI service_tier: flex | default | priority */
+      tier: string;
     }
   | {
       protocolVersion: typeof IPC_PROTOCOL_VERSION;
@@ -1669,6 +1691,13 @@ export interface PixDesktopApi {
   thinking: {
     set(level: string): Promise<HostSnapshot>;
   };
+  /**
+   * OpenAI Responses-family request priority (`service_tier`).
+   * The preference is retained across models; unsupported APIs receive no request field.
+   */
+  serviceTier: {
+    set(tier: string): Promise<HostSnapshot>;
+  };
   providers: {
     list(): Promise<ProviderAuthSummary[]>;
     /** Fetches live plan limits without exposing provider credentials. */
@@ -2168,6 +2197,15 @@ function isHostSnapshot(value: unknown): value is HostSnapshot {
     (value.model === undefined || isModelSelector(value.model)) &&
     (value.thinkingLevel === undefined || typeof value.thinkingLevel === "string") &&
     (value.availableThinkingLevels === undefined || isStringArray(value.availableThinkingLevels)) &&
+    (value.serviceTier === undefined ||
+      value.serviceTier === "flex" ||
+      value.serviceTier === "default" ||
+      value.serviceTier === "priority") &&
+    (value.availableServiceTiers === undefined ||
+      (Array.isArray(value.availableServiceTiers) &&
+        value.availableServiceTiers.every(
+          (tier) => tier === "flex" || tier === "default" || tier === "priority",
+        ))) &&
     (value.usage === undefined || isSessionUsageSummary(value.usage)) &&
     Array.isArray(value.slashCommands) &&
     value.slashCommands.every(
@@ -2222,6 +2260,7 @@ function isRuntimeEvent(value: unknown): value is RuntimeEvent {
         typeof value.toolName === "string" &&
         typeof value.output === "string" &&
         typeof value.isError === "boolean"
+        // details is optional free-form tool payload
       );
     case "shell.completed":
       return (
@@ -2341,6 +2380,7 @@ export function isHostCommand(value: unknown): value is HostCommand {
   if (value.type === "models.config.upsert") return isUpsertCustomProviderInput(value.input);
   if (value.type === "models.config.remove") return typeof value.provider === "string";
   if (value.type === "thinking.set") return typeof value.level === "string";
+  if (value.type === "serviceTier.set") return typeof value.tier === "string";
   if (value.type === "providers.list" || value.type === "providers.usage") return true;
   if (value.type === "providers.setApiKey") {
     return typeof value.provider === "string" && typeof value.apiKey === "string";
@@ -2752,6 +2792,10 @@ function isPiSettingsView(value: unknown): value is PiSettingsView {
     value.degradedCapabilities.every((item) => typeof item === "string") &&
     Array.isArray(value.availableThinkingLevels) &&
     value.availableThinkingLevels.every((item) => typeof item === "string") &&
+    Array.isArray(value.availableServiceTiers) &&
+    value.availableServiceTiers.every(
+      (tier) => tier === "flex" || tier === "default" || tier === "priority",
+    ) &&
     (value.defaultProvider === undefined || typeof value.defaultProvider === "string") &&
     (value.defaultModel === undefined || typeof value.defaultModel === "string") &&
     (value.defaultThinkingLevel === undefined || typeof value.defaultThinkingLevel === "string") &&

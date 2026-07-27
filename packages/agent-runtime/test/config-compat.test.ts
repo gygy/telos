@@ -118,7 +118,12 @@ describe("C04 invalid settings/models/auth", () => {
       const messages = snapshot.diagnostics.map((item) => item.message).join("\n");
       expect(messages.toLowerCase()).not.toMatch(/settings .*failed/);
       expect(messages.toLowerCase()).not.toMatch(/models failed/);
-      expect(snapshot.model).toEqual({ provider: "pix-fake", id: "pix-fake" });
+      expect(snapshot.model).toEqual({
+        provider: "pix-fake",
+        id: "pix-fake",
+        api: "openai-completions",
+        reasoning: false,
+      });
       expect(SettingsManager.create(paths.cwd, paths.agentDir).getTheme()).toBe("dark");
     } finally {
       await recovered.dispose();

@@ -99,7 +99,12 @@ describe("Workspace model trust resume", () => {
 
       // setModel may require auth; pix-fake has key in models.json
       const afterModel = await handle.setModel("pix-fake", "pix-fake-b");
-      expect(afterModel.model).toEqual({ provider: "pix-fake", id: "pix-fake-b" });
+      expect(afterModel.model).toEqual({
+        provider: "pix-fake",
+        id: "pix-fake-b",
+        api: "openai-completions",
+        reasoning: false,
+      });
 
       if ((afterModel.availableThinkingLevels?.length ?? 0) > 0) {
         const level = afterModel.availableThinkingLevels![0]!;

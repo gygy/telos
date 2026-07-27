@@ -15,6 +15,8 @@ interface LaunchedPix {
   app: ElectronApplication;
   page: Page;
   root: string;
+  /** Isolated `~/.pi/agent` for this launch (`PI_CODING_AGENT_DIR`). */
+  agentDir: string;
   workspace: string;
   attachmentPaths: string[];
   fakeModel: FakeOpenAiServer;
@@ -193,7 +195,7 @@ async function launchPixApp(): Promise<LaunchedPix> {
     timeout: 120_000,
   });
 
-  return { app, page, root, workspace, attachmentPaths, fakeModel };
+  return { app, page, root, agentDir, workspace, attachmentPaths, fakeModel };
 }
 
 export const test = base.extend<PixE2EFixtures>({

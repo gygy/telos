@@ -72,7 +72,12 @@ describe("Runtime streaming", () => {
     expect(result.eventTypes).toContain("tool_execution_start");
     expect(result.eventTypes).toContain("tool_execution_end");
     expect(result.eventTypes).toContain("agent_settled");
-    expect(result.snapshot.model).toEqual({ provider: "pix-fake", id: "pix-fake" });
+    expect(result.snapshot.model).toEqual({
+      provider: "pix-fake",
+      id: "pix-fake",
+      api: "openai-completions",
+      reasoning: false,
+    });
     expect(result.snapshot.activeTools).toEqual(["read"]);
     expect(result.snapshot.sessionFile).toBeUndefined();
   }, 30_000);

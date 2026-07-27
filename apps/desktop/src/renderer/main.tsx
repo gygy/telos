@@ -24,9 +24,10 @@ import { flushSync } from "react-dom";
 import { ArrowDown } from "lucide-react";
 import { AppSidebar } from "./components/AppSidebar.tsx";
 import { CommandPalette } from "./components/CommandPalette.tsx";
-import { Composer, type SpeedMode } from "./components/Composer.tsx";
+import { Composer } from "./components/Composer.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
+import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
 import { SessionInfoPanel, SessionTreePanel } from "./components/SessionParityPanels.tsx";
 import { RenameDialog } from "./components/RenameDialog.tsx";
 import { SettingsPage } from "./components/settings/SettingsPage.tsx";
@@ -71,6 +72,16 @@ import { applyDocumentTheme, colorModeFromPiTheme, piThemeLabel } from "./lib/th
 import { cn } from "./lib/utils.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
+  clampToAvailableServiceTier,
+  migrateLegacySpeedToServiceTier,
+  resolveDisplayServiceTiers,
+  type ServiceTierId,
+} from "./lib/service-tier.ts";
+import {
+  clampToAvailableThinkingLevel,
+  resolveDisplayThinkingLevels,
+} from "./lib/thinking-levels.ts";
+import {
   loadAccessMode,
   loadAccessVisibility,
   loadShowContextUsage,
@@ -86,6 +97,7 @@ import { installOverlayScroll, syncOverlayScroll } from "./lib/overlay-scroll.ts
 import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
 import { matchShortcut, SHORTCUT_OVERRIDES_CHANGED_EVENT } from "./lib/shortcuts.ts";
 import { loadContentModeForSession } from "./lib/content-mode-prefs.ts";
+import { projectTrustPromptKey, shouldPromptProjectTrust } from "./lib/project-trust-prompt.ts";
 import { loadTerminalPrefs, resolveTerminalTheme } from "./lib/terminal-prefs.ts";
 import {
   loadPinnedProjects,
@@ -423,16 +435,22 @@ function App() {
     setShowContextUsage(value);
     saveShowContextUsage(value);
   }
-  const [speedMode, setSpeedMode] = useState<SpeedMode>(() => {
+  const [serviceTier, setServiceTier] = useState<ServiceTierId>(() => {
     try {
-      const v = localStorage.getItem("pix.composer.speed");
-      if (v === "fast" || v === "balanced" || v === "quality") return v;
+      // Prefer new key; fall back to legacy speed labels.
+      const next = localStorage.getItem("pix.composer.serviceTier");
+      if (next === "flex" || next === "default" || next === "priority") return next;
+      return migrateLegacySpeedToServiceTier(localStorage.getItem("pix.composer.speed"));
     } catch {
       // ignore
     }
-    return "balanced";
+    return "default";
   });
   const [attachments, setAttachments] = useState<string[]>([]);
+  /** Cwds dismissed with "Later" this app session (no trust.json write). */
+  const trustPromptDismissedRef = useRef<Set<string>>(new Set());
+  const [trustPromptDismissTick, setTrustPromptDismissTick] = useState(0);
+  const [trustPromptBusy, setTrustPromptBusy] = useState(false);
   /**
    * Selected project for composer chrome / rail highlight.
    * Global「新建会话」clears this (pure conversation) but must keep the project
@@ -456,21 +474,34 @@ function App() {
 
   /** Last known model chrome — survives snapshot gaps so composer never flashes "未选择模型". */
   const lastComposerChromeRef = useRef<{
-    model?: { provider: string; id: string };
+    model?: { provider: string; id: string; api?: string; reasoning?: boolean };
     thinkingLevel?: string;
     availableThinkingLevels?: string[];
+    serviceTier?: ServiceTierId;
+    availableServiceTiers?: ServiceTierId[];
   }>({});
   if (snapshot?.model) {
-    const chrome: {
-      model?: { provider: string; id: string };
-      thinkingLevel?: string;
-      availableThinkingLevels?: string[];
-    } = { model: snapshot.model };
-    if (snapshot.thinkingLevel !== undefined) chrome.thinkingLevel = snapshot.thinkingLevel;
-    if (snapshot.availableThinkingLevels !== undefined) {
-      chrome.availableThinkingLevels = snapshot.availableThinkingLevels;
-    }
-    lastComposerChromeRef.current = chrome;
+    const prev = lastComposerChromeRef.current;
+    const thinkingLevel = snapshot.thinkingLevel ?? prev.thinkingLevel;
+    // Model-specific list from pi getSupportedThinkingLevels — keep last known across gaps.
+    const availableThinkingLevels =
+      snapshot.availableThinkingLevels ?? prev.availableThinkingLevels;
+    const nextServiceTier =
+      snapshot.serviceTier === "flex" ||
+      snapshot.serviceTier === "default" ||
+      snapshot.serviceTier === "priority"
+        ? snapshot.serviceTier
+        : prev.serviceTier;
+    const availableServiceTiers = resolveDisplayServiceTiers(
+      snapshot.availableServiceTiers ?? prev.availableServiceTiers,
+    );
+    lastComposerChromeRef.current = {
+      model: snapshot.model,
+      ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+      ...(availableThinkingLevels !== undefined ? { availableThinkingLevels } : {}),
+      ...(nextServiceTier !== undefined ? { serviceTier: nextServiceTier } : {}),
+      ...(availableServiceTiers.length > 0 ? { availableServiceTiers } : {}),
+    };
   }
 
   /** Hide conversation/scratch dirs from project chrome / sidebar. */
@@ -535,10 +566,22 @@ function App() {
         ? t(locale, "thread.new")
         : t(locale, "thread.current"));
   const displayModel = snapshot?.model ?? lastComposerChromeRef.current.model;
-  const displayThinkingLevel =
-    snapshot?.thinkingLevel ?? lastComposerChromeRef.current.thinkingLevel ?? "off";
-  // Full pi ThinkingLevel set (docs: off…max). Model support enforced on apply.
-  const displayThinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  // Dynamic per current model (HostSnapshot.availableThinkingLevels); full set only as cold fallback.
+  const displayThinkingLevels = resolveDisplayThinkingLevels(
+    snapshot?.availableThinkingLevels ?? lastComposerChromeRef.current.availableThinkingLevels,
+  );
+  const displayThinkingLevel = clampToAvailableThinkingLevel(
+    snapshot?.thinkingLevel ?? lastComposerChromeRef.current.thinkingLevel ?? "off",
+    displayThinkingLevels,
+  );
+  // OpenAI service_tier only — empty when current model has no request-priority control.
+  const displayServiceTiers = resolveDisplayServiceTiers(
+    snapshot?.availableServiceTiers ?? lastComposerChromeRef.current.availableServiceTiers,
+  );
+  const displayServiceTier = clampToAvailableServiceTier(
+    snapshot?.serviceTier ?? lastComposerChromeRef.current.serviceTier ?? serviceTier,
+    displayServiceTiers.length > 0 ? displayServiceTiers : ["default"],
+  );
 
   function normalizeCwdKey(path: string): string {
     return path.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -1004,6 +1047,14 @@ function App() {
     const value = await window.pix.host.start({ cwd: knownCwd });
     acceptSnapshot(value);
     setStatus("Agent Host ready");
+    // Apply persisted OpenAI service_tier when the current model supports it.
+    if (serviceTier !== "default") {
+      try {
+        acceptSnapshot(await window.pix.serviceTier.set(serviceTier));
+      } catch {
+        // Model may not support service_tier — UI will show unsupported.
+      }
+    }
     try {
       await refreshComposerModels();
     } catch {
@@ -1770,10 +1821,51 @@ function App() {
     }
   }
 
+  // Prefer live host cwd for trust (openPath may update snapshot before selection state).
+  // Allow temp/e2e project paths that still carry .pi config (ephemeral ≠ non-project for trust).
+  const trustPromptCwd = snapshot?.cwd?.trim()
+    ? snapshot.cwd
+    : asProjectPath(selectedWorkspacePath);
+  // tick forces re-render after in-session dismiss without writing trust.json.
+  void trustPromptDismissTick;
+  const showProjectTrustPrompt = shouldPromptProjectTrust({
+    contentMode,
+    cwd: trustPromptCwd,
+    trust: snapshot?.trust,
+    projectTrusted: snapshot?.projectTrusted,
+    dismissedKeys: trustPromptDismissedRef.current,
+  });
+
+  async function answerProjectTrust(trusted: boolean) {
+    if (!trustPromptCwd || trustPromptBusy) return;
+    setTrustPromptBusy(true);
+    try {
+      setStatus(trusted ? "Trusting project…" : "Untrusting project…");
+      acceptSnapshot(await window.pix.trust.set(trusted));
+      setStatus("Agent Host ready");
+    } catch (error) {
+      reportAppError(error, "Failed to set trust");
+    } finally {
+      setTrustPromptBusy(false);
+    }
+  }
+
+  function dismissProjectTrustPrompt() {
+    if (!trustPromptCwd) return;
+    trustPromptDismissedRef.current.add(projectTrustPromptKey(trustPromptCwd));
+    setTrustPromptDismissTick((n) => n + 1);
+  }
+
   async function changeModel(provider: string, id: string) {
     try {
       setStatus(`Switching model ${provider}/${id}…`);
-      acceptSnapshot(await window.pix.models.set(provider, id));
+      let next = await window.pix.models.set(provider, id);
+      acceptSnapshot(next);
+      // A preference selected while another model was active becomes effective now.
+      if ((next.availableServiceTiers?.length ?? 0) > 0 && next.serviceTier !== serviceTier) {
+        next = await window.pix.serviceTier.set(serviceTier);
+        acceptSnapshot(next);
+      }
       setStatus("Agent Host ready");
     } catch (error) {
       reportAppError(error, "Failed to set model");
@@ -1787,6 +1879,27 @@ function App() {
       setStatus("Agent Host ready");
     } catch (error) {
       reportAppError(error, "Failed to set thinking level");
+    }
+  }
+
+  async function changeServiceTier(tier: ServiceTierId) {
+    setServiceTier(tier);
+    try {
+      localStorage.setItem("pix.composer.serviceTier", tier);
+    } catch {
+      // ignore
+    }
+    const current = useShellStore.getState().snapshot;
+    if (!current) {
+      setStatus("Request priority preference saved");
+      return;
+    }
+    try {
+      setStatus(`Service tier ${tier}…`);
+      acceptSnapshot(await window.pix.serviceTier.set(tier));
+      setStatus("Agent Host ready");
+    } catch (error) {
+      reportAppError(error, "Failed to set service tier");
     }
   }
 
@@ -2828,15 +2941,9 @@ function App() {
                               thinkingLevel={displayThinkingLevel}
                               thinkingLevels={displayThinkingLevels}
                               onThinkingChange={(level) => void changeThinking(level)}
-                              speedMode={speedMode}
-                              onSpeedMode={(mode) => {
-                                setSpeedMode(mode);
-                                try {
-                                  localStorage.setItem("pix.composer.speed", mode);
-                                } catch {
-                                  // ignore
-                                }
-                              }}
+                              serviceTier={displayServiceTier}
+                              serviceTiers={displayServiceTiers}
+                              onServiceTierChange={(tier) => void changeServiceTier(tier)}
                               contextPercent={snapshot?.usage?.context?.percent ?? undefined}
                               contextTokens={
                                 snapshot?.usage?.context?.tokens ??
@@ -2933,6 +3040,8 @@ function App() {
             onAccessMode={applyAccessMode}
             showContextUsage={showContextUsage}
             onShowContextUsage={applyShowContextUsage}
+            serviceTier={serviceTier}
+            onServiceTierChange={(tier) => void changeServiceTier(tier)}
             onEnsureHost={() => ensureHost()}
             onSnapshot={acceptSnapshot}
             onLocale={setLocale}
@@ -3141,6 +3250,16 @@ function App() {
           if (!pending) return;
           void editUserAndResend(pending.item, pending.text, { skipConfirm: true });
         }}
+      />
+
+      <ProjectTrustDialog
+        open={showProjectTrustPrompt}
+        locale={locale}
+        cwd={trustPromptCwd ?? ""}
+        busy={trustPromptBusy}
+        onTrust={() => void answerProjectTrust(true)}
+        onDistrust={() => void answerProjectTrust(false)}
+        onLater={dismissProjectTrustPrompt}
       />
 
       <ErrorDialog
