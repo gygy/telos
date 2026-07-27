@@ -48,6 +48,14 @@ const api: PixDesktopApi = {
       return () => ipcRenderer.removeListener("pix:pi:progress", handler);
     },
   },
+  piSdk: {
+    getStatus: () => ipcRenderer.invoke("pix:pi-sdk:get-status"),
+    setSource: (source, options) => ipcRenderer.invoke("pix:pi-sdk:set-source", source, options),
+    listConfigFiles: () => ipcRenderer.invoke("pix:pi-sdk:list-config-files"),
+    revealConfig: (id) => ipcRenderer.invoke("pix:pi-sdk:reveal-config", id),
+    openConfig: (id) => ipcRenderer.invoke("pix:pi-sdk:open-config", id),
+    installGlobal: () => ipcRenderer.invoke("pix:pi-sdk:install-global"),
+  },
   terminal: {
     open: (options) => ipcRenderer.invoke("pix:terminal:open", options),
     write: (data) => ipcRenderer.invoke("pix:terminal:write", data),

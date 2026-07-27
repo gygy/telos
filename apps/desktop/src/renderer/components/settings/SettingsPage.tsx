@@ -117,8 +117,13 @@ import type { ThemePreference } from "../../lib/theme.ts";
 import { cn } from "../../lib/utils.ts";
 import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace.ts";
 import { useShellStore, type SettingsSection } from "../../store/shell-store.ts";
+import { PiSdkSection } from "./PiSdkSection.tsx";
 import {
+  PI_DOCS_SETTINGS_URL,
+  PI_DOCS_USAGE_URL,
   SettingsButton,
+  SettingsDocsLink,
+  SettingsHelpTip,
   SettingsIconButton,
   SettingsInput,
   SettingsPageShell,
@@ -171,6 +176,8 @@ export function SettingsPage(props: SettingsPageProps) {
       <div className="settings-page-body">
         {props.section === "general" ? (
           <GeneralSection {...props} tr={tr} />
+        ) : props.section === "pi" ? (
+          <PiSdkSection locale={props.locale} />
         ) : props.section === "appearance" ? (
           <AppearanceSection {...props} tr={tr} />
         ) : props.section === "terminal" ? (
@@ -3492,10 +3499,31 @@ function ModelsSection(
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-1.5" title={tr("models.scopeToggleHint")}>
+          <div className="flex items-center gap-1">
             <span className="text-[11px] text-[var(--muted-foreground)] whitespace-nowrap">
               {tr("models.scopeToggle")}
             </span>
+            <SettingsHelpTip
+              ariaLabel={tr("models.scopeToggleHelpTitle")}
+              testId={`model-scope-help-${model.provider}-${model.id}`}
+              side="top"
+              align="end"
+            >
+              <div className="flex flex-col gap-1.5">
+                <p className="m-0 font-medium text-[var(--popover-foreground)]">
+                  {tr("models.scopeToggleHelpTitle")}
+                </p>
+                <p className="m-0 text-[var(--muted-foreground)]">
+                  {tr("models.scopeToggleHelpP1")}
+                </p>
+                <p className="m-0 text-[var(--muted-foreground)]">
+                  {tr("models.scopeToggleHelpP2")}
+                </p>
+                <SettingsDocsLink href={PI_DOCS_SETTINGS_URL} testId="model-scope-docs-link">
+                  {tr("models.scopeToggleHelpDocs")}
+                </SettingsDocsLink>
+              </div>
+            </SettingsHelpTip>
             <SettingsToggle
               checked={scopedSelected.has(key)}
               onChange={(on) => void setModelFastSwitch(model.provider, model.id, on)}
@@ -3614,7 +3642,25 @@ function ModelsSection(
       {/* Independent wildcard patterns (pi enabledModels globs). */}
       <SettingsSectionBlock
         label={tr("models.wildcardSection")}
-        labelHint={tr("models.wildcardHelp")}
+        labelHintAria={tr("models.wildcardHelpTitle")}
+        labelHint={
+          <div className="flex flex-col gap-1.5">
+            <p className="m-0 font-medium text-[var(--popover-foreground)]">
+              {tr("models.wildcardHelpTitle")}
+            </p>
+            <p className="m-0 text-[var(--muted-foreground)]">{tr("models.wildcardHelpP1")}</p>
+            <p className="m-0 text-[var(--muted-foreground)]">{tr("models.wildcardHelpP2")}</p>
+            <p className="m-0 text-[var(--muted-foreground)]">{tr("models.wildcardHelpP3")}</p>
+            <div className="flex flex-col gap-0.5">
+              <SettingsDocsLink href={PI_DOCS_SETTINGS_URL} testId="models-wildcard-docs-settings">
+                {tr("models.wildcardHelpDocs")}
+              </SettingsDocsLink>
+              <SettingsDocsLink href={PI_DOCS_USAGE_URL} testId="models-wildcard-docs-usage">
+                {tr("models.wildcardHelpDocsUsage")}
+              </SettingsDocsLink>
+            </div>
+          </div>
+        }
         testId="models-wildcard"
       >
         <div className="space-y-3 px-3 py-3">

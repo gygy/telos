@@ -196,7 +196,7 @@ export function ThreadHeader(props: {
         ) : null}
         <div className="no-drag flex min-w-0 max-w-[calc(100%-2.5rem)] items-center gap-0.5">
           <h2
-            className="m-0 min-w-0 shrink-0 text-[13px] font-semibold tracking-tight"
+            className="m-0 min-w-0 shrink-0 text-[13px] font-medium tracking-tight"
             title={titleTooltip}
           >
             {displayTitle}

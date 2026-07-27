@@ -1216,7 +1216,7 @@ export interface PiCliProgressEvent {
   installedNow?: boolean;
 }
 
-/** Result of detecting / auto-installing the global `pi` CLI. */
+/** Result of detecting (or explicitly installing) the global `pi` CLI. */
 export interface PiCliEnsureResult {
   installed: boolean;
   alreadyPresent: boolean;
@@ -1225,6 +1225,74 @@ export interface PiCliEnsureResult {
   path?: string;
   version?: string;
   error?: string;
+}
+
+/**
+ * Which `@earendil-works/pi-coding-agent` install powers Agent Host + terminal.
+ * Desktop preference only (userData) — not written into ~/.pi/agent.
+ */
+export type PiSdkSource = "builtin" | "global";
+
+export interface PiSdkCandidate {
+  source: PiSdkSource;
+  available: boolean;
+  version?: string;
+  /** Absolute package root (directory containing package.json). */
+  packageRoot?: string;
+  /** Absolute path to the `pi` CLI entry (bin / dist/cli.js). */
+  cliPath?: string;
+  /** Why this candidate is unavailable. */
+  error?: string;
+}
+
+/** Work that would be interrupted by an SDK switch (host recycle + TUI dispose). */
+export interface PiSdkActivity {
+  /** Foreground agent is mid-prompt / streaming. */
+  agentBusy: boolean;
+  /** Parked hosts still generating in the background. */
+  parkedBusyCount: number;
+  /** Embedded terminal has a live (non-suspended) pi PTY. */
+  terminalLive: boolean;
+  /** Convenience: any of the above. */
+  busy: boolean;
+}
+
+export interface PiSdkStatus {
+  /** User preference from desktop prefs. */
+  activeSource: PiSdkSource;
+  /**
+   * Source last applied to a spawned Agent Host / TUI resolver.
+   * May lag `activeSource` until host recycle completes.
+   */
+  appliedSource: PiSdkSource;
+  needsRestart: boolean;
+  activeVersion?: string;
+  candidates: PiSdkCandidate[];
+  /** pi agent dir (`~/.pi/agent` or PI_CODING_AGENT_DIR). */
+  agentDir: string;
+  /** Current interruptible work — UI should confirm before force switch. */
+  activity: PiSdkActivity;
+}
+
+export interface PiSdkSetSourceOptions {
+  /**
+   * When true, abort in-flight generation, dispose terminal, and recycle host
+   * even if activity.busy. Without force, setSource refuses while busy.
+   */
+  force?: boolean;
+}
+
+export interface PiConfigFileInfo {
+  /** Stable id: settings | models | auth | trust | sessions | mcp | bin | … */
+  id: string;
+  /** Absolute path. */
+  path: string;
+  kind: "file" | "directory";
+  exists: boolean;
+  sizeBytes?: number;
+  mtimeMs?: number;
+  /** When false, UI may only reveal in folder (e.g. auth.json). */
+  openable: boolean;
 }
 
 /** Independent proxy channels (desktop prefs). */
@@ -1330,12 +1398,30 @@ export interface PixDesktopApi {
     onStateChange(listener: (state: { isMaximized: boolean }) => void): () => void;
   };
   /**
-   * Global `pi` CLI (`@earendil-works/pi-coding-agent`).
-   * Product mode auto-installs the latest package when missing.
+   * Global `pi` CLI detection (no auto-install).
+   * Default runtime is the builtin SDK; install global only via Settings → Pi.
    */
   pi: {
+    /** Detect global `pi` if present; does not run npm install. */
     ensure(): Promise<PiCliEnsureResult>;
     onProgress(listener: (event: PiCliProgressEvent) => void): () => void;
+  };
+  /**
+   * Settings → Pi: SDK source (builtin vs global), active version, config files.
+   * Preference is desktop-only; agent config stays under ~/.pi/agent.
+   */
+  piSdk: {
+    getStatus(): Promise<PiSdkStatus>;
+    /**
+     * Switch SDK source. Refuses while agent/terminal is busy unless
+     * `options.force` (aborts generation and recycles host).
+     */
+    setSource(source: PiSdkSource, options?: PiSdkSetSourceOptions): Promise<PiSdkStatus>;
+    listConfigFiles(): Promise<PiConfigFileInfo[]>;
+    revealConfig(id: string): Promise<void>;
+    openConfig(id: string): Promise<void>;
+    /** Ensure global `pi` CLI is installed (same as bootstrap ensure). */
+    installGlobal(): Promise<PiCliEnsureResult>;
   };
   /**
    * Embedded pi TUI (terminal mode): real PTY running `pi --session <file>`.

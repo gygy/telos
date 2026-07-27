@@ -76,6 +76,21 @@ import {
 } from "./host-park-policy.ts";
 import { createAutoUpdateController, type AutoUpdateController } from "./auto-update.ts";
 import { ensurePiCli, type PiCliProgressEvent } from "./pi-cli-ensure.ts";
+import {
+  buildPiSdkActivity,
+  buildPiSdkStatus,
+  defaultAgentDir,
+  formatPiSdkBusyError,
+  listPiConfigFiles,
+  normalizePiSdkPrefs,
+  normalizePiSdkSource,
+  piSdkSpawnEnv,
+  resolveActiveCliPath,
+  resolveBuiltinSdk,
+  resolveGlobalSdk,
+  type PiSdkPrefs,
+  type ResolvedPiSdk,
+} from "./pi-sdk.ts";
 import { createNodePtySpawn, PiTuiPtyController } from "./pi-tui-pty.ts";
 import { PiTuiExclusiveGuard, planPiTuiLaunch } from "./pi-tui-session.ts";
 import {
@@ -97,6 +112,86 @@ applyProcessPathAugmentation();
 const piTuiGuard = new PiTuiExclusiveGuard();
 let piTuiController: PiTuiPtyController | undefined;
 let piTuiControllerInit: Promise<PiTuiPtyController> | undefined;
+/** Source last applied to a spawned Agent Host (Settings needsRestart). */
+let appliedPiSdkSource: "builtin" | "global" = "builtin";
+let cachedBuiltinSdk: ResolvedPiSdk | undefined;
+let cachedGlobalSdk: ResolvedPiSdk | undefined;
+
+function resolveBuiltinSdkCached(): ResolvedPiSdk {
+  if (cachedBuiltinSdk) return cachedBuiltinSdk;
+  const opts: {
+    mainModuleUrl?: string;
+    appPath?: string;
+    resourcesPath?: string;
+  } = { mainModuleUrl: import.meta.url };
+  try {
+    if (app.isReady()) opts.appPath = app.getAppPath();
+  } catch {
+    // app may not be ready
+  }
+  if (typeof process.resourcesPath === "string" && process.resourcesPath) {
+    opts.resourcesPath = process.resourcesPath;
+  }
+  cachedBuiltinSdk = resolveBuiltinSdk(opts);
+  return cachedBuiltinSdk;
+}
+
+async function resolveGlobalSdkCached(force = false): Promise<ResolvedPiSdk> {
+  if (!force && cachedGlobalSdk) return cachedGlobalSdk;
+  cachedGlobalSdk = await resolveGlobalSdk();
+  return cachedGlobalSdk;
+}
+
+function getPiSdkPrefs(): PiSdkPrefs {
+  return normalizePiSdkPrefs(loadDesktopPrefs().piSdk);
+}
+
+function setPiSdkPrefs(next: PiSdkPrefs): PiSdkPrefs {
+  const normalized = normalizePiSdkPrefs(next);
+  const prefs = loadDesktopPrefs();
+  saveDesktopPrefs({ ...prefs, piSdk: normalized });
+  return normalized;
+}
+
+function collectPiSdkActivity(): import("@pix/contracts").PiSdkActivity {
+  const host = supervisor?.getSdkSwitchActivity() ?? {
+    agentBusy: false,
+    parkedBusyCount: 0,
+  };
+  let terminalLive = false;
+  try {
+    const tui = piTuiController?.status();
+    terminalLive = Boolean(tui?.live && !tui.live.suspended);
+  } catch {
+    terminalLive = false;
+  }
+  return buildPiSdkActivity({
+    agentBusy: host.agentBusy,
+    parkedBusyCount: host.parkedBusyCount,
+    terminalLive,
+  });
+}
+
+async function collectPiSdkStatus(): Promise<import("@pix/contracts").PiSdkStatus> {
+  const preference = getPiSdkPrefs();
+  const builtin = resolveBuiltinSdkCached();
+  const global = await resolveGlobalSdkCached(true);
+  let agentDir = defaultAgentDir();
+  try {
+    const snap = await supervisor?.snapshot();
+    if (snap?.agentDir) agentDir = snap.agentDir;
+  } catch {
+    // host may be down
+  }
+  return buildPiSdkStatus({
+    preference,
+    appliedSource: appliedPiSdkSource,
+    builtin,
+    global,
+    agentDir,
+    activity: collectPiSdkActivity(),
+  });
+}
 
 async function getPiTuiController(): Promise<PiTuiPtyController> {
   if (piTuiController) return piTuiController;
@@ -104,13 +199,23 @@ async function getPiTuiController(): Promise<PiTuiPtyController> {
     piTuiControllerInit = (async () => {
       const spawn = await createNodePtySpawn();
       const controller = new PiTuiPtyController(spawn, async () => {
-        const ensured = await ensurePiCli();
-        if (!ensured.path?.trim()) {
-          throw new Error(
-            ensured.error || "pi CLI not found; install @earendil-works/pi-coding-agent",
-          );
+        const preference = getPiSdkPrefs();
+        const builtin = resolveBuiltinSdkCached();
+        if (preference.source === "builtin") {
+          const active = await resolveActiveCliPath(preference, { builtin });
+          if (active.path?.trim()) return active.path;
+          throw new Error(active.error || "Builtin pi CLI entry not found");
         }
-        return ensured.path;
+        // Global SDK: detect only — never auto-install from the terminal path.
+        const ensured = await ensurePiCli();
+        if (ensured.path?.trim()) return ensured.path;
+        const active = await resolveActiveCliPath(preference, { builtin });
+        if (active.path?.trim()) return active.path;
+        throw new Error(
+          ensured.error ||
+            active.error ||
+            "Global pi CLI not found. Click Install global pi, or switch to builtin SDK.",
+        );
       });
       piTuiController = controller;
       return controller;
@@ -1597,6 +1702,11 @@ interface DesktopPrefs {
    * - app: Electron session (renderer loads, shell.openExternal helpers, etc.)
    */
   proxy?: ProxyPrefs;
+  /**
+   * Which pi SDK powers Agent Host + terminal (desktop-only; not ~/.pi/agent).
+   * builtin = packaged dependency; global = npm -g / PATH pi.
+   */
+  piSdk?: PiSdkPrefs;
 }
 
 const WINDOW_MIN_WIDTH = 760;
@@ -1970,7 +2080,13 @@ function processEnvironment(): Record<string, string> {
   );
   const proxy = getProxyPrefs();
   // AI channel only — app proxy uses Electron session, not agent-host env.
-  return withNodeEnvProxyFlag(applyProxyChannelToEnv(base, proxy.ai, launch));
+  const withProxy = withNodeEnvProxyFlag(applyProxyChannelToEnv(base, proxy.ai, launch));
+  const preference = getPiSdkPrefs();
+  const builtin = resolveBuiltinSdkCached();
+  const global = cachedGlobalSdk ?? { source: "global" as const, available: false };
+  const sdkEnv = piSdkSpawnEnv(preference, builtin, global);
+  appliedPiSdkSource = sdkEnv.PIX_PI_SDK_SOURCE === "global" ? "global" : "builtin";
+  return { ...withProxy, ...sdkEnv };
 }
 
 /** Live PATH from process.env (may gain npm global bin after pi ensure). */
@@ -2076,6 +2192,16 @@ class HostSupervisor {
 
   #isForegroundBusy(): boolean {
     return pendingHasPrompt(this.#pending);
+  }
+
+  /** Busy work that an SDK switch would interrupt (foreground + parked generators). */
+  getSdkSwitchActivity(): { agentBusy: boolean; parkedBusyCount: number } {
+    const agentBusy = this.#isForegroundBusy();
+    let parkedBusyCount = 0;
+    for (const parked of this.#parked.values()) {
+      if (pendingHasPrompt(parked.pending)) parkedBusyCount += 1;
+    }
+    return { agentBusy, parkedBusyCount };
   }
 
   #findParkedByHost(host: ActiveHost): ParkedHost | undefined {
@@ -3605,9 +3731,15 @@ class HostSupervisor {
   }
 
   #spawn(): ActiveHost {
+    // Sync path: env may be incomplete for global until #spawnAsync is used.
+    // Callers that need accurate global SDK should use #spawnWithSdkEnv.
+    return this.#spawnWithEnv(processEnvironment());
+  }
+
+  #spawnWithEnv(env: Record<string, string>): ActiveHost {
     const hostEntry = join(currentDirectory, "..", "agent-host", "agent-host.mjs");
     const child = utilityProcess.fork(hostEntry, [], {
-      env: processEnvironment(),
+      env,
       serviceName: "Pix Agent Host",
       stdio: "pipe",
     });
@@ -4582,8 +4714,13 @@ void app
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.webContents.send(PI_PROGRESS_CHANNEL, event);
     };
-    const runEnsurePiCli = async () => {
-      const result = await ensurePiCli({ onProgress: broadcastPiProgress });
+    /** Detect global pi only (no npm install). Used at startup / bootstrap. */
+    const runDetectPiCli = async () => {
+      return ensurePiCli({ onProgress: broadcastPiProgress });
+    };
+    /** Explicit global install (Settings → Pi). */
+    const runInstallGlobalPiCli = async () => {
+      const result = await ensurePiCli({ onProgress: broadcastPiProgress, force: true });
       // Fresh install only: gently re-read config. Do not force-kill a healthy host mid-start
       // (that surfaces as "Agent Host exited with code 0" on Windows).
       if (result.installedNow && supervisor) {
@@ -4593,9 +4730,110 @@ void app
           console.warn("[pix] host refresh after pi install failed:", error);
         }
       }
+      cachedGlobalSdk = undefined;
+      void resolveGlobalSdkCached(true).catch(() => undefined);
       return result;
     };
-    ipcMain.handle("pix:pi:ensure", () => runEnsurePiCli());
+    ipcMain.handle("pix:pi:ensure", () => runDetectPiCli());
+    ipcMain.handle("pix:pi-sdk:get-status", () => collectPiSdkStatus());
+    ipcMain.handle(
+      "pix:pi-sdk:set-source",
+      async (_event, source: unknown, options?: { force?: boolean }) => {
+        const next = normalizePiSdkSource(source);
+        const force = options?.force === true;
+        if (next === "global") {
+          const global = await resolveGlobalSdkCached(true);
+          if (!global.available) {
+            throw new Error(global.error || "Global pi SDK is not available");
+          }
+        }
+
+        const activity = collectPiSdkActivity();
+        if (activity.busy && !force) {
+          // Soft refuse: UI should confirm then retry with force.
+          throw new Error(formatPiSdkBusyError(activity));
+        }
+
+        setPiSdkPrefs({ source: next });
+        cachedGlobalSdk = await resolveGlobalSdkCached(true);
+
+        // Best-effort graceful abort before hard recycle when user forced through busy work.
+        if (activity.agentBusy && supervisor) {
+          try {
+            await supervisor.abort();
+          } catch {
+            // ignore — stop() will tear down regardless
+          }
+        }
+
+        // Dispose TUI so next open uses the new CLI path.
+        try {
+          piTuiController?.disposeAll();
+          piTuiGuard.release();
+        } catch {
+          // ignore
+        }
+
+        // Recycle Agent Host so module resolution picks the new package root.
+        // stop() also tears down parked generators (including busy parked sessions).
+        if (supervisor) {
+          try {
+            await supervisor.stop();
+            await supervisor.start({ force: true });
+          } catch (error) {
+            console.warn("[pix] host recycle after pi SDK switch failed:", error);
+          }
+        }
+        return collectPiSdkStatus();
+      },
+    );
+    ipcMain.handle("pix:pi-sdk:list-config-files", async () => {
+      let agentDir = defaultAgentDir();
+      try {
+        const snap = await supervisor?.snapshot();
+        if (snap?.agentDir) agentDir = snap.agentDir;
+      } catch {
+        // ignore
+      }
+      return listPiConfigFiles(agentDir);
+    });
+    ipcMain.handle("pix:pi-sdk:reveal-config", async (_event, id: unknown) => {
+      if (typeof id !== "string" || !id.trim()) throw new Error("Invalid config id");
+      let agentDir = defaultAgentDir();
+      try {
+        const snap = await supervisor?.snapshot();
+        if (snap?.agentDir) agentDir = snap.agentDir;
+      } catch {
+        // ignore
+      }
+      const entry = listPiConfigFiles(agentDir).find((f) => f.id === id);
+      if (!entry) throw new Error(`Unknown config id: ${id}`);
+      if (!entry.exists) throw new Error(`Config path does not exist: ${entry.path}`);
+      shell.showItemInFolder(entry.path);
+    });
+    ipcMain.handle("pix:pi-sdk:open-config", async (_event, id: unknown) => {
+      if (typeof id !== "string" || !id.trim()) throw new Error("Invalid config id");
+      let agentDir = defaultAgentDir();
+      try {
+        const snap = await supervisor?.snapshot();
+        if (snap?.agentDir) agentDir = snap.agentDir;
+      } catch {
+        // ignore
+      }
+      const entry = listPiConfigFiles(agentDir).find((f) => f.id === id);
+      if (!entry) throw new Error(`Unknown config id: ${id}`);
+      if (!entry.openable) throw new Error("This file cannot be opened from Pix (sensitive).");
+      if (!entry.exists) throw new Error(`Config path does not exist: ${entry.path}`);
+      const error = await shell.openPath(entry.path);
+      if (error) throw new Error(error);
+    });
+    ipcMain.handle("pix:pi-sdk:install-global", () => runInstallGlobalPiCli());
+
+    // Only resolve global package when user already prefers global SDK.
+    // Default builtin: skip global pi probe entirely at startup.
+    if (getPiSdkPrefs().source === "global") {
+      void resolveGlobalSdkCached(true).catch(() => undefined);
+    }
 
     await createWindow();
     autoUpdate = createAutoUpdateController({
@@ -4603,11 +4841,6 @@ void app
         if (!mainWindow || mainWindow.isDestroyed()) return;
         mainWindow.webContents.send(APP_UPDATE_CHANNEL, status);
       },
-    });
-    // Do not wait for the renderer effect — start ensure as soon as the window exists
-    // so `pnpm dev` installs even if React remounts cancel the first UI call.
-    void runEnsurePiCli().catch((error) => {
-      console.warn("[pix] pi ensure failed:", error);
     });
 
     ipcMain.handle(

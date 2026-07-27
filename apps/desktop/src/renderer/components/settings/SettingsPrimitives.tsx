@@ -5,7 +5,7 @@
  */
 import * as React from "react";
 import type { ReactNode } from "react";
-import { CircleHelp, Search } from "lucide-react";
+import { CircleHelp, ExternalLink, Search } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,78 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "../../lib/utils.ts";
+
+/** Official pi docs used in settings help tips. */
+export const PI_DOCS_SETTINGS_URL = "https://pi.dev/docs/latest/settings";
+export const PI_DOCS_USAGE_URL = "https://pi.dev/docs/latest/usage";
+
+export function openSettingsDocs(url: string): void {
+  void window.pix.workspace.openExternal(url).catch(() => undefined);
+}
+
+/**
+ * ? help control with app-styled tooltip. Prefer rich `children` for multi-line + links.
+ * Tooltip content stays hoverable so links can be clicked.
+ */
+export function SettingsHelpTip(props: {
+  /** Accessible name (always a plain string). */
+  ariaLabel: string;
+  /** Tooltip body — string or rich content. */
+  children: ReactNode;
+  testId?: string;
+  side?: "top" | "right" | "bottom" | "left";
+  align?: "start" | "center" | "end";
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "settings-section-label-help inline-flex shrink-0 cursor-help items-center rounded-sm text-[var(--text-subtle)] outline-none hover:text-[var(--muted-foreground)] focus-visible:ring-2 focus-visible:ring-ring/50",
+              props.className,
+            )}
+            aria-label={props.ariaLabel}
+            data-testid={props.testId ?? "settings-help-tip"}
+          >
+            <CircleHelp className="size-3.5" strokeWidth={1.75} aria-hidden />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side={props.side ?? "top"}
+          align={props.align ?? "start"}
+          className={cn("max-w-[20rem]", props.contentClassName)}
+        >
+          {props.children}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** Inline docs link for use inside SettingsHelpTip (opens via Electron shell). */
+export function SettingsDocsLink(props: { href: string; children: ReactNode; testId?: string }) {
+  return (
+    <button
+      type="button"
+      data-testid={props.testId}
+      className="mt-1.5 inline-flex items-center gap-1 text-left text-[12px] font-medium text-[var(--link)] underline-offset-2 hover:underline"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openSettingsDocs(props.href);
+      }}
+    >
+      <span className="min-w-0">{props.children}</span>
+      <ExternalLink className="size-3 shrink-0 opacity-80" strokeWidth={1.75} aria-hidden />
+    </button>
+  );
+}
 
 /**
  * Unified filter search field for all Settings surfaces (left rail + every page toolbar).
@@ -74,11 +145,18 @@ export function SettingsSectionBlock(props: {
   testId?: string;
   showLabel?: boolean;
   labelVariant?: "default" | "code";
-  /** Hover help next to the group label (native title tooltip). */
-  labelHint?: string;
+  /**
+   * Hover help next to the group label.
+   * Plain string for simple tips, or ReactNode for multi-line + docs links.
+   */
+  labelHint?: ReactNode;
+  /** Accessible name when `labelHint` is not a string. */
+  labelHintAria?: string;
   children: ReactNode;
 }) {
   const showLabel = props.showLabel !== false;
+  const hintAria =
+    props.labelHintAria ?? (typeof props.labelHint === "string" ? props.labelHint : props.label);
   return (
     <section className="settings-section-block" data-testid={props.testId}>
       {showLabel ? (
@@ -90,15 +168,13 @@ export function SettingsSectionBlock(props: {
         >
           <span className="inline-flex min-w-0 items-center gap-1">
             <span className="min-w-0 truncate">{props.label}</span>
-            {props.labelHint ? (
-              <span
-                className="settings-section-label-help inline-flex shrink-0 cursor-help items-center text-[var(--text-subtle)] hover:text-[var(--muted-foreground)]"
-                title={props.labelHint}
-                aria-label={props.labelHint}
-                data-testid={props.testId ? `${props.testId}-help` : "settings-section-help"}
+            {props.labelHint != null && props.labelHint !== false ? (
+              <SettingsHelpTip
+                ariaLabel={hintAria}
+                testId={props.testId ? `${props.testId}-help` : "settings-section-help"}
               >
-                <CircleHelp className="size-3.5" strokeWidth={1.75} aria-hidden />
-              </span>
+                {props.labelHint}
+              </SettingsHelpTip>
             ) : null}
           </span>
         </h2>

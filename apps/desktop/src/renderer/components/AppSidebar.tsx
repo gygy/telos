@@ -398,7 +398,7 @@ function ProductRail(
             data-testid="developer-details"
           >
             <summary
-              className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-subtle)] hover:text-[var(--muted-foreground)] [&::-webkit-details-marker]:hidden"
+              className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] font-normal text-[var(--text-subtle)] hover:text-[var(--muted-foreground)] [&::-webkit-details-marker]:hidden"
               data-testid="developer-summary"
             >
               {tr("dev.developer")}
@@ -487,8 +487,9 @@ function SettingsRail(props: {
     /*
      * Settings IA (product-facing):
      *  通用 — shell prefs (look & feel, confirmations, hotkeys)
+     *  Pi — SDK runtime + agent settings.json behavior
+     *  模型 — providers, catalog, usage
      *  工作区 — Git → environment → terminal → worktree
-     *  模型 — providers, catalog, agent, usage
      *  网络 — connectivity (proxy; lower priority, advanced)
      *  数据 — archives
      */
@@ -530,6 +531,48 @@ function SettingsRail(props: {
       ],
     },
     {
+      id: "pi",
+      labelKey: "settings.group.pi",
+      items: [
+        {
+          section: "pi",
+          testId: "settings-nav-pi",
+          labelKey: "section.pi",
+          icon: <Package className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "piSettings",
+          testId: "settings-nav-agent",
+          labelKey: "section.piSettings",
+          icon: <Boxes className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+      ],
+    },
+    {
+      id: "models",
+      labelKey: "settings.group.models",
+      items: [
+        {
+          section: "providers",
+          testId: "settings-nav-providers",
+          labelKey: "section.auth",
+          icon: <KeyRound className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "models",
+          testId: "settings-nav-models",
+          labelKey: "section.models",
+          icon: <Sparkles className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+        {
+          section: "usage",
+          testId: "settings-nav-usage",
+          labelKey: "section.usage",
+          icon: <BarChart3 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+      ],
+    },
+    {
       id: "workspace",
       labelKey: "settings.group.workspace",
       items: [
@@ -556,36 +599,6 @@ function SettingsRail(props: {
           testId: "settings-nav-worktree",
           labelKey: "section.worktree",
           icon: <FolderGit2 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-      ],
-    },
-    {
-      id: "models",
-      labelKey: "settings.group.models",
-      items: [
-        {
-          section: "providers",
-          testId: "settings-nav-providers",
-          labelKey: "section.auth",
-          icon: <KeyRound className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-        {
-          section: "models",
-          testId: "settings-nav-models",
-          labelKey: "section.models",
-          icon: <Sparkles className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-        {
-          section: "piSettings",
-          testId: "settings-nav-agent",
-          labelKey: "section.piSettings",
-          icon: <Boxes className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
-        {
-          section: "usage",
-          testId: "settings-nav-usage",
-          labelKey: "section.usage",
-          icon: <BarChart3 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
       ],
     },
@@ -831,7 +844,7 @@ function SidebarUpdateButton(props: {
         <Download className="size-4" strokeWidth={1.85} />
       ) : phase === "downloading" ? (
         percent !== undefined ? (
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium tabular-nums leading-none">
             <LoaderCircle className="size-3 animate-spin" strokeWidth={2} />
             {percent}
           </span>

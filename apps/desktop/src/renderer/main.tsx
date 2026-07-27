@@ -654,7 +654,8 @@ function App() {
     void refreshConversationSessions();
   }, [workspacePath, recentWorkspaces]);
 
-  // Cold start: full-window gate until pi is ready and host config is loaded.
+  // Cold start: gate until host/config is loaded. Default runtime is builtin SDK —
+  // do not probe/install global pi here (Settings → Pi handles global install/switch).
   useEffect(() => {
     let cancelled = false;
     const loc = () => useShellStore.getState().locale;
@@ -664,79 +665,11 @@ function App() {
       setBootstrapDetail(detail);
       useShellStore.getState().setStatus(status);
     };
-    const applyPiProgress = (event: {
-      phase: string;
-      message: string;
-      version?: string;
-      installedNow?: boolean;
-    }) => {
-      const versionLabel = event.version ? ` ${event.version}` : "";
-      switch (event.phase) {
-        case "checking":
-          setBoot(t(loc(), "pi.checking"));
-          break;
-        case "installing":
-          setBoot(t(loc(), "pi.installing"));
-          break;
-        case "progress":
-          setBoot(t(loc(), "pi.progress"), event.message.slice(0, 200));
-          break;
-        case "complete":
-          setBoot(
-            event.installedNow
-              ? t(loc(), "pi.completeInstalled", { version: versionLabel })
-              : t(loc(), "pi.complete", { version: versionLabel }),
-          );
-          break;
-        case "error":
-          setBoot(t(loc(), "pi.error", { detail: event.message }));
-          setBootstrapError(event.message);
-          break;
-        case "skipped":
-          setBoot(t(loc(), "pi.skipped"));
-          break;
-        default:
-          if (event.message) setBoot(event.message);
-          break;
-      }
-    };
-    // Subscribe before ensure() so install lines from main's in-flight work still surface.
-    const unsubPiProgress = window.pix.pi.onProgress((event) => {
-      applyPiProgress(event);
-    });
     void (async () => {
       try {
         setBoot(t(loc(), "boot.starting"));
-        // Main also starts ensure on window create; this joins the same in-flight promise.
-        const piResult = await window.pix.pi.ensure();
         if (cancelled) return;
-        if (piResult.error) {
-          const msg = t(loc(), "pi.error", { detail: piResult.error });
-          setBoot(msg);
-          setBootstrapError(piResult.error);
-        } else if (piResult.installedNow) {
-          setBoot(
-            t(loc(), "pi.completeInstalled", {
-              version: piResult.version ? ` ${piResult.version}` : "",
-            }),
-          );
-          try {
-            const snap = await window.pix.host.start({ force: true });
-            if (!cancelled) useShellStore.getState().acceptSnapshot(snap);
-          } catch {
-            // Host may not be up yet — refreshPiStatus will start it.
-          }
-        } else if (piResult.alreadyPresent || piResult.skipped) {
-          setBoot(
-            piResult.skipped
-              ? t(loc(), "pi.skipped")
-              : t(loc(), "pi.complete", {
-                  version: piResult.version ? ` ${piResult.version}` : "",
-                }),
-          );
-        }
 
-        if (cancelled) return;
         setBoot(t(loc(), "boot.workspaces"));
         await refreshRecentWorkspaces();
         if (cancelled) return;
@@ -755,7 +688,7 @@ function App() {
       } catch (error) {
         if (!cancelled) {
           const detail = error instanceof Error ? error.message : String(error);
-          setBoot(t(loc(), "pi.error", { detail }));
+          setBoot(t(loc(), "boot.failed", { detail }));
           setBootstrapError(detail);
           // Still try to bring the shell up so the user is not stuck forever.
           try {
@@ -772,7 +705,6 @@ function App() {
     })();
     return () => {
       cancelled = true;
-      unsubPiProgress();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

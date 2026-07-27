@@ -171,9 +171,19 @@
   --radius-control: var(--radius-sm);
   --radius-field: var(--radius-md);
   --radius-panel: var(--radius-lg);
-  /* Unified group / section label type */
-  --group-label-size: 13px;
-  --group-label-weight: 400;
+  /*
+   * Typography weights (app-wide):
+   *  400 regular  — body, nav, lists, settings labels, prose
+   *  500 medium   — buttons, badges, selected/unread emphasis
+   *  600 semibold — page titles, brand, markdown headings
+   * Hierarchy prefers size + color over stacking medium everywhere.
+   */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  /* Unified group / section label type (sidebar, settings, menus, palette). */
+  --group-label-size: 12px;
+  --group-label-weight: 500;
   --group-label-line-height: 1.35;
   --group-label-color: var(--text-subtle);
 }
@@ -248,9 +258,12 @@
   --radius-control: var(--radius-sm);
   --radius-field: var(--radius-md);
   --radius-panel: var(--radius-lg);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
   /* Unified group / section label type (sidebar, settings, menus, palette). */
-  --group-label-size: 13px;
-  --group-label-weight: 400;
+  --group-label-size: 12px;
+  --group-label-weight: 500;
   --group-label-line-height: 1.35;
   --group-label-color: var(--text-subtle);
 }
@@ -542,7 +555,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 .nav-item {
-  @apply flex h-8 w-full items-center gap-2.5 px-2.5 text-left text-[13px] font-medium;
+  @apply flex h-8 w-full items-center gap-2.5 px-2.5 text-left text-[13px] font-normal;
   border-radius: var(--radius-control);
   color: var(--sidebar-foreground);
 }
@@ -562,7 +575,7 @@ html[data-custom-window-controls="true"] .page-header {
  * Project rows use .sidebar-list-row without data-active (only sessions highlight).
  */
 .sidebar-list-row {
-  @apply relative flex h-8 w-full min-w-0 items-center px-2.5 text-[13px] font-medium transition-colors;
+  @apply relative flex h-8 w-full min-w-0 items-center px-2.5 text-[13px] font-normal transition-colors;
   border-radius: var(--radius-control);
   color: var(--sidebar-foreground);
 }
@@ -593,7 +606,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 .nav-item-primary {
-  @apply font-semibold;
+  @apply font-normal;
   color: var(--sidebar-foreground);
 }
 
@@ -671,7 +684,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 .project-meta .title {
-  @apply truncate text-[13px] font-medium;
+  @apply truncate text-[13px] font-normal;
 }
 
 .project-meta .meta {
@@ -1217,6 +1230,7 @@ html[data-custom-window-controls="true"] .page-header {
 /* Assistant Markdown (react-markdown + remark-gfm) */
 .pix-md {
   @apply min-w-0;
+  font-weight: var(--font-weight-regular, 400);
 }
 .pix-md > :first-child {
   @apply mt-0;
@@ -1225,7 +1239,7 @@ html[data-custom-window-controls="true"] .page-header {
   @apply mb-0;
 }
 .pix-md p {
-  @apply my-2 leading-relaxed wrap-break-word;
+  @apply my-2 leading-relaxed wrap-break-word font-normal;
 }
 .pix-md h1,
 .pix-md h2,
@@ -1328,6 +1342,7 @@ html[data-custom-window-controls="true"] .page-header {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 13px;
+  font-weight: var(--font-weight-regular, 400);
   line-height: 1.45;
 }
 .timeline-user-edit {
@@ -3224,7 +3239,7 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   @apply mb-8 flex items-center justify-between gap-3;
 }
 .settings-page-title {
-  @apply m-0 text-left text-[22px] font-medium tracking-tight text-[var(--foreground)];
+  @apply m-0 text-left text-[22px] font-semibold tracking-tight text-[var(--foreground)];
 }
 .settings-page-title-action {
   @apply shrink-0;
@@ -3389,7 +3404,7 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   @apply min-w-0 flex-1;
 }
 .archived-item-title {
-  @apply truncate text-[13.5px] font-medium text-[var(--foreground)];
+  @apply truncate text-[13.5px] font-normal text-[var(--foreground)];
 }
 .archived-item-date {
   @apply mt-0.5 text-[12px] text-[var(--muted-foreground)];
@@ -3486,10 +3501,10 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   pointer-events: none;
 }
 .settings-row-title {
-  @apply text-[13.5px] leading-snug font-medium text-[var(--foreground)];
+  @apply text-[13.5px] leading-snug font-normal text-[var(--foreground)];
 }
 .settings-row-desc {
-  @apply mt-1 text-[12px] leading-relaxed text-[var(--muted-foreground)];
+  @apply mt-1 text-[12px] leading-relaxed font-normal text-[var(--muted-foreground)];
 }
 .settings-row-control {
   @apply flex items-center;
@@ -3500,6 +3515,14 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 /* Agent settings: right-align controls; keep natural control widths. */
 [data-testid="settings-pi"] .settings-row-control {
   min-width: 9.5rem;
+  justify-content: flex-end;
+}
+/* Pi SDK page: allow long mono paths in descriptions; align action pills. */
+[data-testid="settings-pi-sdk"] .settings-row-desc {
+  @apply min-w-0;
+}
+[data-testid="settings-pi-sdk"] .settings-row-control {
+  min-width: 5.5rem;
   justify-content: flex-end;
 }
 .settings-key-row {
@@ -3956,7 +3979,7 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 
 /* Settings rail (left) — Codex hierarchy */
 .settings-rail-back {
-  @apply flex h-8 w-full items-center gap-1.5 px-2 text-left text-[13px] font-medium text-[var(--sidebar-foreground)] transition-colors;
+  @apply flex h-8 w-full items-center gap-1.5 px-2 text-left text-[13px] font-normal text-[var(--sidebar-foreground)] transition-colors;
   border-radius: var(--radius-control);
 }
 .settings-rail-back:hover {

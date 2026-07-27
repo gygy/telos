@@ -6,7 +6,7 @@
  * user bin dirs so we do not re-run `npm install -g` every launch.
  */
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -19,6 +19,39 @@ import {
 const execFileAsync = promisify(execFile);
 
 export const PI_NPM_PACKAGE = "@earendil-works/pi-coding-agent";
+
+/**
+ * True when `path` is a monorepo / project dependency shim, not a user-global install.
+ * Examples to reject:
+ *   apps/desktop/node_modules/.bin/pi
+ *   node_modules/.pnpm/.../pi-coding-agent/dist/cli.js
+ * Global installs live under npm root -g, …/lib/node_modules, AppData/npm, etc.
+ */
+export function isProjectLocalPiPath(filePath: string): boolean {
+  let resolved = filePath;
+  try {
+    if (existsSync(filePath)) resolved = realpathSync(filePath);
+  } catch {
+    resolved = filePath;
+  }
+  const norm = resolved.replace(/\\/g, "/");
+
+  // Always reject package bin shims from a project install.
+  if (/\/node_modules\/\.bin(\/|$)/i.test(norm)) return true;
+
+  if (!/\/node_modules\//i.test(norm)) return false;
+
+  // Known global node_modules layouts (keep).
+  if (/\/lib\/node_modules\//i.test(norm)) return false;
+  if (/\/\.vite-plus\/.*\/lib\/node_modules\//i.test(norm)) return false;
+  if (/\/(?:Roaming|Local)\/npm\/node_modules\//i.test(norm)) return false;
+  if (/\/npm\/node_modules\//i.test(norm) && /\/AppData\//i.test(norm)) return false;
+  // pnpm global store sometimes: ~/.local/share/pnpm/global/...
+  if (/\/pnpm\/global\//i.test(norm)) return false;
+
+  // Everything else under node_modules (including monorepo .pnpm) is project-local.
+  return true;
+}
 
 export type PiCliProgressPhase =
   | "checking"
@@ -56,14 +89,22 @@ export type PiCliEnsureOptions = {
 
 let ensureInFlight: Promise<PiCliEnsureResult> | undefined;
 
-/** Product launch only — never auto-install during isolated / e2e / smoke fixtures. */
+/**
+ * Whether startup/bootstrap may run `npm install -g` for the global pi CLI.
+ *
+ * Default is **false**: Agent Host + terminal default to the **builtin** SDK
+ * (Settings → Pi). Global install is opt-in via Settings or `ensurePiCli({ force: true })`.
+ * Set PIX_FORCE_PI_INSTALL=1 only for explicit debug/CI that needs auto global install.
+ */
 export function shouldAutoInstallPiCli(env: NodeJS.ProcessEnv = process.env): boolean {
+  // Explicit opt-outs always win (fixtures / e2e / smoke).
   if (env.PIX_SKIP_PI_INSTALL === "1" || env.PIX_SKIP_PI_INSTALL === "true") return false;
   if (env.PIX_ISOLATED === "1" || env.PIX_ISOLATED === "true") return false;
-  // Fixture workspace / pinned agent dir → test harness owns the environment.
   if (env.PIX_WORKSPACE?.trim()) return false;
   if (env.PI_CODING_AGENT_DIR?.trim() && env.PIX_ENABLE_TEST_COMMANDS === "1") return false;
-  return true;
+  // Opt-in only (debug/CI). Product default never auto-installs.
+  if (env.PIX_FORCE_PI_INSTALL === "1" || env.PIX_FORCE_PI_INSTALL === "true") return true;
+  return false;
 }
 
 function emit(onProgress: PiCliEnsureOptions["onProgress"], event: PiCliProgressEvent): void {
@@ -203,31 +244,71 @@ function ensureDirOnProcessPath(binPath: string): void {
   if (process.platform === "win32") process.env.Path = next;
 }
 
-/** Exported for tests — locate pi without installing. */
+/** Collect every PATH hit for `pi` (not just the first). */
+async function resolveAllOnPath(command: string, env: NodeJS.ProcessEnv): Promise<string[]> {
+  const known = candidateCommandPaths(command, env);
+  const found: string[] = [];
+  const seen = new Set<string>();
+  const push = (p: string | undefined) => {
+    if (!p || !existsSync(p) || isProjectLocalPiPath(p)) return;
+    const key = process.platform === "win32" ? p.toLowerCase() : p;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push(p);
+  };
+  for (const p of known) push(p);
+
+  try {
+    if (process.platform === "win32") {
+      const { stdout } = await execFileAsync("where.exe", [command], {
+        env,
+        windowsHide: true,
+        timeout: 8_000,
+        maxBuffer: 1024 * 1024,
+      });
+      for (const line of stdout.split(/\r?\n/).map((l) => l.trim())) push(line);
+    } else {
+      const { stdout } = await execFileAsync("which", ["-a", command], {
+        env,
+        timeout: 8_000,
+        maxBuffer: 1024 * 1024,
+      });
+      for (const line of stdout.split(/\r?\n/).map((l) => l.trim())) push(line);
+    }
+  } catch {
+    // ignore
+  }
+  return found;
+}
+
+/**
+ * Locate a **user-global** `pi` CLI (not monorepo / project node_modules).
+ * Exported for tests.
+ */
 export async function detectPiCli(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ path?: string; version?: string }> {
   const resolvedEnv = augmentEnvPath(env);
 
-  const fromPath = await resolveOnPath("pi", resolvedEnv);
-  if (fromPath) {
-    return detected(fromPath, await readPiVersion(fromPath, resolvedEnv));
-  }
-
-  // Global npm prefix (PATH may not include it inside Electron).
+  // 1) Prefer npm global prefix (true `npm install -g` location).
   const npmPath =
     (await resolveOnPath("npm", resolvedEnv)) ?? (await resolveOnPath("npm.cmd", resolvedEnv));
   if (npmPath) {
     const prefix = await npmGlobalPrefix(npmPath, resolvedEnv);
     if (prefix) {
       for (const candidate of candidatePiPaths(prefix)) {
-        if (!existsSync(candidate)) continue;
+        if (!existsSync(candidate) || isProjectLocalPiPath(candidate)) continue;
         return detected(candidate, await readPiVersion(candidate, resolvedEnv));
       }
     }
   }
 
-  // Common user global locations (GUI launch often misses these on PATH).
+  // 2) PATH hits — skip project node_modules/.bin and monorepo packages.
+  for (const fromPath of await resolveAllOnPath("pi", resolvedEnv)) {
+    return detected(fromPath, await readPiVersion(fromPath, resolvedEnv));
+  }
+
+  // 3) Common user-global bins (GUI launch often misses these on PATH).
   const home = resolvedEnv.HOME || resolvedEnv.USERPROFILE || homedir();
   const extras =
     process.platform === "win32"
@@ -237,7 +318,6 @@ export async function detectPiCli(
           join(home, "AppData", "Local", "npm", "pi.cmd"),
         ]
       : [
-          ...candidateCommandPaths("pi", resolvedEnv),
           join(home, ".vite-plus", "bin", "pi"),
           join(home, ".npm-global", "bin", "pi"),
           join(home, ".local", "bin", "pi"),
@@ -250,6 +330,7 @@ export async function detectPiCli(
   const seen = new Set<string>();
   for (const candidate of extras) {
     if (!candidate || seen.has(candidate) || !existsSync(candidate)) continue;
+    if (isProjectLocalPiPath(candidate)) continue;
     seen.add(candidate);
     return detected(candidate, await readPiVersion(candidate, resolvedEnv));
   }
@@ -339,8 +420,9 @@ function pipeInstallOutput(
 }
 
 /**
- * Ensure the global `pi` CLI is available. Installs `@earendil-works/pi-coding-agent@latest`
- * via npm when missing. Concurrent callers share one in-flight promise.
+ * Detect (and optionally install) the global `pi` CLI.
+ * By default only detects — install requires `force: true` or PIX_FORCE_PI_INSTALL.
+ * Concurrent callers share one in-flight promise.
  */
 export function ensurePiCli(options: PiCliEnsureOptions = {}): Promise<PiCliEnsureResult> {
   if (ensureInFlight) return ensureInFlight;
@@ -359,28 +441,6 @@ async function ensurePiCliOnce(options: PiCliEnsureOptions): Promise<PiCliEnsure
   if (process.platform === "win32" && env.Path) process.env.Path = env.Path;
 
   const onProgress = options.onProgress;
-
-  if (!shouldAutoInstallPiCli(env) && !options.force) {
-    const found = await detectPiCli(env);
-    if (found.path) ensureDirOnProcessPath(found.path);
-    const skipped: PiCliEnsureResult = {
-      installed: Boolean(found.path),
-      alreadyPresent: Boolean(found.path),
-      installedNow: false,
-      skipped: true,
-      ...(found.path ? { path: found.path } : {}),
-      ...(found.version ? { version: found.version } : {}),
-    };
-    emit(onProgress, {
-      phase: "skipped",
-      message: found.path
-        ? `Skipped auto-install (fixture mode); pi found${found.version ? ` ${found.version}` : ""}`
-        : "Skipped pi auto-install (fixture / test mode)",
-      ...(found.path ? { path: found.path } : {}),
-      ...(found.version ? { version: found.version } : {}),
-    });
-    return skipped;
-  }
 
   emit(onProgress, { phase: "checking", message: "Checking for pi CLI…" });
   const existing = await detectPiCli(env);
@@ -404,10 +464,24 @@ async function ensurePiCliOnce(options: PiCliEnsureOptions): Promise<PiCliEnsure
     return result;
   }
 
+  // Default product policy: detect only. Install is opt-in (Settings / force).
+  if (!shouldAutoInstallPiCli(env) && !options.force) {
+    const skipped: PiCliEnsureResult = {
+      installed: false,
+      alreadyPresent: false,
+      installedNow: false,
+      skipped: true,
+    };
+    emit(onProgress, {
+      phase: "skipped",
+      message: "Global pi auto-install is off (builtin SDK is default).",
+    });
+    return skipped;
+  }
+
   const npmPath = (await resolveOnPath("npm", env)) ?? (await resolveOnPath("npm.cmd", env));
   if (!npmPath) {
-    const error =
-      "npm was not found on PATH. Install Node.js/npm, then restart Pix to install pi automatically.";
+    const error = "npm was not found on PATH. Install Node.js/npm, then click Install global pi.";
     emit(onProgress, { phase: "error", message: error });
     return {
       installed: false,

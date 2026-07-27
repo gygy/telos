@@ -85,6 +85,7 @@ export type SettingsSection =
   | "providers"
   | "models"
   | "piSettings"
+  | "pi"
   | "archived";
 
 export interface ShellState {
