@@ -1,7 +1,11 @@
 /**
  * Shared model grouping for Settings → Models and composer model picker.
  * Custom and builtin providers both use the same display labels
- * (`formatProviderGroupLabel`); custom groups are listed first (settings order).
+ * (`formatProviderGroupLabel`); custom groups are listed first.
+ *
+ * Order is stable from the input list (pi catalog / models.json order):
+ * first-seen provider order, and first-seen model order within each group.
+ * Do not alphabetically re-sort — that scrambles catalog and user-defined order.
  */
 
 export type ModelGroupSource = string;
@@ -44,6 +48,20 @@ const PROVIDER_LABELS: Record<string, string> = {
   fireworks: "Fireworks",
   cohere: "Cohere",
   perplexity: "Perplexity",
+  "qwen-token-plan": "Qwen Token Plan",
+  "qwen-token-plan-cn": "Qwen Token Plan Cn",
+  "kimi-coding": "Kimi Coding",
+  "github-copilot": "GitHub Copilot",
+  "vercel-ai-gateway": "Vercel AI Gateway",
+  "zai-coding-cn": "ZAI Coding Cn",
+  "minimax-cn": "MiniMax Cn",
+  "moonshotai-cn": "Moonshot AI Cn",
+  "xiaomi-token-plan-cn": "Xiaomi Token Plan Cn",
+  "xiaomi-token-plan-ams": "Xiaomi Token Plan Ams",
+  "xiaomi-token-plan-sgp": "Xiaomi Token Plan Sgp",
+  "cloudflare-workers-ai": "Cloudflare Workers AI",
+  "cloudflare-ai-gateway": "Cloudflare AI Gateway",
+  "opencode-go": "OpenCode Go",
 };
 
 /**
@@ -66,28 +84,26 @@ export function formatProviderGroupLabel(provider: string): string {
     .join(" ");
 }
 
-function sortModelsInGroup<T extends GroupableModel>(list: T[]): T[] {
-  return list.slice().sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-}
-
 function mapToGroups<T extends GroupableModel>(
   map: Map<string, T[]>,
   custom: boolean,
 ): Array<ModelGroup<T>> {
-  return [...map.entries()]
-    .map(([provider, list]) => ({
-      key: custom ? `custom:${provider}` : provider,
-      label: formatProviderGroupLabel(provider),
-      models: sortModelsInGroup(list),
-      custom,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  // Map insertion order = first-seen provider order from the input list.
+  return [...map.entries()].map(([provider, list]) => ({
+    key: custom ? `custom:${provider}` : provider,
+    label: formatProviderGroupLabel(provider),
+    // list already preserves push order (catalog / models.json model order).
+    models: list,
+    custom,
+  }));
 }
 
 /**
  * Same grouping as Settings → Models:
- * 1. each custom provider (label via formatProviderGroupLabel), sorted by label
- * 2. each built-in provider (brand-cased label), sorted by label
+ * 1. each custom provider (first-seen order from input)
+ * 2. each built-in provider (first-seen order from input)
+ *
+ * Models inside a group keep input order (pi catalog or models.json array).
  *
  * `customLabel` is kept for API compatibility (empty custom section title in settings)
  * but is no longer used to lump all custom models under one group.

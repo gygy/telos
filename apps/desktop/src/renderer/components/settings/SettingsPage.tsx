@@ -3639,37 +3639,7 @@ function ModelsSection(
         />
       </div>
 
-      {/* Custom providers first — top of Models page (one card per provider). */}
-      {customModels.length === 0 ? (
-        <SettingsSectionBlock label={tr("models.group.custom")} testId="models-custom">
-          <div data-testid="models-list-custom">
-            {renderModelRows(
-              [],
-              searching ? tr("models.searchEmpty") : tr("models.group.customEmpty"),
-            )}
-          </div>
-        </SettingsSectionBlock>
-      ) : (
-        groupModelsByProvider(customModels, tr("models.group.custom")).map((group) => (
-          <SettingsSectionBlock
-            key={group.key}
-            label={group.label}
-            testId={`models-custom-group-${group.key}`}
-          >
-            <div data-testid={`models-list-custom-${group.key}`}>
-              {group.models.map((model, index) =>
-                renderModelRow(model, {
-                  last: index === group.models.length - 1,
-                  hideProviderPrefix: true,
-                  allowEdit: true,
-                }),
-              )}
-            </div>
-          </SettingsSectionBlock>
-        ))
-      )}
-
-      {/* Independent wildcard patterns (pi enabledModels globs). */}
+      {/* Page order: wildcard (top) → custom → builtin (catalog order). */}
       <SettingsSectionBlock
         label={tr("models.wildcardSection")}
         labelHintAria={tr("models.wildcardHelpTitle")}
@@ -3729,6 +3699,35 @@ function ModelsSection(
           </div>
         </div>
       </SettingsSectionBlock>
+
+      {customModels.length === 0 ? (
+        <SettingsSectionBlock label={tr("models.group.custom")} testId="models-custom">
+          <div data-testid="models-list-custom">
+            {renderModelRows(
+              [],
+              searching ? tr("models.searchEmpty") : tr("models.group.customEmpty"),
+            )}
+          </div>
+        </SettingsSectionBlock>
+      ) : (
+        groupModelsByProvider(customModels, tr("models.group.custom")).map((group) => (
+          <SettingsSectionBlock
+            key={group.key}
+            label={group.label}
+            testId={`models-custom-group-${group.key}`}
+          >
+            <div data-testid={`models-list-custom-${group.key}`}>
+              {group.models.map((model, index) =>
+                renderModelRow(model, {
+                  last: index === group.models.length - 1,
+                  hideProviderPrefix: true,
+                  allowEdit: true,
+                }),
+              )}
+            </div>
+          </SettingsSectionBlock>
+        ))
+      )}
 
       {renderBuiltinProviderSections(
         searching ? tr("models.searchEmpty") : tr("models.group.builtinEmpty"),

@@ -134,6 +134,44 @@ describe("models.json helpers", () => {
     ).rejects.toThrow(/Provider id/);
   });
 
+  it("preserves models.json provider and model order when reading", async () => {
+    const agentDir = await tempAgentDir();
+    await writeFile(
+      join(agentDir, "models.json"),
+      `${JSON.stringify(
+        {
+          providers: {
+            XTJ: {
+              baseUrl: "https://example.com/a",
+              api: "openai-responses",
+              models: [
+                { id: "second-model", name: "Second" },
+                { id: "first-model", name: "First" },
+              ],
+            },
+            Yu: {
+              baseUrl: "https://example.com/b",
+              api: "openai-responses",
+              models: [{ id: "grok", name: "Grok" }],
+            },
+            acme: {
+              baseUrl: "https://example.com/c",
+              api: "openai-completions",
+              models: [{ id: "x", name: "X" }],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    const view = await readModelsJsonConfig(agentDir);
+    // File key order (XTJ, Yu, acme) — not alphabetical (acme, XTJ, Yu).
+    expect(view.providers.map((p) => p.provider)).toEqual(["XTJ", "Yu", "acme"]);
+    expect(view.providers[0]?.models.map((m) => m.id)).toEqual(["second-model", "first-model"]);
+  });
+
   it("writes explicit userAgent and projects it back", async () => {
     const agentDir = await tempAgentDir();
     await upsertCustomProviderInModelsJson(agentDir, {

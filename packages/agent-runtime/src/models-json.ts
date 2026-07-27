@@ -162,9 +162,8 @@ export async function readModelsJsonConfig(agentDir: string): Promise<ModelsJson
       return { path, exists: true, providers: [], error: "models.json root must be an object" };
     }
     const providersRaw = isRecord(parsed.providers) ? parsed.providers : {};
-    const providers = Object.keys(providersRaw)
-      .sort((a, b) => a.localeCompare(b))
-      .map((id) => projectProvider(id, providersRaw[id]));
+    // Preserve models.json key order (do not alphabetically re-sort).
+    const providers = Object.keys(providersRaw).map((id) => projectProvider(id, providersRaw[id]));
     return { path, exists: true, providers };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to read models.json";

@@ -1475,14 +1475,7 @@ export async function createPixRuntime(
       );
     },
     listModels() {
-      const modelsJsonProviders = listModelsJsonProviderIds(runtime.services.agentDir);
-      return runtime.services.modelRuntime.getModels().map((model) => ({
-        provider: model.provider,
-        id: model.id,
-        name: model.name ?? model.id,
-        reasoning: Boolean(model.reasoning),
-        source: classifyModelSource(model.provider, runtime.services, modelsJsonProviders),
-      }));
+      return projectModelSummaries(runtime.services);
     },
     async setModel(provider, id) {
       const model = runtime.services.modelRuntime.getModel(provider, id);
@@ -1816,14 +1809,7 @@ export async function createPixRuntime(
     },
     async refreshModelCatalog() {
       await runtime.services.modelRuntime.refresh();
-      const modelsJsonProviders = listModelsJsonProviderIds(runtime.services.agentDir);
-      return runtime.services.modelRuntime.getModels().map((model) => ({
-        provider: model.provider,
-        id: model.id,
-        name: model.name ?? model.id,
-        reasoning: Boolean(model.reasoning),
-        source: classifyModelSource(model.provider, runtime.services, modelsJsonProviders),
-      }));
+      return projectModelSummaries(runtime.services);
     },
     async completeText(prompt, options) {
       const modelRuntime = runtime.services.modelRuntime;
@@ -2085,46 +2071,49 @@ function projectSettingsInventory(
 }
 
 /**
- * pi-ai KnownProvider catalog. Providers outside this set (e.g. models.json
- * custom names, extension providers) are treated as user-defined.
+ * pi-ai `builtinProviders()` catalog (keep in sync with @earendil-works/pi-ai).
+ * Providers outside this set (e.g. models.json custom names, extension providers)
+ * are treated as user-defined.
  */
 const PI_BUILTIN_PROVIDERS = new Set<string>([
   "amazon-bedrock",
   "ant-ling",
   "anthropic",
+  "azure-openai-responses",
+  "cerebras",
+  "cloudflare-ai-gateway",
+  "cloudflare-workers-ai",
+  "deepseek",
+  "fireworks",
+  "github-copilot",
   "google",
   "google-vertex",
-  "openai",
-  "azure-openai-responses",
-  "openai-codex",
-  "radius",
-  "nvidia",
-  "deepseek",
-  "github-copilot",
-  "xai",
   "groq",
-  "cerebras",
-  "openrouter",
-  "vercel-ai-gateway",
-  "zai",
-  "zai-coding-cn",
-  "mistral",
+  "huggingface",
+  "kimi-coding",
   "minimax",
   "minimax-cn",
+  "mistral",
   "moonshotai",
   "moonshotai-cn",
-  "huggingface",
-  "fireworks",
-  "together",
+  "nvidia",
+  "openai",
+  "openai-codex",
   "opencode",
   "opencode-go",
-  "kimi-coding",
-  "cloudflare-workers-ai",
-  "cloudflare-ai-gateway",
+  "openrouter",
+  "qwen-token-plan",
+  "qwen-token-plan-cn",
+  "radius",
+  "together",
+  "vercel-ai-gateway",
+  "xai",
   "xiaomi",
-  "xiaomi-token-plan-cn",
   "xiaomi-token-plan-ams",
+  "xiaomi-token-plan-cn",
   "xiaomi-token-plan-sgp",
+  "zai",
+  "zai-coding-cn",
 ]);
 
 function classifyModelSource(
@@ -2145,6 +2134,30 @@ function classifyModelSource(
     // older runtimes without the method
   }
   return PI_BUILTIN_PROVIDERS.has(id) ? "builtin" : "custom";
+}
+
+/**
+ * Project catalog models with source tags.
+ * Order: custom first (models.json / extension order), then builtin (pi catalog order).
+ * Relative order inside each bucket is preserved — never alphabetically re-sorted.
+ */
+function projectModelSummaries(services: AgentSessionServices): ModelSummary[] {
+  const modelsJsonProviders = listModelsJsonProviderIds(services.agentDir);
+  const custom: ModelSummary[] = [];
+  const builtin: ModelSummary[] = [];
+  for (const model of services.modelRuntime.getModels()) {
+    const source = classifyModelSource(model.provider, services, modelsJsonProviders);
+    const summary: ModelSummary = {
+      provider: model.provider,
+      id: model.id,
+      name: model.name ?? model.id,
+      reasoning: Boolean(model.reasoning),
+      source,
+    };
+    if (source === "custom") custom.push(summary);
+    else builtin.push(summary);
+  }
+  return [...custom, ...builtin];
 }
 
 /**
