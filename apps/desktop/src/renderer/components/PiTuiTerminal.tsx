@@ -55,8 +55,11 @@ function stripPiEditorCursorStyle(data: string): string {
   return data.replaceAll("\x1b[7m", "").replaceAll("\x1b[27m", "");
 }
 
+/** Match main-process normalizeSessionKey (incl. macOS /private/var collapse). */
 function normSession(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  let p = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  if (p.startsWith("/private/")) p = p.slice("/private".length);
+  return p;
 }
 
 /**
@@ -187,10 +190,23 @@ function focusTerminalInput(term: GhosttyTerminal): void {
 /** Quiet window after the last output frame; TUI startup often paints in bursts. */
 const READY_SETTLE_MS = 160;
 /** A resumed process still needs to redraw after its resize before it is revealed. */
-const READY_SETTLE_RESUMED_MS = 80;
+const READY_SETTLE_RESUMED_MS = 100;
 /** Fallback for a quiet/empty session; output-driven readiness remains preferred. */
 const READY_MAX_MS = 2_400;
-const READY_MAX_RESUMED_MS = 1_500;
+/** Promote/resume must not wait long — canvas is empty until pi repaints. */
+const READY_MAX_RESUMED_MS = 600;
+
+/** Nudge PTY size so parked pi TUI full-repaints into a fresh Ghostty canvas. */
+function forcePtyRepaint(cols: number, rows: number): void {
+  const c = Math.max(20, Math.floor(cols));
+  const r = Math.max(5, Math.floor(rows));
+  const altC = c > 20 ? c - 1 : c + 1;
+  const altR = r > 5 ? r - 1 : r + 1;
+  void window.pix.terminal.resize(altC, altR).catch(() => undefined);
+  window.setTimeout(() => {
+    void window.pix.terminal.resize(c, r).catch(() => undefined);
+  }, 16);
+}
 
 export function PiTuiTerminal(props: {
   sessionFile: string;
@@ -211,6 +227,14 @@ export function PiTuiTerminal(props: {
   const prefsRef = useRef<TerminalPrefs>(loadTerminalPrefs());
   const [surfaceReady, setSurfaceReady] = useState(false);
   const surfaceReadyRef = useRef(false);
+  /** Exposed for e2e: grid + whether PTY actually painted into Ghostty. */
+  const [paintStats, setPaintStats] = useState({
+    cols: 0,
+    rows: 0,
+    bytes: 0,
+    canvasW: 0,
+    canvasH: 0,
+  });
   onExitRef.current = props.onProcessExit;
   onReadyRef.current = props.onReady;
   onOpenErrorRef.current = props.onOpenError;
@@ -242,8 +266,13 @@ export function PiTuiTerminal(props: {
     let acceptSessionKey: string | null = null;
     /** PTY output can arrive before the open IPC promise resolves; retain it in order. */
     const pendingData: string[] = [];
+    /** Bytes written into Ghostty after open — blank canvas is not "ready". */
+    let ptyBytes = 0;
+    let openedResumed = false;
+    let repaintAttempts = 0;
     setSurfaceReady(false);
     surfaceReadyRef.current = false;
+    setPaintStats({ cols: 0, rows: 0, bytes: 0, canvasW: 0, canvasH: 0 });
 
     function paintHostBackground(prefs: TerminalPrefs) {
       const theme = resolveTerminalTheme(prefs, colorModeRef.current);
@@ -279,9 +308,71 @@ export function PiTuiTerminal(props: {
       syncTerminalInputCaret(target);
     }
 
+    function readCanvasMetrics(target: GhosttyTerminal): { w: number; h: number } {
+      try {
+        const canvas = host?.querySelector("canvas");
+        if (canvas instanceof HTMLCanvasElement) {
+          return { w: canvas.width || 0, h: canvas.height || 0 };
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        return { w: Math.max(0, target.cols * 8), h: Math.max(0, target.rows * 16) };
+      } catch {
+        return { w: 0, h: 0 };
+      }
+    }
+
+    function publishPaintStats(target: GhosttyTerminal) {
+      const { w, h } = readCanvasMetrics(target);
+      setPaintStats({
+        cols: target.cols,
+        rows: target.rows,
+        bytes: ptyBytes,
+        canvasW: w,
+        canvasH: h,
+      });
+    }
+
+    /**
+     * Ready only when Ghostty has a real grid and (for resume/promote) PTY bytes
+     * actually landed — otherwise session hops look "ready" on a blank canvas.
+     */
+    function canDeclareReady(target: GhosttyTerminal | null): boolean {
+      if (!target || acceptSessionKey !== expectedKey) return false;
+      if (target.cols < 20 || target.rows < 5) return false;
+      const { w, h } = readCanvasMetrics(target);
+      if (w < 40 || h < 40) return false;
+      // Cold open of a quiet session may have no bytes yet; resume must repaint.
+      if (openedResumed && ptyBytes < 1) return false;
+      return true;
+    }
+
     function fireReady() {
       if (readyFired || cancelled) return;
       if (acceptSessionKey !== expectedKey) return;
+      if (!canDeclareReady(term)) {
+        // Not painted yet — nudge again instead of revealing a broken surface.
+        if (term && repaintAttempts < 6) {
+          repaintAttempts += 1;
+          try {
+            fit?.fit();
+            forcePtyRepaint(term.cols, term.rows);
+          } catch {
+            // ignore
+          }
+          if (maxTimer != null) window.clearTimeout(maxTimer);
+          maxTimer = window.setTimeout(
+            () => {
+              maxTimer = null;
+              fireReady();
+            },
+            openedResumed ? 200 : 400,
+          );
+        }
+        return;
+      }
       readyFired = true;
       surfaceReadyRef.current = true;
       if (settleTimer != null) {
@@ -292,16 +383,33 @@ export function PiTuiTerminal(props: {
         window.clearTimeout(maxTimer);
         maxTimer = null;
       }
-      if (term) {
-        normalizeInitialPromptCursor(term);
-        syncTerminalInputCaret(term);
-      }
+      if (term) publishPaintStats(term);
+      // Reveal first so layout metrics are final, then re-fit the cell grid.
       setSurfaceReady(true);
-      // Double rAF: composite the themed canvas before reporting readiness.
       window.requestAnimationFrame(() => {
+        if (cancelled || !term) return;
+        try {
+          fit?.fit();
+          void window.pix.terminal.resize(term.cols, term.rows).catch(() => undefined);
+          normalizeInitialPromptCursor(term);
+          syncTerminalInputCaret(term);
+          focusTerminalInput(term);
+          publishPaintStats(term);
+        } catch {
+          // ignore
+        }
         window.requestAnimationFrame(() => {
           if (cancelled) return;
-          if (term) focusTerminalInput(term);
+          if (term) {
+            try {
+              fit?.fit();
+              void window.pix.terminal.resize(term.cols, term.rows).catch(() => undefined);
+              focusTerminalInput(term);
+              publishPaintStats(term);
+            } catch {
+              // ignore
+            }
+          }
           onReadyRef.current?.({ sessionFile });
         });
       });
@@ -358,12 +466,14 @@ export function PiTuiTerminal(props: {
       fit = nextFit;
 
       function writeTerminalOutput(data: string) {
+        if (data) ptyBytes += data.length;
         // Pi's TUI positions the hardware cursor after each render. Keep that
         // cursor visible and remove only the duplicate reverse-video styling.
         next.write(stripPiEditorCursorStyle(data), () => {
           if (cancelled) return;
           // The callback is scheduled after Ghostty's next render frame, so the
           // settle window starts only after this output is actually paintable.
+          publishPaintStats(next);
           scheduleReadyAfterVerifiedOutput();
           syncTerminalInputCaret(next);
         });
@@ -470,6 +580,7 @@ export function PiTuiTerminal(props: {
         return;
       }
 
+      openedResumed = Boolean(opened.resumed);
       if (opened.resumed) {
         settleMs = READY_SETTLE_RESUMED_MS;
         maxMs = READY_MAX_RESUMED_MS;
@@ -484,15 +595,23 @@ export function PiTuiTerminal(props: {
         if (cancelled) return;
         try {
           nextFit.fit();
-          void window.pix.terminal.resize(next.cols, next.rows).catch(() => undefined);
+          // Parked/resumed pi keeps VT state but this Ghostty is empty — force a
+          // full TUI repaint into the new canvas (same-size resize is often ignored).
+          forcePtyRepaint(next.cols, next.rows);
           focusTerminalInput(next);
+          publishPaintStats(next);
         } catch {
           // ignore
         }
+        // Resumed: wait for real PTY bytes (canDeclareReady). Cold: allow quiet sessions.
         maxTimer = window.setTimeout(() => {
           maxTimer = null;
           fireReady();
         }, maxMs);
+        if (!opened.resumed) {
+          // Quiet cold session (no output yet) — still need a valid grid.
+          scheduleReadyAfterVerifiedOutput();
+        }
       });
       nextFit.observeResize();
     })();
@@ -554,6 +673,11 @@ export function PiTuiTerminal(props: {
       data-testid="pi-tui-terminal"
       data-session={props.sessionFile}
       data-surface-ready={surfaceReady ? "true" : "false"}
+      data-paint-cols={String(paintStats.cols)}
+      data-paint-rows={String(paintStats.rows)}
+      data-paint-bytes={String(paintStats.bytes)}
+      data-paint-canvas-w={String(paintStats.canvasW)}
+      data-paint-canvas-h={String(paintStats.canvasH)}
       style={{ background: initialBg }}
     >
       <div

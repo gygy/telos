@@ -33,6 +33,7 @@ import {
   isPinnedThread,
   loadPinnedThreads,
   loadThreadAliases,
+  notifyThreadPrefsChanged,
   setThreadAlias,
   threadDisplayTitle,
   togglePinnedThread,
@@ -43,10 +44,8 @@ import { anchorFromEvent, FloatingMenu, type AnchorRect } from "./FloatingMenu.t
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { RenameDialog } from "./RenameDialog.tsx";
 
-/** Notify sidebar lists to reload pin/archive/alias prefs. */
-export function notifyThreadPrefsChanged(): void {
-  window.dispatchEvent(new Event("pix-thread-prefs"));
-}
+/** @deprecated use notifyThreadPrefsChanged from project-prefs — re-export for callers. */
+export { notifyThreadPrefsChanged };
 
 export function ThreadHeader(props: {
   locale: Locale;

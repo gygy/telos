@@ -28,6 +28,32 @@ if (!executable) {
     `Packaged app not found. Run pnpm package:dir first. Tried:\n${candidates.join("\n")}`,
   );
 }
+
+// electron-updater requires Resources/app-update.yml (see scripts/after-pack.mjs).
+// Missing file → "ENOENT ... app-update.yml" on Settings → Check for updates.
+const updateConfigCandidates =
+  process.platform === "win32"
+    ? [
+        join(dirname(executable), "resources", "app-update.yml"),
+        join(appDirectory, "release/app/win-unpacked/resources/app-update.yml"),
+      ]
+    : [
+        join(dirname(executable), "..", "Resources", "app-update.yml"),
+        join(appDirectory, "release/app/mac-arm64/Pix.app/Contents/Resources/app-update.yml"),
+        join(appDirectory, "release/app/mac-x64/Pix.app/Contents/Resources/app-update.yml"),
+        join(appDirectory, "release/app/mac/Pix.app/Contents/Resources/app-update.yml"),
+      ];
+const updateConfigPath = updateConfigCandidates.find((path) => existsSync(path));
+if (!updateConfigPath) {
+  throw new Error(
+    `Packaged app is missing app-update.yml (electron-updater feed config). Tried:\n${updateConfigCandidates.join("\n")}`,
+  );
+}
+const updateConfigBody = await readFile(updateConfigPath, "utf8");
+if (!updateConfigBody.includes("provider:") || !updateConfigBody.includes("github")) {
+  throw new Error(`app-update.yml is incomplete:\n${updateConfigBody}`);
+}
+console.log(`[smoke:packaged] app-update.yml ok: ${updateConfigPath}`);
 const root = await mkdtemp(join(tmpdir(), "pix-packaged-smoke-"));
 const home = join(root, "home");
 const agentDir = join(home, ".pi", "agent");

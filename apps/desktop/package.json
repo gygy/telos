@@ -18,7 +18,8 @@
     "electron:install": "install-electron",
     "package": "pnpm run build && electron-builder --config electron-builder.yml --publish never",
     "package:dir": "pnpm run build && electron-builder --dir --config electron-builder.yml --publish never",
-    "test": "vp test --run --config vite.renderer.config.ts"
+    "test": "vp test --run --config vite.renderer.config.ts",
+    "test:after-pack": "node scripts/after-pack.test.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:",
@@ -29,7 +30,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "catalog:",
-    "electron-updater": "catalog:",
+    "electron-updater": "6.8.9",
     "ghostty-web": "catalog:",
     "highlight.js": "catalog:",
     "katex": "catalog:",

@@ -87,6 +87,11 @@ import {
   type ProxyPrefs,
 } from "./proxy-prefs.ts";
 import { discoverLocalProxies } from "./proxy-discover.ts";
+import { applyProcessPathAugmentation, augmentEnvPath } from "./shell-path.ts";
+
+// Packaged Dock/Finder launches get a minimal PATH. Augment before any snapshot of
+// process.env (LAUNCH_ENV) or child spawn so pi/node/npm resolve like in dev shells.
+applyProcessPathAugmentation();
 
 /** Embedded pi TUI (terminal mode) — exclusive with host chat prompts. */
 const piTuiGuard = new PiTuiExclusiveGuard();
@@ -1958,12 +1963,22 @@ function deferred<T>(): Deferred<T> {
 const LAUNCH_ENV: NodeJS.ProcessEnv = { ...process.env };
 
 function processEnvironment(): Record<string, string> {
+  // Re-augment on each spawn: ensurePiCli may prepend npm global bin after install.
+  const launch = augmentEnvPath({ ...LAUNCH_ENV, ...pickLivePathEnv() });
   const base = Object.fromEntries(
-    Object.entries(LAUNCH_ENV).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    Object.entries(launch).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
   const proxy = getProxyPrefs();
   // AI channel only — app proxy uses Electron session, not agent-host env.
-  return withNodeEnvProxyFlag(applyProxyChannelToEnv(base, proxy.ai, LAUNCH_ENV));
+  return withNodeEnvProxyFlag(applyProxyChannelToEnv(base, proxy.ai, launch));
+}
+
+/** Live PATH from process.env (may gain npm global bin after pi ensure). */
+function pickLivePathEnv(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  if (process.env.PATH) out.PATH = process.env.PATH;
+  if (process.env.Path) out.Path = process.env.Path;
+  return out;
 }
 
 function getProxyPrefs(): ProxyPrefs {
@@ -4103,22 +4118,43 @@ function applyWindowsAppUserModelId(): void {
 }
 
 /**
- * macOS Dock: system applies the squircle mask — artwork must be a full square.
- * Pre-drawn rounded corners make the icon look smaller / differently framed than
- * VS Code, Cursor, ChatGPT, etc.
- * Dev: Electron binary has no Pix .icns, so set the dock image explicitly.
+ * macOS Dock icon — follow Apple HIG *App Icons* (not document icons):
+ * https://developer.apple.com/design/human-interface-guidelines/app-icons
+ *
+ * Standard:
+ * - Master canvas 1024×1024, square, full-bleed (fill the canvas).
+ * - Do **not** pre-apply the rounded-rect mask, soft edges, or invent outer
+ *   “safe margins”. The system applies the continuous corner mask + Dock
+ *   scaling. (The ~10% margin / ~80% content guidance applies to *document*
+ *   icons, not app icons.)
+ *
+ * Packaged: leave CFBundleIconFile / electron-builder `mac.icon` alone —
+ * that is the supported path and matches other Mac apps.
+ * Dev: Electron has no Pix .icns; set a square unmasked image only.
  */
 function applyDockIcon(iconPath: string | undefined): void {
-  if (process.platform !== "darwin" || !iconPath || !app.dock) return;
+  if (process.platform !== "darwin" || !app.dock) return;
+  // Packaged builds ship a proper .icns; overriding via setIcon bypasses
+  // normal Dock treatment and was the source of “oversized” tiles.
+  if (app.isPackaged) return;
+  if (!iconPath) return;
   const image = nativeImage.createFromPath(iconPath);
   if (image.isEmpty()) {
     console.warn("[pix] dock icon empty:", iconPath);
     return;
   }
-  // Normalize to a square bitmap so Dock scaling matches other apps.
-  const size = Math.max(image.getSize().width, image.getSize().height, 128);
-  const squared = image.resize({ width: size, height: size, quality: "best" });
-  app.dock.setIcon(squared);
+  try {
+    // Square only — no artificial inset. System mask matches HIG app icons.
+    const { width, height } = image.getSize();
+    const size = Math.max(width, height, 128);
+    const squared =
+      width === height && width >= 128
+        ? image
+        : image.resize({ width: size, height: size, quality: "best" });
+    app.dock.setIcon(squared);
+  } catch (error) {
+    console.warn("[pix] dock setIcon failed:", error);
+  }
 }
 
 /**
@@ -4917,12 +4953,10 @@ void app
           ...(typeof options.rows === "number" ? { rows: options.rows } : {}),
         });
         const controller = await getPiTuiController();
-        // Transfer interactive ownership before open() parks the previous session.
-        const liveKey = controller.sessionKey();
-        if (liveKey && liveKey !== plan.sessionKey) {
-          piTuiGuard.release(liveKey);
-        }
-        const acquired = piTuiGuard.tryAcquire(plan.sessionKey);
+        // Always transfer exclusive ownership on open. tryAcquire-only failed after
+        // the first session when guard/controller keys desynced (macOS /private/var
+        // vs /var, or suspend/cancel races) — UI then could not open any later TUI.
+        const acquired = piTuiGuard.transferTo(plan.sessionKey);
         if (!acquired.ok) throw new Error(acquired.reason);
 
         try {

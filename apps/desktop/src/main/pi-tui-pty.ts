@@ -9,8 +9,20 @@
  * - Data is bound to the live handle + generation (stale processes never feed the UI).
  * - open() for a different session parks the current one instead of always killing.
  */
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  openSync,
+  readSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { normalizeSessionKey, type PiTuiLaunchPlan } from "./pi-tui-session.ts";
 import { buildPiTuiEnv } from "./pi-tui-env.ts";
+import { candidateCommandPaths } from "./shell-path.ts";
 
 export type PtyExitEvent = { exitCode: number; signal?: number };
 
@@ -85,6 +97,8 @@ export class PiTuiPtyController {
   #exitListener: ((event: PtyExitEvent) => void) | null = null;
   #generation = 0;
   #parked = new Map<string, ParkedPty>();
+  /** Serialize open() so session hops cannot interleave park/spawn (macOS races). */
+  #openChain: Promise<unknown> = Promise.resolve();
 
   constructor(spawn: PtySpawnFn, resolvePiPath: () => Promise<string>) {
     this.#spawn = spawn;
@@ -130,14 +144,45 @@ export class PiTuiPtyController {
   }
 
   async open(plan: PiTuiLaunchPlan, callbacks: PiTuiPtyCallbacks): Promise<PiTuiPtyOpenResult> {
+    // One open at a time: concurrent hops (unmount+mount) previously interleaved
+    // park/spawn and left the second session dead on macOS.
+    const run = this.#openChain.then(() => this.#openExclusive(plan, callbacks));
+    this.#openChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  async #openExclusive(
+    plan: PiTuiLaunchPlan,
+    callbacks: PiTuiPtyCallbacks,
+  ): Promise<PiTuiPtyOpenResult> {
+    const sessionKey = normalizeSessionKey(plan.sessionKey || plan.sessionFile);
+    if (!sessionKey) throw new Error("sessionFile is required for terminal mode");
+
     // Same live session → resume (chat ⇄ terminal on one session).
-    if (this.#live && this.#live.sessionKey === plan.sessionKey) {
+    if (this.#live && this.#live.sessionKey === sessionKey) {
       this.#suspended = false;
       this.#dataListener = callbacks.onData;
       this.#exitListener = callbacks.onExit;
-      this.#live.pty.resize(plan.cols, plan.rows);
+      // Ghostty remounted empty — nudge size so pi repaints the full screen.
+      const cols = plan.cols;
+      const rows = plan.rows;
+      const altC = cols > 20 ? cols - 1 : cols + 1;
+      const altR = rows > 5 ? rows - 1 : rows + 1;
+      try {
+        this.#live.pty.resize(altC, altR);
+        this.#live.pty.resize(cols, rows);
+      } catch {
+        try {
+          this.#live.pty.resize(cols, rows);
+        } catch {
+          // ignore
+        }
+      }
       return {
-        sessionKey: plan.sessionKey,
+        sessionKey,
         sessionFile: plan.sessionFile,
         cwd: plan.cwd,
         resumed: true,
@@ -151,26 +196,41 @@ export class PiTuiPtyController {
     }
 
     // Promote a parked process for this session (terminal ⇄ terminal hop).
-    const parked = this.#parked.get(plan.sessionKey);
+    const parked = this.#parked.get(sessionKey);
     if (parked) {
-      this.#parked.delete(plan.sessionKey);
+      this.#parked.delete(sessionKey);
       const generation = ++this.#generation;
       this.#live = {
         pty: parked.pty,
-        sessionKey: parked.sessionKey,
-        sessionFile: parked.sessionFile,
-        cwd: parked.cwd,
+        sessionKey,
+        // Prefer the caller's path so renderer sessionFile checks stay stable.
+        sessionFile: plan.sessionFile,
+        cwd: plan.cwd || parked.cwd,
         generation,
       };
       this.#suspended = false;
       this.#dataListener = callbacks.onData;
       this.#exitListener = callbacks.onExit;
-      // Already wired at spawn — only reattach listeners + resize.
-      parked.pty.resize(plan.cols, plan.rows);
+      // Force a full TUI repaint into the new Ghostty canvas. Same-size resize is
+      // often ignored by pi, which left a blank/corrupt surface after session hops.
+      const cols = plan.cols;
+      const rows = plan.rows;
+      const altC = cols > 20 ? cols - 1 : cols + 1;
+      const altR = rows > 5 ? rows - 1 : rows + 1;
+      try {
+        parked.pty.resize(altC, altR);
+        parked.pty.resize(cols, rows);
+      } catch {
+        try {
+          parked.pty.resize(cols, rows);
+        } catch {
+          // ignore
+        }
+      }
       return {
-        sessionKey: plan.sessionKey,
+        sessionKey,
         sessionFile: plan.sessionFile,
-        cwd: plan.cwd,
+        cwd: plan.cwd || parked.cwd,
         resumed: true,
         generation,
       };
@@ -185,13 +245,22 @@ export class PiTuiPtyController {
     }
 
     const env = buildPiTuiEnv(process.env);
-    const pty = this.#spawn(piPath, plan.args, {
-      name: "xterm-256color",
-      cols: plan.cols,
-      rows: plan.rows,
-      cwd: plan.cwd,
-      env,
-    });
+    const launch = resolvePiPtyLaunch(piPath, plan.args, env);
+    let pty: PtyHandle;
+    try {
+      pty = this.#spawn(launch.file, launch.args, {
+        name: "xterm-256color",
+        cols: plan.cols,
+        rows: plan.rows,
+        cwd: plan.cwd,
+        env: launch.env,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to start terminal (${detail}). file=${launch.file} args=${JSON.stringify(launch.args.slice(0, 4))} cwd=${plan.cwd}`,
+      );
+    }
 
     if (generation !== this.#generation) {
       try {
@@ -204,7 +273,7 @@ export class PiTuiPtyController {
 
     this.#live = {
       pty,
-      sessionKey: plan.sessionKey,
+      sessionKey,
       sessionFile: plan.sessionFile,
       cwd: plan.cwd,
       generation,
@@ -215,7 +284,7 @@ export class PiTuiPtyController {
     this.#wireHandle(pty);
 
     return {
-      sessionKey: plan.sessionKey,
+      sessionKey,
       sessionFile: plan.sessionFile,
       cwd: plan.cwd,
       resumed: false,
@@ -256,8 +325,17 @@ export class PiTuiPtyController {
     this.#exitListener = null;
     this.#suspended = false;
     this.#live = null;
+    const key = normalizeSessionKey(live.sessionKey || live.sessionFile);
+    if (!key) {
+      try {
+        live.pty.kill();
+      } catch {
+        // ignore
+      }
+      return;
+    }
     // Drop existing park entry for same key, then insert.
-    const existing = this.#parked.get(live.sessionKey);
+    const existing = this.#parked.get(key);
     if (existing) {
       try {
         existing.pty.kill();
@@ -265,9 +343,9 @@ export class PiTuiPtyController {
         // ignore
       }
     }
-    this.#parked.set(live.sessionKey, {
+    this.#parked.set(key, {
       pty: live.pty,
-      sessionKey: live.sessionKey,
+      sessionKey: key,
       sessionFile: live.sessionFile,
       cwd: live.cwd,
       parkedAt: Date.now(),
@@ -366,41 +444,177 @@ export class PiTuiPtyController {
   }
 }
 
+/**
+ * node-pty ships `spawn-helper` next to the native addon. pnpm / electron-builder /
+ * zip often drop the execute bit, which surfaces as:
+ *   Error: posix_spawnp failed.
+ * Restore +x before the first spawn (dev + packaged).
+ */
+export function ensureNodePtySpawnHelperExecutable(
+  requireFn: NodeRequire = createRequire(import.meta.url),
+): string | undefined {
+  if (process.platform === "win32") return undefined;
+  try {
+    // Same resolution path as node-pty/lib/unixTerminal.js
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const utils = requireFn("node-pty/lib/utils.js") as {
+      loadNativeModule: (name: string) => { dir: string };
+    };
+    const native = utils.loadNativeModule("pty");
+    const unixDir = dirname(requireFn.resolve("node-pty/lib/unixTerminal.js"));
+    let helperPath = resolve(unixDir, native.dir, "spawn-helper");
+    // Packaged: helper lives next to unpacked .node, not inside app.asar.
+    helperPath = helperPath
+      .replaceAll("app.asar", "app.asar.unpacked")
+      .replaceAll("node_modules.asar", "node_modules.asar.unpacked");
+    if (!existsSync(helperPath)) {
+      console.warn("[pix] node-pty spawn-helper missing:", helperPath);
+      return undefined;
+    }
+    const mode = statSync(helperPath).mode;
+    if ((mode & 0o111) === 0) {
+      chmodSync(helperPath, mode | 0o755);
+      console.log("[pix] restored execute bit on node-pty spawn-helper:", helperPath);
+    }
+    return helperPath;
+  } catch (error) {
+    console.warn("[pix] ensureNodePtySpawnHelperExecutable failed:", error);
+    return undefined;
+  }
+}
+
+export type PiPtyLaunch = {
+  file: string;
+  args: string[];
+  env: Record<string, string>;
+};
+
+/**
+ * Build argv for node-pty. `pi` is usually a `#!/usr/bin/env node` script; spawning
+ * the script path directly can fail when env lookup is flaky. Prefer `node <script> …`.
+ */
+export function resolvePiPtyLaunch(
+  piPath: string,
+  args: string[],
+  env: Record<string, string>,
+): PiPtyLaunch {
+  const file = piPath.trim();
+  if (!file) throw new Error("pi executable not found; install the pi CLI first");
+
+  let resolved = file;
+  try {
+    if (existsSync(file)) resolved = realpathSync(file);
+  } catch {
+    resolved = file;
+  }
+
+  const nodePath = resolveNodeExecutable(env);
+  if (nodePath && shouldSpawnViaNode(resolved)) {
+    const nextEnv = { ...env };
+    const nodeDir = dirname(nodePath);
+    const pathKey = process.platform === "win32" && nextEnv.Path && !nextEnv.PATH ? "Path" : "PATH";
+    const current = nextEnv[pathKey] || nextEnv.PATH || nextEnv.Path || "";
+    if (!current.toLowerCase().includes(nodeDir.toLowerCase())) {
+      const sep = process.platform === "win32" ? ";" : ":";
+      nextEnv.PATH = `${nodeDir}${sep}${current}`;
+      if (process.platform === "win32") nextEnv.Path = nextEnv.PATH;
+    }
+    return { file: nodePath, args: [resolved, ...args], env: nextEnv };
+  }
+
+  return { file: resolved, args: [...args], env };
+}
+
+function shouldSpawnViaNode(resolvedPath: string): boolean {
+  if (/\.(c?js|mjs)$/i.test(resolvedPath)) return true;
+  let fd: number | undefined;
+  try {
+    fd = openSync(resolvedPath, "r");
+    const buf = Buffer.alloc(120);
+    const n = readSync(fd, buf, 0, 120, 0);
+    const head = buf.subarray(0, n).toString("utf8");
+    return /^#!.*\bnode(?:\s|$)/m.test(head);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+function resolveNodeExecutable(env: Record<string, string>): string | undefined {
+  const fromEnv = env.NODE_BINARY?.trim() || env.npm_node_execpath?.trim();
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+
+  for (const candidate of candidateCommandPaths("node", env)) {
+    if (!existsSync(candidate)) continue;
+    // Prefer real node over vite-plus shims when both appear.
+    const norm = candidate.replace(/\\/g, "/").toLowerCase();
+    if (norm.includes("/.vite-plus/bin/")) continue;
+    return candidate;
+  }
+  // Last resort: shim still better than nothing.
+  const fallback = candidateCommandPaths("node", env)[0];
+  return fallback && existsSync(fallback) ? fallback : undefined;
+}
+
 /** Real node-pty spawn used by the Electron main process. */
 export async function createNodePtySpawn(): Promise<PtySpawnFn> {
+  ensureNodePtySpawnHelperExecutable();
   const pty = await import("node-pty");
   return (file, args, options) => {
-    const proc = pty.spawn(file, args, {
-      name: options.name,
-      cols: options.cols,
-      rows: options.rows,
-      cwd: options.cwd,
-      env: options.env,
-      ...(process.platform === "win32" ? { useConpty: true } : {}),
-    });
-    return {
-      write: (data) => {
-        proc.write(data);
-      },
-      resize: (cols, rows) => {
-        proc.resize(cols, rows);
-      },
-      kill: (signal) => {
-        proc.kill(signal);
-      },
-      onData: (listener) => {
-        proc.onData((data) => {
-          listener(typeof data === "string" ? data : Buffer.from(data).toString("utf8"));
-        });
-      },
-      onExit: (listener) => {
-        proc.onExit((e) => {
-          listener({
-            exitCode: e.exitCode,
-            ...(typeof e.signal === "number" ? { signal: e.signal } : {}),
+    // Defense in depth: helper may be restored after first import on some layouts.
+    ensureNodePtySpawnHelperExecutable();
+    if (!file || (isAbsolute(file) && !existsSync(file) && process.platform !== "win32")) {
+      throw new Error(`PTY executable not found: ${file}`);
+    }
+    try {
+      const proc = pty.spawn(file, args, {
+        name: options.name,
+        cols: options.cols,
+        rows: options.rows,
+        cwd: options.cwd,
+        env: options.env,
+        ...(process.platform === "win32" ? { useConpty: true } : {}),
+      });
+      return {
+        write: (data) => {
+          proc.write(data);
+        },
+        resize: (cols, rows) => {
+          proc.resize(cols, rows);
+        },
+        kill: (signal) => {
+          proc.kill(signal);
+        },
+        onData: (listener) => {
+          proc.onData((data) => {
+            listener(typeof data === "string" ? data : Buffer.from(data).toString("utf8"));
           });
-        });
-      },
-    };
+        },
+        onExit: (listener) => {
+          proc.onExit((e) => {
+            listener({
+              exitCode: e.exitCode,
+              ...(typeof e.signal === "number" ? { signal: e.signal } : {}),
+            });
+          });
+        },
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      // Re-attempt chmod once more — some installers re-copy without +x.
+      ensureNodePtySpawnHelperExecutable();
+      throw new Error(
+        /posix_spawnp|spawn/i.test(detail)
+          ? `${detail} (node-pty spawn-helper may lack execute permission; Pix tried to restore it. file=${file})`
+          : detail,
+      );
+    }
   };
 }

@@ -25,4 +25,16 @@ describe("pi-tui-env", () => {
     });
     expect(String(env[PI_CODING_AGENT_DIR_ENV] ?? "").replace(/\\/g, "/")).toBe("D:/custom/agent");
   });
+
+  it("augments GUI-minimal PATH so node/pi bins remain reachable", () => {
+    const env = buildPiTuiEnv({
+      HOME: process.env.HOME || process.env.USERPROFILE || "/tmp",
+      PATH: "/usr/bin:/bin",
+    });
+    const path = env.PATH || "";
+    // Original entries preserved
+    expect(path.includes("/usr/bin")).toBe(true);
+    // Managed bin always first-ish
+    expect(path.replace(/\\/g, "/")).toMatch(/\.pi\/agent\/bin/);
+  });
 });

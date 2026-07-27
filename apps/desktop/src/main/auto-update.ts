@@ -1,10 +1,16 @@
 /**
  * Desktop auto-update via electron-updater + GitHub Releases.
  * Checks once after launch when packaged; manual check from Settings.
+ *
+ * Feed config lives in Resources/app-update.yml (written by electron-builder
+ * PublishManager for installer targets, and always by scripts/after-pack.mjs
+ * so `package:dir` smokes also work).
  */
 import type { AppUpdateStatus, AppUpdateState } from "@pix/contracts";
 import { app } from "electron";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 
 export type AutoUpdateBroadcast = (status: AppUpdateStatus) => void;
 
@@ -14,6 +20,14 @@ export type AutoUpdateController = {
   downloadUpdate(): Promise<AppUpdateStatus>;
   quitAndInstall(): void;
   dispose(): void;
+};
+
+/** GitHub Releases feed — must match electron-builder.yml `publish`. */
+export const DEFAULT_UPDATE_FEED = {
+  provider: "github" as const,
+  owner: "num-scope",
+  repo: "pix",
+  releaseType: "release" as const,
 };
 
 type UpdaterLike = {
@@ -26,6 +40,8 @@ type UpdaterLike = {
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
   on(event: string, listener: (...args: unknown[]) => void): void;
   removeAllListeners(event?: string): void;
+  /** Override / supply feed when app-update.yml is missing or wrong. */
+  setFeedURL?(options: typeof DEFAULT_UPDATE_FEED): void;
 };
 
 type StatusFields = {
@@ -85,11 +101,32 @@ export function createAutoUpdateController(options: {
     return status;
   }
 
+  function missingUpdateConfigError(): string | null {
+    // electron-updater reads process.resourcesPath/app-update.yml for downloads.
+    // setFeedURL alone is not enough — getOrCreateDownloadHelper still loads the file.
+    if (!isPackaged) return null;
+    // Injected updaters (unit tests) do not exercise the on-disk config path.
+    if (options.loadUpdater) return null;
+    const resourcesPath =
+      typeof process.resourcesPath === "string" && process.resourcesPath.length > 0
+        ? process.resourcesPath
+        : null;
+    if (!resourcesPath) return null;
+    const configPath = join(resourcesPath, "app-update.yml");
+    if (existsSync(configPath)) return null;
+    return (
+      `Missing app-update.yml (expected at ${configPath}). ` +
+      `This usually means the app was installed from a directory pack (package:dir) ` +
+      `instead of a GitHub Release installer. Reinstall from the official release.`
+    );
+  }
+
   function load(): UpdaterLike | null {
     if (!isPackaged) return null;
     if (updater) return updater;
     if (options.loadUpdater) {
       updater = options.loadUpdater();
+      configureFeed(updater);
       return updater;
     }
     try {
@@ -99,11 +136,23 @@ export function createAutoUpdateController(options: {
         default?: { autoUpdater?: UpdaterLike };
       };
       updater = mod.autoUpdater ?? mod.default?.autoUpdater ?? null;
+      configureFeed(updater);
       return updater;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus({ state: "error", error: message });
       return null;
+    }
+  }
+
+  function configureFeed(instance: UpdaterLike | null): void {
+    if (!instance?.setFeedURL) return;
+    try {
+      // Prefer explicit feed so check works even if app-update.yml is incomplete.
+      // Download still requires the on-disk yml (see missingUpdateConfigError).
+      instance.setFeedURL(DEFAULT_UPDATE_FEED);
+    } catch (error) {
+      console.warn("[pix] setFeedURL failed:", error);
     }
   }
 
@@ -174,6 +223,10 @@ export function createAutoUpdateController(options: {
         checkedAt: new Date().toISOString(),
       });
     }
+    const configError = missingUpdateConfigError();
+    if (configError) {
+      return setStatus({ state: "error", error: configError, checkedAt: new Date().toISOString() });
+    }
     const instance = load();
     if (!instance) {
       return setStatus({
@@ -212,6 +265,10 @@ export function createAutoUpdateController(options: {
         state: "error",
         error: "Updates are only available in packaged builds",
       });
+    }
+    const configError = missingUpdateConfigError();
+    if (configError) {
+      return setStatus({ state: "error", error: configError });
     }
     const instance = load();
     if (!instance) {

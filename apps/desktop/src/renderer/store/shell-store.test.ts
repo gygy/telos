@@ -152,10 +152,13 @@ describe("per-session running", () => {
     useShellStore.getState().setSessionRunning("/tmp/fg.jsonl", true, "rt-fg");
     expect(useShellStore.getState().running).toBe(true);
 
+    expect(useShellStore.getState().sessionKeyForRuntime("rt-bg")).toBe("/tmp/bg.jsonl");
     useShellStore.getState().settleSessionByRuntime("rt-bg", "completed");
     expect(useShellStore.getState().sessionMarkers["/tmp/bg.jsonl"]?.state).toBe("completed");
     expect(useShellStore.getState().runningSessions["/tmp/bg.jsonl"]).toBeUndefined();
     expect(useShellStore.getState().running).toBe(true);
+    // Durable map cleared after settle.
+    expect(useShellStore.getState().sessionKeyForRuntime("rt-bg")).toBeUndefined();
 
     useShellStore.getState().setSessionRunning("/tmp/fg.jsonl", false, "rt-fg");
     expect(useShellStore.getState().running).toBe(false);

@@ -1834,12 +1834,19 @@ html[data-custom-window-controls="true"] .page-header {
   color: var(--muted-foreground);
 }
 
-/* Canvas stays invisible until PiTuiTerminal marks ready (second line of defense). */
+/*
+ * Hide until ready without `visibility:hidden` / `display:none`.
+ * Those can leave ghostty-web's canvas at 0×0 or a stale buffer after a
+ * session hop remount — first open looks fine, switch then paints garbage.
+ * Opacity keeps layout metrics so FitAddon + cell grid stay valid.
+ */
 .pi-tui-terminal[data-surface-ready="false"] .pi-tui-terminal-host {
-  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 .pi-tui-terminal[data-surface-ready="true"] .pi-tui-terminal-host {
-  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /*

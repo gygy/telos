@@ -25,6 +25,8 @@ directories:
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 # electron-updater reads GitHub Releases (latest.yml / latest-mac.yml / latest-linux.yml).
 # CI still packages with `--publish never`; softprops uploads artifacts + update metadata.
+# app-update.yml is written by electron-builder for dmg/zip/nsis targets, and always by
+# scripts/after-pack.mjs so `package:dir` installs can check for updates too.
 publish:
   provider: github
   owner: num-scope
@@ -70,6 +72,12 @@ linux:
   category: Development
   synopsis: Desktop shell for the pi coding agent
   description: Pix is a desktop shell for the pi coding agent.
+# node-pty's spawn-helper must live outside asar and remain executable.
+# Missing +x → terminal mode: "posix_spawnp failed".
 asarUnpack:
   - "**/*.node"
+  - "**/node-pty/prebuilds/**"
+  - "**/node-pty/build/**"
+  - "**/spawn-helper"
   - "**/@silvia-odwyer/photon-node/**"
+afterPack: scripts/after-pack.mjs

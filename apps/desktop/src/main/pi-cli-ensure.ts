@@ -1,12 +1,20 @@
 /**
  * Detect the global `pi` CLI and install the latest package when missing.
  * Product mode only — skipped for isolated/smoke/e2e fixtures.
+ *
+ * Packaged Electron has a minimal GUI PATH; always resolve against augmented
+ * user bin dirs so we do not re-run `npm install -g` every launch.
  */
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import {
+  applyProcessPathAugmentation,
+  augmentEnvPath,
+  candidateCommandPaths,
+} from "./shell-path.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -40,7 +48,7 @@ export type PiCliEnsureResult = {
 
 export type PiCliEnsureOptions = {
   onProgress?: (event: PiCliProgressEvent) => void;
-  /** Override env (tests). Defaults to process.env. */
+  /** Override env (tests). Defaults to process.env (augmented). */
   env?: NodeJS.ProcessEnv;
   /** Force install even when already present (not used by product). */
   force?: boolean;
@@ -68,32 +76,66 @@ function emit(onProgress: PiCliEnsureOptions["onProgress"], event: PiCliProgress
   }
 }
 
+function isVitePlusShim(path: string): boolean {
+  const norm = path.replace(/\\/g, "/").toLowerCase();
+  // ~/.vite-plus/bin/{node,npm,npx,vp} are thin shims; prefer real runtimes when installing.
+  return (
+    norm.includes("/.vite-plus/bin/") ||
+    norm.endsWith("/.vite-plus/bin/npm") ||
+    norm.endsWith("/.vite-plus/bin/npm.cmd") ||
+    norm.endsWith("/vp") ||
+    norm.endsWith("/vp.exe")
+  );
+}
+
 async function resolveOnPath(command: string, env: NodeJS.ProcessEnv): Promise<string | undefined> {
+  // Fast path: known user bins (works with GUI PATH).
+  const known = candidateCommandPaths(command, env);
+  if (command === "npm" || command === "npm.cmd") {
+    const preferred = known.find((p) => !isVitePlusShim(p));
+    if (preferred) return preferred;
+  } else if (known[0]) {
+    return known[0];
+  }
+
   try {
     if (process.platform === "win32") {
       const { stdout } = await execFileAsync("where.exe", [command], {
         env,
         windowsHide: true,
-        timeout: 15_000,
+        timeout: 8_000,
         maxBuffer: 1024 * 1024,
       });
       const candidates = stdout
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.length > 0 && existsSync(line));
-      // Prefer .cmd / .exe shims — bare `npm` is often a bash script Node cannot spawn.
+      if (command === "npm" || command === "npm.cmd") {
+        const preferred = candidates.find(
+          (line) => /\.(cmd|exe|bat)$/i.test(line) && !isVitePlusShim(line),
+        );
+        if (preferred) return preferred;
+        const shim = candidates.find((line) => /\.(cmd|exe|bat)$/i.test(line));
+        return shim ?? candidates[0];
+      }
       const preferred = candidates.find((line) => /\.(cmd|exe|bat)$/i.test(line));
       return preferred ?? candidates[0];
     }
-    const { stdout } = await execFileAsync("which", [command], {
+    const { stdout } = await execFileAsync("which", ["-a", command], {
       env,
-      timeout: 15_000,
+      timeout: 8_000,
       maxBuffer: 1024 * 1024,
     });
-    const path = stdout.trim().split(/\r?\n/)[0]?.trim();
-    return path && existsSync(path) ? path : undefined;
+    const candidates = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && existsSync(line));
+    if (command === "npm") {
+      return candidates.find((p) => !isVitePlusShim(p)) ?? candidates[0];
+    }
+    return candidates[0];
   } catch {
-    return undefined;
+    return known[0];
   }
 }
 
@@ -102,7 +144,7 @@ async function readPiVersion(piPath: string, env: NodeJS.ProcessEnv): Promise<st
     const { stdout, stderr } = await execFileAsync(piPath, ["--version"], {
       env,
       windowsHide: true,
-      timeout: 20_000,
+      timeout: 12_000,
       maxBuffer: 1024 * 1024,
     });
     const text = `${stdout}\n${stderr}`.trim();
@@ -122,7 +164,9 @@ async function npmGlobalPrefix(
     const { stdout } = await execFileAsync(npmPath, ["prefix", "-g"], {
       env,
       windowsHide: true,
-      timeout: 20_000,
+      // Run outside any project so packageManager/devEngines cannot fail the probe.
+      cwd: process.platform === "win32" ? env.TEMP || env.TMP || homedir() : "/tmp",
+      timeout: 12_000,
       maxBuffer: 1024 * 1024,
     });
     const prefix = stdout.trim().split(/\r?\n/)[0]?.trim();
@@ -143,40 +187,71 @@ function detected(path: string, version: string | undefined): { path: string; ve
   return version ? { path, version } : { path };
 }
 
-async function detectPiCli(env: NodeJS.ProcessEnv): Promise<{ path?: string; version?: string }> {
-  const fromPath = await resolveOnPath("pi", env);
+/** Ensure the directory of a found binary is on process PATH for later host/TUI spawns. */
+function ensureDirOnProcessPath(binPath: string): void {
+  const dir = dirname(binPath);
+  if (!dir) return;
+  const current = process.env.PATH || process.env.Path || "";
+  const parts = current.split(process.platform === "win32" ? ";" : ":");
+  const hit = parts.some((p) =>
+    process.platform === "win32" ? p.toLowerCase() === dir.toLowerCase() : p === dir,
+  );
+  if (hit) return;
+  const sep = process.platform === "win32" ? ";" : ":";
+  const next = `${dir}${sep}${current}`;
+  process.env.PATH = next;
+  if (process.platform === "win32") process.env.Path = next;
+}
+
+/** Exported for tests — locate pi without installing. */
+export async function detectPiCli(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ path?: string; version?: string }> {
+  const resolvedEnv = augmentEnvPath(env);
+
+  const fromPath = await resolveOnPath("pi", resolvedEnv);
   if (fromPath) {
-    return detected(fromPath, await readPiVersion(fromPath, env));
+    return detected(fromPath, await readPiVersion(fromPath, resolvedEnv));
   }
 
   // Global npm prefix (PATH may not include it inside Electron).
-  const npmPath = (await resolveOnPath("npm", env)) ?? (await resolveOnPath("npm.cmd", env));
+  const npmPath =
+    (await resolveOnPath("npm", resolvedEnv)) ?? (await resolveOnPath("npm.cmd", resolvedEnv));
   if (npmPath) {
-    const prefix = await npmGlobalPrefix(npmPath, env);
+    const prefix = await npmGlobalPrefix(npmPath, resolvedEnv);
     if (prefix) {
       for (const candidate of candidatePiPaths(prefix)) {
         if (!existsSync(candidate)) continue;
-        return detected(candidate, await readPiVersion(candidate, env));
+        return detected(candidate, await readPiVersion(candidate, resolvedEnv));
       }
     }
   }
 
-  // Common user global locations.
-  const home = env.HOME || env.USERPROFILE || homedir();
+  // Common user global locations (GUI launch often misses these on PATH).
+  const home = resolvedEnv.HOME || resolvedEnv.USERPROFILE || homedir();
   const extras =
     process.platform === "win32"
       ? [
           join(home, "AppData", "Roaming", "npm", "pi.cmd"),
           join(home, "AppData", "Roaming", "npm", "pi"),
+          join(home, "AppData", "Local", "npm", "pi.cmd"),
         ]
       : [
+          ...candidateCommandPaths("pi", resolvedEnv),
+          join(home, ".vite-plus", "bin", "pi"),
           join(home, ".npm-global", "bin", "pi"),
+          join(home, ".local", "bin", "pi"),
           join(home, ".local", "share", "fnm", "aliases", "default", "bin", "pi"),
+          join(home, ".volta", "bin", "pi"),
+          join(home, ".nvm", "current", "bin", "pi"),
+          "/opt/homebrew/bin/pi",
           "/usr/local/bin/pi",
         ];
+  const seen = new Set<string>();
   for (const candidate of extras) {
-    if (!existsSync(candidate)) continue;
-    return detected(candidate, await readPiVersion(candidate, env));
+    if (!candidate || seen.has(candidate) || !existsSync(candidate)) continue;
+    seen.add(candidate);
+    return detected(candidate, await readPiVersion(candidate, resolvedEnv));
   }
 
   return {};
@@ -184,6 +259,8 @@ async function detectPiCli(env: NodeJS.ProcessEnv): Promise<{ path?: string; ver
 
 function spawnNpmInstall(npmPath: string, env: NodeJS.ProcessEnv): ChildProcess {
   const args = ["install", "-g", "--ignore-scripts", `${PI_NPM_PACKAGE}@latest`];
+  // Install from a neutral cwd so monorepo packageManager/devEngines cannot block npm.
+  const cwd = process.platform === "win32" ? env.TEMP || env.TMP || homedir() : "/tmp";
   // On Windows, always shell + prefer .cmd path so PATHEXT resolves correctly.
   if (process.platform === "win32") {
     const cmd =
@@ -192,6 +269,7 @@ function spawnNpmInstall(npmPath: string, env: NodeJS.ProcessEnv): ChildProcess 
         : "npm.cmd";
     return spawn(cmd, args, {
       env,
+      cwd,
       windowsHide: true,
       shell: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -199,6 +277,7 @@ function spawnNpmInstall(npmPath: string, env: NodeJS.ProcessEnv): ChildProcess 
   }
   return spawn(npmPath, args, {
     env,
+    cwd,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
@@ -272,26 +351,33 @@ export function ensurePiCli(options: PiCliEnsureOptions = {}): Promise<PiCliEnsu
 }
 
 async function ensurePiCliOnce(options: PiCliEnsureOptions): Promise<PiCliEnsureResult> {
-  const env = options.env ?? process.env;
+  // Packaged Dock launches need user bins before any which/npm work.
+  applyProcessPathAugmentation();
+  const env = augmentEnvPath(options.env ?? process.env);
+  // Keep process.env in sync so agent-host / PTY inherit the same PATH.
+  if (env.PATH) process.env.PATH = env.PATH;
+  if (process.platform === "win32" && env.Path) process.env.Path = env.Path;
+
   const onProgress = options.onProgress;
 
   if (!shouldAutoInstallPiCli(env) && !options.force) {
-    const detected = await detectPiCli(env);
+    const found = await detectPiCli(env);
+    if (found.path) ensureDirOnProcessPath(found.path);
     const skipped: PiCliEnsureResult = {
-      installed: Boolean(detected.path),
-      alreadyPresent: Boolean(detected.path),
+      installed: Boolean(found.path),
+      alreadyPresent: Boolean(found.path),
       installedNow: false,
       skipped: true,
-      ...(detected.path ? { path: detected.path } : {}),
-      ...(detected.version ? { version: detected.version } : {}),
+      ...(found.path ? { path: found.path } : {}),
+      ...(found.version ? { version: found.version } : {}),
     };
     emit(onProgress, {
       phase: "skipped",
-      message: detected.path
-        ? `Skipped auto-install (fixture mode); pi found${detected.version ? ` ${detected.version}` : ""}`
+      message: found.path
+        ? `Skipped auto-install (fixture mode); pi found${found.version ? ` ${found.version}` : ""}`
         : "Skipped pi auto-install (fixture / test mode)",
-      ...(detected.path ? { path: detected.path } : {}),
-      ...(detected.version ? { version: detected.version } : {}),
+      ...(found.path ? { path: found.path } : {}),
+      ...(found.version ? { version: found.version } : {}),
     });
     return skipped;
   }
@@ -299,6 +385,7 @@ async function ensurePiCliOnce(options: PiCliEnsureOptions): Promise<PiCliEnsure
   emit(onProgress, { phase: "checking", message: "Checking for pi CLI…" });
   const existing = await detectPiCli(env);
   if (existing.path && !options.force) {
+    ensureDirOnProcessPath(existing.path);
     const result: PiCliEnsureResult = {
       installed: true,
       alreadyPresent: true,
@@ -381,6 +468,8 @@ async function ensurePiCliOnce(options: PiCliEnsureOptions): Promise<PiCliEnsure
       error,
     };
   }
+
+  ensureDirOnProcessPath(installed.path);
 
   const result: PiCliEnsureResult = {
     installed: true,

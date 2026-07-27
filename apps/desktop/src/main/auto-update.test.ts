@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { buildAppUpdateStatus, createAutoUpdateController } from "./auto-update.ts";
+import {
+  buildAppUpdateStatus,
+  createAutoUpdateController,
+  DEFAULT_UPDATE_FEED,
+} from "./auto-update.ts";
 
 describe("buildAppUpdateStatus", () => {
   it("includes optional fields only when provided", () => {
@@ -72,6 +76,7 @@ describe("createAutoUpdateController", () => {
     }));
     const downloadUpdate = vi.fn(async () => undefined);
     const quitAndInstall = vi.fn();
+    const setFeedURL = vi.fn();
     const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 
     const updater = {
@@ -82,6 +87,7 @@ describe("createAutoUpdateController", () => {
       checkForUpdates,
       downloadUpdate,
       quitAndInstall,
+      setFeedURL,
       on(event: string, listener: (...args: unknown[]) => void) {
         const list = listeners.get(event) ?? [];
         list.push(listener);
@@ -101,6 +107,7 @@ describe("createAutoUpdateController", () => {
     });
 
     const available = await controller.checkForUpdates();
+    expect(setFeedURL).toHaveBeenCalledWith(DEFAULT_UPDATE_FEED);
     expect(updater.autoDownload).toBe(false);
     expect(updater.autoInstallOnAppQuit).toBe(true);
     expect(checkForUpdates).toHaveBeenCalledTimes(1);

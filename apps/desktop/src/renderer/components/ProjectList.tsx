@@ -452,9 +452,9 @@ export function ProjectList(props: ProjectListProps) {
     doArchiveThread(id);
   }
 
-  function handleToggleUnread(id: string) {
-    const unread = !isUnreadThread(id, unreadThreads);
-    setUnreadThreads(markThreadUnread(id, unread));
+  function handleToggleUnread(thread: SessionThreadSummary) {
+    const unread = !isUnreadThread(thread, unreadThreads);
+    setUnreadThreads(markThreadUnread(thread, unread));
     closeMenus();
   }
 
@@ -616,7 +616,7 @@ export function ProjectList(props: ProjectListProps) {
     const menuId = `${kind}:${thread.id}`;
     const showMenu = menuKey === menuId;
     const pinnedHere = isPinnedThread(thread.id, pinnedThreads);
-    const unread = isUnreadThread(thread.id, unreadThreads);
+    const unread = isUnreadThread(thread, unreadThreads);
     const indent = opts?.indent !== false && kind === "session";
     const isFork = Boolean(thread.parentSessionPath?.trim());
     const parentFile = thread.parentSessionPath
@@ -673,7 +673,7 @@ export function ProjectList(props: ProjectListProps) {
             }
             title={tooltipParts.join("\n")}
             onClick={() => {
-              if (unread) setUnreadThreads(markThreadUnread(thread.id, false));
+              if (unread) setUnreadThreads(markThreadUnread(thread, false));
               // Always switch — re-open is needed after failed loads / cross-workspace hops.
               props.onSwitchThread(thread.path, thread.cwd);
             }}
@@ -686,7 +686,12 @@ export function ProjectList(props: ProjectListProps) {
             {pinnedHere ? (
               <Pin className="size-3 shrink-0 opacity-50" strokeWidth={1.75} aria-hidden />
             ) : null}
-            <span className="sidebar-title-fade min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-4 text-left">
+            <span
+              className={cn(
+                "sidebar-title-fade min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-4 text-left",
+                unread && "font-medium text-[var(--foreground)]",
+              )}
+            >
               {title}
             </span>
             <ThreadRunMarker marker={runMarker} {...(stateLabel ? { label: stateLabel } : {})} />
@@ -1193,7 +1198,7 @@ export function ProjectList(props: ProjectListProps) {
                   .find((t) => t.id === id);
               if (!thread) return null;
               const pinnedHere = isPinnedThread(thread.id, pinnedThreads);
-              const unread = isUnreadThread(thread.id, unreadThreads);
+              const unread = isUnreadThread(thread, unreadThreads);
               const L = isSession
                 ? {
                     pin: tr("session.pin"),
@@ -1252,7 +1257,7 @@ export function ProjectList(props: ProjectListProps) {
                       )
                     }
                     label={unread ? L.read : L.unread}
-                    onClick={() => handleToggleUnread(thread.id)}
+                    onClick={() => handleToggleUnread(thread)}
                     testId="thread-menu-unread"
                   />
                   <MenuItem

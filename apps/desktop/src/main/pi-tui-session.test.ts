@@ -32,6 +32,12 @@ describe("pi-tui-session", () => {
     expect(normalizeSessionKey("C:\\a\\b.jsonl")).toBe(normalizeSessionKey("C:/a/b.jsonl"));
   });
 
+  it("collapses macOS /private firmlink so park keys match across hops", () => {
+    expect(normalizeSessionKey("/private/var/folders/xx/s.jsonl")).toBe(
+      normalizeSessionKey("/var/folders/xx/s.jsonl"),
+    );
+  });
+
   it("enforces mutual exclusion: one TUI owner, host prompt blocked while active", () => {
     const guard = new PiTuiExclusiveGuard();
     const a = normalizeSessionKey("/sessions/a.jsonl");
@@ -49,7 +55,12 @@ describe("pi-tui-session", () => {
 
     expect(() => guard.assertHostPromptAllowed()).toThrow(/Terminal mode owns/i);
 
-    guard.release(a);
+    // Session hop must transfer (not refuse) — same as terminal.open IPC.
+    expect(guard.transferTo(b)).toEqual({ ok: true });
+    expect(guard.owns(b)).toBe(true);
+    expect(guard.owns(a)).toBe(false);
+
+    guard.release(b);
     expect(guard.isActive()).toBe(false);
     expect(() => guard.assertHostPromptAllowed()).not.toThrow();
     expect(guard.tryAcquire(b).ok).toBe(true);

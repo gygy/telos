@@ -2,9 +2,9 @@
  * Environment for embedded pi TUI — align with agent-host so managed tools
  * (fd/rg under ~/.pi/agent/bin) are found and not re-downloaded every launch.
  */
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
+import { augmentEnvPath, commonUserBinDirs, mergePathDirs } from "./shell-path.ts";
 
 /** pi `ENV_AGENT_DIR` — tools live at `<agentDir>/bin`. */
 export const PI_CODING_AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
@@ -32,46 +32,27 @@ function expandTilde(path: string, env: NodeJS.ProcessEnv): string {
  * Build env for `pi --session` PTY:
  * - stable PI_CODING_AGENT_DIR (shared with host / previous TUI runs)
  * - prepend managed bin + common tool locations so getToolPath finds fd/rg
+ * - GUI-minimal PATH is augmented like the rest of packaged Pix
  */
 export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const augmented = augmentEnvPath(baseEnv);
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(baseEnv)) {
+  for (const [key, value] of Object.entries(augmented)) {
     if (typeof value === "string") env[key] = value;
   }
 
-  const agentDir = defaultPiAgentDir(baseEnv);
+  const agentDir = defaultPiAgentDir(augmented);
   env[PI_CODING_AGENT_DIR_ENV] = agentDir;
 
   const home = env.USERPROFILE || env.HOME || homedir();
   if (!env.USERPROFILE && process.platform === "win32") env.USERPROFILE = home;
   if (!env.HOME) env.HOME = home;
 
-  // Windows often uses Path; normalize both.
-  const existingPath = env.Path || env.PATH || "";
   // Always put managed bin first (even if not created yet) so pi installs fd/rg there
   // and subsequent launches find them without re-downloading.
   const managedBin = join(agentDir, "bin");
-  const extras: string[] = [
-    managedBin,
-    // Common user tool installs (only if present)
-    ...[
-      join(home, "scoop", "shims"),
-      join(home, "AppData", "Local", "Microsoft", "WinGet", "Links"),
-      join(home, "AppData", "Roaming", "npm"),
-      "C:\\ProgramData\\chocolatey\\bin",
-    ].filter((p) => existsSync(p)),
-  ];
-
-  const merged = [...extras, ...existingPath.split(delimiter).filter(Boolean)];
-  const seen = new Set<string>();
-  const pathValue = merged
-    .filter((p) => {
-      const k = p.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-    .join(delimiter);
+  const extras = [managedBin, ...commonUserBinDirs(home)];
+  const pathValue = mergePathDirs(env.PATH || env.Path || "", extras);
 
   env.PATH = pathValue;
   env.Path = pathValue;

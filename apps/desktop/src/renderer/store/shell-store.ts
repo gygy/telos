@@ -115,6 +115,12 @@ export interface ShellState {
   runningSessions: Record<string, true>;
   /** runtimeId → session key, so background settle events can clear the right row. */
   runningRuntimeIds: Record<string, string>;
+  /**
+   * Last session key bound to a runtime while it was busy.
+   * Survives `setSessionRunning(false)` / idle so late `agent.settled` can still
+   * mark sidebar unread after the busy map is cleared.
+   */
+  lastSessionByRuntime: Record<string, string>;
   reviewOpen: boolean;
   /** Session environment panel (right rail). */
   envPanelOpen: boolean;
@@ -187,6 +193,8 @@ export interface ShellState {
     state: Extract<ThreadRunState, "completed" | "failed" | "aborted" | "crashed" | "idle">,
     reason?: string,
   ) => void;
+  /** Session key for a runtime (busy map, then last-known). */
+  sessionKeyForRuntime: (runtimeId: string) => string | undefined;
   clearSessionRunningByRuntime: (runtimeId: string) => void;
   isSessionRunning: (sessionKey: string | undefined) => boolean;
   /** After switch/open: composer `running` follows the newly focused session only. */
@@ -345,6 +353,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   sessionMarkers: {},
   runningSessions: {},
   runningRuntimeIds: {},
+  lastSessionByRuntime: {},
   reviewOpen: false,
   envPanelOpen: false,
   sidebarOpen: false,
@@ -418,6 +427,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
       const sessionMarkers = { ...state.sessionMarkers };
       const runningSessions = { ...state.runningSessions };
       const runningRuntimeIds = { ...state.runningRuntimeIds };
+      const lastSessionByRuntime = { ...state.lastSessionByRuntime };
       if (markerState === "idle") {
         delete sessionMarkers[key];
         delete runningSessions[key];
@@ -432,13 +442,16 @@ export const useShellStore = create<ShellState>((set, get) => ({
         const rid = options.runtimeId;
         if (markerState === "idle") {
           if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
+          // Keep lastSessionByRuntime for late settle / unread — cleared on settle.
         } else if (isBusyRunState(markerState)) {
           // Only bind runtime→session while busy. Drop on settle so late events
           // cannot re-light a finished row.
           runningRuntimeIds[rid] = key;
+          lastSessionByRuntime[rid] = key;
         } else {
-          // completed / failed / aborted / crashed — release runtime binding.
+          // completed / failed / aborted / crashed — release busy binding.
           if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
+          // lastSessionByRuntime cleared by settleSessionByRuntime after unread.
         }
       }
       // Composer stop tracks the *foreground* session only.
@@ -447,6 +460,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
         sessionMarkers,
         runningSessions,
         runningRuntimeIds,
+        lastSessionByRuntime,
         running: fgKey ? Boolean(runningSessions[fgKey]) : false,
       };
     });
@@ -482,15 +496,33 @@ export const useShellStore = create<ShellState>((set, get) => ({
     }
     get().setSessionMarker(sessionKey, "idle", runtimeId ? { runtimeId } : undefined);
   },
+  sessionKeyForRuntime: (runtimeId) => {
+    if (!runtimeId) return undefined;
+    const state = get();
+    return state.runningRuntimeIds[runtimeId] ?? state.lastSessionByRuntime[runtimeId];
+  },
   settleSessionByRuntime: (runtimeId, markerState, reason) => {
-    const key = get().runningRuntimeIds[runtimeId];
+    const key = get().sessionKeyForRuntime(runtimeId);
     if (!key) return;
     get().setSessionMarker(key, markerState, { runtimeId, ...(reason ? { reason } : {}) });
+    // Drop durable mapping after settle so a recycled runtime id cannot target the old row.
+    set((state) => {
+      if (!state.lastSessionByRuntime[runtimeId]) return state;
+      const lastSessionByRuntime = { ...state.lastSessionByRuntime };
+      delete lastSessionByRuntime[runtimeId];
+      return { lastSessionByRuntime };
+    });
   },
   clearSessionRunningByRuntime: (runtimeId) => {
-    const key = get().runningRuntimeIds[runtimeId];
+    const key = get().sessionKeyForRuntime(runtimeId);
     if (!key) return;
     get().setSessionMarker(key, "idle", { runtimeId });
+    set((state) => {
+      if (!state.lastSessionByRuntime[runtimeId]) return state;
+      const lastSessionByRuntime = { ...state.lastSessionByRuntime };
+      delete lastSessionByRuntime[runtimeId];
+      return { lastSessionByRuntime };
+    });
   },
   isSessionRunning: (sessionKey) => {
     const key = sessionRunKey(sessionKey);
@@ -633,6 +665,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
       sessionMarkers: {},
       runningSessions: {},
       runningRuntimeIds: {},
+      lastSessionByRuntime: {},
       runtimeId: undefined,
       lastSequence: 0,
       status: "Agent Host stopped",
@@ -644,13 +677,17 @@ export const useShellStore = create<ShellState>((set, get) => ({
       const fgKey = sessionKeyFromSnapshot(state.snapshot);
       const runningSessions = { ...state.runningSessions };
       const runningRuntimeIds = { ...state.runningRuntimeIds };
+      const lastSessionByRuntime = { ...state.lastSessionByRuntime };
       const sessionMarkers = { ...state.sessionMarkers };
       if (fgKey) {
         clearCompletedTimer(fgKey);
         delete runningSessions[fgKey];
         sessionMarkers[fgKey] = { state: "crashed", reason: message };
       }
-      if (state.runtimeId) delete runningRuntimeIds[state.runtimeId];
+      if (state.runtimeId) {
+        delete runningRuntimeIds[state.runtimeId];
+        delete lastSessionByRuntime[state.runtimeId];
+      }
       return {
         runtimeId: undefined,
         lastSequence: 0,
@@ -658,6 +695,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
         sessionMarkers,
         runningSessions,
         runningRuntimeIds,
+        lastSessionByRuntime,
         queuedMessages: { steering: [], followUp: [] },
         snapshot: undefined,
         liveStream: emptyLiveStream(),

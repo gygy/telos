@@ -87,7 +87,11 @@ import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
 import { matchShortcut, SHORTCUT_OVERRIDES_CHANGED_EVENT } from "./lib/shortcuts.ts";
 import { loadContentModeForSession } from "./lib/content-mode-prefs.ts";
 import { loadTerminalPrefs, resolveTerminalTheme } from "./lib/terminal-prefs.ts";
-import { loadPinnedProjects, savePinnedProjects } from "./lib/project-prefs.ts";
+import {
+  loadPinnedProjects,
+  markUnreadOnAgentSettle,
+  savePinnedProjects,
+} from "./lib/project-prefs.ts";
 import {
   filterRecentWorkspaces,
   firstLine,
@@ -142,6 +146,21 @@ function maybeNotify(kind: "complete" | "error" | "crash", body?: string): void 
       requireUnfocused: prefs.onlyWhenUnfocused,
     })
     .catch(() => undefined);
+}
+
+/**
+ * Mark sidebar session unread when a turn settles and the user is not currently
+ * reading that transcript (other session, settings, packages, …).
+ * Must run before settleSessionByRuntime drops the runtime→session binding.
+ */
+function maybeMarkUnreadForRuntime(runtimeId: string): void {
+  const store = useShellStore.getState();
+  const sessionKey = store.sessionKeyForRuntime(runtimeId);
+  if (!sessionKey) return;
+  markUnreadOnAgentSettle(sessionKey, {
+    activeSessionKey: sessionKeyFromSnapshot(store.snapshot),
+    view: store.view,
+  });
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -230,8 +249,11 @@ function App() {
   /** Session file the mounted terminal is waiting for (normed path). */
   const transitionSessionRef = useRef<string | null>(null);
 
+  /** Match main-process session keys (macOS /private/var collapse). */
   function normSessionPath(path: string): string {
-    return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    let p = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    if (p.startsWith("/private/")) p = p.slice("/private".length);
+    return p;
   }
 
   /**
@@ -257,8 +279,12 @@ function App() {
    */
   function restoreSessionContentMode(sessionFile: string | undefined) {
     const desired = loadContentModeForSession(sessionFile);
-    const busy = useShellStore.getState().running;
-    if (desired === "terminal" && !busy && sessionFile?.trim()) {
+    // Block terminal only when *this* session is mid-turn (not a stale global flag
+    // from a parked previous session — that left an empty terminal pane after hops).
+    const targetBusy = sessionFile
+      ? useShellStore.getState().isSessionRunning(sessionFile)
+      : useShellStore.getState().running;
+    if (desired === "terminal" && !targetBusy && sessionFile?.trim()) {
       // Warm Ghostty before mounting the surface so WASM startup overlaps the
       // session/layout work instead of delaying the first visible frame.
       preloadPiTuiTerminal();
@@ -268,9 +294,13 @@ function App() {
       // Snapshot already has the new sessionFile; mount only that identity.
       setContentMode("terminal", { persist: false });
       transitionSessionRef.current = normSessionPath(sessionFile);
+      // Double rAF: wait until contentMode + flex layout commit before mount so
+      // FitAddon does not measure a zero-height host after a session hop.
       window.requestAnimationFrame(() => {
-        if (useShellStore.getState().contentMode !== "terminal") return;
-        setTerminalSurfaceActive(true);
+        window.requestAnimationFrame(() => {
+          if (useShellStore.getState().contentMode !== "terminal") return;
+          setTerminalSurfaceActive(true);
+        });
       });
       return;
     }
@@ -815,10 +845,13 @@ function App() {
           // Background (parked) hosts only surface terminal events for sidebar markers.
           if (delivery === "stale-runtime") {
             if (event.event.type === "agent.settled") {
+              // Background / parked host — always mark unread if not the open thread.
+              maybeMarkUnreadForRuntime(event.runtimeId);
               store.settleSessionByRuntime(event.runtimeId, "completed");
               maybeNotify("complete");
             } else if (event.event.type === "message.failed") {
               const aborted = event.event.reason === "aborted";
+              maybeMarkUnreadForRuntime(event.runtimeId);
               store.settleSessionByRuntime(
                 event.runtimeId,
                 aborted ? "aborted" : "failed",
@@ -854,6 +887,7 @@ function App() {
           } else if (event.event.type === "message.failed") {
             store.setLastFailure(event.event.message);
             const aborted = event.event.reason === "aborted";
+            maybeMarkUnreadForRuntime(event.runtimeId);
             store.settleSessionByRuntime(
               event.runtimeId,
               aborted ? "aborted" : "failed",
@@ -861,6 +895,7 @@ function App() {
             );
             maybeNotify("error", event.event.message);
           } else if (event.event.type === "agent.settled") {
+            maybeMarkUnreadForRuntime(event.runtimeId);
             store.settleSessionByRuntime(event.runtimeId, "completed");
             maybeNotify("complete");
           }

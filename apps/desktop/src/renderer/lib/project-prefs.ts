@@ -343,15 +343,92 @@ export function loadUnreadThreads(): string[] {
   return Array.isArray(list) ? list.filter((p) => typeof p === "string") : [];
 }
 
-export function markThreadUnread(id: string, unread: boolean): string[] {
+/** Normalize session id / path so unread matches either form. */
+export function normalizeThreadKey(raw: string | undefined | null): string {
+  if (!raw) return "";
+  return raw.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+/** Unread identity keys for a thread (id + session file path). */
+export function threadUnreadKeys(thread: { id: string; path?: string }): string[] {
+  const keys = [normalizeThreadKey(thread.id), normalizeThreadKey(thread.path)].filter(Boolean);
+  return [...new Set(keys)];
+}
+
+/** Sidebar lists listen for this after pin/archive/unread mutations. */
+export function notifyThreadPrefsChanged(): void {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  try {
+    window.dispatchEvent(new Event("pix-thread-prefs"));
+  } catch {
+    // ignore (SSR / tests)
+  }
+}
+
+/**
+ * Mark or clear unread. Accepts a thread id, session path, or `{ id, path }` so
+ * auto-unread (path from runtime) and manual toggle (id) share one set.
+ */
+export function markThreadUnread(
+  idOrThread: string | { id: string; path?: string },
+  unread: boolean,
+): string[] {
+  const keys =
+    typeof idOrThread === "string"
+      ? [normalizeThreadKey(idOrThread)].filter(Boolean)
+      : threadUnreadKeys(idOrThread);
+  if (keys.length === 0) return loadUnreadThreads();
+
   const current = loadUnreadThreads();
-  const next = unread ? [id, ...current.filter((p) => p !== id)] : current.filter((p) => p !== id);
+  const currentKeys = current.map((item) => normalizeThreadKey(item));
+  let next: string[];
+  if (unread) {
+    // Prefer the first key (usually session path for auto-unread, id for manual).
+    const primary =
+      typeof idOrThread === "string" ? idOrThread : (idOrThread.path ?? idOrThread.id);
+    next = [primary, ...current.filter((_, index) => !keys.includes(currentKeys[index] ?? ""))];
+  } else {
+    next = current.filter((_, index) => !keys.includes(currentKeys[index] ?? ""));
+  }
   writeJson(THREAD_UNREAD_KEY, next);
+  notifyThreadPrefsChanged();
   return next;
 }
 
-export function isUnreadThread(id: string, unread: readonly string[]): boolean {
-  return unread.includes(id);
+export function isUnreadThread(
+  idOrThread: string | { id: string; path?: string },
+  unread: readonly string[],
+): boolean {
+  const keys =
+    typeof idOrThread === "string"
+      ? [normalizeThreadKey(idOrThread)].filter(Boolean)
+      : threadUnreadKeys(idOrThread);
+  if (keys.length === 0) return false;
+  const set = new Set(unread.map((item) => normalizeThreadKey(item)));
+  return keys.some((key) => set.has(key));
+}
+
+/**
+ * After an agent turn settles: mark the session unread unless the user is
+ * already viewing that thread in the main pane.
+ *
+ * @returns true when unread was set
+ */
+export function markUnreadOnAgentSettle(
+  sessionKey: string,
+  options: {
+    /** Foreground session key (sessionFile / sessionId, already normalized or raw). */
+    activeSessionKey?: string;
+    /** Shell view — only "thread" counts as actively reading the transcript. */
+    view?: string;
+  } = {},
+): boolean {
+  const key = normalizeThreadKey(sessionKey);
+  if (!key) return false;
+  const active = normalizeThreadKey(options.activeSessionKey);
+  if (options.view === "thread" && active && key === active) return false;
+  markThreadUnread(sessionKey, true);
+  return true;
 }
 
 export function loadDeletedThreads(): string[] {

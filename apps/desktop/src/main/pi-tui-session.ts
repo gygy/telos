@@ -21,9 +21,28 @@ export type PiTuiLaunchPlan = {
   rows: number;
 };
 
-/** Normalize session path for equality / ownership checks. */
+/**
+ * Normalize session path for equality / ownership / park keys.
+ *
+ * macOS: `/var` is a symlink to `/private/var`. Host snapshots, sidebar rows, and
+ * `realpath` may disagree — without collapsing that prefix, the first terminal
+ * open works but switch/hop fails to match the parked PTY or exclusive guard.
+ */
 export function normalizeSessionKey(sessionPath: string): string {
-  return sessionPath.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  let p = sessionPath.replace(/\\/g, "/").replace(/\/+$/, "").trim().toLowerCase();
+  if (!p) return "";
+  // Collapse Apple firmlink prefix so /var/... === /private/var/...
+  if (p.startsWith("/private/")) p = p.slice("/private".length);
+  return p;
+}
+
+/** True when two session paths refer to the same JSONL (slash / case / /private). */
+export function sessionKeysMatch(
+  a: string | undefined | null,
+  b: string | undefined | null,
+): boolean {
+  if (!a?.trim() || !b?.trim()) return false;
+  return normalizeSessionKey(a) === normalizeSessionKey(b);
 }
 
 /**
@@ -85,6 +104,17 @@ export class PiTuiExclusiveGuard {
         reason: "Another terminal session is already open; close it before opening a new one",
       };
     }
+    this.#ownerKey = key;
+    return { ok: true };
+  }
+
+  /**
+   * Session hops must transfer ownership. Refusing mid-hop leaves the UI unable
+   * to open TUI after the first session (guard desync / path-key mismatch).
+   */
+  transferTo(sessionKey: string): { ok: true } | { ok: false; reason: string } {
+    const key = normalizeSessionKey(sessionKey);
+    if (!key) return { ok: false, reason: "Invalid session key" };
     this.#ownerKey = key;
     return { ok: true };
   }

@@ -1,8 +1,12 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { planPiTuiLaunch } from "./pi-tui-session.ts";
 import {
   MAX_PARKED_PTYS,
   PiTuiPtyController,
+  resolvePiPtyLaunch,
   type PtyHandle,
   type PtySpawnFn,
 } from "./pi-tui-pty.ts";
@@ -64,6 +68,35 @@ describe("PiTuiPtyController", () => {
     expect(second.resumed).toBe(true);
     expect(tracker.kills).toBe(0);
     expect(tracker.spawns).toHaveLength(1);
+  });
+
+  it("serializes concurrent opens so hops do not interleave", async () => {
+    const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    let resolveCalls = 0;
+    const controller = new PiTuiPtyController(fakeSpawn(tracker), async () => {
+      resolveCalls += 1;
+      if (resolveCalls === 1) await firstGate;
+      return "pi";
+    });
+    const planA = planPiTuiLaunch({ sessionFile: "/work/a.jsonl", cwd: "/work" });
+    const planB = planPiTuiLaunch({ sessionFile: "/work/b.jsonl", cwd: "/work" });
+
+    const openA = controller.open(planA, { onData: () => undefined, onExit: () => undefined });
+    // Queue B while A is still resolving pi — must not run until A finishes.
+    const openB = controller.open(planB, { onData: () => undefined, onExit: () => undefined });
+    expect(tracker.spawns).toHaveLength(0);
+    releaseFirst();
+    const a = await openA;
+    expect(a.sessionFile).toBe("/work/a.jsonl");
+    const b = await openB;
+    expect(b.sessionFile).toBe("/work/b.jsonl");
+    expect(tracker.spawns).toHaveLength(2);
+    expect(controller.sessionFile()).toBe("/work/b.jsonl");
+    expect(controller.status().parkedSessionFiles).toEqual(["/work/a.jsonl"]);
   });
 
   it("parks the previous session and promotes it on hop back", async () => {
@@ -184,5 +217,59 @@ describe("PiTuiPtyController", () => {
     await expect(
       controller.open(plan, { onData: () => undefined, onExit: () => undefined }),
     ).rejects.toThrow(/pi executable/i);
+  });
+
+  it("spawns pi via node when the CLI is a node shebang script", async () => {
+    const tracker = { spawns: [] as SpawnRecord[], writes: [] as string[], kills: 0 };
+    const root = mkdtempSync(join(tmpdir(), "pix-pty-launch-"));
+    const bin = join(root, "bin");
+    mkdirSync(bin, { recursive: true });
+    const piPath = join(bin, "pi");
+    writeFileSync(piPath, "#!/usr/bin/env node\nconsole.log(1)\n", { mode: 0o755 });
+
+    const controller = new PiTuiPtyController(fakeSpawn(tracker), async () => piPath);
+    const plan = planPiTuiLaunch({ sessionFile: join(root, "s.jsonl"), cwd: root });
+    await controller.open(plan, { onData: () => undefined, onExit: () => undefined });
+    expect(tracker.spawns).toHaveLength(1);
+    // Real node from the machine (or PATH) should wrap the shebang script.
+    expect(tracker.spawns[0]?.file.toLowerCase()).toMatch(/node(\.exe)?$/);
+    // macOS realpath may prefix /private — compare resolved tails.
+    expect(tracker.spawns[0]?.args[0]?.endsWith("/bin/pi")).toBe(true);
+    expect(tracker.spawns[0]?.args.slice(1)).toEqual(["--session", join(root, "s.jsonl")]);
+  });
+});
+
+describe("resolvePiPtyLaunch", () => {
+  it("uses node to run a shebang or .js CLI when node is available", () => {
+    const root = mkdtempSync(join(tmpdir(), "pix-pty-resolve-"));
+    const script = join(root, "cli.js");
+    writeFileSync(script, "#!/usr/bin/env node\n", { mode: 0o755 });
+
+    const launch = resolvePiPtyLaunch(script, ["--session", "/s.jsonl"], {
+      PATH: process.env.PATH || "/usr/bin:/bin",
+      HOME: root,
+    });
+    // On developer machines node is present; argv0 is the script path.
+    expect(launch.file.toLowerCase()).toMatch(/node(\.exe)?$/);
+    expect(launch.args[0]?.endsWith("cli.js")).toBe(true);
+    expect(launch.args.slice(1)).toEqual(["--session", "/s.jsonl"]);
+  });
+
+  it("honors NODE_BINARY override", () => {
+    const root = mkdtempSync(join(tmpdir(), "pix-pty-resolve-nodebin-"));
+    const bin = join(root, "bin");
+    mkdirSync(bin, { recursive: true });
+    const nodePath = join(bin, "custom-node");
+    const script = join(bin, "cli.js");
+    writeFileSync(nodePath, "#!/bin/sh\n", { mode: 0o755 });
+    writeFileSync(script, "export default 1\n", { mode: 0o644 });
+
+    const launch = resolvePiPtyLaunch(script, ["--version"], {
+      PATH: "/usr/bin",
+      HOME: root,
+      NODE_BINARY: nodePath,
+    });
+    expect(launch.file).toBe(nodePath);
+    expect(launch.args[0]?.endsWith("cli.js")).toBe(true);
   });
 });
