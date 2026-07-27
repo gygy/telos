@@ -661,6 +661,47 @@ export const TimelineRow = memo(function TimelineRow(props: {
   }
   if (item.kind === "tool") return <ToolCard item={item} locale={props.locale} />;
 
+  // Compaction lifecycle — shadcn Marker (docs: in-progress default, done = separator).
+  if (item.title === "Compaction") {
+    const label = compactionMarkerLabel(props.locale, item.text);
+    const failed = item.tone === "error" || /abort|fail|error/i.test(item.text);
+    const started = !failed && /started/i.test(item.text) && !/completed|done/i.test(item.text);
+    if (started) {
+      return (
+        <Marker
+          variant="default"
+          shimmer
+          className="timeline-live-status min-h-0 gap-1.5 py-1 text-[13px]"
+          data-kind="system"
+          data-testid="timeline-compaction-marker"
+          data-tone="info"
+          data-phase="compacting"
+          role="status"
+        >
+          <MarkerIcon className="size-3.5">
+            <Minimize2 className="size-3.5 opacity-80" strokeWidth={1.75} />
+          </MarkerIcon>
+          <MarkerContent className="min-w-0 truncate">{label}</MarkerContent>
+        </Marker>
+      );
+    }
+    return (
+      <Marker
+        variant="separator"
+        className={cn(
+          "timeline-compaction-marker my-3 min-h-0 text-[12px]",
+          failed && "text-destructive",
+        )}
+        data-kind="system"
+        data-testid="timeline-compaction-marker"
+        data-tone={failed ? "error" : "info"}
+      >
+        <MarkerContent className="px-2">{label}</MarkerContent>
+      </Marker>
+    );
+  }
+
+  // Shell / errors / other system notes — default Marker card.
   return (
     <Marker
       variant="default"
@@ -690,6 +731,18 @@ export const TimelineRow = memo(function TimelineRow(props: {
     </Marker>
   );
 });
+
+/** Localized label for compaction system rows (host projects English text). */
+function compactionMarkerLabel(locale: Locale, text: string): string {
+  const body = text.trim();
+  if (/abort/i.test(body)) return t(locale, "timeline.compaction.aborted");
+  if (/fail|error/i.test(body) && !/started/i.test(body)) {
+    return body || t(locale, "timeline.compaction.aborted");
+  }
+  if (/completed|done/i.test(body)) return t(locale, "timeline.compaction.completed");
+  if (/started/i.test(body)) return t(locale, "timeline.compaction.started");
+  return body || t(locale, "timeline.compaction.completed");
+}
 
 function processToolIcon(kind: ProcessToolKind): ReactNode {
   const props = { className: "size-3.5 shrink-0", strokeWidth: 1.75 } as const;
@@ -1470,21 +1523,21 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
           setDetailsOpen(event.currentTarget.open);
         }}
       >
+        {/* summary hosts shadcn Marker (border) — same pattern as chat markers. */}
         <summary className="timeline-process-summary group/process-trigger w-full text-left">
-          <span
-            className={cn(
-              "timeline-process-label min-w-0 flex-1 truncate",
-              // Live phases (thinking / processing / executing / …) get the soft sweep;
-              // completed “已处理 …” stays static muted text.
-              active && "shimmer",
-            )}
+          <Marker
+            variant="border"
+            shimmer={active}
+            className="timeline-process-marker w-full min-h-0 gap-1 py-0 text-[12.5px]"
           >
-            {label}
-          </span>
-          <ChevronRight
-            className="timeline-process-chevron size-3.5 shrink-0 opacity-60"
-            strokeWidth={2}
-          />
+            <MarkerContent className="timeline-process-label min-w-0 flex-1 truncate">
+              {label}
+            </MarkerContent>
+            <ChevronRight
+              className="timeline-process-chevron size-3.5 shrink-0 opacity-60"
+              strokeWidth={2}
+            />
+          </Marker>
         </summary>
         <div className="timeline-process-body">
           <ProcessSteps
@@ -1500,7 +1553,7 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
 
 /**
  * Trailing live status Marker when no open process group covers the phase.
- * Uses Marker for busy states (thinking / working / compacting / …).
+ * Busy phases (thinking / executing / compacting / …) use default Marker + shimmer.
  */
 export const TimelineLiveStatus = memo(function TimelineLiveStatus(props: {
   locale: Locale;

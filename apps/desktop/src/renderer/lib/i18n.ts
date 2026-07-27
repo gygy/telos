@@ -37,6 +37,9 @@ const messages = {
     "timeline.activity.compactingWithDuration": "正在压缩上下文 {duration}",
     "timeline.activity.summarizing": "正在生成摘要",
     "timeline.activity.summarizingWithDuration": "正在生成摘要 {duration}",
+    "timeline.compaction.started": "正在压缩上下文",
+    "timeline.compaction.completed": "上下文已压缩",
+    "timeline.compaction.aborted": "上下文压缩已中止",
     "timeline.sources": "来源",
     /*
      * Shell: 运行 + 具体命令（对象在后）；无命令时用「运行命令」。
@@ -1098,6 +1101,9 @@ const messages = {
     "timeline.activity.compactingWithDuration": "Compacting context {duration}",
     "timeline.activity.summarizing": "Summarizing",
     "timeline.activity.summarizingWithDuration": "Summarizing {duration}",
+    "timeline.compaction.started": "Compacting context",
+    "timeline.compaction.completed": "Conversation compacted",
+    "timeline.compaction.aborted": "Compaction aborted",
     "timeline.sources": "Sources",
     "timeline.process.read": "Read",
     "timeline.process.readPath": "Read {path}",

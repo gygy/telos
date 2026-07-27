@@ -486,4 +486,18 @@ describe("process activity", () => {
     expect(processBlockCoversLiveActivity(blocks, { phase: "responding" })).toBe(true);
     expect(processBlockCoversLiveActivity(blocks, { phase: "compacting" })).toBe(false);
   });
+
+  it("hides trailing compacting status when a Compaction started system row is last", () => {
+    const blocks = buildTimelineBlocks([
+      { id: "u1", kind: "user", text: "hi" },
+      {
+        id: "sys",
+        kind: "system",
+        title: "Compaction",
+        text: "Compaction started (threshold)",
+        tone: "info",
+      },
+    ]);
+    expect(processBlockCoversLiveActivity(blocks, { phase: "compacting" })).toBe(true);
+  });
 });

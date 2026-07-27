@@ -626,8 +626,8 @@ export function deriveLiveActivity(input: {
 }
 
 /**
- * True when an open process block already renders the live phase (avoid double markers).
- * Compacting / waiting / summarizing stay as a separate trailing Marker (no process steps).
+ * True when an open process block (or a dedicated system row) already paints the live phase.
+ * Avoids double markers (e.g. Compaction started system + trailing compacting status).
  * Responding is folded into the open process header via `resolveProcessActivity`.
  */
 export function processBlockCoversLiveActivity(
@@ -635,13 +635,24 @@ export function processBlockCoversLiveActivity(
   activity: ProcessActivity | null,
 ): boolean {
   if (!activity || activity.phase === "processed") return false;
+
+  // Compaction started is already a system Marker (shimmer); skip trailing live status.
+  if (activity.phase === "compacting") {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i];
+      if (!b || b.type !== "item") continue;
+      const it = b.item;
+      if (it.kind === "system" && it.title === "Compaction" && /started/i.test(it.text)) {
+        return true;
+      }
+      break;
+    }
+    return false;
+  }
+
   const last = blocks[blocks.length - 1];
   if (!last || last.type !== "process" || !last.open) return false;
-  if (
-    activity.phase === "compacting" ||
-    activity.phase === "waiting" ||
-    activity.phase === "summarizing"
-  ) {
+  if (activity.phase === "waiting" || activity.phase === "summarizing") {
     return false;
   }
   return true;

@@ -1465,48 +1465,37 @@ html[data-custom-window-controls="true"] .page-header {
 .timeline-process-details {
   border: none;
 }
-/* Full-width row + permanent hairline under process status (open or closed). */
+/* Process header: native <summary> wraps shadcn Marker variant=border. */
 .timeline-process-summary {
-  display: flex;
+  display: block;
   width: 100%;
-  align-items: center;
-  gap: 4px;
   list-style: none;
   cursor: pointer;
-  font-size: 12.5px;
-  color: var(--text-subtle);
   user-select: none;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--divider, var(--border));
-  box-sizing: border-box;
   background: transparent;
-  border-left: 0;
-  border-right: 0;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--text-subtle);
 }
 .timeline-process-summary::-webkit-details-marker {
   display: none;
 }
-.timeline-process-summary {
-  border-top: 0;
-  text-align: left;
-}
 .timeline-process-summary:hover {
   color: var(--muted-foreground);
 }
+.timeline-process-marker {
+  color: inherit;
+}
 .timeline-process-label {
   min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Active process header (“思考中… / 处理中…”) — slightly stronger base for shimmer. */
+/* Active process header (“思考中… / 处理中…”) — stronger base for shimmer. */
 .timeline-process[data-active="true"] .timeline-process-summary {
   color: var(--muted-foreground);
-}
-.timeline-process[data-active="true"] .timeline-process-label {
-  /* Keep ellipsis while shimmer paints via background-clip:text. */
-  display: block;
 }
 /* Collapsed → right; open → down */
 .timeline-process-chevron {
@@ -1520,6 +1509,14 @@ html[data-custom-window-controls="true"] .page-header {
   margin-top: 10px;
   padding-top: 2px;
   border-top: none;
+}
+/* Compaction system rows — Marker separator (shadcn chat pattern). */
+.timeline-compaction-marker {
+  margin: 10px 0 14px;
+  color: var(--text-subtle);
+}
+.timeline-compaction-marker[data-tone="error"] {
+  color: var(--destructive);
 }
 /*
  * Codex-style process steps.

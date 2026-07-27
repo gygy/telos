@@ -34,11 +34,11 @@ pnpm electron:install
 
 Apps have **independent** `dev` / `build` entry points at the repo root:
 
-| App                          | Dev                | Build                | Notes                                          |
-| ---------------------------- | ------------------ | -------------------- | ---------------------------------------------- |
-| **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop             |
-| **Landing** (`apps/landing`) | `pnpm dev:landing` | `pnpm build:landing` | Preview: `pnpm preview:landing`                |
-| **All packages**             | —                  | `pnpm build`         | Recursive `build` across the workspace         |
+| App                          | Dev                | Build                | Notes                                  |
+| ---------------------------- | ------------------ | -------------------- | -------------------------------------- |
+| **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop     |
+| **Landing** (`apps/landing`) | `pnpm dev:landing` | `pnpm build:landing` | Preview: `pnpm preview:landing`        |
+| **All packages**             | —                  | `pnpm build`         | Recursive `build` across the workspace |
 
 ### Desktop
 

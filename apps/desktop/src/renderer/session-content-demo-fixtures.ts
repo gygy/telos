@@ -303,7 +303,7 @@ export function scenarioCompacting(): DemoScenario {
     id: "compacting",
     title: "进行中 · 压缩上下文",
     description:
-      "system「Compaction started」+ running → deriveLiveActivity phase=compacting → TimelineLiveStatus。",
+      "running + compaction.started → TimelineLiveStatus「正在压缩上下文」（Marker shimmer）；与 system 投影一致。",
     running: true,
     events: [
       {
@@ -346,7 +346,7 @@ export function scenarioCompactionDone(): DemoScenario {
     id: "compaction-done",
     title: "历史 · 压缩完成",
     description:
-      "projectEvents 投影的 Compaction started/completed system 行；running=false，无 TimelineLiveStatus。",
+      "历史压缩完成：Marker variant=separator「上下文已压缩」；running=false，无 live status。",
     items: [
       {
         id: "u-cd",
