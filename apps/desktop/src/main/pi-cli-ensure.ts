@@ -1,6 +1,6 @@
 /**
  * Detect the global `pi` CLI and install the latest package when missing.
- * Product mode only — skipped for isolated/smoke/e2e fixtures.
+ * Product mode only — skipped for isolated/e2e fixtures.
  *
  * Packaged Electron has a minimal GUI PATH; always resolve against augmented
  * user bin dirs so we do not re-run `npm install -g` every launch.
@@ -97,7 +97,7 @@ let ensureInFlight: Promise<PiCliEnsureResult> | undefined;
  * Set PIX_FORCE_PI_INSTALL=1 only for explicit debug/CI that needs auto global install.
  */
 export function shouldAutoInstallPiCli(env: NodeJS.ProcessEnv = process.env): boolean {
-  // Explicit opt-outs always win (fixtures / e2e / smoke).
+  // Explicit opt-outs always win (fixtures / e2e).
   if (env.PIX_SKIP_PI_INSTALL === "1" || env.PIX_SKIP_PI_INSTALL === "true") return false;
   if (env.PIX_ISOLATED === "1" || env.PIX_ISOLATED === "true") return false;
   if (env.PIX_WORKSPACE?.trim()) return false;

@@ -8,14 +8,13 @@ import { join } from "node:path";
 import { FakeOpenAiServer } from "../../../packages/test-utils/src/index.ts";
 
 /**
- * @param {{ isolated?: boolean, smoke?: boolean }} options
+ * @param {{ isolated?: boolean }} options
  * @returns {Promise<{ environment: NodeJS.ProcessEnv, cleanup: () => Promise<void>, label: string }>}
  */
 export async function prepareLaunchEnv(options = {}) {
   const isolated = Boolean(options.isolated);
-  const smoke = Boolean(options.smoke);
 
-  if (!isolated && !smoke) {
+  if (!isolated) {
     // Product = visual pi: real HOME, real ~/.pi/agent (models/auth/settings/tools).
     const environment = {
       ...process.env,
@@ -25,11 +24,6 @@ export async function prepareLaunchEnv(options = {}) {
     delete environment.ELECTRON_RUN_AS_NODE;
     // Never inherit probe fixtures into product mode.
     delete environment.PIX_WORKSPACE;
-    delete environment.PIX_AUTO_START;
-    delete environment.PIX_AUTO_PROMPT;
-    delete environment.PIX_AUTO_ABORT;
-    delete environment.PIX_AUTO_CRASH_PROBE;
-    delete environment.PIX_AUTO_CLOSE_MS;
     delete environment.PIX_TOOLS;
     if (!process.env.PIX_MODEL_PROVIDER) {
       delete environment.PIX_MODEL_PROVIDER;
@@ -57,7 +51,7 @@ export async function prepareLaunchEnv(options = {}) {
     mkdir(workspace, { recursive: true }),
   ]);
   const toolPath = join(workspace, "fixture.txt");
-  await writeFile(toolPath, "Pix Electron smoke fixture\n");
+  await writeFile(toolPath, "Pix isolated launch fixture\n");
 
   const fakeModel = new FakeOpenAiServer({ toolPath });
   await fakeModel.start();
@@ -98,15 +92,6 @@ export async function prepareLaunchEnv(options = {}) {
     PIX_TOOLS: "read",
     PIX_PERSIST_SESSION: "1",
     PIX_ENABLE_TEST_COMMANDS: "1",
-    ...(smoke
-      ? {
-          PIX_AUTO_START: "1",
-          PIX_AUTO_PROMPT: "Use the read tool for the fixture file.",
-          PIX_AUTO_ABORT: "1",
-          PIX_AUTO_CRASH_PROBE: "1",
-          PIX_AUTO_CLOSE_MS: "2500",
-        }
-      : {}),
   };
   delete environment.ELECTRON_RUN_AS_NODE;
 

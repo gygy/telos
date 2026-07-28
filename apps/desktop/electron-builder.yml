@@ -26,7 +26,7 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 # electron-updater reads GitHub Releases (latest.yml / latest-mac.yml / latest-linux.yml).
 # CI still packages with `--publish never`; softprops uploads artifacts + update metadata.
 # app-update.yml is written by electron-builder for dmg/zip/nsis targets, and always by
-# scripts/after-pack.mjs so `package:dir` installs can check for updates too.
+# scripts/after-pack.mjs so directory packs also get a valid updater feed.
 publish:
   provider: github
   owner: num-scope

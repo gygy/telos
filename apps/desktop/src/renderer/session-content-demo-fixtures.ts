@@ -4,7 +4,7 @@
  * Rules:
  * - Only TimelineItem shapes the product actually builds (history / live-stream / projectEvents).
  * - Tool args/output/details match pi tool payloads (edit details.diff, write args-only, etc.).
- * - Assistant rich markdown mirrors packages/test-utils fake-openai-server (same smoke/e2e fixture).
+ * - Assistant rich markdown mirrors packages/test-utils fake-openai-server (same e2e fixture).
  * - No decorative “phase galleries” or system lines the product never emits.
  *
  * Path: TimelineItem[] → buildTimelineBlocks → TimelineProcessBlock / TimelineRow /

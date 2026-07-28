@@ -1,8 +1,8 @@
 /**
- * Desktop launcher (no watch).
+ * Desktop launcher (no watch). Used by `pnpm dev` after build.
  *
- * - Interactive (`pnpm start`): real HOME and last durable workspace.
- * - Smoke (`--smoke`) or `PIX_ISOLATED=1`: temp HOME, fixture workspace, fake model.
+ * - Interactive: real HOME and last durable workspace.
+ * - Isolated (`PIX_ISOLATED=1`): temp HOME, fixture workspace, fake model.
  */
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -14,10 +14,8 @@ const require = createRequire(import.meta.url);
 const electron = require("electron");
 const appDirectory = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const smoke = process.argv.includes("--smoke");
-const isolated = smoke || process.env.PIX_ISOLATED === "1";
-
-const prepared = await prepareLaunchEnv({ isolated, smoke });
+const isolated = process.env.PIX_ISOLATED === "1";
+const prepared = await prepareLaunchEnv({ isolated });
 
 console.log(prepared.label);
 let exitCode = 1;

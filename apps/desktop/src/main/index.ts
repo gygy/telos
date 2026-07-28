@@ -53,7 +53,6 @@ import {
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  appendFileSync,
   readFileSync,
   writeFileSync,
   existsSync,
@@ -1846,7 +1845,7 @@ function saveDesktopPrefs(prefs: DesktopPrefs): void {
 }
 
 /**
- * Load prefs and scrub fixture/temp paths left by older smoke launches.
+ * Load prefs and scrub fixture/temp paths left by older isolated launches.
  * If lastWorkspace is dead, fall back to the first durable recent project.
  * Preserves unrelated fields (git, window bounds, worktree, …).
  */
@@ -2187,7 +2186,7 @@ class HostSupervisor {
 
   constructor(private readonly window: BrowserWindow) {
     const prefs = loadDesktopPrefs();
-    // Env fixture wins for smoke/e2e. Otherwise restore last durable workspace
+    // Env fixture wins for isolated/e2e. Otherwise restore last durable workspace
     // (loadDesktopPrefs already falls back to first recent real project).
     this.#workspaceCwd =
       process.env.PIX_WORKSPACE ?? durableWorkspacePath(prefs.lastWorkspace) ?? undefined;
@@ -2713,7 +2712,7 @@ class HostSupervisor {
       cwd,
     };
     // Share CLI config: only override agentDir/model/tools when explicitly set
-    // (isolated smoke/e2e). Product omits them → pi getAgentDir() + default tools/models.
+    // (isolated/e2e). Product omits them → pi getAgentDir() + default tools/models.
     if (process.env.PI_CODING_AGENT_DIR) command.agentDir = process.env.PI_CODING_AGENT_DIR;
     const modelProvider = process.env.PIX_MODEL_PROVIDER;
     const modelId = process.env.PIX_MODEL_ID;
@@ -4034,184 +4033,6 @@ let mainWindow: BrowserWindow | undefined;
 let autoUpdate: AutoUpdateController | undefined;
 let supervisor: HostSupervisor | undefined;
 
-function emitSmokeReport(report: { type: string; [key: string]: unknown }): void {
-  const line = JSON.stringify(report);
-  console.log(line);
-  const reportPath = process.env.PIX_SMOKE_REPORT_PATH?.trim();
-  if (!reportPath) return;
-  mkdirSync(dirname(reportPath), { recursive: true });
-  appendFileSync(reportPath, `${line}\n`, "utf8");
-}
-
-async function waitForEventCount(
-  hostSupervisor: HostSupervisor,
-  eventType: string,
-  minimum: number,
-): Promise<void> {
-  const deadline = Date.now() + 5_000;
-  while ((hostSupervisor.eventCounts()[eventType] ?? 0) < minimum) {
-    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${eventType}`);
-    await delay(10);
-  }
-}
-
-async function expectRejected(operation: Promise<unknown>): Promise<boolean> {
-  try {
-    await operation;
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-async function runCrashRecoveryProbe(
-  hostSupervisor: HostSupervisor,
-  initial: HostSnapshot,
-): Promise<void> {
-  const snapshots = [initial];
-
-  await hostSupervisor.crashHost();
-  snapshots.push(await hostSupervisor.start());
-
-  const nextDelta = (hostSupervisor.eventCounts()["message.delta"] ?? 0) + 1;
-  const messageOperation = hostSupervisor.prompt("ABORT while the host is streaming a message.");
-  await waitForEventCount(hostSupervisor, "message.delta", nextDelta);
-  await hostSupervisor.crashHost();
-  const messagePendingRejected = await expectRejected(messageOperation);
-  snapshots.push(await hostSupervisor.start());
-
-  hostSupervisor.armCrashOnEvent("tool.started");
-  const toolPendingRejected = await expectRejected(
-    hostSupervisor.prompt("Use the read tool and crash during tool execution."),
-  );
-  snapshots.push(await hostSupervisor.start());
-  const gapSnapshot = await hostSupervisor.probeSequenceGap();
-
-  const runtimeIds = snapshots.map((snapshot) => snapshot.runtimeId);
-  const sessionFiles = snapshots.map((snapshot) => snapshot.sessionFile);
-  const report = {
-    type: "pix.smoke.recovery",
-    runtimeIds,
-    runtimeIdsUnique: new Set(runtimeIds).size === runtimeIds.length,
-    sessionIdsStable: new Set(snapshots.map((snapshot) => snapshot.sessionId)).size === 1,
-    sessionFileStable:
-      sessionFiles.every((sessionFile) => typeof sessionFile === "string") &&
-      new Set(sessionFiles).size === 1,
-    sessionFile: snapshots.at(-1)?.sessionFile,
-    messagePendingRejected,
-    toolPendingRejected,
-    gapRecovered:
-      gapSnapshot.runtimeId === snapshots.at(-1)?.runtimeId &&
-      hostSupervisor.eventCounts()["runtime.gap"] === 1,
-    windowAlive: !mainWindow?.isDestroyed(),
-    eventCounts: hostSupervisor.eventCounts(),
-  };
-  if (
-    !report.runtimeIdsUnique ||
-    !report.sessionIdsStable ||
-    !report.sessionFileStable ||
-    !report.messagePendingRejected ||
-    !report.toolPendingRejected ||
-    !report.gapRecovered ||
-    !report.windowAlive ||
-    report.eventCounts["host.crashed"] !== 3 ||
-    report.eventCounts["host.restarted"] !== 3
-  ) {
-    throw new Error("Crash recovery invariants failed");
-  }
-  emitSmokeReport(report);
-}
-
-async function runTerminalSmokeProbe(snapshot: {
-  sessionFile: string | undefined;
-  cwd: string | undefined;
-}): Promise<void> {
-  const sessionFile = snapshot.sessionFile?.trim();
-  const cwd = snapshot.cwd?.trim();
-  if (!sessionFile || !cwd) {
-    throw new Error("Terminal smoke requires an active sessionFile and cwd");
-  }
-
-  const plan = planPiTuiLaunch({ sessionFile, cwd, cols: 80, rows: 24 });
-  const controller = await getPiTuiController();
-  const acquired = piTuiGuard.tryAcquire(plan.sessionKey);
-  if (!acquired.ok) throw new Error(acquired.reason);
-
-  let outputBytes = 0;
-  let resolveOutput!: () => void;
-  let rejectOutput!: (error: Error) => void;
-  let outputSettled = false;
-  const firstOutput = new Promise<void>((resolve, reject) => {
-    resolveOutput = resolve;
-    rejectOutput = reject;
-  });
-  let openedSessionFile: string | undefined;
-  let open = false;
-  let disposed = false;
-
-  try {
-    const opened = await controller.open(plan, {
-      onData: (data) => {
-        outputBytes += Buffer.byteLength(data, "utf8");
-        if (!outputSettled && outputBytes > 0) {
-          outputSettled = true;
-          resolveOutput();
-        }
-      },
-      onExit: (event) => {
-        if (!outputSettled) {
-          outputSettled = true;
-          rejectOutput(new Error(`Terminal smoke PTY exited before output (${event.exitCode})`));
-        }
-      },
-    });
-    openedSessionFile = opened.sessionFile;
-    controller.resize(100, 30);
-    controller.write("\u001b");
-
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        firstOutput,
-        new Promise<never>((_resolve, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error("Timed out waiting for packaged pi TUI output")),
-            20_000,
-          );
-        }),
-      ]);
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-
-    const status = controller.status();
-    open = controller.isOpen();
-    if (!open || status.live?.sessionFile !== sessionFile || openedSessionFile !== sessionFile) {
-      throw new Error("Terminal smoke session identity invariant failed");
-    }
-  } finally {
-    disposed = controller.disposeSession(sessionFile);
-    piTuiGuard.release(plan.sessionKey);
-  }
-
-  const report = {
-    type: "pix.smoke.terminal",
-    platform: process.platform,
-    conpty: process.platform === "win32",
-    sessionFile,
-    sessionFileMatches: openedSessionFile === sessionFile,
-    outputBytes,
-    resized: true,
-    wroteInput: true,
-    open,
-    disposed,
-  };
-  if (!report.sessionFileMatches || report.outputBytes <= 0 || !report.open || !report.disposed) {
-    throw new Error("Terminal smoke invariants failed");
-  }
-  emitSmokeReport(report);
-}
-
 /** App package root (apps/desktop) whether running from src or dist/main. */
 function packageRoot(): string {
   // dist/main → ../.. ; file:// main might be nested differently
@@ -5396,53 +5217,7 @@ void app
       openSystemNotificationSettings();
     });
 
-    let autoStartSnapshot: HostSnapshot | undefined;
-    if (process.env.PIX_AUTO_START === "1") {
-      const snapshot = await supervisor?.start();
-      autoStartSnapshot = snapshot;
-      emitSmokeReport({
-        type: "pix.smoke.ready",
-        runtimeId: snapshot?.runtimeId,
-        resourceCounts: snapshot?.resources,
-      });
-
-      if (process.env.PIX_PHOTON_PROBE_IMAGE && supervisor) {
-        const result = await supervisor.photonProbe(process.env.PIX_PHOTON_PROBE_IMAGE);
-        if (
-          result.extensions !== 1 ||
-          result.extensionDiagnostics !== 0 ||
-          result.input.width !== 2 ||
-          result.input.height !== 2 ||
-          result.output.width !== 1 ||
-          result.output.height !== 1 ||
-          result.output.bytes <= 0
-        ) {
-          throw new Error("Photon probe invariants failed");
-        }
-        emitSmokeReport({ type: "pix.smoke.photon", ...result });
-      }
-
-      if (process.env.PIX_AUTO_PROMPT && supervisor) {
-        let completed = await supervisor.prompt(process.env.PIX_AUTO_PROMPT);
-
-        if (process.env.PIX_AUTO_ABORT === "1") {
-          const nextDelta = (supervisor.eventCounts()["message.delta"] ?? 0) + 1;
-          const abortPrompt = supervisor.prompt("ABORT this response after its first delta.");
-          await waitForEventCount(supervisor, "message.delta", nextDelta);
-          await supervisor.abort();
-          completed = await abortPrompt;
-        }
-
-        emitSmokeReport({
-          type: "pix.smoke.runtime",
-          sequence: completed.sequence,
-          eventCounts: supervisor.eventCounts(),
-        });
-
-        if (process.env.PIX_AUTO_CRASH_PROBE === "1")
-          await runCrashRecoveryProbe(supervisor, completed);
-      }
-    } else if (process.env.PIX_NO_AUTO_RESUME !== "1" && supervisor) {
+    if (process.env.PIX_NO_AUTO_RESUME !== "1" && supervisor) {
       // Product cold start: restore last durable workspace and continue recent pi session.
       // Skip ephemeral fixture paths and missing directories.
       const cwd = durableWorkspacePath(supervisor.getWorkspaceCwd());
@@ -5466,16 +5241,6 @@ void app
         }
       }
     }
-
-    if (process.env.PIX_AUTO_TERMINAL_PROBE === "1") {
-      await runTerminalSmokeProbe({
-        sessionFile: autoStartSnapshot?.sessionFile ?? process.env.PIX_TERMINAL_PROBE_SESSION_FILE,
-        cwd: autoStartSnapshot?.cwd ?? process.env.PIX_WORKSPACE,
-      });
-    }
-
-    const autoCloseMs = Number.parseInt(process.env.PIX_AUTO_CLOSE_MS ?? "", 10);
-    if (Number.isFinite(autoCloseMs) && autoCloseMs > 0) setTimeout(() => app.quit(), autoCloseMs);
   })
   .catch((error: unknown) => {
     console.error("Pix failed to initialize", error);

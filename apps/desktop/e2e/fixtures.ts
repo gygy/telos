@@ -164,17 +164,8 @@ async function launchPixApp(): Promise<LaunchedPix> {
     // Product cold-start auto-resume is off so each test drives Host start via UI.
     PIX_NO_AUTO_RESUME: "1",
   });
-  // Interactive E2E: do not auto-drive Main; the test clicks the UI.
-  for (const key of [
-    "ELECTRON_RUN_AS_NODE",
-    "PIX_AUTO_START",
-    "PIX_AUTO_PROMPT",
-    "PIX_AUTO_ABORT",
-    "PIX_AUTO_CRASH_PROBE",
-    "PIX_AUTO_CLOSE_MS",
-  ]) {
-    delete env[key];
-  }
+  // Interactive E2E: product cold-start auto-resume is already off via PIX_NO_AUTO_RESUME.
+  delete env.ELECTRON_RUN_AS_NODE;
 
   // Isolate Electron userData so recent workspaces / prefs do not leak across runs.
   const userData = join(root, "electron-userData");

@@ -44,15 +44,17 @@ Apps have **independent** `dev` / `build` entry points at the repo root:
 
 ```bash
 pnpm dev:desktop   # or: pnpm dev
+pnpm build:desktop # compile only (no Electron launch)
 ```
 
 Builds renderer / preload / main / agent-host, then launches Electron. Restart after source changes.
 
 Product launch uses your real `HOME` and the same agent dir as the CLI (`~/.pi/agent` / `PI_CODING_AGENT_DIR`). Models, API keys, settings, packages, and tools match interactive `pi`. The last workspace is restored from desktop prefs; no temp workspace is created on every start.
 
+Optional isolated launch (temp home + fixture workspace + fake model):
+
 ```bash
-pnpm build:desktop   # compile only (no Electron launch)
-pnpm start:desktop   # launch previously built dist/
+PIX_ISOLATED=1 pnpm dev:desktop
 ```
 
 Browser-only chat timeline preview (no Electron), for iterating on session content rendering:
@@ -80,31 +82,12 @@ pnpm check:types  # lint + types only
 pnpm fmt          # auto-fix formatting
 pnpm test
 pnpm build        # all workspace packages (desktop + landing + libs)
-pnpm smoke
-pnpm ready        # check + test + build
-```
-
-Isolated smoke (temp home + fixture workspace + fake model):
-
-```bash
-pnpm smoke
-# or
-PIX_ISOLATED=1 pnpm start:desktop
-```
-
-Packaged smoke (unsigned app directory):
-
-```bash
-pnpm package:dir
-pnpm smoke:packaged
 ```
 
 ## Package (desktop)
 
 ```bash
-pnpm package          # alias → package:desktop
-pnpm package:desktop  # platform installers (NSIS / DMG / AppImage+deb)
-pnpm package:dir      # unpacked app directory only (for local smoke)
+pnpm package   # platform installers (NSIS / DMG / AppImage+deb)
 ```
 
 Installers land under `apps/desktop/release/app/` (unsigned in CI — no code-signing certs yet).
@@ -113,7 +96,7 @@ Installers land under `apps/desktop/release/app/` (unsigned in CI — no code-si
 
 | Workflow    | File                            | When                      | What                                                                                               |
 | ----------- | ------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build; Windows: packaged ConPTY smoke only           |
+| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build                                                |
 | **Release** | `.github/workflows/release.yml` | push `v*` tag (or manual) | multi-platform installers → **GitHub Release** (Win NSIS, mac DMG arm64+Intel, Linux AppImage+deb) |
 
 ### Versioning
@@ -135,7 +118,7 @@ git tag v0.1.0
 git push origin main --tags
 ```
 
-Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build, plus a narrow Windows packaged ConPTY smoke; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
+Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
 
 > **macOS note:** auto-update works best with a signed/notarized app. Unsigned builds may fail code-signature verification when installing updates; Windows NSIS and Linux AppImage are the more reliable unsigned paths today.
 

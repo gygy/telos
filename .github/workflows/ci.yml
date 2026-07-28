@@ -1,4 +1,4 @@
-# Daily gate on Ubuntu; Windows only for packaged ConPTY smoke.
+# Daily gate on Ubuntu: lint/types/format, tests, build.
 # Multi-platform installers stay in release.yml (tag-driven).
 name: CI
 
@@ -43,38 +43,3 @@ jobs:
 
       - name: Build packages
         run: pnpm build
-
-  # node-pty / ConPTY paths are Windows-only; keep a narrow packaged smoke.
-  windows-smoke:
-    name: packaged smoke (windows)
-    runs-on: windows-latest
-    timeout-minutes: 35
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.15.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        run: pnpm build
-
-      - name: Install Electron binary
-        run: pnpm electron:install
-
-      - name: Package app directory
-        run: pnpm --filter @pix/desktop package:dir
-
-      - name: Run packaged ConPTY smoke
-        run: pnpm smoke:packaged

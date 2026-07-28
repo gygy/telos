@@ -86,8 +86,8 @@ export function SessionContentDemoApp() {
         <header className="space-y-2">
           <h1 className="text-lg font-semibold tracking-tight">视图模式 · 会话内容渲染</h1>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            与应用直接共用 SessionTimelineScroller 和相同的数据形态。快照与 smoke/e2e 的 fake 模型
-            rich content、pi 工具 payload 对齐；不维护第二套近似渲染。
+            与应用直接共用 SessionTimelineScroller 和相同的数据形态。快照与 e2e 的 fake 模型 rich
+            content、pi 工具 payload 对齐；不维护第二套近似渲染。
           </p>
           <p className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
             启动：

@@ -4,7 +4,7 @@
  *
  * Feed config lives in Resources/app-update.yml (written by electron-builder
  * PublishManager for installer targets, and always by scripts/after-pack.mjs
- * so `package:dir` smokes also work).
+ * so directory packs also work).
  */
 import type { AppUpdateStatus, AppUpdateState } from "@pix/contracts";
 import { app } from "electron";
@@ -116,7 +116,7 @@ export function createAutoUpdateController(options: {
     if (existsSync(configPath)) return null;
     return (
       `Missing app-update.yml (expected at ${configPath}). ` +
-      `This usually means the app was installed from a directory pack (package:dir) ` +
+      `This usually means the app was installed from a directory pack ` +
       `instead of a GitHub Release installer. Reinstall from the official release.`
     );
   }

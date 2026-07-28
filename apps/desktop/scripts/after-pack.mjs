@@ -4,8 +4,7 @@
  * 2) ensure app-update.yml is present for electron-updater
  *
  * PublishManager only writes app-update.yml when targets include dmg/zip/nsis/etc.
- * `electron-builder --dir` (package:dir) skips that path, so local packaged smokes
- * and ad-hoc installs would hit:
+ * `electron-builder --dir` skips that path, so directory packs would hit:
  *   ENOENT .../Resources/app-update.yml
  */
 import { chmodSync, existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
