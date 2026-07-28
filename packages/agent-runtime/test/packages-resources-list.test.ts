@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { createPixRuntime, packageKindFromSource } from "../src/index.ts";
+import {
+  createPixRuntime,
+  packageKindFromSource,
+  resolvePackageRemoveSource,
+} from "../src/index.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -251,5 +255,54 @@ describe("packages and resources listing", () => {
     } finally {
       await handle.dispose();
     }
+  });
+
+  it("resolves remove sources without using npm/git install paths as local keys", () => {
+    const npmSource = "npm:pi-atelier";
+    const npmInstalled = "/home/user/.pi/agent/npm/node_modules/pi-atelier";
+    const gitSource = "https://github.com/acme/pkg.git";
+    const gitInstalled = "/home/user/.pi/agent/git/github.com/acme/pkg";
+    const localSource = "../vendor/local-pkg";
+    const localInstalled = "/workspace/vendor/local-pkg";
+
+    expect(
+      resolvePackageRemoveSource(
+        [{ source: npmSource, scope: "user", installedPath: npmInstalled }],
+        npmSource,
+        "global",
+      ),
+    ).toBe(npmSource);
+
+    expect(
+      resolvePackageRemoveSource(
+        [{ source: gitSource, scope: "user", installedPath: gitInstalled }],
+        gitSource,
+        "global",
+      ),
+    ).toBe(gitSource);
+
+    expect(
+      resolvePackageRemoveSource(
+        [{ source: localSource, scope: "user", installedPath: localInstalled }],
+        localSource,
+        "global",
+      ),
+    ).toBe(localInstalled);
+
+    // Prefer the matching scope when the same package identity exists in both.
+    expect(
+      resolvePackageRemoveSource(
+        [
+          { source: npmSource, scope: "user", installedPath: npmInstalled },
+          {
+            source: npmSource,
+            scope: "project",
+            installedPath: "/project/.pi/npm/node_modules/pi-atelier",
+          },
+        ],
+        npmSource,
+        "project",
+      ),
+    ).toBe(npmSource);
   });
 });

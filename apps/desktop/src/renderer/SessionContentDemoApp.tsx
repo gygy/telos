@@ -2,10 +2,13 @@
  * View-mode session content demo — same components and wiring as product chat.
  *
  * TimelineItem[] → SessionTimelineScroller (the exact component used by main.tsx).
+ * QueuedMessages → ComposerQueueCard (same strip as product Composer).
  *
  * No decorative phase galleries; no force-open of completed process blocks.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { QueuedMessages } from "@pix/contracts";
+import { ComposerQueueCard, removeQueuedItem } from "./components/ComposerQueueCard.tsx";
 import { SessionTimelineScroller } from "./components/SessionTimelineContent.tsx";
 import { applyDocumentTheme } from "./lib/theme.ts";
 import {
@@ -16,6 +19,8 @@ import {
 import "./styles.css";
 
 applyDocumentTheme("dark");
+
+const EMPTY_QUEUE: QueuedMessages = { steering: [], followUp: [] };
 
 function useDemoDocumentScroll() {
   useEffect(() => {
@@ -42,6 +47,18 @@ function ScenarioTimeline(props: { scenario: DemoScenario; locale: "zh" | "en" }
   const running = Boolean(scenario.running);
   const waiting = Boolean(scenario.waiting);
   const events = scenario.events ?? [];
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>(
+    () => scenario.queuedMessages ?? EMPTY_QUEUE,
+  );
+  const [paused, setPaused] = useState(() => Boolean(scenario.queuePaused));
+
+  useEffect(() => {
+    setQueuedMessages(scenario.queuedMessages ?? EMPTY_QUEUE);
+    setPaused(Boolean(scenario.queuePaused));
+  }, [scenario.id, scenario.queuedMessages, scenario.queuePaused]);
+
+  const queueCount = queuedMessages.steering.length + queuedMessages.followUp.length;
+  const showQueueDock = Boolean(scenario.queuedMessages);
 
   return (
     <div
@@ -49,6 +66,8 @@ function ScenarioTimeline(props: { scenario: DemoScenario; locale: "zh" | "en" }
       data-testid={`timeline-${scenario.id}`}
       data-demo="session-content"
       data-demo-scenario={scenario.id}
+      data-has-queue={queueCount > 0 ? "true" : "false"}
+      data-queue-paused={paused ? "true" : "false"}
     >
       <SessionTimelineScroller
         autoScroll={scenario.items.length > 0}
@@ -66,6 +85,62 @@ function ScenarioTimeline(props: { scenario: DemoScenario; locale: "zh" | "en" }
         onForkAssistant={() => undefined}
         testId={`timeline-content-${scenario.id}`}
       />
+      {/*
+        Product docks Composer under the timeline; the queue strip sits above the
+        prompt. Demo mounts the same ComposerQueueCard without the full composer
+        chrome (no Electron host for model/git menus).
+      */}
+      {showQueueDock ? (
+        <div
+          className="composer-dock pointer-events-auto w-full shrink-0 border-t border-border/40 bg-[var(--canvas)] px-3 pt-2 pb-3"
+          data-testid={`composer-dock-${scenario.id}`}
+        >
+          <ComposerQueueCard
+            locale={locale}
+            queuedMessages={queuedMessages}
+            paused={paused && queueCount > 0}
+            onClearQueue={() => {
+              setQueuedMessages(EMPTY_QUEUE);
+              setPaused(false);
+            }}
+            onRemoveItem={(kind, index) => {
+              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
+            }}
+            onSendNow={(kind, index, message) => {
+              // Demo: 立即发送 → drop the row (product delivers via host).
+              void message;
+              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
+              setPaused(false);
+            }}
+            onEditItem={(kind, index, message) => {
+              // Demo: 编辑 → remove from queue; product also fills the composer.
+              console.info("[session-content-demo] edit queue item", message);
+              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
+            }}
+            onContinue={() => {
+              // Demo: drop the head row and leave the rest unpaused (visual only).
+              setQueuedMessages((current) => {
+                if (current.steering.length > 0) {
+                  return removeQueuedItem(current, "steering", 0);
+                }
+                if (current.followUp.length > 0) {
+                  return removeQueuedItem(current, "followUp", 0);
+                }
+                return current;
+              });
+              setPaused(false);
+            }}
+          />
+          {queueCount === 0 ? (
+            <p
+              className="px-1 pt-1 text-[11px] text-muted-foreground"
+              data-testid={`queue-cleared-${scenario.id}`}
+            >
+              队列已清空（demo 本地状态；产品会调用 agent.clearQueue）
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

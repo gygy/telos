@@ -189,6 +189,9 @@
   --group-label-weight: 500;
   --group-label-line-height: 1.35;
   --group-label-color: var(--text-subtle);
+  /* Appearance prefs (overridden by applyAppearancePrefs). */
+  --ui-font-size: 14px;
+  --code-font-size: 12px;
 }
 
 [data-theme="light"] {
@@ -306,7 +309,7 @@ body {
   /* Transparent so macOS window vibrancy can show through the frosted rail. */
   color: var(--foreground);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--ui-font-size, 14px);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
@@ -790,6 +793,7 @@ html[data-custom-window-controls="true"] .page-header {
   scrollbar-gutter: auto;
   scrollbar-width: none;
   scrollbar-color: transparent transparent;
+  font-size: var(--ui-font-size, 14px);
 }
 .pix-scroll::-webkit-scrollbar,
 .timeline-scroll::-webkit-scrollbar,
@@ -1039,22 +1043,125 @@ html[data-custom-window-controls="true"] .page-header {
   object-fit: cover;
 }
 
+/* Queue strip: Cursor/Codex-style per-row list (all items, kind + remove + more). */
 .composer-queue-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   margin-bottom: 8px;
   overflow: hidden;
-  border: 1px solid var(--composer-border);
-  border-radius: var(--radius-panel);
-  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-panel) 94%, #000 6%);
   box-shadow: var(--shadow-soft);
   color: var(--foreground);
   backdrop-filter: blur(18px) saturate(125%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
-.composer-queue-card > div:first-child > div + div {
-  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+.composer-queue-banner {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px 2px;
+}
+
+.composer-queue-banner-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.composer-queue-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 2px;
+}
+
+.composer-queue-toolbar-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+/* 继续 / 清空 — pin to the right edge of the toolbar */
+.composer-queue-toolbar-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.composer-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 4px;
+}
+
+.composer-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+.composer-queue-row + .composer-queue-row {
+  /* Soft separation without hard rules (matches reference screenshots). */
+  box-shadow: none;
+}
+
+.composer-queue-item-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+/* 立即发送 / 编辑 / 取消 — pin to the right edge of each row */
+.composer-queue-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.composer-queue-action {
+  margin: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.composer-queue-action:hover {
+  color: var(--foreground);
+  background: var(--hover-fill);
+}
+
+.composer-queue-action[data-testid="composer-queue-send-now"] {
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
 }
 
 /* / and @ suggestion panels: flat card, NO outer shadow; only inner bottom fade.
@@ -1229,6 +1336,7 @@ html[data-custom-window-controls="true"] .page-header {
 /* Assistant Markdown (react-markdown + remark-gfm) */
 .pix-md {
   @apply min-w-0;
+  font-size: var(--ui-font-size, 14px);
   font-weight: var(--font-weight-regular, 400);
 }
 .pix-md > :first-child {
@@ -1293,7 +1401,8 @@ html[data-custom-window-controls="true"] .page-header {
   @apply my-2 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--muted)] p-3;
 }
 .pix-md pre code {
-  @apply bg-transparent p-0 text-[12.5px] leading-relaxed;
+  @apply bg-transparent p-0 leading-relaxed;
+  font-size: var(--code-font-size, 12px);
 }
 .pix-md blockquote {
   @apply my-2 border-l-2 border-[var(--border)] pl-3 text-[var(--muted-foreground)];
@@ -1315,6 +1424,11 @@ html[data-custom-window-controls="true"] .page-header {
   @apply font-semibold;
 }
 
+/* User bubbles + edit field follow Appearance → UI font size. */
+[data-slot="bubble-content"] {
+  font-size: var(--ui-font-size, 14px);
+}
+
 .timeline-user-edit-input {
   display: block;
   width: 100%;
@@ -1327,7 +1441,7 @@ html[data-custom-window-controls="true"] .page-header {
   background: var(--user-bubble);
   color: var(--user-bubble-fg);
   padding: 14px 18px;
-  font-size: 13px;
+  font-size: var(--ui-font-size, 14px);
   line-height: 1.45;
   outline: none;
   box-sizing: border-box;
@@ -2127,7 +2241,7 @@ html[data-custom-window-controls="true"] .page-header {
   background: transparent;
   padding: 0;
   color: #d8dee9;
-  font-size: 12.25px;
+  font-size: var(--code-font-size, 12px);
   line-height: 1.62;
   tab-size: 2;
   white-space: inherit;
@@ -3535,10 +3649,12 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   pointer-events: none;
 }
 .settings-row-title {
-  @apply text-[13.5px] leading-snug font-normal text-[var(--foreground)];
+  @apply leading-snug font-normal text-[var(--foreground)];
+  font-size: calc(var(--ui-font-size, 14px) * 0.96);
 }
 .settings-row-desc {
-  @apply mt-1 text-[12px] leading-relaxed font-normal text-[var(--muted-foreground)];
+  @apply mt-1 leading-relaxed font-normal text-[var(--muted-foreground)];
+  font-size: calc(var(--ui-font-size, 14px) * 0.86);
 }
 .settings-row-control {
   @apply flex items-center;

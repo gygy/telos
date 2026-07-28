@@ -23,6 +23,13 @@ export function isTerminalRunState(state: ThreadRunState | undefined): boolean {
 /** How long the completed checkmark stays before returning to idle. */
 export const COMPLETED_MARKER_MS = 2_500;
 
+function defaultSessionKey(raw: string | undefined | null): string {
+  if (!raw) return "";
+  let p = raw.replace(/\\/g, "/").replace(/\/+$/, "").trim().toLowerCase();
+  if (p.startsWith("/private/")) p = p.slice("/private".length);
+  return p;
+}
+
 export function sessionMarkerFromThread(
   thread: { path?: string; id?: string; active?: boolean },
   markers: Record<string, SessionMarker>,
@@ -33,12 +40,24 @@ export function sessionMarkerFromThread(
     foregroundState?: ThreadRunState | undefined;
   },
 ): SessionMarker | undefined {
-  const keyOf =
-    options?.keyOf ?? ((raw) => (raw ?? "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
+  const keyOf = options?.keyOf ?? defaultSessionKey;
   const pathKey = keyOf(thread.path);
   const idKey = keyOf(thread.id);
-  const hit = (pathKey && markers[pathKey]) || (idKey && markers[idKey]) || undefined;
-  if (hit) return hit;
+  // Direct hit first; also try the alternate /private form for older map entries.
+  const candidates = [pathKey, idKey].filter(Boolean);
+  for (const key of candidates) {
+    const hit = markers[key];
+    if (hit) return hit;
+  }
+  for (const key of candidates) {
+    if (key.startsWith("/private/")) {
+      const alt = key.slice("/private".length);
+      if (markers[alt]) return markers[alt];
+    } else if (key.startsWith("/")) {
+      const alt = `/private${key}`;
+      if (markers[alt]) return markers[alt];
+    }
+  }
   const fg = options?.foregroundState;
   if (thread.active && fg && fg !== "idle") {
     return { state: fg };

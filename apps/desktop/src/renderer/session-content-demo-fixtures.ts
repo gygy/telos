@@ -10,7 +10,7 @@
  * Path: TimelineItem[] → buildTimelineBlocks → TimelineProcessBlock / TimelineRow /
  * TimelineLiveStatus (same as main.tsx chat timeline).
  */
-import { IPC_PROTOCOL_VERSION, type HostEvent } from "@pix/contracts";
+import { IPC_PROTOCOL_VERSION, type HostEvent, type QueuedMessages } from "@pix/contracts";
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from "./lib/composer-suggestions.ts";
 import type { TimelineItem } from "./lib/timeline.ts";
 
@@ -108,6 +108,13 @@ export type DemoScenario = {
   waiting?: boolean;
   /** Optional recent host events (e.g. compaction.started) for deriveLiveActivity. */
   events?: HostEvent[];
+  /**
+   * Mid-turn queue (steer / follow-up). Rendered with product ComposerQueueCard —
+   * never as timeline user rows until host delivery.
+   */
+  queuedMessages?: QueuedMessages;
+  /** Abort left the queue paused — show banner + Continue (same as product). */
+  queuePaused?: boolean;
 };
 
 /** User attachment coverage: every supported extension goes through the product timeline row. */
@@ -454,12 +461,99 @@ export function scenarioWaiting(): DemoScenario {
   };
 }
 
+/**
+ * Live turn with steer queue — product ComposerQueueCard (per-row list, all items).
+ * Queued text must not appear as timeline user rows (chat-view queue contract).
+ */
+export function scenarioLiveQueue(): DemoScenario {
+  return {
+    id: "live-queue",
+    title: "进行中 · 消息队列",
+    description:
+      "running=true + 队列。整队「清空」+ 每行：立即发送 / 编辑 / 取消；排队消息不进时间线 user 行。",
+    running: true,
+    queuedMessages: {
+      steering: ["4", "5", "6"],
+      followUp: [],
+    },
+    items: [
+      {
+        id: "u-queue",
+        kind: "user",
+        text: "Refactor the queue path and keep the timeline clean.",
+        timestamp: iso(70),
+        entryId: "e-u-queue",
+      },
+      {
+        id: "th-queue",
+        kind: "thinking",
+        text: "Stream a short plan while steer messages sit in the queue card only.",
+        timestamp: iso(71),
+      },
+      {
+        id: "tool-queue",
+        kind: "tool",
+        toolCallId: "c-queue-read",
+        toolName: "read",
+        status: "completed",
+        args: { path: `${DEMO_WORKSPACE}/src/renderer/main.tsx` },
+        output: "async function sendPrompt(...) { /* queue path */ }\n",
+        timestamp: iso(72),
+        endedAt: iso(73),
+      },
+      {
+        id: "asst-queue-stream",
+        kind: "assistant",
+        text: "I am adjusting the queue path so mid-turn messages stay off the timeline until delivery…",
+        timestamp: iso(74),
+        entryId: "e-asst-queue",
+      },
+    ],
+  };
+}
+
+/**
+ * Aborted mid-turn with remaining queue — paused banner + Continue (reference UI).
+ */
+export function scenarioPausedQueue(): DemoScenario {
+  return {
+    id: "paused-queue",
+    title: "中断 · 队列已暂停",
+    description:
+      "用户中断后队列暂停：横幅「由于你中断了当前响应，队列已暂停」+「继续」；剩余引导行仍可删除。",
+    running: false,
+    queuePaused: true,
+    queuedMessages: {
+      steering: ["5", "6"],
+      followUp: [],
+    },
+    items: [
+      {
+        id: "u-paused",
+        kind: "user",
+        text: "Keep refining the queue chrome until it matches the product strip.",
+        timestamp: iso(80),
+        entryId: "e-u-paused",
+      },
+      {
+        id: "asst-paused",
+        kind: "assistant",
+        text: "Working on the queue card layout — interrupted before finish.",
+        timestamp: iso(81),
+        entryId: "e-asst-paused",
+      },
+    ],
+  };
+}
+
 export function allDemoScenarios(): DemoScenario[] {
   return [
     scenarioCompletedTurn(),
     scenarioUserAttachments(),
     scenarioLiveExecuting(),
     scenarioLiveResponding(),
+    scenarioLiveQueue(),
+    scenarioPausedQueue(),
     scenarioCompacting(),
     scenarioCompactionDone(),
     scenarioWaiting(),

@@ -219,6 +219,23 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
       if (event.errorMessage) completed.errorMessage = event.errorMessage;
       return completed;
     }
+    case "auto_retry_start":
+      return {
+        type: "retry.started",
+        attempt: event.attempt,
+        maxAttempts: event.maxAttempts,
+        delayMs: event.delayMs,
+        errorMessage: event.errorMessage,
+      };
+    case "auto_retry_end": {
+      const ended: RuntimeEvent = {
+        type: "retry.ended",
+        success: event.success,
+        attempt: event.attempt,
+      };
+      if (event.finalError) ended.finalError = event.finalError;
+      return ended;
+    }
     case "message_start": {
       const content = userMessageText(event.message);
       return content === undefined ? undefined : { type: "user.message", content };
@@ -397,7 +414,26 @@ async function handleCommand(command: HostCommand): Promise<void> {
       }
       case "agent.abort": {
         if (!handle) throw new Error("Agent Host is not ready");
-        await handle.runtime.session.abort();
+        const session = handle.runtime.session;
+        // session.abort() only signals the agent loop + waits for idle. Ancillary
+        // work (bash / compaction / branch summary) can keep the process busy
+        // unless we tear it down explicitly (mirrors session.dispose()).
+        try {
+          session.abortCompaction();
+          session.abortBranchSummary();
+          session.abortBash();
+        } catch {
+          // best-effort — still signal the agent loop below
+        }
+        // waitForIdle can hang when tools ignore AbortSignal or agent_settled
+        // extension handlers stall. Bound the wait so the IPC reply always lands
+        // before main's hostCommandTimeout for agent.abort (avoids orphaning the
+        // UI as idle while the host is still mid-turn → "already processing").
+        const ABORT_IDLE_BUDGET_MS = 10_000;
+        await Promise.race([
+          session.abort().catch(() => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, ABORT_IDLE_BUDGET_MS)),
+        ]);
         post({
           protocolVersion: IPC_PROTOCOL_VERSION,
           type: "runtime.snapshot",

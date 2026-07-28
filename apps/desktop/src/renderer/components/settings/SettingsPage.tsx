@@ -91,6 +91,7 @@ import {
   resetTerminalPrefs,
   TERMINAL_FONT_SIZE_MAX,
   TERMINAL_FONT_SIZE_MIN,
+  TERMINAL_LINE_HEIGHT_OPTIONS,
   TERMINAL_SCROLLBACK_MAX,
   TERMINAL_SCROLLBACK_MIN,
   type TerminalColorScheme,
@@ -114,6 +115,15 @@ import {
   type AccessVisibility,
 } from "../../lib/settings-prefs.ts";
 import { applyDiscoverResults } from "../../lib/proxy-discover-ui.ts";
+import {
+  CODE_FONT_SIZE_MAX,
+  CODE_FONT_SIZE_MIN,
+  loadAppearancePrefs,
+  patchAppearancePrefs,
+  UI_FONT_SIZE_MAX,
+  UI_FONT_SIZE_MIN,
+  type AppearancePrefs,
+} from "../../lib/appearance-prefs.ts";
 import type { ThemePreference } from "../../lib/theme.ts";
 import { cn } from "../../lib/utils.ts";
 import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace.ts";
@@ -1939,6 +1949,22 @@ function TerminalSection(
               size="sm"
             />
           }
+        />
+        <SettingsRow
+          title={tr("terminal.lineHeight")}
+          description={tr("terminal.lineHeightHint")}
+          control={
+            <SettingsSelect
+              value={String(prefs.lineHeight)}
+              onChange={(v) => update({ lineHeight: Number(v) })}
+              options={TERMINAL_LINE_HEIGHT_OPTIONS.map((n) => ({
+                value: String(n),
+                label: `${n.toFixed(1)}×`,
+              }))}
+              testId="settings-terminal-line-height"
+              size="sm"
+            />
+          }
           last
         />
       </SettingsSectionBlock>
@@ -2444,6 +2470,23 @@ function AppearanceSection(
   props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
 ) {
   const { tr } = props;
+  const [prefs, setPrefs] = useState<AppearancePrefs>(loadAppearancePrefs);
+
+  function update(patch: Partial<AppearancePrefs>) {
+    setPrefs(patchAppearancePrefs(patch));
+  }
+
+  const uiFontOptions = Array.from({ length: UI_FONT_SIZE_MAX - UI_FONT_SIZE_MIN + 1 }, (_, i) => {
+    const n = UI_FONT_SIZE_MIN + i;
+    return { value: String(n), label: `${n}px` };
+  });
+  const codeFontOptions = Array.from(
+    { length: CODE_FONT_SIZE_MAX - CODE_FONT_SIZE_MIN + 1 },
+    (_, i) => {
+      const n = CODE_FONT_SIZE_MIN + i;
+      return { value: String(n), label: `${n}px` };
+    },
+  );
 
   return (
     <SettingsPageShell title={tr("section.appearance")} testId="settings-appearance">
@@ -2461,6 +2504,45 @@ function AppearanceSection(
                 { value: "dark", label: tr("appearance.themeDark") },
                 { value: "light", label: tr("appearance.themeLight") },
               ]}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <SettingsSectionBlock
+        label={tr("appearance.typography")}
+        testId="settings-appearance-typography"
+      >
+        <SettingsRow
+          title={tr("appearance.uiFontSize")}
+          description={tr("appearance.uiFontSizeHint", {
+            min: String(UI_FONT_SIZE_MIN),
+            max: String(UI_FONT_SIZE_MAX),
+          })}
+          control={
+            <SettingsSelect
+              value={String(prefs.uiFontSize)}
+              onChange={(v) => update({ uiFontSize: Number(v) })}
+              options={uiFontOptions}
+              testId="appearance-ui-font-size"
+              size="sm"
+            />
+          }
+        />
+        <SettingsRow
+          title={tr("appearance.codeFontSize")}
+          description={tr("appearance.codeFontSizeHint", {
+            min: String(CODE_FONT_SIZE_MIN),
+            max: String(CODE_FONT_SIZE_MAX),
+          })}
+          control={
+            <SettingsSelect
+              value={String(prefs.codeFontSize)}
+              onChange={(v) => update({ codeFontSize: Number(v) })}
+              options={codeFontOptions}
+              testId="appearance-code-font-size"
+              size="sm"
             />
           }
           last
@@ -4426,7 +4508,12 @@ function PiSettingsSection(
         />
       </SettingsSectionBlock>
 
-      <SettingsSectionBlock label={tr("piSettings.queueSection")}>
+      <SettingsSectionBlock
+        label={tr("piSettings.queueSection")}
+        labelHint={tr("piSettings.queueSectionHint")}
+        labelHintAria={tr("piSettings.queueSection")}
+        testId="pi-settings-queue"
+      >
         <SettingsRow
           title={tr("piSettings.steeringMode")}
           description={tr("piSettings.steeringModeHint")}

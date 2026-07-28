@@ -2048,9 +2048,43 @@ interface ActiveHost {
 type PendingWaiter = {
   resolve: (event: HostEvent) => void;
   reject: (error: Error) => void;
-  timeout: NodeJS.Timeout;
+  /** Undefined when the command has no wait budget (e.g. agent.prompt). */
+  timeout: NodeJS.Timeout | undefined;
   commandType: string;
 };
+
+function clearPendingTimeout(waiter: Pick<PendingWaiter, "timeout">): void {
+  if (waiter.timeout !== undefined) clearTimeout(waiter.timeout);
+}
+
+/**
+ * Wait budgets for host command RPC. `agent.prompt` is unbounded: a turn may stream
+ * and tool-call for far longer than any fixed IPC budget. Timing it out orphans the
+ * UI (running=false) while the host keeps processing, so later prompts fail with
+ * "Agent is already processing". Users abort explicitly via agent.abort.
+ *
+ * `agent.abort` is soft-bounded in the host (~10s idle wait after signalling). Give
+ * the IPC layer a small margin so a healthy abort always resolves; a hard-stuck
+ * host still times out and is recycled in Supervisor.abort().
+ */
+function hostCommandTimeoutMs(commandType: string): number | undefined {
+  switch (commandType) {
+    case "agent.prompt":
+      return undefined;
+    case "agent.abort":
+      return 20_000;
+    case "providers.oauth.start":
+      return 300_000;
+    case "providers.usage":
+      return 25_000;
+    case "packages.install":
+    case "packages.remove":
+    case "packages.update":
+      return 180_000;
+    default:
+      return 15_000;
+  }
+}
 
 /**
  * A live utility-process host that is not the UI foreground (still generating).
@@ -2326,7 +2360,7 @@ class HostSupervisor {
     parked.host.stopping = true;
     parked.host.ignoreMessages = true;
     for (const waiter of parked.pending.values()) {
-      clearTimeout(waiter.timeout);
+      clearPendingTimeout(waiter);
       waiter.reject(new Error(`Parked Agent Host was stopped (${reason})`));
     }
     parked.pending.clear();
@@ -2799,15 +2833,51 @@ class HostSupervisor {
 
   async abort(): Promise<HostSnapshot> {
     if (!this.#host) throw new Error("Agent Host is not running");
-    const event = await this.#request({
-      protocolVersion: IPC_PROTOCOL_VERSION,
-      type: "agent.abort",
-      requestId: randomUUID(),
+    try {
+      const event = await this.#request({
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "agent.abort",
+        requestId: randomUUID(),
+      });
+      if (event.type !== "runtime.snapshot")
+        throw new Error("Agent Host returned an unexpected abort response");
+      this.#acceptSnapshot(event.snapshot);
+      return event.snapshot;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "");
+      if (!/timed out/i.test(message)) throw error;
+      // Host is hard-stuck (event loop blocked or abort never idles). Kill without
+      // parking so the next prompt is not blocked by a ghost mid-turn, then reopen
+      // the same session file when we have one.
+      return this.#exclusive(async () => this.#recycleAfterAbortTimeout());
+    }
+  }
+
+  /** Hard-kill the foreground host and reopen the current session after abort IPC timeout. */
+  async #recycleAfterAbortTimeout(): Promise<HostSnapshot> {
+    const sessionFile = this.#sessionFile ?? this.#snapshot?.sessionFile;
+    const cwd = this.#workspaceCwd ?? this.#snapshot?.cwd;
+    const runtimeId = this.#snapshot?.runtimeId;
+    const host = this.#host;
+    if (host) {
+      if (runtimeId) this.#previousRuntimeId = runtimeId;
+      host.stopping = true;
+      host.ignoreMessages = true;
+      this.#rejectPending(new Error("Agent Host recycled after abort timeout"));
+      try {
+        host.child.kill();
+      } catch {
+        // already dead
+      }
+      await host.exit.promise.catch(() => undefined);
+      if (this.#host === host) this.#host = undefined;
+      this.#snapshot = undefined;
+    }
+    return this.#startExclusive({
+      ...(cwd ? { cwd } : {}),
+      ...(sessionFile ? { sessionFile } : {}),
+      force: true,
     });
-    if (event.type !== "runtime.snapshot")
-      throw new Error("Agent Host returned an unexpected abort response");
-    this.#acceptSnapshot(event.snapshot);
-    return event.snapshot;
   }
 
   async listSessions(): Promise<{ threads: SessionThreadSummary[]; activeSessionId?: string }> {
@@ -3896,7 +3966,7 @@ class HostSupervisor {
           : new Error(`Agent Host exited with code ${exitCode}`);
         host.hello.reject(error);
         for (const waiter of parked.pending.values()) {
-          clearTimeout(waiter.timeout);
+          clearPendingTimeout(waiter);
           waiter.reject(error);
         }
         parked.pending.clear();
@@ -3960,22 +4030,14 @@ class HostSupervisor {
     const pendingMap = this.#pending;
 
     return new Promise((resolve, reject) => {
-      const timeoutMs =
-        command.type === "agent.prompt"
-          ? 300_000
-          : command.type === "providers.oauth.start"
-            ? 300_000
-            : command.type === "providers.usage"
-              ? 25_000
-              : command.type === "packages.install" ||
-                  command.type === "packages.remove" ||
-                  command.type === "packages.update"
-                ? 180_000
-                : 15_000;
-      const timeout = setTimeout(() => {
-        pendingMap.delete(command.requestId);
-        reject(new Error(`Agent Host timed out handling ${command.type}`));
-      }, timeoutMs);
+      const timeoutMs = hostCommandTimeoutMs(command.type);
+      const timeout =
+        timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+              pendingMap.delete(command.requestId);
+              reject(new Error(`Agent Host timed out handling ${command.type}`));
+            }, timeoutMs);
       pendingMap.set(command.requestId, {
         resolve,
         reject,
@@ -3998,7 +4060,7 @@ class HostSupervisor {
     if (!pendingMap) return;
     const pending = pendingMap.get(message.requestId);
     if (!pending) return;
-    clearTimeout(pending.timeout);
+    clearPendingTimeout(pending);
     pendingMap.delete(message.requestId);
     if (message.type === "host.error") {
       const error = new Error(message.message) as NodeJS.ErrnoException;
@@ -4013,7 +4075,7 @@ class HostSupervisor {
 
   #rejectPending(error: Error): void {
     for (const pending of this.#pending.values()) {
-      clearTimeout(pending.timeout);
+      clearPendingTimeout(pending);
       pending.reject(error);
     }
     this.#pending.clear();
@@ -5123,19 +5185,25 @@ void app
     ipcMain.handle("pix:session:list", () => supervisor?.listSessions());
     ipcMain.handle("pix:session:list-for-cwd", async (_event, cwd: string) => {
       if (typeof cwd !== "string" || !cwd.trim()) return [];
-      // Import agent-runtime (pi stays external in the main bundle — see vite.main.config).
-      const { listProjectSessions } = await import("@pix/agent-runtime");
-      let activeSessionId: string | undefined;
+      // When this cwd is the live host workspace, prefer host listSessions — it merges
+      // the in-memory session that pi has not flushed to disk yet (no assistant msg).
+      // Disk-only list would drop brand-new conversations from the sidebar.
       try {
         const current = supervisor?.getWorkspaceCwd();
-        if (current && current.replace(/\\/g, "/") === cwd.replace(/\\/g, "/")) {
+        if (
+          current &&
+          current.replace(/\\/g, "/").replace(/\/+$/, "") ===
+            cwd.replace(/\\/g, "/").replace(/\/+$/, "")
+        ) {
           const listed = await supervisor?.listSessions();
-          activeSessionId = listed?.activeSessionId;
+          if (listed) return listed.threads;
         }
       } catch {
-        // host may be stopped
+        // host may be stopped — fall through to disk scan
       }
-      return listProjectSessions(cwd, activeSessionId ? { activeSessionId } : undefined);
+      // Import agent-runtime (pi stays external in the main bundle — see vite.main.config).
+      const { listProjectSessions } = await import("@pix/agent-runtime");
+      return listProjectSessions(cwd);
     });
     ipcMain.handle("pix:session:new", () => supervisor?.newSession());
     ipcMain.handle("pix:session:create-blank", () => supervisor?.createBlankConversation());

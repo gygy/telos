@@ -25,6 +25,10 @@ import { ArrowDown } from "lucide-react";
 import { AppSidebar } from "./components/AppSidebar.tsx";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import { Composer } from "./components/Composer.tsx";
+import {
+  flattenQueuedMessages,
+  removeQueuedItem as dropQueuedItem,
+} from "./components/ComposerQueueCard.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
@@ -57,7 +61,11 @@ import {
   parseSlashLine,
   resolveBuiltinSlash,
 } from "./lib/slash-parity.ts";
+import { applyAppearancePrefs } from "./lib/appearance-prefs.ts";
 import { applyDocumentTheme, colorModeFromPiTheme, piThemeLabel } from "./lib/theme.ts";
+
+// Apply stored typography before first paint (CSS vars on <html>).
+applyAppearancePrefs();
 import { cn } from "./lib/utils.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
@@ -107,6 +115,7 @@ import { deriveRunState, historyToTimeline, type TimelineItem } from "./lib/time
 import {
   classifyRuntimeEventDelivery,
   sessionKeyFromSnapshot,
+  sessionRunKey,
   useShellStore,
 } from "./store/shell-store.ts";
 import "./styles.css";
@@ -116,6 +125,18 @@ function reportAppError(error: unknown, fallback: string): string {
   const message = error instanceof Error && error.message.trim() ? error.message : fallback;
   useShellStore.getState().showAppError(message);
   return message;
+}
+
+/** Host still mid-turn while UI thought it was idle (stale running flag / prior IPC orphan). */
+function isAlreadyProcessingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /already processing/i.test(message);
+}
+
+/** Abort timed out and main recycled the host — in-flight prompt IPC is expected to die. */
+function isAbortRecycleError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /recycled after abort|timed out handling agent\.abort/i.test(message);
 }
 
 function maybeNotify(kind: "complete" | "error" | "crash", body?: string): void {
@@ -242,12 +263,33 @@ function App() {
   const [terminalSurfaceActive, setTerminalSurfaceActive] = useState(true);
   /** Session file the mounted terminal is waiting for (normed path). */
   const transitionSessionRef = useRef<string | null>(null);
+  /** Live / parked pi TUI sessions for sidebar glyphs (sessionRunKey → status). */
+  const [terminalSessions, setTerminalSessions] = useState<Record<string, "live" | "parked">>({});
 
   /** Match main-process session keys (macOS /private/var collapse). */
   function normSessionPath(path: string): string {
     let p = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
     if (p.startsWith("/private/")) p = p.slice("/private".length);
     return p;
+  }
+
+  /** Refresh sidebar terminal glyphs from main-process PTY status. */
+  async function refreshTerminalSessions() {
+    try {
+      const st = await window.pix.terminal.status();
+      const next: Record<string, "live" | "parked"> = {};
+      for (const file of st.parkedSessionFiles ?? []) {
+        const key = sessionRunKey(file);
+        if (key) next[key] = "parked";
+      }
+      if (st.sessionFile?.trim()) {
+        const key = sessionRunKey(st.sessionFile);
+        if (key) next[key] = st.suspended ? "parked" : st.open ? "live" : "parked";
+      }
+      setTerminalSessions(next);
+    } catch {
+      setTerminalSessions({});
+    }
   }
 
   /**
@@ -511,9 +553,17 @@ function App() {
       selectWorkspacePath(snapshot.cwd);
     }
   }, [snapshot?.cwd]);
-  const runState = deriveRunState({ hostStatus: status, running, lastFailure });
   /** Session identity — used to pin scroll + remount timeline rows on switch. */
   const sessionKey = snapshot?.sessionFile ?? snapshot?.sessionId ?? "";
+  const foregroundMarkerState = sessionKey
+    ? sessionMarkers[sessionRunKey(sessionKey)]?.state
+    : undefined;
+  // Prefer per-session marker for waiting / recovering so the composer + timeline
+  // keep the live phase after model errors (auto-retry) and extension UI prompts.
+  const runState =
+    foregroundMarkerState === "waiting" || foregroundMarkerState === "recovering"
+      ? foregroundMarkerState
+      : deriveRunState({ hostStatus: status, running, lastFailure });
   const timeline = useMemo(() => {
     // history = session JSONL at open; liveStream = append-only log for this session
     // (streamed text only grows). Do not re-project deltas from the events ring.
@@ -525,7 +575,7 @@ function App() {
     return items.map((item) => ({ ...item, id: `${sessionKey}:${item.id}` }));
   }, [history, liveStream, sessionKey, snapshot?.hideThinkingBlock]);
   const hasActivity = timeline.length > 0;
-  const waitingForInput = runState === "waiting";
+  const waitingForInput = runState === "waiting" || foregroundMarkerState === "waiting";
   const activeThread = threads.find((thread) => thread.active);
   const threadTitle =
     activeThread?.title ||
@@ -566,6 +616,64 @@ function App() {
       }
     } catch {
       // Host may be stopped.
+    }
+  }
+
+  /**
+   * Optimistically put the open session at the top of the sidebar with a title
+   * from the just-sent user text. Needed because pi defers flushing session JSONL
+   * until the first assistant message — without this, a brand-new conversation
+   * stays invisible (or keeps "(no messages)") for the whole first turn.
+   */
+  function touchActiveThreadInSidebar(userText: string) {
+    const store = useShellStore.getState();
+    const snap = store.snapshot;
+    const sessionId = snap?.sessionId?.trim();
+    const sessionPath = snap?.sessionFile?.trim();
+    if (!sessionId && !sessionPath) return;
+    const cwd = (snap?.cwd || "").trim();
+    const title = firstLine(userText) || t(store.locale, "thread.new");
+    const now = new Date().toISOString();
+    const newLabel = t(store.locale, "thread.new");
+    const patch = (list: SessionThreadSummary[]): SessionThreadSummary[] => {
+      const match = (row: SessionThreadSummary) =>
+        (sessionId && row.id === sessionId) ||
+        (sessionPath && row.path.replace(/\\/g, "/") === sessionPath.replace(/\\/g, "/"));
+      const existing = list.find(match);
+      const base = (existing?.titleBase ?? existing?.title ?? "").trim();
+      const looksDefault =
+        !base || base === "(no messages)" || /^Thread\s/i.test(base) || base === newLabel;
+      const nextTitle = existing && !looksDefault ? existing.title : title;
+      const nextBase = existing && !looksDefault ? (existing.titleBase ?? existing.title) : title;
+      const nextRow: SessionThreadSummary = existing
+        ? {
+            ...existing,
+            title: nextTitle,
+            titleBase: nextBase,
+            modifiedAt: now,
+            messageCount: Math.max(existing.messageCount, 1),
+            active: true,
+          }
+        : {
+            id: sessionId || sessionPath || `live-${now}`,
+            path: sessionPath || sessionId || "",
+            cwd,
+            title,
+            titleBase: title,
+            modifiedAt: now,
+            messageCount: 1,
+            active: true,
+          };
+      const rest = list.filter((row) => !match(row)).map((row) => ({ ...row, active: false }));
+      return [nextRow, ...rest].sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    };
+    setThreads(patch(store.threads));
+    if (cwd) {
+      const key = normalizeCwdKey(cwd);
+      setThreadsByCwd((prev) => ({
+        ...prev,
+        [key]: patch(prev[key] ?? prev[cwd] ?? []),
+      }));
     }
   }
 
@@ -731,6 +839,8 @@ function App() {
           if (event.type === "host.ready") void refreshPiStatus({ ensure: false });
         } else if (event.type === "host.restarted") {
           store.acceptSnapshot(event.snapshot);
+          // Clear busy markers bound to the previous runtime (e.g. abort-timeout recycle).
+          store.settleSessionByRuntime(event.previousRuntimeId, "aborted");
           store.setStatus("Agent Host restarted");
           void refreshPiStatus({ ensure: false });
         } else if (event.type === "host.crashed") {
@@ -791,17 +901,47 @@ function App() {
             if (event.event.type === "agent.settled") {
               // Background / parked host — always mark unread if not the open thread.
               maybeMarkUnreadForRuntime(event.runtimeId);
-              store.settleSessionByRuntime(event.runtimeId, "completed");
-              maybeNotify("complete");
+              const failure = store.takePendingFailure(event.runtimeId);
+              if (failure) {
+                store.settleSessionByRuntime(event.runtimeId, "failed", failure);
+                maybeNotify("error", failure);
+              } else {
+                store.settleSessionByRuntime(event.runtimeId, "completed");
+                maybeNotify("complete");
+              }
             } else if (event.event.type === "message.failed") {
+              store.setPendingFailure(event.runtimeId, event.event.message);
               const aborted = event.event.reason === "aborted";
-              maybeMarkUnreadForRuntime(event.runtimeId);
-              store.settleSessionByRuntime(
-                event.runtimeId,
-                aborted ? "aborted" : "failed",
-                event.event.message,
-              );
-              maybeNotify("error", event.event.message);
+              if (aborted) {
+                store.takePendingFailure(event.runtimeId);
+                maybeMarkUnreadForRuntime(event.runtimeId);
+                store.settleSessionByRuntime(event.runtimeId, "aborted", event.event.message);
+                maybeNotify("error", event.event.message);
+              }
+              // Non-abort errors stay busy so auto-retry can re-enter recovering.
+            } else if (event.event.type === "retry.started") {
+              const key = store.sessionKeyForRuntime(event.runtimeId);
+              if (key) {
+                store.setSessionMarker(key, "recovering", {
+                  runtimeId: event.runtimeId,
+                  reason: event.event.errorMessage,
+                });
+              }
+            } else if (event.event.type === "retry.ended") {
+              if (!event.event.success) {
+                const msg = event.event.finalError ?? "Retry failed";
+                store.setPendingFailure(event.runtimeId, msg);
+                maybeMarkUnreadForRuntime(event.runtimeId);
+                store.settleSessionByRuntime(event.runtimeId, "failed", msg);
+                store.takePendingFailure(event.runtimeId);
+                maybeNotify("error", msg);
+              } else {
+                store.takePendingFailure(event.runtimeId);
+                const key = store.sessionKeyForRuntime(event.runtimeId);
+                if (key) {
+                  store.setSessionMarker(key, "running", { runtimeId: event.runtimeId });
+                }
+              }
             }
             // Ignore background agent.started — re-binding can re-light finished rows.
             return;
@@ -830,18 +970,93 @@ function App() {
             });
           } else if (event.event.type === "message.failed") {
             store.setLastFailure(event.event.message);
+            store.setPendingFailure(event.runtimeId, event.event.message);
             const aborted = event.event.reason === "aborted";
-            maybeMarkUnreadForRuntime(event.runtimeId);
-            store.settleSessionByRuntime(
-              event.runtimeId,
-              aborted ? "aborted" : "failed",
-              event.event.message,
-            );
-            maybeNotify("error", event.event.message);
+            if (aborted) {
+              store.takePendingFailure(event.runtimeId);
+              maybeMarkUnreadForRuntime(event.runtimeId);
+              store.settleSessionByRuntime(event.runtimeId, "aborted", event.event.message);
+              maybeNotify("error", event.event.message);
+            }
+            // Non-abort model errors keep the turn busy. Auto-retry emits retry.started
+            // (recovering); final failure is settled by retry.ended / agent.settled.
+          } else if (event.event.type === "retry.started") {
+            const key =
+              store.sessionKeyForRuntime(event.runtimeId) || sessionKeyFromSnapshot(store.snapshot);
+            if (key) {
+              store.setSessionMarker(key, "recovering", {
+                runtimeId: event.runtimeId,
+                reason: event.event.errorMessage,
+              });
+            }
+            store.setStatus(`Retrying ${event.event.attempt}/${event.event.maxAttempts}…`);
+          } else if (event.event.type === "retry.ended") {
+            if (!event.event.success) {
+              const msg = event.event.finalError ?? "Retry failed";
+              store.setLastFailure(msg);
+              store.setPendingFailure(event.runtimeId, msg);
+              maybeMarkUnreadForRuntime(event.runtimeId);
+              store.settleSessionByRuntime(event.runtimeId, "failed", msg);
+              store.takePendingFailure(event.runtimeId);
+              maybeNotify("error", msg);
+            } else {
+              store.takePendingFailure(event.runtimeId);
+              store.setLastFailure(undefined);
+              const key =
+                store.sessionKeyForRuntime(event.runtimeId) ||
+                sessionKeyFromSnapshot(store.snapshot);
+              if (key) {
+                store.setSessionMarker(key, "running", { runtimeId: event.runtimeId });
+              }
+            }
           } else if (event.event.type === "agent.settled") {
             maybeMarkUnreadForRuntime(event.runtimeId);
-            store.settleSessionByRuntime(event.runtimeId, "completed");
-            maybeNotify("complete");
+            const failure = store.takePendingFailure(event.runtimeId);
+            if (failure) {
+              // Model error without a successful recovery (or after retries exhausted).
+              store.setLastFailure(failure);
+              store.settleSessionByRuntime(event.runtimeId, "failed", failure);
+              maybeNotify("error", failure);
+            } else {
+              store.setLastFailure(undefined);
+              store.settleSessionByRuntime(event.runtimeId, "completed");
+              maybeNotify("complete");
+            }
+            // Disk is flushed after assistant message — sync rail title/recency.
+            void window.pix.session
+              .list()
+              .then((listed) => {
+                if (!listed?.threads) return;
+                useShellStore.getState().setThreads(listed.threads);
+                const cwd = useShellStore.getState().snapshot?.cwd;
+                if (cwd && listed.threads.length > 0) {
+                  setThreadsByCwd((prev) => ({
+                    ...prev,
+                    [cwd.replace(/\\/g, "/").replace(/\/+$/, "")]: listed.threads,
+                  }));
+                }
+              })
+              .catch(() => undefined);
+          } else if (event.event.type === "user.message") {
+            // Live session now has the user text in memory — refresh rail title/order.
+            void window.pix.session
+              .list()
+              .then((listed) => {
+                if (!listed?.threads) return;
+                useShellStore.getState().setThreads(listed.threads);
+                const cwd = useShellStore.getState().snapshot?.cwd;
+                if (cwd && listed.threads.length > 0) {
+                  setThreadsByCwd((prev) => ({
+                    ...prev,
+                    [cwd.replace(/\\/g, "/").replace(/\/+$/, "")]: listed.threads,
+                  }));
+                }
+              })
+              .catch(() => undefined);
+          } else if (event.event.type === "message.completed") {
+            // A successful assistant step clears sticky failure from a prior retry.
+            store.takePendingFailure(event.runtimeId);
+            store.setLastFailure(undefined);
           }
           // Do NOT set running from agent.started / compaction.started — those can fire
           // around host/session lifecycle without a user prompt and stuck the sidebar spinner.
@@ -1398,6 +1613,41 @@ function App() {
       return sessionKeyFromSnapshot(useShellStore.getState().snapshot) === sessionAtStart;
     };
 
+    // ── Queue path (agent already mid-turn) ──────────────────────────────────
+    // Steer / follow-up must NOT paint as delivered user rows or pollute
+    // sentPrompts. Otherwise the live assistant bubble splits around a ghost
+    // user message, and later host delivery duplicates the row.
+    if (queueBehavior) {
+      setPrompt("");
+      setAttachments([]);
+      const prevQueue = useShellStore.getState().queuedMessages;
+      // Optimistic queue card; host snapshot is authoritative on success.
+      useShellStore.getState().setQueuedMessages({
+        steering: queueBehavior === "steer" ? [...prevQueue.steering, message] : prevQueue.steering,
+        followUp:
+          queueBehavior === "followUp" ? [...prevQueue.followUp, message] : prevQueue.followUp,
+      });
+      setStatus(queueBehavior === "followUp" ? "Follow-up queued" : "Guidance queued");
+      try {
+        if (!useShellStore.getState().snapshot) await ensureHost();
+        if (!stillSameSession()) {
+          // Switched away — drop optimistic queue chrome for this view.
+          useShellStore.getState().setQueuedMessages(prevQueue);
+          return;
+        }
+        const next = await window.pix.agent.prompt(message, queueBehavior, imagePaths);
+        if (stillSameSession()) acceptSnapshot(next);
+      } catch (error) {
+        if (!stillSameSession()) return;
+        useShellStore.getState().setQueuedMessages(prevQueue);
+        setPrompt(draft);
+        setAttachments((current) => [...new Set([...attachedPaths, ...current])].slice(0, 12));
+        reportAppError(error, "排队失败");
+      }
+      return;
+    }
+
+    // ── Normal send path ─────────────────────────────────────────────────────
     setPrompt("");
     setAttachments([]);
     setSentPrompts((current) => [...current, displayMessage]);
@@ -1409,26 +1659,11 @@ function App() {
         { type: "user.message", content: message },
         useShellStore.getState().sentPrompts,
       );
-
-    if (queueBehavior) {
-      // Already streaming — keep stop button; just queue follow-up / steer.
-      setStatus(queueBehavior === "followUp" ? "Follow-up queued" : "Guidance queued");
-      try {
-        if (!useShellStore.getState().snapshot) await ensureHost();
-        const next = await window.pix.agent.prompt(message, queueBehavior, imagePaths);
-        if (stillSameSession()) acceptSnapshot(next);
-      } catch (error) {
-        if (!stillSameSession()) return;
-        setPrompt(draft);
-        setAttachments((current) => [...new Set([...attachedPaths, ...current])].slice(0, 12));
-        setSentPrompts((current) => {
-          const index = current.lastIndexOf(displayMessage);
-          return index < 0 ? current : [...current.slice(0, index), ...current.slice(index + 1)];
-        });
-        reportAppError(error, "排队失败");
-      }
-      return;
-    }
+    // Surface / retitle the conversation in the sidebar immediately (do not wait for
+    // agent settle — pi has not flushed the session file yet on first turn).
+    // Avoid an immediate list() here: host may still show "(no messages)" and clobber
+    // this title before the user message is in the live SessionManager.
+    touchActiveThreadInSidebar(displayMessage);
 
     // Flip send → stop immediately (before ensureHost / stream wait).
     if (sessionAtStart) setSessionRunning(sessionAtStart, true, runtimeAtStart);
@@ -1436,6 +1671,8 @@ function App() {
     setLastFailure(undefined);
     setStatus("Agent running...");
     let promptDispatched = false;
+    /** Host was still mid-turn; we queued as steer and must keep the busy marker. */
+    let keepRunningAfterQueue = false;
     try {
       if (!useShellStore.getState().snapshot) await ensureHost();
       // User may have switched sessions during ensureHost — do not bind the new
@@ -1448,15 +1685,57 @@ function App() {
       const rid = useShellStore.getState().runtimeId ?? runtimeAtStart;
       if (sessionAtStart && rid) setSessionRunning(sessionAtStart, true, rid);
       promptDispatched = true;
-      const next = await window.pix.agent.prompt(message, undefined, imagePaths);
-      if (!stillSameSession()) return;
-      acceptSnapshot(next);
-      setStatus("Agent settled");
-      await refreshThreads();
+      try {
+        const next = await window.pix.agent.prompt(message, undefined, imagePaths);
+        if (!stillSameSession()) return;
+        acceptSnapshot(next);
+        setStatus("Agent settled");
+        await refreshThreads();
+      } catch (error) {
+        // UI thought the agent was idle but the host is still mid-turn (e.g. an
+        // older build timed out the IPC while the utility process kept going).
+        // Queue as steer so the message is not dropped and the stop control stays up.
+        if (!stillSameSession()) return;
+        if (isAbortRecycleError(error)) {
+          // Host was hard-recycled because abort hung — turn is gone; leave UI idle.
+          setStatus("Agent aborted");
+          return;
+        }
+        if (!isAlreadyProcessingError(error)) throw error;
+        // Retract the optimistic delivered row — this is a queue, not a send.
+        useShellStore.getState().retractOptimisticUserMessage(displayMessage);
+        setSentPrompts((current) => {
+          const index = current.lastIndexOf(displayMessage);
+          return index < 0 ? current : [...current.slice(0, index), ...current.slice(index + 1)];
+        });
+        const prevQueue = useShellStore.getState().queuedMessages;
+        useShellStore.getState().setQueuedMessages({
+          steering: [...prevQueue.steering, message],
+          followUp: prevQueue.followUp,
+        });
+        try {
+          const next = await window.pix.agent.prompt(message, "steer", imagePaths);
+          if (!stillSameSession()) return;
+          acceptSnapshot(next);
+          setStatus("Guidance queued");
+          keepRunningAfterQueue = true;
+        } catch (steerError) {
+          if (stillSameSession()) {
+            useShellStore.getState().setQueuedMessages(prevQueue);
+          }
+          throw steerError;
+        }
+      }
     } catch (error) {
       // Switched away — do not restore draft into the new session.
       if (!stillSameSession()) return;
+      // Abort recycle tears down the in-flight prompt RPC on purpose — not a send failure.
+      if (isAbortRecycleError(error)) {
+        setStatus("Agent aborted");
+        return;
+      }
       // Host/workspace/IPC failures → modal + restore draft for retry.
+      useShellStore.getState().retractOptimisticUserMessage(displayMessage);
       setPrompt(draft);
       setAttachments((current) => [...new Set([...attachedPaths, ...current])].slice(0, 12));
       setSentPrompts((current) => {
@@ -1466,7 +1745,10 @@ function App() {
       });
       reportAppError(error, "发送失败");
     } finally {
-      if (!sessionAtStart) {
+      if (keepRunningAfterQueue && stillSameSession()) {
+        if (sessionAtStart) setSessionRunning(sessionAtStart, true, runtimeAtStart);
+        else setRunning(true);
+      } else if (!sessionAtStart) {
         if (stillSameSession()) setRunning(false);
       } else if (stillSameSession()) {
         // Still viewing this session: clear busy (settled events may already have
@@ -1487,11 +1769,184 @@ function App() {
     try {
       const next = await window.pix.agent.clearQueue();
       acceptSnapshot(next);
-      setSentPrompts((current) => current.slice(0, Math.max(0, current.length - queuedCount)));
+      // Queued messages never enter sentPrompts / liveStream until host delivery.
       setStatus("Queued messages cleared");
     } catch (error) {
       reportAppError(error, "清空队列失败");
     }
+  }
+
+  /**
+   * Rebuild host queue as `next`.
+   * Host only exposes clear-all, so we clear then re-queue when mid-turn;
+   * when idle, host is empty and remainder is kept in the UI store only.
+   */
+  async function replaceHostQueue(next: { steering: string[]; followUp: string[] }): Promise<void> {
+    const remaining = flattenQueuedMessages(next);
+    const cleared = await window.pix.agent.clearQueue();
+    acceptSnapshot(cleared);
+    if (useShellStore.getState().running && remaining.length > 0) {
+      let snap = cleared;
+      for (const item of remaining) {
+        snap = await window.pix.agent.prompt(
+          item.message,
+          item.kind === "steering" ? "steer" : "followUp",
+        );
+      }
+      acceptSnapshot(snap);
+    } else {
+      // Idle (or empty remainder): keep UI remainder for paused Continue / edit.
+      useShellStore.getState().setQueuedMessages(next);
+    }
+  }
+
+  /** Re-queue items onto a live host (must already be mid-turn / streaming). */
+  async function enqueueOnHost(
+    items: Array<{ message: string; kind: "steering" | "followUp" }>,
+  ): Promise<void> {
+    if (items.length === 0) return;
+    let snap = useShellStore.getState().snapshot;
+    for (const item of items) {
+      snap = await window.pix.agent.prompt(
+        item.message,
+        item.kind === "steering" ? "steer" : "followUp",
+      );
+    }
+    if (snap) acceptSnapshot(snap);
+  }
+
+  async function removeQueuedItem(kind: "steering" | "followUp", index: number) {
+    const current = useShellStore.getState().queuedMessages;
+    const next = dropQueuedItem(current, kind, index);
+    // Optimistic UI so the row disappears immediately.
+    useShellStore.getState().setQueuedMessages(next);
+    try {
+      await replaceHostQueue(next);
+      setStatus(
+        next.steering.length + next.followUp.length === 0
+          ? "Queued messages cleared"
+          : "Queue item removed",
+      );
+    } catch (error) {
+      useShellStore.getState().setQueuedMessages(current);
+      reportAppError(error, "移除排队消息失败");
+    }
+  }
+
+  /**
+   * 立即发送：把该条从队列拿掉并立刻投递。
+   * - 进行中 → clear 后优先 steer 这条，再把剩余按原顺序排回
+   * - 空闲/暂停 → clear 后作为新回合 prompt；剩余稍后重新入队
+   * 任一步失败都恢复原队列，避免「闪一下就丢了」。
+   */
+  async function sendQueuedItemNow(kind: "steering" | "followUp", index: number, message: string) {
+    const text = message.trim();
+    if (!text) return;
+
+    const current = useShellStore.getState().queuedMessages;
+    // Prefer identity by kind+index; fall back to message match if list shifted.
+    let rest = dropQueuedItem(current, kind, index);
+    const atIndex = kind === "steering" ? current.steering[index] : current.followUp[index];
+    if (atIndex !== undefined && atIndex !== message) {
+      // Index drifted — drop first exact text match in that lane.
+      const lane = kind === "steering" ? current.steering : current.followUp;
+      const found = lane.indexOf(message);
+      if (found >= 0) rest = dropQueuedItem(current, kind, found);
+    }
+    const remaining = flattenQueuedMessages(rest);
+    const wasBusy = useShellStore.getState().running;
+
+    // Optimistic: row leaves the card immediately.
+    useShellStore.getState().setQueuedMessages(rest);
+
+    try {
+      const cleared = await window.pix.agent.clearQueue();
+      // acceptSnapshot applies host empty queue — re-apply remainder so the card
+      // does not stay blank while we deliver (queue.updated can also race empty).
+      acceptSnapshot(cleared);
+      useShellStore.getState().setQueuedMessages(rest);
+
+      if (wasBusy || useShellStore.getState().running) {
+        // Live turn: inject this message first, then re-arm the tail.
+        // Use steer so a mid-turn host does not throw "already processing".
+        let snap = await window.pix.agent.prompt(text, "steer");
+        acceptSnapshot(snap);
+        // Keep showing remainder until host confirms the rebuilt queue.
+        useShellStore.getState().setQueuedMessages(rest);
+        if (remaining.length > 0) {
+          for (const item of remaining) {
+            snap = await window.pix.agent.prompt(
+              item.message,
+              item.kind === "steering" ? "steer" : "followUp",
+            );
+          }
+          acceptSnapshot(snap);
+        }
+        setStatus("已立即发送");
+        return;
+      }
+
+      // Idle / paused after abort: start a real turn with this text.
+      const turn = sendPrompt(undefined, undefined, { text });
+      // While the turn is starting, put remaining items back on the host queue.
+      if (remaining.length > 0) {
+        for (let i = 0; i < 80 && !useShellStore.getState().running; i++) {
+          await new Promise((r) => window.setTimeout(r, 25));
+        }
+        if (useShellStore.getState().running) {
+          await enqueueOnHost(remaining);
+        } else {
+          // Turn never flipped busy (failed/switched) — keep remainder visible.
+          useShellStore.getState().setQueuedMessages(rest);
+        }
+      }
+      await turn;
+      setStatus("已立即发送");
+    } catch (error) {
+      // Restore full queue so the user does not lose the row after a failed send.
+      useShellStore.getState().setQueuedMessages(current);
+      try {
+        if (useShellStore.getState().running) {
+          await window.pix.agent.clearQueue();
+          await enqueueOnHost(flattenQueuedMessages(current));
+        }
+      } catch {
+        // ignore restore errors — UI already has `current`
+      }
+      reportAppError(error, "立即发送失败");
+    }
+  }
+
+  /** 编辑：pull text into composer and drop the queue row. */
+  async function editQueuedItem(kind: "steering" | "followUp", index: number, message: string) {
+    const current = useShellStore.getState().queuedMessages;
+    const rest = dropQueuedItem(current, kind, index);
+    useShellStore.getState().setQueuedMessages(rest);
+    try {
+      await replaceHostQueue(rest);
+      // Display text only (strip attached-paths markup if present).
+      const display = message.split("\n\n<attached-paths>", 1)[0]?.trim() || message.trim();
+      setPrompt(display);
+      setStatus("已移到输入框");
+      requestAnimationFrame(() => composerRef.current?.focus());
+    } catch (error) {
+      useShellStore.getState().setQueuedMessages(current);
+      reportAppError(error, "编辑排队消息失败");
+    }
+  }
+
+  /** Resume a paused queue after abort — deliver the first item as a normal turn. */
+  async function continueQueuedMessages() {
+    const current = useShellStore.getState().queuedMessages;
+    const first =
+      current.steering[0] !== undefined
+        ? { kind: "steering" as const, message: current.steering[0], index: 0 }
+        : current.followUp[0] !== undefined
+          ? { kind: "followUp" as const, message: current.followUp[0], index: 0 }
+          : undefined;
+    if (!first) return;
+    // Reuse send-now: head item is delivered, remainder stays queued.
+    await sendQueuedItemNow(first.kind, first.index, first.message);
   }
 
   async function pickComposerAttachments(mode: "files" | "folders" = "files") {
@@ -1508,14 +1963,34 @@ function App() {
   async function abort() {
     const snap = useShellStore.getState().snapshot;
     const key = sessionKeyFromSnapshot(snap);
+    const runtimeId = snap?.runtimeId;
     try {
       acceptSnapshot(await window.pix.agent.abort());
       setStatus("Agent aborted");
-    } catch (error) {
-      reportAppError(error, "Abort failed");
-    } finally {
+      // Prefer terminal settle events when present; still clear busy so Stop flips
+      // back to Send immediately after a successful abort RPC.
       if (key) {
-        setSessionMarker(key, "aborted", snap?.runtimeId ? { runtimeId: snap.runtimeId } : {});
+        setSessionMarker(key, "aborted", runtimeId ? { runtimeId } : {});
+      } else {
+        setRunning(false);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "");
+      // Abort IPC timed out (or host recycled mid-abort). Do NOT mark idle — a ghost
+      // mid-turn would make the next send trip "already processing" without steer.
+      // Keep the stop control up until agent.settled / host.restarted clears it.
+      if (/timed out|recycled after abort/i.test(message)) {
+        setStatus("Abort requested — waiting for agent to stop…");
+        if (key) {
+          setSessionMarker(key, "running", runtimeId ? { runtimeId } : {});
+        } else {
+          setRunning(true);
+        }
+        return;
+      }
+      reportAppError(error, "Abort failed");
+      if (key) {
+        setSessionMarker(key, "aborted", runtimeId ? { runtimeId } : {});
       } else {
         setRunning(false);
       }
@@ -2308,6 +2783,8 @@ function App() {
       if (useShellStore.getState().contentMode !== "terminal") {
         window.requestAnimationFrame(() => endSurfaceTransition());
       }
+      // Keep sidebar terminal glyphs accurate after park/promote hops.
+      void refreshTerminalSessions();
     } catch (error) {
       reportAppError(error, "无法打开会话");
       holdBlankRef.current = false;
@@ -2315,6 +2792,7 @@ function App() {
       setTimelineReady(true);
       void refreshThreads();
       endSurfaceTransition();
+      void refreshTerminalSessions();
     } finally {
       switchingSessionRef.current = false;
     }
@@ -2372,6 +2850,15 @@ function App() {
       if (sessionFile) {
         const opened = await window.pix.session.switch(sessionFile);
         applySessionOpen(opened);
+        // Keep ProjectList's per-cwd cache in sync — otherwise active flags and
+        // titles lag behind store.threads and sidebar markers look incomplete.
+        const cwd = opened.snapshot.cwd?.trim();
+        if (cwd && opened.threads.length > 0) {
+          setThreadsByCwd((prev) => ({
+            ...prev,
+            [normalizeCwdKey(cwd)]: opened.threads,
+          }));
+        }
         contentReloaded = true;
       }
     } catch (error) {
@@ -2386,6 +2873,7 @@ function App() {
       if (contentReloaded) requestContentReveal();
       else finishBlankHold();
       endSurfaceTransition();
+      void refreshTerminalSessions();
     }
   }
 
@@ -2586,6 +3074,7 @@ function App() {
         runState={runState}
         running={running}
         sessionMarkers={sessionMarkers}
+        terminalSessions={terminalSessions}
         collapsed={sidebarCollapsed}
         widthPx={sidebarWidthPx}
         translucent={sidebarTranslucent}
@@ -2705,15 +3194,22 @@ function App() {
                       cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
                       colorMode={colorMode}
                       className="min-h-0 flex-1 p-2"
-                      onReady={(info) => endSurfaceTransition(info.sessionFile)}
+                      onReady={(info) => {
+                        endSurfaceTransition(info.sessionFile);
+                        void refreshTerminalSessions();
+                      }}
                       onOpenError={(error) => {
                         reportAppError(error, t(locale, "contentMode.openFailed"));
                         // Keep per-session terminal preference so the user can retry.
                         setContentMode("chat", { persist: false });
                         setTerminalSurfaceActive(false);
                         endSurfaceTransition();
+                        void refreshTerminalSessions();
                       }}
-                      onProcessExit={() => void leaveTerminalMode()}
+                      onProcessExit={() => {
+                        void refreshTerminalSessions();
+                        void leaveTerminalMode();
+                      }}
                     />
                   ) : null}
                 </div>
@@ -2878,6 +3374,19 @@ function App() {
                             )}
                             queuedMessages={queuedMessages}
                             onClearQueue={() => void clearQueuedMessages()}
+                            queuePaused={
+                              !running &&
+                              foregroundMarkerState === "aborted" &&
+                              queuedMessages.steering.length + queuedMessages.followUp.length > 0
+                            }
+                            onContinueQueue={() => void continueQueuedMessages()}
+                            onRemoveQueuedItem={(kind, index) => void removeQueuedItem(kind, index)}
+                            onSendQueuedNow={(kind, index, message) =>
+                              void sendQueuedItemNow(kind, index, message)
+                            }
+                            onEditQueuedItem={(kind, index, message) =>
+                              void editQueuedItem(kind, index, message)
+                            }
                           />
                         </div>
                       </>

@@ -5,6 +5,8 @@ import {
 } from "./lib/composer-suggestions.ts";
 import {
   DEMO_USER_ATTACHMENT_PATHS,
+  scenarioLiveQueue,
+  scenarioPausedQueue,
   scenarioUserAttachments,
 } from "./session-content-demo-fixtures.ts";
 
@@ -28,5 +30,30 @@ describe("session content demo attachment coverage", () => {
     expect(userItem?.kind).toBe("user");
     if (userItem?.kind !== "user") throw new Error("User attachment fixture is missing");
     expect(userItem.attachments).toEqual(DEMO_USER_ATTACHMENT_PATHS);
+  });
+});
+
+describe("session content demo queue coverage", () => {
+  it("exposes steer rows without painting them as timeline user rows", () => {
+    const scenario = scenarioLiveQueue();
+    expect(scenario.running).toBe(true);
+    expect(scenario.queuePaused).toBeFalsy();
+    expect(scenario.queuedMessages?.steering).toEqual(["4", "5", "6"]);
+
+    const queueTexts = [...(scenario.queuedMessages?.steering ?? [])];
+    const userTexts = scenario.items
+      .filter((item) => item.kind === "user")
+      .map((item) => (item.kind === "user" ? item.text : ""));
+
+    for (const text of queueTexts) {
+      expect(userTexts.some((user) => user === text || user.includes(text))).toBe(false);
+    }
+  });
+
+  it("includes a paused queue fixture matching the interrupted-response strip", () => {
+    const scenario = scenarioPausedQueue();
+    expect(scenario.queuePaused).toBe(true);
+    expect(scenario.running).toBe(false);
+    expect(scenario.queuedMessages?.steering).toEqual(["5", "6"]);
   });
 });

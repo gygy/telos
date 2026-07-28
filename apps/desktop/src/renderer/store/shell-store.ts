@@ -24,6 +24,7 @@ import {
   applyRuntimeEventToLiveStream,
   emptyLiveStream,
   resetLiveStream,
+  retractOptimisticUserMessage,
   type LiveStreamState,
 } from "../lib/live-stream.ts";
 import {
@@ -134,6 +135,11 @@ export interface ShellState {
   locale: Locale;
   settingsSection: SettingsSection;
   lastFailure: string | undefined;
+  /**
+   * Model errors that have not yet finalized (auto-retry may still recover).
+   * Keyed by runtimeId so background hosts do not clobber the foreground failure text.
+   */
+  pendingFailureByRuntime: Record<string, string>;
   /** App-level error modal (not agent timeline errors). */
   appError: string | undefined;
   view: ShellView;
@@ -172,6 +178,11 @@ export interface ShellState {
     prompts: string[],
     options?: { sequence?: number },
   ) => void;
+  /**
+   * Drop an optimistic user row (e.g. send reclassified as steer queue).
+   * Does not touch host authority — only the local live stream projection.
+   */
+  retractOptimisticUserMessage: (displayText: string) => void;
   /** Drop all stream state (session switch). */
   clearLiveStream: () => void;
   setHistory: (history: SessionHistoryMessage[]) => void;
@@ -210,6 +221,9 @@ export interface ShellState {
   setLocale: (locale: Locale) => void;
   setSettingsSection: (section: SettingsSection) => void;
   setLastFailure: (failure: string | undefined) => void;
+  /** Remember a model error for a runtime until settle / successful recovery. */
+  setPendingFailure: (runtimeId: string, message: string | undefined) => void;
+  takePendingFailure: (runtimeId: string) => string | undefined;
   showAppError: (message: string) => void;
   clearAppError: () => void;
   setView: (view: ShellView) => void;
@@ -240,10 +254,19 @@ type RuntimeHostEvent = Extract<HostEvent, { type: "runtime.event" }>;
 
 export type RuntimeEventDelivery = "accept" | "duplicate" | "gap" | "stale-runtime";
 
-/** Normalize session file / id for running-session maps. */
+/**
+ * Normalize session file / id for running-session maps and sidebar markers.
+ *
+ * Collapses macOS `/private/var` → `/var` the same way as terminal PTY keys so
+ * host snapshots, sidebar rows, and TUI realpaths all hit the same marker entry.
+ */
 export function sessionRunKey(raw: string | undefined | null): string {
   if (!raw) return "";
-  return raw.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  let p = raw.replace(/\\/g, "/").replace(/\/+$/, "").trim().toLowerCase();
+  if (!p) return "";
+  // Apple firmlink: /var is a symlink to /private/var.
+  if (p.startsWith("/private/")) p = p.slice("/private".length);
+  return p;
 }
 
 export function sessionKeyFromSnapshot(
@@ -364,6 +387,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
   locale: loadLocale(),
   settingsSection: "general",
   lastFailure: undefined,
+  pendingFailureByRuntime: {},
   appError: undefined,
   view: "thread",
   packages: [],
@@ -407,6 +431,10 @@ export const useShellStore = create<ShellState>((set, get) => ({
   applyLiveStreamEvent: (event, prompts, options) =>
     set((state) => ({
       liveStream: applyRuntimeEventToLiveStream(state.liveStream, event, prompts, options),
+    })),
+  retractOptimisticUserMessage: (displayText) =>
+    set((state) => ({
+      liveStream: retractOptimisticUserMessage(state.liveStream, displayText),
     })),
   clearLiveStream: () => set({ liveStream: resetLiveStream() }),
   setHistory: (history) => set({ history }),
@@ -569,6 +597,30 @@ export const useShellStore = create<ShellState>((set, get) => ({
   },
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   setLastFailure: (lastFailure) => set({ lastFailure }),
+  setPendingFailure: (runtimeId, message) => {
+    if (!runtimeId) return;
+    set((state) => {
+      const pendingFailureByRuntime = { ...state.pendingFailureByRuntime };
+      if (message === undefined || message === "") {
+        delete pendingFailureByRuntime[runtimeId];
+      } else {
+        pendingFailureByRuntime[runtimeId] = message;
+      }
+      return { pendingFailureByRuntime };
+    });
+  },
+  takePendingFailure: (runtimeId) => {
+    if (!runtimeId) return undefined;
+    const message = get().pendingFailureByRuntime[runtimeId];
+    if (message === undefined) return undefined;
+    set((state) => {
+      if (!(runtimeId in state.pendingFailureByRuntime)) return state;
+      const pendingFailureByRuntime = { ...state.pendingFailureByRuntime };
+      delete pendingFailureByRuntime[runtimeId];
+      return { pendingFailureByRuntime };
+    });
+    return message;
+  },
   showAppError: (appError) => set({ appError }),
   clearAppError: () => set({ appError: undefined }),
   setView: (view) => set({ view }),
@@ -646,6 +698,14 @@ export const useShellStore = create<ShellState>((set, get) => ({
         sentPrompts: [],
         queuedMessages: input.snapshot.queuedMessages,
         lastFailure: undefined,
+        // Drop pending failures for the runtime we are leaving; keep others (parked).
+        pendingFailureByRuntime: state.runtimeId
+          ? Object.fromEntries(
+              Object.entries(state.pendingFailureByRuntime).filter(
+                ([rid]) => rid !== state.runtimeId,
+              ),
+            )
+          : state.pendingFailureByRuntime,
         sessionMarkers,
         runningSessions,
         // Foreground only — never inherit previous session's busy flag.
@@ -667,6 +727,8 @@ export const useShellStore = create<ShellState>((set, get) => ({
       runningSessions: {},
       runningRuntimeIds: {},
       lastSessionByRuntime: {},
+      pendingFailureByRuntime: {},
+      lastFailure: undefined,
       runtimeId: undefined,
       lastSequence: 0,
       status: "Agent Host stopped",

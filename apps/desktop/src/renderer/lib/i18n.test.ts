@@ -27,8 +27,13 @@ describe("i18n", () => {
     expect(t("en", "sessionTree.title")).toBe("Session tree");
     expect(t("zh", "sessionInfo.exportJsonl")).toBe("导出 JSONL");
     expect(t("en", "sessionInfo.exportJsonl")).toBe("Export JSONL");
-    expect(t("zh", "piSettings.steeringMode")).toBe("引导模式");
-    expect(t("en", "piSettings.steeringMode")).toBe("Steering mode");
+    expect(t("zh", "piSettings.steeringMode")).toContain("引导");
+    expect(t("zh", "piSettings.steeringMode")).toContain("当前回合");
+    expect(t("en", "piSettings.steeringMode").toLowerCase()).toContain("guidance");
+    expect(t("zh", "piSettings.followUpMode")).toContain("追问");
+    expect(t("zh", "piSettings.followUpModeHint")).toContain("Alt+Enter");
+    expect(t("zh", "piSettings.steeringModeHint")).toContain("Enter");
+    expect(t("zh", "piSettings.queueSectionHint")).toContain("引导");
     expect(t("zh", "slash.builtin.tree")).toContain("会话树");
     expect(t("en", "slash.builtin.tree").toLowerCase()).toContain("tree");
   });

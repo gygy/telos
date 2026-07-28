@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
+  applyTerminalLineHeight,
   loadTerminalPrefs,
   resolveTerminalTheme,
   terminalOptionsFromPrefs,
@@ -299,8 +300,12 @@ export function PiTuiTerminal(props: {
       } catch {
         // ignore
       }
+      // ghostty-web has no lineHeight option — scale cell height after font metrics settle.
+      applyTerminalLineHeight(target, opts.lineHeight);
       try {
         fit?.fit();
+        // FitAddon may change cols/rows; re-apply so canvas matches the new grid.
+        applyTerminalLineHeight(target, opts.lineHeight);
         void window.pix.terminal.resize(target.cols, target.rows).catch(() => undefined);
       } catch {
         // ignore

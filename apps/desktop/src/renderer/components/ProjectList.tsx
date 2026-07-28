@@ -23,6 +23,7 @@ import {
   PinOff,
   Plus,
   SquarePen,
+  SquareTerminal,
   Trash2,
 } from "lucide-react";
 import {
@@ -99,6 +100,7 @@ import {
   projectThreadIdsFromCwdMap,
   workspaceLabel,
 } from "../lib/workspace.ts";
+import { loadContentModeForSession } from "../lib/content-mode-prefs.ts";
 import type { SessionMarker } from "../lib/session-markers.ts";
 import { sessionMarkerFromThread } from "../lib/session-markers.ts";
 import { sessionRunKey } from "../store/shell-store.ts";
@@ -118,6 +120,11 @@ export interface ProjectListProps {
   sessionMarkers?: Record<string, SessionMarker>;
   /** @deprecated prefer sessionMarkers — kept for busy-only callers */
   runningSessions?: Record<string, true>;
+  /**
+   * Live / parked pi TUI sessions (normalized session file keys).
+   * Shown as a terminal glyph so chat⇄terminal mode remains visible in the rail.
+   */
+  terminalSessions?: Record<string, "live" | "parked">;
   onOpenRecent: (path: string) => void;
   onNewThread: (path?: string) => void;
   onSwitchThread: (path: string, projectCwd?: string) => void;
@@ -168,6 +175,8 @@ export function ProjectList(props: ProjectListProps) {
   /** path key → linked git worktree (not main). */
   const [worktreeFlags, setWorktreeFlags] = useState<Record<string, boolean>>({});
   const showAppError = useShellStore((s) => s.showAppError);
+  // Re-render when the open session flips chat⇄terminal so rail glyphs stay current.
+  useShellStore((s) => s.contentMode);
 
   // Keep pin/archive/alias in sync when header (or other) mutates prefs.
   useEffect(() => {
@@ -642,6 +651,13 @@ export function ProjectList(props: ProjectListProps) {
     });
     const stateLabel = markerLabel(runMarker?.state, tr, runMarker?.reason);
     if (stateLabel) tooltipParts.push(stateLabel);
+    // Terminal surface: remembered preference and/or live/parked PTY.
+    const pathKey = sessionRunKey(thread.path);
+    const terminalLive = pathKey ? props.terminalSessions?.[pathKey] : undefined;
+    const prefersTerminal =
+      Boolean(terminalLive) || loadContentModeForSession(thread.path) === "terminal";
+    if (terminalLive === "live") tooltipParts.push(tr("thread.state.terminalLive"));
+    else if (prefersTerminal) tooltipParts.push(tr("thread.state.terminal"));
 
     return (
       <div key={`${kind}-${thread.id}`} className="relative min-w-0">
@@ -664,6 +680,8 @@ export function ProjectList(props: ProjectListProps) {
             data-session-path={thread.path}
             data-fork={isFork ? "true" : "false"}
             data-state={runMarker?.state ?? "idle"}
+            data-content-mode={prefersTerminal ? "terminal" : "chat"}
+            data-terminal={terminalLive ?? (prefersTerminal ? "pref" : undefined)}
             data-testid={
               thread.active && kind === "conversation"
                 ? "thread-item-current"
@@ -694,6 +712,31 @@ export function ProjectList(props: ProjectListProps) {
             >
               {title}
             </span>
+            {prefersTerminal ? (
+              <span
+                className="inline-flex shrink-0"
+                title={
+                  terminalLive === "live"
+                    ? tr("thread.state.terminalLive")
+                    : tr("thread.state.terminal")
+                }
+                aria-label={
+                  terminalLive === "live"
+                    ? tr("thread.state.terminalLive")
+                    : tr("thread.state.terminal")
+                }
+              >
+                <SquareTerminal
+                  className={cn(
+                    "size-3 shrink-0",
+                    terminalLive === "live"
+                      ? "text-blue-400"
+                      : "text-[var(--muted-foreground)] opacity-70",
+                  )}
+                  strokeWidth={1.75}
+                />
+              </span>
+            ) : null}
             <ThreadRunMarker marker={runMarker} {...(stateLabel ? { label: stateLabel } : {})} />
           </button>
           {/* Hover: pin + archive only. Full menu via right-click. */}

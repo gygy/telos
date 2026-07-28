@@ -13,6 +13,11 @@ export type TerminalPrefs = {
   fontFamily: string;
   /** Point size (px). */
   fontSize: number;
+  /**
+   * Cell line-height multiplier on top of measured font metrics.
+   * 1.0 = ghostty native (tight); higher values add vertical padding per row.
+   */
+  lineHeight: number;
   cursorBlink: boolean;
   cursorStyle: TerminalCursorStyle;
   /** Scrollback lines retained by the VT buffer. */
@@ -39,6 +44,8 @@ export const TERMINAL_PREFS_CHANGED_EVENT = "pix-terminal-prefs";
 export const DEFAULT_TERMINAL_PREFS: TerminalPrefs = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
   fontSize: 13,
+  // Slightly looser than ghostty native (1.0) — dense TUI rows are hard to scan.
+  lineHeight: 1.2,
   cursorBlink: true,
   cursorStyle: "block",
   scrollback: 10_000,
@@ -51,6 +58,11 @@ export const DEFAULT_TERMINAL_PREFS: TerminalPrefs = {
 
 export const TERMINAL_FONT_SIZE_MIN = 10;
 export const TERMINAL_FONT_SIZE_MAX = 28;
+export const TERMINAL_LINE_HEIGHT_MIN = 1;
+export const TERMINAL_LINE_HEIGHT_MAX = 1.5;
+export const TERMINAL_LINE_HEIGHT_STEP = 0.1;
+/** Discrete options shown in Settings → Terminal. */
+export const TERMINAL_LINE_HEIGHT_OPTIONS = [1, 1.1, 1.2, 1.3, 1.4, 1.5] as const;
 export const TERMINAL_SCROLLBACK_MIN = 500;
 export const TERMINAL_SCROLLBACK_MAX = 100_000;
 export const TERMINAL_SMOOTH_SCROLL_MAX = 500;
@@ -84,6 +96,13 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** Round to one decimal and clamp into the supported line-height range. */
+export function clampTerminalLineHeight(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_TERMINAL_PREFS.lineHeight;
+  const rounded = Math.round(n * 10) / 10;
+  return Math.min(TERMINAL_LINE_HEIGHT_MAX, Math.max(TERMINAL_LINE_HEIGHT_MIN, rounded));
+}
+
 function isCursorStyle(value: unknown): value is TerminalCursorStyle {
   return value === "block" || value === "underline" || value === "bar";
 }
@@ -102,6 +121,7 @@ export function normalizeTerminalPrefs(
         ? base.fontFamily.trim()
         : DEFAULT_TERMINAL_PREFS.fontFamily,
     fontSize: clamp(Number(base.fontSize), TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX),
+    lineHeight: clampTerminalLineHeight(Number(base.lineHeight)),
     cursorBlink: base.cursorBlink !== false,
     cursorStyle: isCursorStyle(base.cursorStyle)
       ? base.cursorStyle
@@ -174,6 +194,7 @@ export function terminalOptionsFromPrefs(
 ): {
   fontFamily: string;
   fontSize: number;
+  lineHeight: number;
   cursorBlink: boolean;
   cursorStyle: TerminalCursorStyle;
   scrollback: number;
@@ -185,6 +206,7 @@ export function terminalOptionsFromPrefs(
   return {
     fontFamily: prefs.fontFamily,
     fontSize: prefs.fontSize,
+    lineHeight: prefs.lineHeight,
     cursorBlink: prefs.cursorBlink,
     cursorStyle: prefs.cursorStyle,
     scrollback: prefs.scrollback,
@@ -192,4 +214,84 @@ export function terminalOptionsFromPrefs(
     convertEol: prefs.convertEol,
     theme,
   };
+}
+
+type GhosttyFontMetrics = { width: number; height: number; baseline: number };
+
+type GhosttyRendererForLineHeight = {
+  metrics: GhosttyFontMetrics;
+  measureFont?: () => GhosttyFontMetrics;
+  resize?: (cols: number, rows: number) => void;
+  render?: (
+    buffer: unknown,
+    forceAll?: boolean,
+    viewportY?: number,
+    scrollbackProvider?: unknown,
+    scrollbarOpacity?: number,
+  ) => void;
+};
+
+type GhosttyTerminalForLineHeight = {
+  cols: number;
+  rows: number;
+  canvas?: HTMLCanvasElement | null;
+  element?: HTMLElement | null;
+  renderer?: GhosttyRendererForLineHeight;
+  wasmTerm?: unknown;
+  viewportY?: number;
+};
+
+/**
+ * ghostty-web has no lineHeight option — cell height is ascent+descent+2px.
+ * After open / font changes, scale measured cell height and re-size the canvas.
+ */
+export function applyTerminalLineHeight(term: unknown, lineHeight: number): void {
+  const t = term as GhosttyTerminalForLineHeight;
+  const renderer = t.renderer;
+  if (!renderer?.measureFont || !renderer.metrics) return;
+  let base: GhosttyFontMetrics;
+  try {
+    base = renderer.measureFont();
+  } catch {
+    return;
+  }
+  if (!base?.width || !base?.height) return;
+
+  const mult = clampTerminalLineHeight(lineHeight);
+  const height = Math.max(base.height, Math.round(base.height * mult));
+  const extra = height - base.height;
+  renderer.metrics = {
+    width: base.width,
+    height,
+    // Keep glyphs optically centered in the taller cell.
+    baseline: Math.max(1, base.baseline + Math.floor(extra / 2)),
+  };
+
+  const cols = Math.max(1, t.cols || 1);
+  const rows = Math.max(1, t.rows || 1);
+  try {
+    renderer.resize?.(cols, rows);
+  } catch {
+    // ignore
+  }
+
+  const canvas =
+    t.canvas ??
+    (t.element?.querySelector?.("canvas") as HTMLCanvasElement | null | undefined) ??
+    null;
+  if (canvas) {
+    const m = renderer.metrics;
+    canvas.width = m.width * cols;
+    canvas.height = m.height * rows;
+    canvas.style.width = `${m.width * cols}px`;
+    canvas.style.height = `${m.height * rows}px`;
+  }
+
+  try {
+    if (t.wasmTerm && renderer.render) {
+      renderer.render(t.wasmTerm, true, t.viewportY ?? 0, t);
+    }
+  } catch {
+    // ignore
+  }
 }

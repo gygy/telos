@@ -500,6 +500,42 @@ describe("process activity", () => {
         running: true,
       }),
     ).toMatchObject({ phase: "compacting" });
+
+    // Model error keeps the turn live; auto-retry surfaces as recovering.
+    expect(
+      deriveLiveActivity({
+        items,
+        events: [
+          runtimeEvent(1, {
+            type: "message.failed",
+            reason: "error",
+            message: "rate limited",
+          }),
+        ],
+        running: true,
+      }),
+    ).toMatchObject({ phase: "processing" });
+
+    expect(
+      deriveLiveActivity({
+        items,
+        events: [
+          runtimeEvent(1, {
+            type: "message.failed",
+            reason: "error",
+            message: "rate limited",
+          }),
+          runtimeEvent(2, {
+            type: "retry.started",
+            attempt: 1,
+            maxAttempts: 3,
+            delayMs: 100,
+            errorMessage: "rate limited",
+          }),
+        ],
+        running: true,
+      }),
+    ).toMatchObject({ phase: "recovering" });
   });
 
   it("hides trailing live status when open process already covers it", () => {

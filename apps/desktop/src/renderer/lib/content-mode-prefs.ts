@@ -19,9 +19,14 @@ export function isContentMode(value: unknown): value is ContentMode {
   return value === "chat" || value === "terminal";
 }
 
-/** Normalize session JSONL path for map keys (stable across slash styles). */
+/**
+ * Normalize session JSONL path for map keys (stable across slash styles).
+ * Same /private collapse as shell-store.sessionRunKey so chat⇄terminal hops keep prefs.
+ */
 export function contentModeSessionKey(sessionFile: string): string {
-  return sessionFile.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  let p = sessionFile.replace(/\\/g, "/").replace(/\/+$/, "").trim().toLowerCase();
+  if (p.startsWith("/private/")) p = p.slice("/private".length);
+  return p;
 }
 
 export function loadContentMode(): ContentMode {

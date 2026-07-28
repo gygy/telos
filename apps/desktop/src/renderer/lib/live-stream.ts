@@ -243,6 +243,43 @@ export function applyRuntimeEventToLiveStream(
         ],
       });
     }
+    case "retry.started": {
+      const { id, seq } = nextId(state, "retry");
+      return mark({
+        ...state,
+        seq,
+        items: [
+          ...state.items,
+          {
+            id,
+            kind: "system",
+            title: "Retry",
+            text: `Retry ${event.attempt}/${event.maxAttempts} in ${event.delayMs}ms — ${event.errorMessage}`,
+            tone: "info",
+            timestamp: nowIso(),
+          },
+        ],
+      });
+    }
+    case "retry.ended": {
+      if (event.success) return mark(state);
+      const { id, seq } = nextId(state, "retry");
+      return mark({
+        ...state,
+        seq,
+        items: [
+          ...state.items,
+          {
+            id,
+            kind: "system",
+            title: "Retry",
+            text: event.finalError ?? `Retry failed after ${event.attempt} attempts`,
+            tone: "error",
+            timestamp: nowIso(),
+          },
+        ],
+      });
+    }
     case "shell.completed": {
       const { id, seq } = nextId(state, "shell");
       const commandPrefix = event.excludeFromContext ? "!!" : "!";
@@ -345,6 +382,33 @@ export function applyRuntimeEventToLiveStream(
     default:
       return mark(state);
   }
+}
+
+/**
+ * Remove a just-queued / reclassified optimistic user row from the live stream.
+ *
+ * Queued steer/follow-up must not appear as delivered user bubbles. When a normal
+ * send hits "already processing" and is re-routed to the steer queue, drop the
+ * optimistic row so mid-stream assistant deltas are not split around a ghost user.
+ * Matches the most recent user row with the same display text.
+ */
+export function retractOptimisticUserMessage(
+  state: LiveStreamState,
+  displayText: string,
+): LiveStreamState {
+  const target = displayText.trim();
+  if (!target) return state;
+  for (let i = state.items.length - 1; i >= 0; i--) {
+    const item = state.items[i];
+    if (item?.kind !== "user") continue;
+    if (item.text !== target) continue;
+    return {
+      ...state,
+      items: state.items.slice(0, i).concat(state.items.slice(i + 1)),
+      promptIndex: Math.max(0, state.promptIndex - 1),
+    };
+  }
+  return state;
 }
 
 /** True if no assistant/thinking text field shrank vs previous state. */

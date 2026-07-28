@@ -119,6 +119,11 @@ describe("per-session running", () => {
     expect(sessionKeyFromSnapshot({ sessionFile: "/tmp/A.jsonl", sessionId: "id-1" })).toBe(
       "/tmp/a.jsonl",
     );
+    // macOS firmlink: host / TUI / sidebar paths must share one marker key.
+    expect(sessionRunKey("/private/var/folders/xx/session.jsonl")).toBe(
+      "/var/folders/xx/session.jsonl",
+    );
+    expect(sessionRunKey("/var/folders/xx/session.jsonl")).toBe("/var/folders/xx/session.jsonl");
   });
 
   it("tracks background sessions without forcing foreground running", () => {
@@ -162,6 +167,18 @@ describe("per-session running", () => {
 
     useShellStore.getState().setSessionRunning("/tmp/fg.jsonl", false, "rt-fg");
     expect(useShellStore.getState().running).toBe(false);
+  });
+
+  it("tracks pending model failures per runtime for delayed settle", () => {
+    useShellStore.setState({ pendingFailureByRuntime: {} });
+    useShellStore.getState().setPendingFailure("rt-1", "rate limited");
+    useShellStore.getState().setPendingFailure("rt-2", "boom");
+    expect(useShellStore.getState().pendingFailureByRuntime["rt-1"]).toBe("rate limited");
+    expect(useShellStore.getState().takePendingFailure("rt-1")).toBe("rate limited");
+    expect(useShellStore.getState().pendingFailureByRuntime["rt-1"]).toBeUndefined();
+    expect(useShellStore.getState().pendingFailureByRuntime["rt-2"]).toBe("boom");
+    useShellStore.getState().setPendingFailure("rt-2", undefined);
+    expect(useShellStore.getState().pendingFailureByRuntime["rt-2"]).toBeUndefined();
   });
 
   it("keeps failed marker when prompt finally clears busy", () => {

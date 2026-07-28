@@ -4,6 +4,7 @@ import {
   applyRuntimeEventToLiveStream,
   assertLiveStreamTextMonotonic,
   emptyLiveStream,
+  retractOptimisticUserMessage,
 } from "./live-stream.ts";
 
 describe("appendMonotonicText", () => {
@@ -210,5 +211,53 @@ describe("live stream (append-only)", () => {
       text: "Look",
       attachments: ["/tmp/photo.webp"],
     });
+  });
+
+  it("retracts a ghost user row so queued steer does not split the assistant", () => {
+    let state = emptyLiveStream();
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "user.message", content: "first" },
+      ["first"],
+      { sequence: 1 },
+    );
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "message.delta", delta: "Working on it" },
+      ["first"],
+      { sequence: 2 },
+    );
+    // Bug path: optimistic user for a mid-turn queue lands between assistant chunks.
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "user.message", content: "steer please" },
+      ["first", "steer please"],
+      { sequence: 3 },
+    );
+    expect(state.items.map((item) => item.kind)).toEqual(["user", "assistant", "user"]);
+    expect(state.promptIndex).toBe(2);
+
+    state = retractOptimisticUserMessage(state, "steer please");
+    expect(state.items.map((item) => item.kind)).toEqual(["user", "assistant"]);
+    expect(state.promptIndex).toBe(1);
+
+    // Further assistant deltas rejoin the open bubble instead of starting a new one.
+    state = applyRuntimeEventToLiveStream(state, { type: "message.delta", delta: "…" }, ["first"], {
+      sequence: 4,
+    });
+    expect(state.items.map((item) => item.kind)).toEqual(["user", "assistant"]);
+    expect(state.items[1]).toMatchObject({ kind: "assistant", text: "Working on it…" });
+  });
+
+  it("ignores retract when the display text is not present", () => {
+    let state = emptyLiveStream();
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "user.message", content: "keep me" },
+      ["keep me"],
+      { sequence: 1 },
+    );
+    const next = retractOptimisticUserMessage(state, "missing");
+    expect(next).toEqual(state);
   });
 });

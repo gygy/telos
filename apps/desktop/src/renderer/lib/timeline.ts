@@ -63,6 +63,7 @@ export type ProcessActivityPhase =
   | "processing"
   | "responding"
   | "waiting"
+  | "recovering"
   | "compacting"
   | "summarizing"
   | "processed";
@@ -288,6 +289,28 @@ export function projectEventsToTimeline(
           tone: "error",
           timestamp: now(),
         });
+      } else if (runtimeEvent.type === "retry.started") {
+        flushMessage();
+        items.push({
+          id: `retry-start-${items.length}`,
+          kind: "system",
+          title: "Retry",
+          text: `Retry ${runtimeEvent.attempt}/${runtimeEvent.maxAttempts} in ${runtimeEvent.delayMs}ms — ${runtimeEvent.errorMessage}`,
+          tone: "info",
+          timestamp: now(),
+        });
+      } else if (runtimeEvent.type === "retry.ended") {
+        flushMessage();
+        if (!runtimeEvent.success) {
+          items.push({
+            id: `retry-end-${items.length}`,
+            kind: "system",
+            title: "Retry",
+            text: runtimeEvent.finalError ?? `Retry failed after ${runtimeEvent.attempt} attempts`,
+            tone: "error",
+            timestamp: now(),
+          });
+        }
       } else if (runtimeEvent.type === "tool.started") {
         flushMessage();
         const tool: Extract<TimelineItem, { kind: "tool" }> = {
@@ -654,6 +677,8 @@ export function processBlockCoversLiveActivity(
 
   const last = blocks[blocks.length - 1];
   if (!last || last.type !== "process" || !last.open) return false;
+  // Waiting / summarizing stay as trailing markers (not process-header phases).
+  // Recovering is folded into the open process header via livePhase.
   if (activity.phase === "waiting" || activity.phase === "summarizing") {
     return false;
   }
@@ -684,6 +709,7 @@ export function resolveProcessActivity(
     options.livePhase === "responding" ||
     options.livePhase === "compacting" ||
     options.livePhase === "waiting" ||
+    options.livePhase === "recovering" ||
     options.livePhase === "summarizing"
   ) {
     return { phase: options.livePhase };
@@ -717,8 +743,16 @@ function phaseFromRecentEvents(events: HostEvent[]): ProcessActivity | null {
     const event = host.event;
     switch (event.type) {
       case "agent.settled":
-      case "message.failed":
         return null;
+      case "retry.started":
+        return { phase: "recovering" };
+      case "retry.ended":
+        // Failed final retry settles the turn; success continues the agent loop.
+        return event.success ? { phase: "processing" } : null;
+      case "message.failed":
+        // Keep the turn live — auto-retry may follow. Terminal settle is owned by
+        // agent.settled / retry.ended, not by the intermediate model error.
+        return { phase: "processing" };
       case "compaction.started":
         return { phase: "compacting" };
       case "compaction.completed":

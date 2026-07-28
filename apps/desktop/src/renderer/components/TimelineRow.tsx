@@ -21,6 +21,7 @@ import {
   Minimize2,
   Pencil,
   Presentation,
+  RotateCcw,
   Search,
   SquarePen,
   GitFork,
@@ -122,6 +123,8 @@ function activityLabel(
       return withDur("timeline.activity.responding", "timeline.activity.respondingWithDuration");
     case "waiting":
       return withDur("timeline.activity.waiting", "timeline.activity.waitingWithDuration");
+    case "recovering":
+      return withDur("timeline.activity.recovering", "timeline.activity.recoveringWithDuration");
     case "compacting":
       return withDur("timeline.activity.compacting", "timeline.activity.compactingWithDuration");
     case "summarizing":
@@ -144,6 +147,10 @@ function liveStatusIcon(phase: ProcessActivityPhase): ReactNode {
   if (phase === "summarizing") return <GitBranch {...common} />;
   // Waiting for user input — Lucide Clock (not a Unicode glyph).
   if (phase === "waiting") return <Clock {...common} />;
+  // Auto-retry after a model error.
+  if (phase === "recovering") {
+    return <RotateCcw {...common} className="size-3.5 animate-spin opacity-80" />;
+  }
   return <LoaderCircle {...common} className="size-3.5 animate-spin opacity-80" />;
 }
 
@@ -622,7 +629,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
       <article className="timeline-assistant-row group/msg" data-kind="assistant">
         <div className="timeline-assistant-body">
           <MarkdownContent
-            className="w-full text-[14px] leading-relaxed text-foreground"
+            className="w-full leading-relaxed text-foreground"
             workspacePath={props.workspacePath}
             locale={props.locale}
           >
@@ -1479,7 +1486,8 @@ function ProcessSteps(props: {
  * Duration is this reply segment only (first thinking/tool → done / now).
  * Body: Codex-style narrative + compact tool activity rows.
  *
- * Never auto-expand — only the user opens/closes via the summary.
+ * Expands by default while the turn is active; auto-collapses when the turn ends
+ * (success, failure, abort — any terminal status). User can still toggle via summary.
  * Header label still tracks live phase while the turn is active.
  */
 export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
@@ -1510,8 +1518,19 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
     props.durationLabel;
   const label = activityLabel(props.locale, activity, liveDuration);
 
-  // Uncontrolled <details>: starts closed; only summary clicks toggle open state.
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Default-open while the agent is working this turn; force-close when the turn ends.
+  const [detailsOpen, setDetailsOpen] = useState(active);
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    const wasActive = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (active && !wasActive) {
+      setDetailsOpen(true);
+    } else if (!active && wasActive) {
+      // Collapse on any terminal outcome (completed / failed / aborted / idle).
+      setDetailsOpen(false);
+    }
+  }, [active]);
 
   return (
     <div
@@ -1523,6 +1542,7 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
     >
       <details
         className="timeline-process-details"
+        open={detailsOpen}
         onToggle={(event) => {
           setDetailsOpen(event.currentTarget.open);
         }}

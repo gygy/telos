@@ -45,7 +45,6 @@ import {
   GitFork,
   Info,
   Keyboard,
-  ListPlus,
   MessageSquareText,
   Minimize2,
   Monitor,
@@ -65,7 +64,6 @@ import {
   Sparkles,
   Square,
   Tag,
-  Trash2,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -79,6 +77,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
+import { ComposerQueueCard, type QueueItemKind } from "./ComposerQueueCard.tsx";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
 import { modelSupportsServiceTier, type ServiceTierId } from "../lib/service-tier.ts";
@@ -154,6 +153,14 @@ export interface ComposerProps {
   packages?: PackageSummary[];
   queuedMessages: QueuedMessages;
   onClearQueue: () => void;
+  /** Abort left pending queue items — show paused banner + Continue. */
+  queuePaused?: boolean;
+  onContinueQueue?: () => void;
+  onRemoveQueuedItem?: (kind: QueueItemKind, index: number) => void;
+  /** 引导：send this queued item immediately. */
+  onSendQueuedNow?: (kind: QueueItemKind, index: number, message: string) => void;
+  /** … → 编辑：load into composer and drop from queue. */
+  onEditQueuedItem?: (kind: QueueItemKind, index: number, message: string) => void;
   /**
    * Project / local / branch bar that protrudes above the input.
    * Hidden once the session already has conversation content.
@@ -624,10 +631,6 @@ function useSuggestOverflow(open: boolean, deps: unknown[]) {
   }, [open, ...deps]);
 
   return { scrollRef, overflows };
-}
-
-function queuedMessagePreview(message: string): string {
-  return message.split("\n\n<attached-paths>", 1)[0]?.trim() || message.trim();
 }
 
 /** Composer prompt: fixed base of 2 lines, grow to 12, then scroll. */
@@ -1266,16 +1269,6 @@ export function Composer(props: ComposerProps) {
       : tr("composer.local.label");
 
   const showProjectBar = props.showProjectBar !== false;
-  const queuedItems = [
-    ...props.queuedMessages.steering.map((message) => ({
-      message,
-      kind: "steering" as const,
-    })),
-    ...props.queuedMessages.followUp.map((message) => ({
-      message,
-      kind: "followUp" as const,
-    })),
-  ];
 
   return (
     <div
@@ -1284,54 +1277,16 @@ export function Composer(props: ComposerProps) {
       className="pointer-events-auto relative w-full min-w-0 max-w-full"
       data-testid="composer-root"
     >
-      {queuedItems.length > 0 ? (
-        <div className="composer-queue-card" data-testid="composer-queue-card">
-          <div className="min-w-0 flex-1">
-            {queuedItems.slice(0, 2).map((item, index) => (
-              <div
-                key={`${item.kind}:${index}:${item.message}`}
-                className="flex min-w-0 items-center gap-2 px-3 py-2"
-              >
-                <ListPlus
-                  className="size-3.5 shrink-0 text-[var(--text-subtle)]"
-                  strokeWidth={1.75}
-                />
-                <span
-                  className="min-w-0 flex-1 truncate text-[12px] font-medium"
-                  title={item.message}
-                >
-                  {queuedMessagePreview(item.message)}
-                </span>
-                <span className="shrink-0 rounded-full bg-[var(--hover-fill)] px-2 py-0.5 text-[10px] text-[var(--muted-foreground)]">
-                  {item.kind === "steering"
-                    ? tr("composer.queue.guidance")
-                    : tr("composer.queue.followUp")}
-                </span>
-              </div>
-            ))}
-            {queuedItems.length > 2 ? (
-              <div className="px-3 pb-2 text-[10px] text-[var(--text-subtle)]">
-                {tr("composer.queue.more", { count: String(queuedItems.length - 2) })}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-1 pr-2">
-            <span className="hidden text-[10px] text-[var(--text-subtle)] sm:inline">
-              {tr("composer.queue.hint")}
-            </span>
-            <button
-              type="button"
-              className="inline-flex size-7 items-center justify-center rounded-full text-[var(--text-subtle)] transition-colors hover:bg-[var(--hover-fill)] hover:text-[var(--foreground)]"
-              title={tr("composer.queue.clear")}
-              aria-label={tr("composer.queue.clear")}
-              data-testid="composer-queue-clear"
-              onClick={props.onClearQueue}
-            >
-              <Trash2 className="size-3.5" strokeWidth={1.75} />
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <ComposerQueueCard
+        locale={props.locale}
+        queuedMessages={props.queuedMessages}
+        paused={Boolean(props.queuePaused)}
+        onClearQueue={props.onClearQueue}
+        {...(props.onRemoveQueuedItem ? { onRemoveItem: props.onRemoveQueuedItem } : {})}
+        {...(props.onContinueQueue ? { onContinue: props.onContinueQueue } : {})}
+        {...(props.onSendQueuedNow ? { onSendNow: props.onSendQueuedNow } : {})}
+        {...(props.onEditQueuedItem ? { onEditItem: props.onEditQueuedItem } : {})}
+      />
 
       {/*
         Protrusion: project / local / branch. Only for empty sessions —
@@ -1424,7 +1379,7 @@ export function Composer(props: ComposerProps) {
           rows={COMPOSER_PROMPT_MIN_LINES}
           className={cn(
             "composer-prompt-scroll resize-none rounded-none border-0 bg-transparent px-3.5 pt-3 pb-1",
-            "text-[14px] leading-[1.5] shadow-none md:text-[14px]",
+            "leading-[1.5] shadow-none",
             "focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
             "dark:bg-transparent",
           )}

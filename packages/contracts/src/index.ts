@@ -311,6 +311,20 @@ export type RuntimeEvent =
       errorMessage?: string;
     }
   | {
+      /** Auto-retry after a retryable model error (rate limit / overloaded / 5xx). */
+      type: "retry.started";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
+  | {
+      type: "retry.ended";
+      success: boolean;
+      attempt: number;
+      finalError?: string;
+    }
+  | {
       type: "custom.message";
       customType: string;
       content: string;
@@ -2285,6 +2299,19 @@ function isRuntimeEvent(value: unknown): value is RuntimeEvent {
           value.reason === "overflow") &&
         typeof value.aborted === "boolean" &&
         (value.errorMessage === undefined || typeof value.errorMessage === "string")
+      );
+    case "retry.started":
+      return (
+        typeof value.attempt === "number" &&
+        typeof value.maxAttempts === "number" &&
+        typeof value.delayMs === "number" &&
+        typeof value.errorMessage === "string"
+      );
+    case "retry.ended":
+      return (
+        typeof value.success === "boolean" &&
+        typeof value.attempt === "number" &&
+        (value.finalError === undefined || typeof value.finalError === "string")
       );
     case "custom.message":
       return typeof value.customType === "string" && typeof value.content === "string";

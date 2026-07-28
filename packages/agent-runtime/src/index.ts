@@ -719,6 +719,119 @@ function threadTitleFromSession(info: { name?: string; firstMessage: string; id:
 }
 
 /**
+ * Build a sidebar row from the live SessionManager.
+ *
+ * Pi defers writing session JSONL until the first assistant message exists, so a
+ * brand-new / first-turn session is often missing from SessionManager.list (disk).
+ * Without this overlay, the sidebar only learns about the conversation after the
+ * agent settles — too late for "send then see it in the rail".
+ */
+export function threadSummaryFromLiveSession(
+  sessionManager: {
+    getSessionId(): string;
+    getSessionFile(): string | undefined;
+    getCwd(): string;
+    getSessionName?: () => string | undefined;
+    getHeader?: () => {
+      id?: string;
+      timestamp?: string;
+      cwd?: string;
+      parentSession?: string;
+    } | null;
+    getEntries(): Array<{
+      type?: string;
+      timestamp?: string;
+      message?: { role?: string; content?: unknown; timestamp?: number | string };
+      name?: string;
+    }>;
+  },
+  options?: { active?: boolean },
+): SessionThreadSummary | undefined {
+  const id = sessionManager.getSessionId()?.trim();
+  const path = sessionManager.getSessionFile()?.trim();
+  if (!id || !path) return undefined;
+
+  const header = typeof sessionManager.getHeader === "function" ? sessionManager.getHeader() : null;
+  const entries = sessionManager.getEntries();
+  let messageCount = 0;
+  let firstMessage = "";
+  let lastActivityMs: number | undefined;
+  let name =
+    typeof sessionManager.getSessionName === "function"
+      ? sessionManager.getSessionName()?.trim() || undefined
+      : undefined;
+
+  for (const entry of entries) {
+    if (entry.type === "session_info" && typeof entry.name === "string") {
+      name = entry.name.trim() || undefined;
+    }
+    if (entry.type !== "message" || !entry.message) continue;
+    messageCount += 1;
+    const role = entry.message.role;
+    if (role !== "user" && role !== "assistant") continue;
+    const text = textFromMessageContent(entry.message.content).trim();
+    if (text && !firstMessage && role === "user") firstMessage = text;
+    const rawTs = entry.message.timestamp ?? entry.timestamp;
+    let ms: number | undefined;
+    if (typeof rawTs === "number" && Number.isFinite(rawTs)) ms = rawTs;
+    else if (typeof rawTs === "string" && rawTs.trim()) {
+      const parsed = Date.parse(rawTs);
+      if (!Number.isNaN(parsed)) ms = parsed;
+    }
+    if (typeof ms === "number") {
+      lastActivityMs = Math.max(lastActivityMs ?? 0, ms);
+    }
+  }
+
+  const headerMs =
+    typeof header?.timestamp === "string" && header.timestamp.trim()
+      ? Date.parse(header.timestamp)
+      : Number.NaN;
+  const modified =
+    typeof lastActivityMs === "number" && lastActivityMs > 0
+      ? new Date(lastActivityMs)
+      : !Number.isNaN(headerMs)
+        ? new Date(headerMs)
+        : new Date();
+  const titleBase = threadTitleFromSession({
+    id,
+    ...(name !== undefined ? { name } : {}),
+    firstMessage: firstMessage || "(no messages)",
+  });
+  const row: SessionThreadSummary = {
+    id,
+    path,
+    cwd: (header?.cwd || sessionManager.getCwd() || "").trim(),
+    title: titleBase,
+    titleBase,
+    modifiedAt: modified.toISOString(),
+    messageCount,
+    active: options?.active !== false,
+  };
+  if (!Number.isNaN(headerMs)) row.createdAt = new Date(headerMs).toISOString();
+  if (typeof header?.parentSession === "string" && header.parentSession.trim()) {
+    row.parentSessionPath = header.parentSession;
+  }
+  return row;
+}
+
+/**
+ * Merge a live (possibly unflushed) session into a disk-backed list.
+ * Replaces a same-id disk row so title/recency reflect in-memory first user message.
+ */
+export function mergeLiveSessionThread(
+  threads: SessionThreadSummary[],
+  live: SessionThreadSummary | undefined,
+): SessionThreadSummary[] {
+  if (!live) return threads;
+  const without = threads.filter((t) => t.id !== live.id && t.path !== live.path);
+  const marked = without.map((t) => (live.active ? { ...t, active: false } : t));
+  return disambiguateSessionTitles([live, ...marked]).sort((left, right) =>
+    right.modifiedAt.localeCompare(left.modifiedAt),
+  );
+}
+
+/**
  * Within one cwd list, append ` (2)`, ` (3)`, … when multiple sessions share the
  * same base title (common after fork: pi inherits `session_info` name).
  * Oldest by createdAt (fallback modifiedAt) keeps the bare title.
@@ -966,6 +1079,41 @@ function findPackageEntry(
     }
   }
   return undefined;
+}
+
+type ConfiguredPackageEntry = {
+  source: string;
+  scope: string;
+  installedPath?: string;
+};
+
+/**
+ * Resolve the source string passed to pi's `removeAndPersist`.
+ *
+ * Local packages are matched by absolute path input keys, so relative settings
+ * entries need their resolved `installedPath`. npm/git packages must keep their
+ * protocol source (e.g. `npm:pi-atelier`); passing the install directory would
+ * be parsed as a local path and fail to remove the settings entry.
+ */
+export function resolvePackageRemoveSource(
+  configured: ConfiguredPackageEntry[],
+  source: string,
+  scope: "global" | "project",
+): string {
+  const expectedScope = scope === "project" ? "project" : "user";
+  const match = configured.find(
+    (entry) =>
+      entry.scope === expectedScope &&
+      (entry.source === source ||
+        entry.installedPath === source ||
+        entry.source.endsWith(source) ||
+        source.endsWith(entry.source)),
+  );
+  if (!match) return source;
+  if (packageKindFromSource(match.source) === "local") {
+    return match.installedPath ?? match.source;
+  }
+  return match.source;
 }
 
 export function listPackagesFromServices(services: AgentSessionServices): PackageSummary[] {
@@ -1414,10 +1562,16 @@ export async function createPixRuntime(
       configDiagnostics.push(...collectConfigDiagnostics(runtime.services));
     },
     async listSessions() {
-      return listProjectSessions(runtime.services.cwd, {
+      const fromDisk = await listProjectSessions(runtime.services.cwd, {
         agentDir: runtime.services.agentDir,
         activeSessionId: runtime.session.sessionId,
       });
+      // Overlay the live session: pi keeps new sessions in memory until the first
+      // assistant message, so disk list alone misses brand-new conversations.
+      const live = threadSummaryFromLiveSession(runtime.session.sessionManager, {
+        active: true,
+      });
+      return mergeLiveSessionThread(fromDisk, live);
     },
     historyMessages() {
       return projectHistoryFromSessionManager(runtime.session.sessionManager);
@@ -1459,17 +1613,8 @@ export async function createPixRuntime(
       const manager = createPackageManager(runtime.services);
       bindPackageProgress(manager, onProgress);
       try {
-        // pi matches local package identity via absolute path for input keys.
-        // Prefer installedPath so relative settings sources still remove correctly.
         const configured = manager.listConfiguredPackages();
-        const match = configured.find(
-          (entry) =>
-            entry.source === source ||
-            entry.installedPath === source ||
-            ((scope === "project" ? entry.scope === "project" : entry.scope === "user") &&
-              (entry.source.endsWith(source) || source.endsWith(entry.source))),
-        );
-        const removeSource = match?.installedPath ?? match?.source ?? source;
+        const removeSource = resolvePackageRemoveSource(configured, source, scope);
         const removed = await manager.removeAndPersist(removeSource, {
           local: scope === "project",
         });
