@@ -1,5 +1,3 @@
-import { AppWindowFrame } from "./AppWindowFrame.tsx";
-
 export function Why() {
   return (
     <section id="why" className="relative scroll-mt-24 overflow-hidden">
@@ -35,14 +33,14 @@ export function Why() {
             aria-hidden="true"
             className="pointer-events-none absolute -inset-x-10 -top-8 bottom-0 -z-10 rounded-[3rem] bg-[radial-gradient(60%_60%_at_50%_0%,oklch(0.7_0_0/0.12),transparent_70%)] blur-2xl"
           />
-          <AppWindowFrame title="Pix — terminal">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.10] shadow-[0_28px_56px_-18px_rgba(0,0,0,0.58)] ring-1 ring-inset ring-white/[0.05]">
             <img
-              src="/terminal-session.png"
-              alt="Pix embedded pi TUI terminal session"
-              className="block h-auto w-full object-cover"
+              src="/pix-desktop.png"
+              alt="Pix desktop shell with sidebar navigation and composer"
+              className="block h-auto w-full object-cover object-top"
               decoding="async"
             />
-          </AppWindowFrame>
+          </div>
         </div>
       </div>
     </section>

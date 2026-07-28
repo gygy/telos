@@ -4,17 +4,9 @@ Pix is a desktop shell for the [pi](https://pi.dev) coding agent: a Codex-style 
 
 ## Screenshots
 
-Empty conversation — start without a project:
+Pix desktop shell — sidebar, session workspace, and composer:
 
-![Empty conversation](./assets/screenshots/empty-conversation.png)
-
-Chat session with sidebar, timeline, and composer:
-
-![Chat session](./assets/screenshots/chat-session.png)
-
-Embedded pi TUI (terminal mode) for the same session:
-
-![Terminal session](./assets/screenshots/terminal-session.png)
+![Pix desktop](./assets/screenshots/pix-desktop.png)
 
 ## Requirements
 

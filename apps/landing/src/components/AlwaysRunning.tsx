@@ -1,5 +1,3 @@
-import { AppWindowFrame } from "./AppWindowFrame.tsx";
-
 export function AlwaysRunning() {
   return (
     <section className="relative overflow-hidden px-6 py-24 sm:py-32">
@@ -16,14 +14,14 @@ export function AlwaysRunning() {
           </p>
         </div>
         <div data-reveal="" style={{ ["--reveal-delay" as string]: "100ms" }}>
-          <AppWindowFrame title="Pix — new session">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.10] shadow-[0_28px_56px_-18px_rgba(0,0,0,0.58)] ring-1 ring-inset ring-white/[0.05]">
             <img
-              src="/empty-conversation.png"
-              alt="Pix empty conversation — start without a project"
-              className="block h-auto w-full object-cover"
+              src="/pix-desktop.png"
+              alt="Pix ready to start a conversation with project context"
+              className="block h-auto w-full object-cover object-top"
               decoding="async"
             />
-          </AppWindowFrame>
+          </div>
         </div>
       </div>
     </section>
