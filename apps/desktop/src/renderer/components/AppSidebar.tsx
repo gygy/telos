@@ -65,8 +65,6 @@ export interface AppSidebarProps {
   sessionMarkers?: Record<string, SessionMarker>;
   /** @deprecated prefer sessionMarkers */
   runningSessions?: Record<string, true>;
-  /** Live / parked pi TUI sessions for sidebar terminal glyphs. */
-  terminalSessions?: Record<string, "live" | "parked">;
   collapsed: boolean;
   widthPx: number;
   translucent: boolean;
@@ -369,7 +367,6 @@ function ProductRail(
         running={props.running}
         {...(props.sessionMarkers ? { sessionMarkers: props.sessionMarkers } : {})}
         {...(props.runningSessions ? { runningSessions: props.runningSessions } : {})}
-        {...(props.terminalSessions ? { terminalSessions: props.terminalSessions } : {})}
         onOpenRecent={props.onOpenRecent}
         onNewThread={(path) => {
           if (path) props.onNewThreadForProject(path);

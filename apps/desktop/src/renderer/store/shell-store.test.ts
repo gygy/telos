@@ -1,5 +1,5 @@
 import { IPC_PROTOCOL_VERSION, type HostEvent } from "@pix/contracts";
-import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { loadContentModeForSession, saveContentModeForSession } from "../lib/content-mode-prefs.ts";
 import { isBusyRunState } from "../lib/session-markers.ts";
 import {
@@ -181,12 +181,14 @@ describe("per-session running", () => {
     expect(useShellStore.getState().pendingFailureByRuntime["rt-2"]).toBeUndefined();
   });
 
-  it("keeps failed marker when prompt finally clears busy", () => {
+  it("keeps failed marker when prompt finally clears busy, then auto-clears", () => {
+    vi.useFakeTimers();
     useShellStore.setState({
       running: true,
       sessionMarkers: {},
       runningSessions: {},
       runningRuntimeIds: {},
+      lastSessionByRuntime: {},
       snapshot: {
         runtimeId: "rt-1",
         sequence: 1,
@@ -207,9 +209,130 @@ describe("per-session running", () => {
     useShellStore.getState().settleSessionByRuntime("rt-1", "failed", "boom");
     expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("failed");
     useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", false, "rt-1");
+    // Still sticky immediately after the prompt IPC ends (do not invent idle).
     expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("failed");
     expect(isBusyRunState(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state)).toBe(
       false,
     );
+    // Auto-fade so recovered sessions do not keep a permanent failure glyph.
+    vi.advanceTimersByTime(4_000);
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("soft-completes busy markers when prompt IPC ends before settle", () => {
+    useShellStore.setState({
+      running: true,
+      sessionMarkers: {},
+      runningSessions: {},
+      runningRuntimeIds: {},
+      lastSessionByRuntime: {},
+      snapshot: {
+        runtimeId: "rt-1",
+        sequence: 1,
+        cwd: "/tmp",
+        agentDir: "/tmp/agent",
+        sessionId: "s1",
+        sessionFile: "/tmp/s1.jsonl",
+        slashCommands: [],
+        queuedMessages: { steering: [], followUp: [] },
+        activeTools: [],
+        projectTrusted: true,
+        resources: { extensions: 0, skills: 0, prompts: 0, themes: 0, contextFiles: 0 },
+        configuredPackages: { global: 0, project: 0 },
+        diagnostics: [],
+      },
+    });
+    useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", true, "rt-1");
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("running");
+    // Prompt IPC returns while still "running" in the map (settle not yet applied).
+    useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", false, "rt-1");
+    // Must not wipe to idle — rail would blank during terminal/session hops.
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("completed");
+    expect(useShellStore.getState().running).toBe(false);
+  });
+
+  it("preserves busy markers across applySessionOpen when runtime still bound", () => {
+    useShellStore.setState({
+      running: false,
+      sessionMarkers: {
+        "/tmp/bg.jsonl": { state: "running" },
+      },
+      // Simulate desync: glyph present, runningSessions briefly empty, runtime still bound.
+      runningSessions: {},
+      runningRuntimeIds: { "rt-bg": "/tmp/bg.jsonl" },
+      lastSessionByRuntime: { "rt-bg": "/tmp/bg.jsonl" },
+      snapshot: {
+        runtimeId: "rt-fg",
+        sequence: 1,
+        cwd: "/tmp",
+        agentDir: "/tmp/agent",
+        sessionId: "fg",
+        sessionFile: "/tmp/fg.jsonl",
+        slashCommands: [],
+        queuedMessages: { steering: [], followUp: [] },
+        activeTools: [],
+        projectTrusted: true,
+        resources: { extensions: 0, skills: 0, prompts: 0, themes: 0, contextFiles: 0 },
+        configuredPackages: { global: 0, project: 0 },
+        diagnostics: [],
+      },
+    });
+    useShellStore.getState().applySessionOpen({
+      snapshot: {
+        runtimeId: "rt-fg",
+        sequence: 2,
+        cwd: "/tmp",
+        agentDir: "/tmp/agent",
+        sessionId: "fg",
+        sessionFile: "/tmp/fg.jsonl",
+        slashCommands: [],
+        queuedMessages: { steering: [], followUp: [] },
+        activeTools: [],
+        projectTrusted: true,
+        resources: { extensions: 0, skills: 0, prompts: 0, themes: 0, contextFiles: 0 },
+        configuredPackages: { global: 0, project: 0 },
+        diagnostics: [],
+      },
+      threads: [],
+      history: [],
+    });
+    expect(useShellStore.getState().sessionMarkers["/tmp/bg.jsonl"]?.state).toBe("running");
+    expect(useShellStore.getState().runningSessions["/tmp/bg.jsonl"]).toBe(true);
+  });
+
+  it("does not let a late abort settle clobber a newer running turn", () => {
+    useShellStore.setState({
+      running: false,
+      sessionMarkers: {},
+      runningSessions: {},
+      runningRuntimeIds: {},
+      lastSessionByRuntime: {},
+      snapshot: {
+        runtimeId: "rt-2",
+        sequence: 2,
+        cwd: "/tmp",
+        agentDir: "/tmp/agent",
+        sessionId: "s1",
+        sessionFile: "/tmp/s1.jsonl",
+        slashCommands: [],
+        queuedMessages: { steering: [], followUp: [] },
+        activeTools: [],
+        projectTrusted: true,
+        resources: { extensions: 0, skills: 0, prompts: 0, themes: 0, contextFiles: 0 },
+        configuredPackages: { global: 0, project: 0 },
+        diagnostics: [],
+      },
+    });
+    // Old turn aborted (sticky map left behind historically).
+    useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", true, "rt-1");
+    useShellStore.getState().setSessionMarker("/tmp/s1.jsonl", "aborted", { runtimeId: "rt-1" });
+    // New turn starts.
+    useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", true, "rt-2");
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("running");
+    // Late settle from the old runtime must not win.
+    useShellStore.getState().settleSessionByRuntime("rt-1", "aborted", "late");
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("running");
+    expect(useShellStore.getState().sessionKeyForRuntime("rt-1")).toBeUndefined();
   });
 });

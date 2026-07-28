@@ -239,6 +239,7 @@ function App() {
   const queuedMessages = useShellStore((s) => s.queuedMessages);
   const running = useShellStore((s) => s.running);
   const sessionMarkers = useShellStore((s) => s.sessionMarkers);
+  const runningSessions = useShellStore((s) => s.runningSessions);
   const reviewOpen = useShellStore((s) => s.reviewOpen);
   const envPanelOpen = useShellStore((s) => s.envPanelOpen);
   const sidebarOpen = useShellStore((s) => s.sidebarOpen);
@@ -263,33 +264,11 @@ function App() {
   const [terminalSurfaceActive, setTerminalSurfaceActive] = useState(true);
   /** Session file the mounted terminal is waiting for (normed path). */
   const transitionSessionRef = useRef<string | null>(null);
-  /** Live / parked pi TUI sessions for sidebar glyphs (sessionRunKey → status). */
-  const [terminalSessions, setTerminalSessions] = useState<Record<string, "live" | "parked">>({});
-
   /** Match main-process session keys (macOS /private/var collapse). */
   function normSessionPath(path: string): string {
     let p = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
     if (p.startsWith("/private/")) p = p.slice("/private".length);
     return p;
-  }
-
-  /** Refresh sidebar terminal glyphs from main-process PTY status. */
-  async function refreshTerminalSessions() {
-    try {
-      const st = await window.pix.terminal.status();
-      const next: Record<string, "live" | "parked"> = {};
-      for (const file of st.parkedSessionFiles ?? []) {
-        const key = sessionRunKey(file);
-        if (key) next[key] = "parked";
-      }
-      if (st.sessionFile?.trim()) {
-        const key = sessionRunKey(st.sessionFile);
-        if (key) next[key] = st.suspended ? "parked" : st.open ? "live" : "parked";
-      }
-      setTerminalSessions(next);
-    } catch {
-      setTerminalSessions({});
-    }
   }
 
   /**
@@ -2783,8 +2762,6 @@ function App() {
       if (useShellStore.getState().contentMode !== "terminal") {
         window.requestAnimationFrame(() => endSurfaceTransition());
       }
-      // Keep sidebar terminal glyphs accurate after park/promote hops.
-      void refreshTerminalSessions();
     } catch (error) {
       reportAppError(error, "无法打开会话");
       holdBlankRef.current = false;
@@ -2792,7 +2769,6 @@ function App() {
       setTimelineReady(true);
       void refreshThreads();
       endSurfaceTransition();
-      void refreshTerminalSessions();
     } finally {
       switchingSessionRef.current = false;
     }
@@ -2873,7 +2849,6 @@ function App() {
       if (contentReloaded) requestContentReveal();
       else finishBlankHold();
       endSurfaceTransition();
-      void refreshTerminalSessions();
     }
   }
 
@@ -3074,7 +3049,7 @@ function App() {
         runState={runState}
         running={running}
         sessionMarkers={sessionMarkers}
-        terminalSessions={terminalSessions}
+        runningSessions={runningSessions}
         collapsed={sidebarCollapsed}
         widthPx={sidebarWidthPx}
         translucent={sidebarTranslucent}
@@ -3196,7 +3171,6 @@ function App() {
                       className="min-h-0 flex-1 p-2"
                       onReady={(info) => {
                         endSurfaceTransition(info.sessionFile);
-                        void refreshTerminalSessions();
                       }}
                       onOpenError={(error) => {
                         reportAppError(error, t(locale, "contentMode.openFailed"));
@@ -3204,10 +3178,8 @@ function App() {
                         setContentMode("chat", { persist: false });
                         setTerminalSurfaceActive(false);
                         endSurfaceTransition();
-                        void refreshTerminalSessions();
                       }}
                       onProcessExit={() => {
-                        void refreshTerminalSessions();
                         void leaveTerminalMode();
                       }}
                     />

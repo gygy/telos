@@ -15,13 +15,20 @@ export function isBusyRunState(state: ThreadRunState | undefined): boolean {
   return state === "running" || state === "waiting" || state === "recovering";
 }
 
-/** Terminal outcomes that should stay visible (failed/aborted) or flash (completed). */
+/** Terminal outcomes that flash then clear (or clear after a short sticky window). */
 export function isTerminalRunState(state: ThreadRunState | undefined): boolean {
   return state === "completed" || state === "failed" || state === "aborted" || state === "crashed";
 }
 
 /** How long the completed checkmark stays before returning to idle. */
 export const COMPLETED_MARKER_MS = 2_500;
+
+/**
+ * How long failed / aborted / crashed glyphs stay before returning to idle.
+ * Must not stick forever: a recovered session (new turn or just idle again)
+ * should not keep showing an old failure after the user has moved on.
+ */
+export const STICKY_TERMINAL_MARKER_MS = 4_000;
 
 function defaultSessionKey(raw: string | undefined | null): string {
   if (!raw) return "";
@@ -38,6 +45,11 @@ export function sessionMarkerFromThread(
     keyOf?: (raw: string | undefined | null) => string;
     /** Foreground run state fallback for the active row only. */
     foregroundState?: ThreadRunState | undefined;
+    /**
+     * Sessions still marked busy in the store. Used when the glyph map briefly
+     * lags (e.g. terminal hop / applySessionOpen) so the spinner does not vanish.
+     */
+    runningSessions?: Record<string, true> | undefined;
   },
 ): SessionMarker | undefined {
   const keyOf = options?.keyOf ?? defaultSessionKey;
@@ -56,6 +68,13 @@ export function sessionMarkerFromThread(
     } else if (key.startsWith("/")) {
       const alt = `/private${key}`;
       if (markers[alt]) return markers[alt];
+    }
+  }
+  // Busy map hit without a glyph entry (transient desync during terminal hops).
+  const running = options?.runningSessions;
+  if (running) {
+    for (const key of candidates) {
+      if (key && running[key]) return { state: "running" };
     }
   }
   const fg = options?.foregroundState;

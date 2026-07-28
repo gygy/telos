@@ -799,8 +799,7 @@ const messages = {
     "thread.state.aborted": "已中断",
     "thread.state.crashed": "已崩溃",
     "thread.state.recovering": "恢复中",
-    "thread.state.terminal": "终端视图",
-    "thread.state.terminalLive": "终端进行中",
+
     "thread.new": "新对话",
     "thread.more": "更多",
     "thread.pin": "置顶对话",
@@ -1901,8 +1900,7 @@ const messages = {
     "thread.state.aborted": "Stopped",
     "thread.state.crashed": "Crashed",
     "thread.state.recovering": "Recovering",
-    "thread.state.terminal": "Terminal view",
-    "thread.state.terminalLive": "Terminal active",
+
     "thread.new": "New conversation",
     "thread.more": "More",
     "thread.pin": "Pin conversation",

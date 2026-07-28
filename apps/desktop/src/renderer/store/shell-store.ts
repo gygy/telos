@@ -18,7 +18,12 @@ import { create } from "zustand";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "../lib/i18n.ts";
 import { SHELL_SIDEBAR } from "../lib/layout.ts";
 import { SIDEBAR_DEFAULT_TRANSLUCENT, clampSidebarWidth } from "../lib/sidebar-prefs.ts";
-import { COMPLETED_MARKER_MS, isBusyRunState, type SessionMarker } from "../lib/session-markers.ts";
+import {
+  COMPLETED_MARKER_MS,
+  STICKY_TERMINAL_MARKER_MS,
+  isBusyRunState,
+  type SessionMarker,
+} from "../lib/session-markers.ts";
 import type { ThreadRunState } from "../lib/timeline.ts";
 import {
   applyRuntimeEventToLiveStream,
@@ -45,25 +50,25 @@ import {
 
 export type { ContentMode };
 
-/** Timers that clear the completed checkmark back to idle. */
-const completedMarkerTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Timers that clear terminal sidebar glyphs (completed / failed / aborted / …) back to idle. */
+const markerClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function clearCompletedTimer(key: string): void {
-  const timer = completedMarkerTimers.get(key);
+function clearMarkerTimer(key: string): void {
+  const timer = markerClearTimers.get(key);
   if (timer !== undefined) {
     clearTimeout(timer);
-    completedMarkerTimers.delete(key);
+    markerClearTimers.delete(key);
   }
 }
 
-function scheduleCompletedClear(key: string, apply: () => void): void {
-  clearCompletedTimer(key);
-  completedMarkerTimers.set(
+function scheduleMarkerClear(key: string, delayMs: number, apply: () => void): void {
+  clearMarkerTimer(key);
+  markerClearTimers.set(
     key,
     setTimeout(() => {
-      completedMarkerTimers.delete(key);
+      markerClearTimers.delete(key);
       apply();
-    }, COMPLETED_MARKER_MS),
+    }, delayMs),
   );
 }
 
@@ -451,7 +456,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
     // Never toggle global `running` without a session identity — that stuck the
     // composer/sidebar after switches when sessionFile was briefly empty.
     if (!key) return;
-    clearCompletedTimer(key);
+    clearMarkerTimer(key);
     set((state) => {
       const sessionMarkers = { ...state.sessionMarkers };
       const runningSessions = { ...state.runningSessions };
@@ -471,16 +476,27 @@ export const useShellStore = create<ShellState>((set, get) => ({
         const rid = options.runtimeId;
         if (markerState === "idle") {
           if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
-          // Keep lastSessionByRuntime for late settle / unread — cleared on settle.
+          // Drop durable map so a recycled runtime cannot re-target this row.
+          delete lastSessionByRuntime[rid];
         } else if (isBusyRunState(markerState)) {
           // Only bind runtime→session while busy. Drop on settle so late events
           // cannot re-light a finished row.
           runningRuntimeIds[rid] = key;
           lastSessionByRuntime[rid] = key;
+          // A new busy turn owns this session — drop other runtimes' durable maps
+          // that still point here (stale abort/fail settles must not win later).
+          for (const [otherRid, sessionKeyForRid] of Object.entries(lastSessionByRuntime)) {
+            if (otherRid !== rid && sessionKeyForRid === key) {
+              delete lastSessionByRuntime[otherRid];
+            }
+          }
         } else {
-          // completed / failed / aborted / crashed — release busy binding.
+          // completed / failed / aborted / crashed — release busy + durable map.
+          // Clearing lastSessionByRuntime here is required: abort() sets aborted via
+          // setSessionMarker (not settleSessionByRuntime), and a late settle from the
+          // old runtime would otherwise re-apply failed/aborted after recovery.
           if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
-          // lastSessionByRuntime cleared by settleSessionByRuntime after unread.
+          delete lastSessionByRuntime[rid];
         }
       }
       // Composer stop tracks the *foreground* session only.
@@ -493,10 +509,17 @@ export const useShellStore = create<ShellState>((set, get) => ({
         running: fgKey ? Boolean(runningSessions[fgKey]) : false,
       };
     });
+    // Flash then clear — completed is short; failed/aborted/crashed a bit longer.
     if (markerState === "completed") {
-      scheduleCompletedClear(key, () => {
+      scheduleMarkerClear(key, COMPLETED_MARKER_MS, () => {
         const current = get().sessionMarkers[key];
         if (current?.state !== "completed") return;
+        get().setSessionMarker(key, "idle");
+      });
+    } else if (markerState === "failed" || markerState === "aborted" || markerState === "crashed") {
+      scheduleMarkerClear(key, STICKY_TERMINAL_MARKER_MS, () => {
+        const current = get().sessionMarkers[key];
+        if (current?.state !== markerState) return;
         get().setSessionMarker(key, "idle");
       });
     }
@@ -504,10 +527,25 @@ export const useShellStore = create<ShellState>((set, get) => ({
   setSessionRunning: (sessionKey, runningFlag, runtimeId) => {
     if (runningFlag) {
       get().setSessionMarker(sessionKey, "running", runtimeId ? { runtimeId } : undefined);
+      // Mirror under the alternate session identity so sidebar rows keyed by
+      // path vs id both resolve (common after terminal ↔ chat session.switch).
+      const snap = get().snapshot;
+      const fileKey = sessionRunKey(snap?.sessionFile);
+      const idKey = sessionRunKey(snap?.sessionId);
+      const primary = sessionRunKey(sessionKey);
+      if (fileKey && idKey && fileKey !== idKey && (primary === fileKey || primary === idKey)) {
+        const other = primary === fileKey ? idKey : fileKey;
+        const marker = get().sessionMarkers[primary];
+        if (marker) {
+          set((state) => ({
+            sessionMarkers: { ...state.sessionMarkers, [other]: marker },
+            runningSessions: { ...state.runningSessions, [other]: true as const },
+          }));
+        }
+      }
       return;
     }
-    // End of prompt IPC: keep terminal markers (failed/aborted/completed from events).
-    // Do not invent "completed" here — agent.settled owns the success flash.
+    // End of prompt IPC: keep terminal outcomes (failed/aborted/completed from events).
     const key = sessionRunKey(sessionKey);
     if (!key) return;
     const existing = get().sessionMarkers[key];
@@ -523,6 +561,15 @@ export const useShellStore = create<ShellState>((set, get) => ({
       });
       return;
     }
+    // Still busy in the map when prompt IPC returns: do NOT wipe to idle.
+    // Race with agent.settled used to clear the spinner before completed/failed
+    // landed (worse on terminal hops where event ordering is less predictable).
+    // Soft-complete so the rail keeps a glyph; settle may overwrite with the
+    // authoritative outcome (or the completed timer fades this away).
+    if (existing && isBusyRunState(existing.state)) {
+      get().setSessionMarker(sessionKey, "completed", runtimeId ? { runtimeId } : undefined);
+      return;
+    }
     get().setSessionMarker(sessionKey, "idle", runtimeId ? { runtimeId } : undefined);
   },
   sessionKeyForRuntime: (runtimeId) => {
@@ -533,11 +580,23 @@ export const useShellStore = create<ShellState>((set, get) => ({
   settleSessionByRuntime: (runtimeId, markerState, reason) => {
     const key = get().sessionKeyForRuntime(runtimeId);
     if (!key) return;
+    const state = get();
+    // Ignore late settles from an old runtime once a newer turn owns this session.
+    const ownerRid = Object.entries(state.runningRuntimeIds).find(([, k]) => k === key)?.[0];
+    if (ownerRid && ownerRid !== runtimeId && isBusyRunState(state.sessionMarkers[key]?.state)) {
+      set((s) => {
+        if (!s.lastSessionByRuntime[runtimeId]) return s;
+        const lastSessionByRuntime = { ...s.lastSessionByRuntime };
+        delete lastSessionByRuntime[runtimeId];
+        return { lastSessionByRuntime };
+      });
+      return;
+    }
     get().setSessionMarker(key, markerState, { runtimeId, ...(reason ? { reason } : {}) });
     // Drop durable mapping after settle so a recycled runtime id cannot target the old row.
-    set((state) => {
-      if (!state.lastSessionByRuntime[runtimeId]) return state;
-      const lastSessionByRuntime = { ...state.lastSessionByRuntime };
+    set((s) => {
+      if (!s.lastSessionByRuntime[runtimeId]) return s;
+      const lastSessionByRuntime = { ...s.lastSessionByRuntime };
       delete lastSessionByRuntime[runtimeId];
       return { lastSessionByRuntime };
     });
@@ -662,22 +721,42 @@ export const useShellStore = create<ShellState>((set, get) => ({
     set((state) => {
       const key = sessionKeyFromSnapshot(input.snapshot);
       const idKey = sessionRunKey(input.snapshot.sessionId);
-      // Integrity: drop busy markers that lost their runningSessions entry (orphans
-      // from lifecycle events). Keep markers for sessions still tracked as busy
-      // (including background/parked turns).
+      // Integrity for busy glyphs during session/terminal hops:
+      // - Keep busy markers that still have runningSessions OR a runtime binding
+      //   (runningRuntimeIds / lastSessionByRuntime). Terminal ↔ chat switches
+      //   call applySessionOpen often; dropping busy glyphs without a binding
+      //   caused "spinner missing" on the rail.
+      // - Drop true orphans (busy glyph, no busy map, no runtime map).
+      const runtimeBoundKeys = new Set<string>();
+      for (const sessionKey of Object.values(state.runningRuntimeIds)) {
+        if (sessionKey) runtimeBoundKeys.add(sessionKey);
+      }
+      for (const sessionKey of Object.values(state.lastSessionByRuntime)) {
+        if (sessionKey) runtimeBoundKeys.add(sessionKey);
+      }
       const sessionMarkers: Record<string, SessionMarker> = {};
       const runningSessions: Record<string, true> = {};
       for (const [k, marker] of Object.entries(state.sessionMarkers)) {
-        if (isBusyRunState(marker.state) && !state.runningSessions[k]) {
-          continue; // stale busy — discard
+        if (isBusyRunState(marker.state) && !state.runningSessions[k] && !runtimeBoundKeys.has(k)) {
+          continue; // true orphan busy — discard
         }
         sessionMarkers[k] = marker;
         if (isBusyRunState(marker.state)) runningSessions[k] = true;
       }
-      // Re-sync runningSessions from surviving busy markers only.
+      // Re-sync runningSessions from surviving busy markers + prior map.
       for (const k of Object.keys(state.runningSessions)) {
         if (sessionMarkers[k] && isBusyRunState(sessionMarkers[k]?.state)) {
           runningSessions[k] = true;
+        }
+      }
+      // Mirror path ↔ id so ProjectList rows keyed either way keep the glyph.
+      if (key && idKey && key !== idKey) {
+        if (sessionMarkers[key] && !sessionMarkers[idKey]) {
+          sessionMarkers[idKey] = sessionMarkers[key]!;
+          if (isBusyRunState(sessionMarkers[key]?.state)) runningSessions[idKey] = true;
+        } else if (sessionMarkers[idKey] && !sessionMarkers[key]) {
+          sessionMarkers[key] = sessionMarkers[idKey]!;
+          if (isBusyRunState(sessionMarkers[idKey]?.state)) runningSessions[key] = true;
         }
       }
       const busyHere = Boolean((key && runningSessions[key]) || (idKey && runningSessions[idKey]));
@@ -714,7 +793,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
       };
     }),
   resetAfterStop: () => {
-    for (const key of completedMarkerTimers.keys()) clearCompletedTimer(key);
+    for (const key of markerClearTimers.keys()) clearMarkerTimer(key);
     set({
       snapshot: undefined,
       threads: [],
@@ -743,7 +822,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
       const lastSessionByRuntime = { ...state.lastSessionByRuntime };
       const sessionMarkers = { ...state.sessionMarkers };
       if (fgKey) {
-        clearCompletedTimer(fgKey);
+        clearMarkerTimer(fgKey);
         delete runningSessions[fgKey];
         sessionMarkers[fgKey] = { state: "crashed", reason: message };
       }
