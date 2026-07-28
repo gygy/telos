@@ -87,17 +87,35 @@ pnpm build        # all workspace packages (desktop + landing + libs)
 ## Package (desktop)
 
 ```bash
-pnpm package   # platform installers (NSIS / DMG / AppImage+deb)
+pnpm package   # platform installers + electron-updater feeds for this OS
 ```
 
-Installers land under `apps/desktop/release/app/` (unsigned in CI — no code-signing certs yet).
+Output: `apps/desktop/release/app/` (unsigned in CI — no code-signing certs yet).
+
+### GitHub Release assets
+
+Each tagged release publishes only what installers and **electron-updater** need:
+
+| Asset                                       | Role                                        |
+| ------------------------------------------- | ------------------------------------------- |
+| `Pix-*-win-x64.exe`                         | Windows install (NSIS)                      |
+| `latest.yml`                                | Windows update feed                         |
+| `Pix-*-mac-arm64.dmg` / `Pix-*-mac-x64.dmg` | macOS manual install                        |
+| `Pix-*-mac-arm64.zip` / `Pix-*-mac-x64.zip` | macOS **auto-update** payload               |
+| `latest-mac.yml`                            | macOS update feed (lists both zips)         |
+| `Pix-*-linux-*.AppImage`                    | Linux run / update                          |
+| `Pix-*-linux-*.deb`                         | Linux manual install (optional convenience) |
+| `latest-linux.yml`                          | Linux update feed                           |
+| `*.blockmap`                                | Differential download maps (when generated) |
+
+CI **fails** if any required feed or mac zip is missing (`scripts/release-assets.mjs`). Blockmaps are kept when present so updates can download only changed ranges.
 
 ## CI & Release
 
-| Workflow    | File                            | When                      | What                                                                                               |
-| ----------- | ------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build                                                |
-| **Release** | `.github/workflows/release.yml` | push `v*` tag (or manual) | multi-platform installers → **GitHub Release** (Win NSIS, mac DMG arm64+Intel, Linux AppImage+deb) |
+| Workflow    | File                            | When                      | What                                                           |
+| ----------- | ------------------------------- | ------------------------- | -------------------------------------------------------------- |
+| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build            |
+| **Release** | `.github/workflows/release.yml` | push `v*` tag (or manual) | multi-platform installers + updater feeds → **GitHub Release** |
 
 ### Versioning
 
@@ -118,7 +136,7 @@ git tag v0.1.0
 git push origin main --tags
 ```
 
-Tag must match desktop version (`v` + semver). That builds unsigned installers (Windows NSIS `.exe`, macOS `.dmg` + `.zip` for arm64 + Intel, Linux `.AppImage` + `.deb`) plus electron-updater metadata (`latest.yml` / `latest-mac.yml` / `latest-linux.yml` and blockmaps), and publishes them on the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
+Tag must match desktop version (`v` + semver). That builds unsigned installers plus the three electron-updater feeds (`latest.yml` / `latest-mac.yml` / `latest-linux.yml`) and mac zip archives, then attaches them to the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
 
 > **macOS note:** auto-update works best with a signed/notarized app. Unsigned builds may fail code-signature verification when installing updates; Windows NSIS and Linux AppImage are the more reliable unsigned paths today.
 

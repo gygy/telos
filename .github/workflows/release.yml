@@ -1,5 +1,10 @@
 # Tag-driven multi-platform installers + GitHub Release.
-# Push a tag like v0.1.0 → build NSIS / DMG+zip / AppImage+deb + update metadata → attach to the release.
+# Push v* → build installers + electron-updater feeds → attach to the release.
+#
+# Required release assets (scripts/release-assets.mjs):
+#   Pix-*-win-x64.exe          + latest.yml  (+ *.blockmap when generated)
+#   Pix-*-mac-{arm64,x64}.dmg  + Pix-*-mac-{arm64,x64}.zip + latest-mac.yml
+#   Pix-*-linux-*.AppImage     + latest-linux.yml  (+ optional .deb / blockmap)
 name: Release
 
 on:
@@ -65,44 +70,15 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: Collect installers and update metadata
+      - name: Collect installers and updater feeds
         shell: bash
         run: |
           set -euo pipefail
-          out="apps/desktop/release/app"
-          if [[ ! -d "$out" ]]; then
-            echo "Missing package output: $out" >&2
-            exit 1
-          fi
-          mkdir -p artifacts
-          shopt -s nullglob
-          # Installers + electron-updater metadata (yml/blockmap) + mac zip feed.
-          matched=(
-            "$out"/*.exe
-            "$out"/*.dmg
-            "$out"/*.AppImage
-            "$out"/*.deb
-            "$out"/*.zip
-            "$out"/*.yml
-            "$out"/*.yaml
-            "$out"/*.blockmap
-          )
-          if [[ ${#matched[@]} -eq 0 ]]; then
-            echo "No installer artifacts under $out" >&2
-            ls -la "$out" >&2 || true
-            exit 1
-          fi
-          for file in "${matched[@]}"; do
-            base="$(basename "$file")"
-            # Arch-split mac runners each emit latest-mac.yml — rename so publish can merge.
-            if [[ "$base" == "latest-mac.yml" || "$base" == "latest-mac.yaml" ]]; then
-              cp -f "$file" "artifacts/latest-mac-${{ runner.arch }}.yml"
-              ls -lh "artifacts/latest-mac-${{ runner.arch }}.yml"
-              continue
-            fi
-            cp -f "$file" "artifacts/$base"
-            ls -lh "artifacts/$base"
-          done
+          node scripts/release-assets.mjs collect \
+            apps/desktop/release/app \
+            artifacts \
+            --platform "${{ matrix.platform }}" \
+            --arch "${{ runner.arch }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -130,21 +106,24 @@ jobs:
           pattern: pix-*
           merge-multiple: true
 
-      - name: Merge latest-mac.yml for multi-arch
+      - name: Merge latest-mac.yml (arm64 + x64)
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
           mac_yml=(release-assets/latest-mac-*.yml)
           if [[ ${#mac_yml[@]} -eq 0 ]]; then
-            echo "No mac update yml found (ok if mac packaging skipped)"
-            ls -la release-assets || true
-            exit 0
+            echo "Missing arch-split latest-mac-*.yml from mac package jobs" >&2
+            ls -la release-assets >&2 || true
+            exit 1
           fi
           node scripts/merge-latest-mac-yml.mjs release-assets release-assets/latest-mac.yml
-          # Keep only the merged feed name on the release.
           rm -f release-assets/latest-mac-*.yml
           ls -lh release-assets/latest-mac.yml
+
+      - name: Validate release assets
+        shell: bash
+        run: node scripts/release-assets.mjs validate-publish release-assets
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

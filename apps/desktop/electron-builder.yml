@@ -23,10 +23,16 @@ directories:
   output: release/app
   buildResources: build
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-# electron-updater reads GitHub Releases (latest.yml / latest-mac.yml / latest-linux.yml).
-# CI still packages with `--publish never`; softprops uploads artifacts + update metadata.
-# app-update.yml is written by electron-builder for dmg/zip/nsis targets, and always by
-# scripts/after-pack.mjs so directory packs also get a valid updater feed.
+# Auto-update via electron-updater + GitHub Releases.
+# CI packages with `--publish never` (yml still generated); softprops attaches assets.
+#
+# Release asset policy (see scripts/release-assets.mjs):
+#   installers — exe / dmg×2 / AppImage / deb
+#   mac zip×2  — auto-update payload (not dmg)
+#   feeds      — latest.yml · latest-mac.yml · latest-linux.yml
+#   blockmaps  — differential downloads when electron-builder emits them
+#
+# app-update.yml is embedded by electron-builder and always by scripts/after-pack.mjs.
 publish:
   provider: github
   owner: num-scope
@@ -35,7 +41,7 @@ publish:
 mac:
   identity: null
   icon: icon.icns
-  # zip is required for electron-updater on macOS; dmg remains the manual installer.
+  # zip is required for electron-updater (Squirrel.Mac); dmg is manual install only.
   target:
     - dmg
     - zip
@@ -43,7 +49,8 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
 dmg:
-  writeUpdateInfo: true
+  # latest-mac.yml must list .zip, not .dmg.
+  writeUpdateInfo: false
 win:
   icon: icon.ico
   # Keep true so rcedit writes icon.ico into Pix.exe (taskbar + Start Menu).
@@ -66,6 +73,7 @@ linux:
   icon: icon.png
   executableName: Pix
   maintainer: num-scope <noreply@users.noreply.github.com>
+  # AppImage writes latest-linux.yml; deb is manual install convenience.
   target:
     - AppImage
     - deb

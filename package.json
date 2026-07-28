@@ -19,7 +19,8 @@
     "electron:install": "vp run --no-cache @pix/desktop#electron:install",
     "e2e": "vp run --no-cache @pix/desktop#e2e",
     "package": "vp run --no-cache @pix/desktop#package",
-    "version:set": "node scripts/set-version.mjs"
+    "version:set": "node scripts/set-version.mjs",
+    "test:release-assets": "node scripts/release-assets.test.mjs && node scripts/merge-latest-mac-yml.test.mjs"
   },
   "devDependencies": {
     "@types/node": "catalog:",

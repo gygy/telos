@@ -41,5 +41,8 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: Release asset policy tests
+        run: pnpm test:release-assets
+
       - name: Build packages
         run: pnpm build

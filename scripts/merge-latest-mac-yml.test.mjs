@@ -1,6 +1,7 @@
 /**
- * Lightweight smoke for merge-latest-mac-yml.mjs (no vitest dependency at root).
+ * Unit test for merge-latest-mac-yml.mjs (no vitest at root).
  * Run: node scripts/merge-latest-mac-yml.test.mjs
+ * Or:  pnpm test:release-assets
  */
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
