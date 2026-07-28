@@ -159,6 +159,9 @@ const ATTACHMENT_TYPES: Record<string, AttachmentPresentation> = {
   yml: { kind: "code", typeLabel: "YAML" },
 };
 
+/** Public source of truth used by the renderer demo to cover every recognized file format. */
+export const SUPPORTED_ATTACHMENT_EXTENSIONS = Object.freeze(Object.keys(ATTACHMENT_TYPES));
+
 export function attachmentPresentation(path: string): AttachmentPresentation {
   const name = attachmentLabel(path);
   const extension = /\.([^.]+)$/.exec(name)?.[1]?.toLocaleLowerCase();
@@ -176,9 +179,9 @@ export function isPromptImagePath(path: string): boolean {
   return /\.(?:png|jpe?g|gif|webp)$/i.test(attachmentLabel(path));
 }
 
-/** Images we can show as AttachmentMedia variant="image" thumbnails. */
+/** Images we can attempt to show as AttachmentMedia variant="image" thumbnails. */
 export function isPreviewableImagePath(path: string): boolean {
-  return /\.(?:png|jpe?g|gif|webp|bmp)$/i.test(attachmentLabel(path));
+  return attachmentPresentation(path).kind === "image";
 }
 
 function escapeXml(value: string): string {

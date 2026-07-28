@@ -463,6 +463,7 @@ export function projectSessionHistory(
         arguments?: unknown;
         input?: unknown;
         command?: string;
+        details?: unknown;
       };
       const args =
         raw.args !== undefined
@@ -492,6 +493,8 @@ export function projectSessionHistory(
       };
       if (args !== undefined) item.args = args;
       if (command) item.command = command;
+      // pi edit stores real file line numbers in details.diff / details.patch — keep for UI.
+      if (raw.details !== undefined) item.details = raw.details;
       if (entryId) item.entryId = entryId;
       history.push(item);
     } else if (row.role === "bashExecution") {

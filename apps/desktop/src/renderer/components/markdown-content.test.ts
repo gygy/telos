@@ -91,6 +91,8 @@ describe("MarkdownContent", () => {
     expect(html).toContain("content-source-line");
     expect(html).toContain(":12:3");
     expect(html).toContain('title="/work/project/src/app.ts:12:3"');
+    // Basename / path-like labels collapse to workspace-relative form (session UI).
+    expect(html).toContain("src/app.ts");
   });
 
   it("renders markdown reference-style links", () => {

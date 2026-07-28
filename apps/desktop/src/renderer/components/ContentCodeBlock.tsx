@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
@@ -165,18 +164,18 @@ export function ContentCodeBlock(props: {
   return (
     <div className="content-code-block" data-language={language}>
       <div className="content-code-header">
-        <Badge variant="secondary" className="rounded-sm font-mono text-[11px] font-normal">
+        <span className="content-code-language font-mono text-[11px] font-normal">
           {language === "plaintext" ? "text" : language}
-        </Badge>
+        </span>
         <Button
           type="button"
           variant="ghost"
-          size="xs"
+          size="icon-xs"
           onClick={() => void copyCode()}
-          aria-label={t(locale, "timeline.codeCopy")}
+          aria-label={t(locale, copied ? "timeline.codeCopied" : "timeline.codeCopy")}
+          title={t(locale, copied ? "timeline.codeCopied" : "timeline.codeCopy")}
         >
           {copied ? <Check /> : <Copy />}
-          <span>{t(locale, copied ? "timeline.codeCopied" : "timeline.codeCopy")}</span>
         </Button>
       </div>
       {language === "mermaid" ? (

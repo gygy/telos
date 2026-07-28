@@ -330,7 +330,7 @@ function splitContentLines(text: string): string[] {
 
 /**
  * Pi TUI / edit-diff display format: "+12 content", "- 3 content", " 10 content".
- * Embeds 1-based file line numbers after the prefix.
+ * Embeds 1-based **file** line numbers after the prefix (must be real offsets, not snippet-local 1..n).
  */
 function prefixLinesNumbered(text: string, sign: "+" | "-", startLine: number): string {
   const lines = text ? splitContentLines(text) : [""];
@@ -341,13 +341,17 @@ function prefixLinesNumbered(text: string, sign: "+" | "-", startLine: number): 
     .join("\n");
 }
 
+/** Plain unified body lines without inventing file line numbers. */
+function prefixLinesPlain(text: string, sign: "+" | "-"): string {
+  const lines = text ? splitContentLines(text) : [""];
+  return lines.map((line) => `${sign}${line}`).join("\n");
+}
+
 /**
- * Build a display-oriented diff from edit/write tool args (pi-style line numbers).
- * - edit: path + edits[{oldText,newText}] or legacy oldText/newText / old_string/new_string
- * - write: path + content as all-addition lines starting at file line 1
- *
- * Prefer {@link extractToolDiffDetails} when the tool result includes `details.diff`
- * (real file line numbers from the agent).
+ * Build a display-oriented diff from edit/write tool args.
+ * - write: path + content as all-addition lines with real file line numbers starting at 1
+ * - edit (args only): plain +/- body **without** fake 1-based numbers — real offsets only come
+ *   from pi `details.diff` / `details.patch` via {@link extractToolDiffDetails}
  */
 export function formatEditToolAsDiff(args: unknown, toolName?: string): string | undefined {
   const kind = toolName ? classifyToolName(toolName) : "edit";
@@ -378,24 +382,22 @@ export function formatEditToolAsDiff(args: unknown, toolName?: string): string |
     : [`--- a/${path}`, `+++ b/${path}`];
   for (let i = 0; i < edits.length; i++) {
     const edit = edits[i]!;
-    const oldCount = edit.oldText ? splitContentLines(edit.oldText).length : 0;
-    const newCount = edit.newText ? splitContentLines(edit.newText).length : edit.oldText ? 0 : 1;
-    // Without reading the file we only know write starts at 1; edit snippets fall back to 1.
-    // Live tool results should supply details.diff with true offsets.
-    const oldStart = isCreateOnly ? 0 : 1;
-    const newStart = 1;
-    if (edits.length > 1) {
-      chunks.push(
-        `@@ edit ${i + 1}/${edits.length} -${oldStart},${oldCount} +${newStart},${newCount} @@`,
-      );
-    } else if (isCreateOnly) {
+    if (isCreateOnly) {
+      // New file: line numbers 1..n are real file lines.
+      const newCount = edit.newText ? splitContentLines(edit.newText).length : 1;
       chunks.push(`@@ -0,0 +1,${newCount} @@`);
-    } else {
-      chunks.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+      if (edit.newText) chunks.push(prefixLinesNumbered(edit.newText, "+", 1));
+      else chunks.push(prefixLinesNumbered("", "+", 1));
+      continue;
     }
-    if (edit.oldText) chunks.push(prefixLinesNumbered(edit.oldText, "-", oldStart || 1));
-    if (edit.newText) chunks.push(prefixLinesNumbered(edit.newText, "+", newStart));
-    else if (!edit.oldText) chunks.push(prefixLinesNumbered("", "+", newStart));
+    // Edit without details.diff: show the change, but do not invent file offsets.
+    // (No @@ tracking header → parser leaves lineNo empty.)
+    if (edits.length > 1) {
+      chunks.push(`@@ edit ${i + 1}/${edits.length} @@`);
+    }
+    if (edit.oldText) chunks.push(prefixLinesPlain(edit.oldText, "-"));
+    if (edit.newText) chunks.push(prefixLinesPlain(edit.newText, "+"));
+    else if (!edit.oldText) chunks.push(prefixLinesPlain("", "+"));
   }
   return chunks.join("\n");
 }

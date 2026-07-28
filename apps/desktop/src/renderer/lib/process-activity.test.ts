@@ -106,23 +106,28 @@ describe("process activity", () => {
     ).toContain("Get-Process");
   });
 
-  it("formats edit tool args as a display diff with file line numbers", () => {
+  it("formats edit tool args as a plain diff without inventing file line numbers", () => {
     const diff = formatEditToolAsDiff({
       path: "src/app.ts",
       edits: [{ oldText: "return 42", newText: "return 43" }],
     });
     expect(diff).toContain("--- a/src/app.ts");
     expect(diff).toContain("+++ b/src/app.ts");
-    expect(diff).toMatch(/^-1 return 42$/m);
-    expect(diff).toMatch(/^\+1 return 43$/m);
+    // Args-only edit must not claim snippet-local 1..n as file line numbers.
+    expect(diff).toMatch(/^-return 42$/m);
+    expect(diff).toMatch(/^\+return 43$/m);
+    expect(diff).not.toMatch(/^-1 return 42$/m);
+    expect(diff).not.toMatch(/^\+1 return 43$/m);
+    // No @@ -N,+N tracking header that would make the parser invent offsets.
+    expect(diff).not.toMatch(/^@@\s+-\d+/m);
 
     const legacy = formatEditToolAsDiff({
       path: "a.ts",
       old_string: "foo",
       new_string: "bar",
     });
-    expect(legacy).toMatch(/^-1 foo$/m);
-    expect(legacy).toMatch(/^\+1 bar$/m);
+    expect(legacy).toMatch(/^-foo$/m);
+    expect(legacy).toMatch(/^\+bar$/m);
 
     expect(looksLikeDiffText("--- a/x\n+++ b/x\n@@\n-old\n+new\n")).toBe(true);
     expect(looksLikeDiffText("+12 old\n-11 new")).toBe(true);
@@ -164,6 +169,17 @@ describe("process activity", () => {
       ["remove", 20, "-old"],
       ["add", 20, "+new"],
       [undefined, 21, " keep"],
+    ]);
+
+    // Args-only fallback: plain +/- without inventing line numbers.
+    const plain = parseDiffDisplayLines(
+      ["--- a/x", "+++ b/x", "-return 42", "+return 43"].join("\n"),
+    );
+    expect(plain.map((r) => [r.kind, r.lineNo, r.text])).toEqual([
+      ["meta", undefined, "--- a/x"],
+      ["meta", undefined, "+++ b/x"],
+      ["remove", undefined, "-return 42"],
+      ["add", undefined, "+return 43"],
     ]);
   });
 

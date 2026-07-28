@@ -1,24 +1,13 @@
 /**
  * View-mode session content demo — same components and wiring as product chat.
  *
- * TimelineItem[] → buildTimelineBlocks → TimelineProcessBlock / TimelineRow /
- * deriveLiveActivity → TimelineLiveStatus (mirrors main.tsx).
+ * TimelineItem[] → SessionTimelineScroller (the exact component used by main.tsx).
  *
  * No decorative phase galleries; no force-open of completed process blocks.
  */
 import { useEffect, useMemo } from "react";
-import {
-  TimelineLiveStatus,
-  TimelineProcessBlock,
-  TimelineRow,
-} from "./components/TimelineRow.tsx";
+import { SessionTimelineScroller } from "./components/SessionTimelineContent.tsx";
 import { applyDocumentTheme } from "./lib/theme.ts";
-import {
-  buildTimelineBlocks,
-  deriveLiveActivity,
-  processBlockCoversLiveActivity,
-} from "./lib/timeline.ts";
-import { cn } from "./lib/utils.ts";
 import {
   allDemoScenarios,
   DEMO_WORKSPACE,
@@ -54,66 +43,29 @@ function ScenarioTimeline(props: { scenario: DemoScenario; locale: "zh" | "en" }
   const waiting = Boolean(scenario.waiting);
   const events = scenario.events ?? [];
 
-  const blocks = useMemo(() => buildTimelineBlocks(scenario.items), [scenario.items]);
-
-  // Same derivation as main.tsx — do not hand-pick live phases for effect.
-  const liveActivity = useMemo(
-    () =>
-      deriveLiveActivity({
-        items: scenario.items,
-        events,
-        running,
-        waiting,
-      }),
-    [scenario.items, events, running, waiting],
-  );
-  const showLiveStatus =
-    liveActivity != null && !processBlockCoversLiveActivity(blocks, liveActivity);
-
   return (
     <div
-      className={cn(
-        "thread-content-column thread-content-column-stack gap-0",
-        "thread-messages-active rounded-lg border border-border/60 bg-background px-3 pt-6 pb-8",
-      )}
+      className="thread-pane h-auto overflow-hidden rounded-lg border border-border/60 bg-background"
       data-testid={`timeline-${scenario.id}`}
-      data-content-mode="chat"
       data-demo="session-content"
       data-demo-scenario={scenario.id}
     >
-      {blocks.map((block) => {
-        const messageId = block.type === "process" ? block.id : block.item.id;
-        return (
-          <div key={messageId} className="w-full" data-message-id={messageId}>
-            {block.type === "process" ? (
-              <TimelineProcessBlock
-                locale={locale}
-                items={block.items}
-                open={Boolean(block.open)}
-                running={running}
-                waiting={waiting}
-                {...(block.open && liveActivity?.phase ? { livePhase: liveActivity.phase } : {})}
-                {...(block.startedAt ? { startedAt: block.startedAt } : {})}
-                {...(block.endedAt ? { endedAt: block.endedAt } : {})}
-                {...(block.durationLabel ? { durationLabel: block.durationLabel } : {})}
-                workspacePath={DEMO_WORKSPACE}
-              />
-            ) : (
-              <TimelineRow
-                item={block.item}
-                locale={locale}
-                workspacePath={DEMO_WORKSPACE}
-                editingLocked={running || waiting}
-              />
-            )}
-          </div>
-        );
-      })}
-      {showLiveStatus && liveActivity ? (
-        <div className="w-full" data-message-id={`${scenario.id}:live-status`}>
-          <TimelineLiveStatus locale={locale} activity={liveActivity} />
-        </div>
-      ) : null}
+      <SessionTimelineScroller
+        autoScroll={scenario.items.length > 0}
+        viewportSizing="content"
+        viewportBusy={false}
+        viewportReady
+        items={scenario.items}
+        events={events}
+        running={running}
+        waiting={waiting}
+        locale={locale}
+        sessionKey={scenario.id}
+        workspacePath={DEMO_WORKSPACE}
+        onEditUser={() => undefined}
+        onForkAssistant={() => undefined}
+        testId={`timeline-content-${scenario.id}`}
+      />
     </div>
   );
 }
@@ -130,13 +82,12 @@ export function SessionContentDemoApp() {
       data-testid="session-content-demo"
       data-theme="dark"
     >
-      <div className="mx-auto max-w-3xl space-y-10 px-4 py-6 pb-16">
+      <div className="mx-auto max-w-[840px] space-y-10 px-4 py-6 pb-16">
         <header className="space-y-2">
           <h1 className="text-lg font-semibold tracking-tight">视图模式 · 会话内容渲染</h1>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            仅使用产品 chat 时间线真实路径与数据形态：TimelineItem → buildTimelineBlocks →
-            TimelineProcessBlock / TimelineRow / deriveLiveActivity → TimelineLiveStatus。快照与
-            smoke/e2e 的 fake 模型 rich content、pi 工具 payload 对齐；不编造额外 UI 状态。
+            与应用直接共用 SessionTimelineScroller 和相同的数据形态。快照与 smoke/e2e 的 fake 模型
+            rich content、pi 工具 payload 对齐；不维护第二套近似渲染。
           </p>
           <p className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
             启动：

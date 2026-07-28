@@ -382,6 +382,11 @@ export interface SessionHistoryMessage {
   command?: string;
   /** Tool call args when persisted on the session message (for process-row previews). */
   args?: unknown;
+  /**
+   * Tool result payload from pi (e.g. edit `details.diff` / `details.patch` with real file line numbers).
+   * Must be preserved so history reload does not fall back to fake 1-based snippet line numbers.
+   */
+  details?: unknown;
   exitCode?: number;
   excludeFromContext?: boolean;
   title?: string;

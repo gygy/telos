@@ -60,7 +60,7 @@ function MarkerContent({ className, ...props }: React.ComponentProps<"span">) {
       data-slot="marker-content"
       className={cn(
         "min-w-0 wrap-break-word group-data-[variant=separator]/marker:flex-none group-data-[variant=separator]/marker:text-center *:[a]:text-[var(--link,#379cfc)] *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-[var(--link,#379cfc)]/90",
-        // Live/processing markers: sweep text like attachment upload shimmer.
+        // shadcn: apply the `shimmer` utility when parent Marker has data-shimmer.
         "group-data-[shimmer=true]/marker:shimmer",
         className,
       )}

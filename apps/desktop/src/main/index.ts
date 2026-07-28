@@ -5100,7 +5100,21 @@ void app
         return undefined;
       }
       const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase();
-      if (![".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(ext)) {
+      if (
+        ![
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".gif",
+          ".webp",
+          ".svg",
+          ".bmp",
+          ".tif",
+          ".tiff",
+          ".heic",
+          ".avif",
+        ].includes(ext)
+      ) {
         return undefined;
       }
       try {

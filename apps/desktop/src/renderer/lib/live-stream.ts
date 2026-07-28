@@ -75,6 +75,19 @@ function shellOutputMarkdown(output: string, exitCode: number): string {
   return `\`\`\`text\n${body.trimEnd()}\n\`\`\``;
 }
 
+/** Stable union of attachment paths (optimistic + host echo). */
+function mergeAttachmentPaths(existing: string[] | undefined, incoming: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const path of [...(existing ?? []), ...incoming]) {
+    const key = path.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
 export type ApplyLiveStreamOptions = {
   /** Host runtime.event sequence — used for at-most-once apply. */
   sequence?: number;
@@ -137,10 +150,21 @@ export function applyRuntimeEventToLiveStream(
       if (!prompt && source.paths.length === 0) {
         return mark({ ...state, promptIndex });
       }
-      // Optimistic send may already have appended this user row.
+      // Optimistic send may already have appended this user row (same display text).
+      // Merge attachment paths from host echo so chips aren't dropped on dedupe.
       const last = state.items[state.items.length - 1];
       if (last?.kind === "user" && last.text === prompt) {
-        return mark({ ...state, promptIndex });
+        if (source.paths.length === 0) {
+          return mark({ ...state, promptIndex });
+        }
+        const merged = mergeAttachmentPaths(last.attachments, source.paths);
+        const same =
+          merged.length === (last.attachments?.length ?? 0) &&
+          merged.every((path, index) => last.attachments?.[index] === path);
+        if (same) return mark({ ...state, promptIndex });
+        const items = state.items.slice();
+        items[items.length - 1] = { ...last, attachments: merged };
+        return mark({ ...state, items, promptIndex });
       }
       const { id, seq } = nextId(state, "user");
       const item: Extract<TimelineItem, { kind: "user" }> = {

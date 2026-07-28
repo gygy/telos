@@ -172,6 +172,8 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
         status: item.isError === true ? "error" : "completed",
         output: item.text,
         ...(args !== undefined ? { args } : {}),
+        // edit tool details.diff has real 1-based file line numbers from pi.
+        ...(item.details !== undefined ? { details: item.details } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
         ...(item.endedAt ? { endedAt: item.endedAt } : {}),
       });

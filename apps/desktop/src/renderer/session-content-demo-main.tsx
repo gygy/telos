@@ -6,10 +6,15 @@
 import { StrictMode, Component, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { SessionContentDemoApp } from "./SessionContentDemoApp.tsx";
+import { isPreviewableImagePath } from "./lib/composer-suggestions.ts";
+
+/** Visible 96×56 demo PNG (slate panel + cyan bar) for attachment + markdown image previews. */
+const DEMO_IMAGE_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA4CAYAAAACRf2iAAAAi0lEQVR42u3bsQ1AEQBFURv8UqdnAonZ7aXzh5Agcoq7wDv1C18sU+cKRgAAQAAACAAAXQiQctNCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwA0A8pABIAAABOBNgNrH1LkAAABgCAAABACAAADQ5n5W7X3OJ+TI/wAAAABJRU5ErkJggg==";
 
 function installBrowserPixStub(): void {
   if (typeof window === "undefined") return;
-  // Only skip if a real preload already installed workspace APIs.
+  // Only skip if a real Electron preload already installed workspace APIs.
   const existing = window.pix as { workspace?: { readAttachmentPreview?: unknown } } | undefined;
   if (existing?.workspace && typeof existing.workspace.readAttachmentPreview === "function") {
     return;
@@ -22,11 +27,12 @@ function installBrowserPixStub(): void {
     openExternal: async (url: string) => {
       window.open(url, "_blank", "noopener,noreferrer");
     },
+    // Markdown MediaContent + attachment chips both use this (file:// is blocked on http demos).
     readAttachmentPreview: async (path: string) => {
-      if (/\.(?:png|jpe?g|gif|webp|bmp)$/i.test(path)) {
-        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC";
+      if (isPreviewableImagePath(path)) {
+        return DEMO_IMAGE_DATA_URL;
       }
-      return undefined as unknown as string;
+      return undefined;
     },
   };
 
@@ -74,7 +80,7 @@ class DemoErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
             {"\n\n"}
             {this.state.error.stack}
           </pre>
-          <p style={{ color: "#9aa3b5", fontSize: 13 }}>
+          <p style={{ color: "#acacac", fontSize: 13 }}>
             Do not open via <code>file://</code>. Run{" "}
             <code>pnpm --filter @pix/desktop demo:session-content</code>.
           </p>
@@ -93,10 +99,10 @@ function boot(): void {
     rootEl.innerHTML = `
       <div style="font-family:system-ui;max-width:36rem;margin:3rem auto;padding:1.25rem;line-height:1.55;color:#e8e8e8;background:#191919;border-radius:12px;border:1px solid #333">
         <h1 style="font-size:1.15rem;margin:0 0 0.75rem">不能用 file:// 打开</h1>
-        <p style="margin:0 0 0.75rem;color:#9aa3b5">本 demo 是 ES module 构建产物，浏览器禁止从本地文件加载模块，所以会黑屏。</p>
+        <p style="margin:0 0 0.75rem;color:#acacac">本 demo 是 ES module 构建产物，浏览器禁止从本地文件加载模块，所以会黑屏。</p>
         <p style="margin:0 0 0.5rem">在仓库根目录执行：</p>
         <pre style="background:#0d0d0d;padding:12px;border-radius:8px;overflow:auto;font-size:12px;margin:0 0 0.75rem">pnpm --filter @pix/desktop demo:session-content</pre>
-        <p style="margin:0;color:#9aa3b5;font-size:13px">会构建并打开 <code>http://127.0.0.1:4177/session-content-demo.html</code></p>
+        <p style="margin:0;color:#acacac;font-size:13px">会构建并打开 <code>http://127.0.0.1:4177/session-content-demo.html</code></p>
       </div>`;
     return;
   }

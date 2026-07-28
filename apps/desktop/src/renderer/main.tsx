@@ -47,19 +47,8 @@ import { PixLogo } from "./components/PixLogo.tsx";
 import { ThreadHeader } from "./components/ThreadHeader.tsx";
 import { PiTuiTerminal, preloadPiTuiTerminal } from "./components/PiTuiTerminal.tsx";
 import { WindowCaptionButtons } from "./components/WindowCaptionButtons.tsx";
-import {
-  TimelineLiveStatus,
-  TimelineProcessBlock,
-  TimelineRow,
-} from "./components/TimelineRow.tsx";
-import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "@/components/ui/message-scroller";
+import { SessionTimelineScroller } from "./components/SessionTimelineContent.tsx";
+import { MessageScrollerButton } from "@/components/ui/message-scroller";
 import { buildShellCommands } from "./lib/commands.ts";
 import { isPromptImagePath, promptWithAttachedPaths } from "./lib/composer-suggestions.ts";
 import {
@@ -114,14 +103,7 @@ import {
   workspaceLabel,
 } from "./lib/workspace.ts";
 import { appendHostEvent } from "./lib/host-events.ts";
-import {
-  buildTimelineBlocks,
-  deriveLiveActivity,
-  deriveRunState,
-  historyToTimeline,
-  processBlockCoversLiveActivity,
-  type TimelineItem,
-} from "./lib/timeline.ts";
+import { deriveRunState, historyToTimeline, type TimelineItem } from "./lib/timeline.ts";
 import {
   classifyRuntimeEventDelivery,
   sessionKeyFromSnapshot,
@@ -542,21 +524,8 @@ function App() {
     if (!sessionKey) return items;
     return items.map((item) => ({ ...item, id: `${sessionKey}:${item.id}` }));
   }, [history, liveStream, sessionKey, snapshot?.hideThinkingBlock]);
-  const timelineBlocks = useMemo(() => buildTimelineBlocks(timeline), [timeline]);
   const hasActivity = timeline.length > 0;
   const waitingForInput = runState === "waiting";
-  const liveActivity = useMemo(
-    () =>
-      deriveLiveActivity({
-        items: timeline,
-        events,
-        running,
-        waiting: waitingForInput,
-      }),
-    [timeline, events, running, waitingForInput],
-  );
-  const showLiveStatus =
-    liveActivity != null && !processBlockCoversLiveActivity(timelineBlocks, liveActivity);
   const activeThread = threads.find((thread) => thread.active);
   const threadTitle =
     activeThread?.title ||
@@ -1021,9 +990,6 @@ function App() {
     return () => ro.disconnect();
   }, [hasActivity, showContextUsage, accessVisibility, timelineReady]);
 
-  /** Pixels from scrollport bottom — MessageScroller autoScroll edge threshold. */
-  const SCROLL_BOTTOM_GAP_PX = 64;
-
   async function ensureHost(): Promise<HostSnapshot> {
     const store = useShellStore.getState();
     if (store.snapshot && store.runtimeId) return store.snapshot;
@@ -1435,11 +1401,12 @@ function App() {
     setPrompt("");
     setAttachments([]);
     setSentPrompts((current) => [...current, displayMessage]);
-    // Optimistic user row (append-only live stream). Host user.message dedupes if same text.
+    // Optimistic user row with the same payload as the host (includes <attached-paths>).
+    // Host user.message dedupes by text and merges attachment paths if needed.
     useShellStore
       .getState()
       .applyLiveStreamEvent(
-        { type: "user.message", content: displayMessage },
+        { type: "user.message", content: message },
         useShellStore.getState().sentPrompts,
       );
 
@@ -2752,243 +2719,170 @@ function App() {
                 </div>
               ) : (
                 <div className="thread-pane">
-                  <MessageScrollerProvider
+                  <SessionTimelineScroller
                     autoScroll={timelineReady && hasActivity}
-                    defaultScrollPosition="end"
-                    scrollEdgeThreshold={SCROLL_BOTTOM_GAP_PX}
-                  >
-                    <MessageScroller className="size-full min-h-0">
-                      <MessageScrollerViewport
-                        ref={timelineScrollRef}
-                        className={cn(
-                          "timeline-scroll thread-pane-scroll size-full min-h-0",
-                          !timelineReady && "invisible pointer-events-none",
-                        )}
-                        aria-busy={!timelineReady}
-                        data-ready={timelineReady ? "true" : "false"}
+                    viewportRef={timelineScrollRef}
+                    viewportClassName={cn(!timelineReady && "invisible pointer-events-none")}
+                    viewportBusy={!timelineReady}
+                    viewportReady={timelineReady}
+                    items={timeline}
+                    events={events}
+                    running={running}
+                    waiting={waitingForInput}
+                    locale={locale}
+                    sessionKey={sessionKey}
+                    {...(workspacePath ? { workspacePath } : {})}
+                    ready={timelineReady}
+                    editingLocked={running}
+                    endRef={timelineEndRef}
+                    onEditUser={(item, text) => void editUserAndResend(item, text)}
+                    onForkAssistant={(item) => {
+                      // pi fork: new session file from this assistant entry
+                      void forkThread(item.entryId);
+                    }}
+                    emptyState={
+                      <div
+                        className="thread-messages empty flex min-h-full flex-1 flex-col items-center justify-center px-4 text-center"
+                        data-testid="empty-hero"
                       >
+                        <PixLogo className="mb-5 size-12" title={t(locale, "app.name")} />
+                        <h1 className="m-0 max-w-lg text-[26px] leading-snug font-semibold tracking-[-0.03em] text-[var(--text)]">
+                          {workspacePath
+                            ? t(locale, "empty.title", { name: workspace.name })
+                            : isPureConversation || snapshot || pendingPureConversation
+                              ? t(locale, "empty.titleConversation")
+                              : t(locale, "empty.titleNoWorkspace")}
+                        </h1>
+                        {!workspacePath ? (
+                          <p className="mt-3 max-w-md text-[13px] text-[var(--muted-foreground)]">
+                            {isPureConversation || snapshot || pendingPureConversation
+                              ? t(locale, "empty.subtitleConversation")
+                              : t(locale, "empty.subtitleNoWorkspace")}
+                          </p>
+                        ) : null}
+                      </div>
+                    }
+                    footer={
+                      <>
                         {/*
-                        MessageScrollerItems MUST be direct children of Content.
-                        Nesting them under `.thread-messages` broke MutationObserver /
-                        item-count / scroll-height math (mid-stream collapse).
-                      */}
-                        <MessageScrollerContent
-                          className={cn(
-                            "thread-content-column thread-content-column-stack gap-0",
-                            hasActivity && "thread-messages-active pt-6 pb-0",
-                          )}
-                          data-testid="timeline"
-                          data-content-mode="chat"
-                        >
-                          {hasActivity ? (
-                            <>
-                              {timelineBlocks.map((block) => {
-                                const messageId =
-                                  block.type === "process" ? block.id : block.item.id;
-                                return (
-                                  <MessageScrollerItem
-                                    key={messageId}
-                                    messageId={messageId}
-                                    // Do not use scrollAnchor during agent turns: pin-to-user-message
-                                    // + spacer math fights streaming growth and collapses earlier rows.
-                                    // autoScroll following-bottom is enough for chat.
-                                    scrollAnchor={false}
-                                    className="w-full"
-                                  >
-                                    {block.type === "process" ? (
-                                      <TimelineProcessBlock
-                                        locale={locale}
-                                        items={block.items}
-                                        open={block.open}
-                                        running={running}
-                                        waiting={waitingForInput}
-                                        {...(block.open && liveActivity?.phase
-                                          ? { livePhase: liveActivity.phase }
-                                          : {})}
-                                        {...(block.startedAt ? { startedAt: block.startedAt } : {})}
-                                        {...(block.endedAt ? { endedAt: block.endedAt } : {})}
-                                        {...(block.durationLabel
-                                          ? { durationLabel: block.durationLabel }
-                                          : {})}
-                                        {...(workspacePath ? { workspacePath } : {})}
-                                      />
-                                    ) : (
-                                      <TimelineRow
-                                        item={block.item}
-                                        locale={locale}
-                                        workspacePath={workspacePath}
-                                        editingLocked={running}
-                                        onEditUser={(item, text) =>
-                                          void editUserAndResend(item, text)
-                                        }
-                                        onForkAssistant={(item) => {
-                                          // pi fork: new session file from this assistant entry.
-                                          void forkThread(item.entryId);
-                                        }}
-                                      />
-                                    )}
-                                  </MessageScrollerItem>
-                                );
-                              })}
-                              {showLiveStatus && liveActivity ? (
-                                <MessageScrollerItem
-                                  messageId={`${sessionKey || "live"}:live-status`}
-                                  className="w-full"
-                                >
-                                  <TimelineLiveStatus locale={locale} activity={liveActivity} />
-                                </MessageScrollerItem>
-                              ) : null}
-                              <div
-                                ref={timelineEndRef}
-                                className="h-px w-full shrink-0"
-                                aria-hidden
-                              />
-                            </>
-                          ) : timelineReady ? (
-                            <div
-                              className="thread-messages empty flex min-h-full flex-1 flex-col items-center justify-center px-4 text-center"
-                              data-testid="empty-hero"
-                            >
-                              <PixLogo className="mb-5 size-12" title={t(locale, "app.name")} />
-                              <h1 className="m-0 max-w-lg text-[26px] leading-snug font-semibold tracking-[-0.03em] text-[var(--text)]">
-                                {workspacePath
-                                  ? t(locale, "empty.title", { name: workspace.name })
-                                  : isPureConversation || snapshot || pendingPureConversation
-                                    ? t(locale, "empty.titleConversation")
-                                    : t(locale, "empty.titleNoWorkspace")}
-                              </h1>
-                              {!workspacePath ? (
-                                <p className="mt-3 max-w-md text-[13px] text-[var(--muted-foreground)]">
-                                  {isPureConversation || snapshot || pendingPureConversation
-                                    ? t(locale, "empty.subtitleConversation")
-                                    : t(locale, "empty.subtitleNoWorkspace")}
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : null}
-
-                          {/*
                           mt-auto pins the dock to the bottom of the min-h-full column when
                           messages are short; sticky keeps it glued to the scrollport bottom
                           while scrolling long threads. (Flattened MessageScroller items no
                           longer provide a flex-1 message wrapper that used to push this down.)
                         */}
-                          <div
-                            ref={composerDockRef}
-                            className="composer-dock pointer-events-none sticky bottom-0 z-[2] mt-auto w-full shrink-0 bg-[var(--canvas)] pt-1 pb-2"
-                            data-mode="sticky"
-                            data-testid="composer-dock"
-                          >
-                            {/*
+                        <div
+                          ref={composerDockRef}
+                          className="composer-dock pointer-events-none sticky bottom-0 z-[2] mt-auto w-full shrink-0 bg-[var(--canvas)] pt-1 pb-2"
+                          data-mode="sticky"
+                          data-testid="composer-dock"
+                        >
+                          {/*
                             Jump-to-bottom is anchored to the dock top (not the scrollport
                             bottom). Measuring dock height and using bottom:Npx was fragile —
                             a low floor (72px) parked the control inside the composer card.
                           */}
-                            {timelineReady && hasActivity ? (
-                              <MessageScrollerButton
-                                data-testid="scroll-to-bottom"
-                                direction="end"
-                                behavior="smooth"
-                                title={t(locale, "thread.scrollToBottom")}
-                                aria-label={t(locale, "thread.scrollToBottom")}
-                                className={cn(
-                                  "pointer-events-auto z-20 size-7 rounded-full border border-border bg-popover text-foreground",
-                                  "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
-                                  // Defeat MessageScrollerButton’s default data-[direction=end]:bottom-4.
-                                  "data-[direction=end]:bottom-[calc(100%+12px)]",
-                                )}
-                                style={{
-                                  left: "50%",
-                                  marginLeft: -14, // half of size-7 (28px)
-                                }}
-                              >
-                                <ArrowDown className="size-3.5" strokeWidth={2.25} />
-                                <span className="sr-only">
-                                  {t(locale, "thread.scrollToBottom")}
-                                </span>
-                              </MessageScrollerButton>
-                            ) : null}
-                            {hasActivity && timelineReady ? (
-                              <div
-                                className="composer-dock-fade pointer-events-none absolute inset-x-0 top-0 z-[1] h-10 -translate-y-full"
-                                aria-hidden
-                              />
-                            ) : null}
-                            <Composer
-                              locale={locale}
-                              prompt={prompt}
-                              onPromptChange={setPrompt}
-                              onSubmit={(event) => void sendPrompt(event)}
-                              onAbort={() => void abort()}
-                              onKeyDown={onComposerKeyDown}
-                              running={running}
-                              composerRef={composerRef}
-                              workspacePath={workspacePath}
-                              recentWorkspaces={recentWorkspaces}
-                              onOpenProject={(path) =>
-                                void openWorkspacePath(path, { resumeRecent: true })
-                              }
-                              onAddProject={() => void openWorkspacePicker()}
-                              showProjectBar={timelineReady && !hasActivity}
-                              accessMode={accessMode}
-                              onAccessMode={applyAccessMode}
-                              accessVisibility={accessVisibility}
-                              modelOptions={modelOptions}
-                              modelValue={
-                                displayModel ? `${displayModel.provider}/${displayModel.id}` : ""
-                              }
-                              onModelChange={(provider, id) => void changeModel(provider, id)}
-                              thinkingLevel={displayThinkingLevel}
-                              thinkingLevels={displayThinkingLevels}
-                              onThinkingChange={(level) => void changeThinking(level)}
-                              serviceTier={displayServiceTier}
-                              serviceTiers={displayServiceTiers}
-                              onServiceTierChange={(tier) => void changeServiceTier(tier)}
-                              contextPercent={snapshot?.usage?.context?.percent ?? undefined}
-                              contextTokens={
-                                snapshot?.usage?.context?.tokens ??
-                                snapshot?.usage?.tokens.total ??
-                                undefined
-                              }
-                              showContextUsage={showContextUsage}
-                              projectTrusted={snapshot?.projectTrusted}
-                              runState={runState}
-                              piThemeLabel={piThemeLabel(snapshot)}
-                              attachments={attachments}
-                              onPickAttachments={pickComposerAttachments}
-                              onRemoveAttachment={(path) =>
-                                setAttachments((current) => current.filter((item) => item !== path))
-                              }
-                              onAddAttachments={(paths) =>
-                                setAttachments((current) =>
-                                  [...new Set([...current, ...paths])].slice(0, 12),
-                                )
-                              }
-                              packages={packages}
-                              slashCommands={buildUnifiedSlashCatalog(snapshot, locale).map(
-                                (item) => ({
-                                  name: item.name,
-                                  description: item.upcoming
-                                    ? `${item.description}${t(locale, "slash.upcomingSuffix")}`
-                                    : item.description,
-                                  source:
-                                    item.source === "skill" ||
-                                    item.source === "prompt" ||
-                                    item.source === "extension" ||
-                                    item.source === "builtin"
-                                      ? item.source
-                                      : "builtin",
-                                  ...(item.argumentHint ? { argumentHint: item.argumentHint } : {}),
-                                }),
+                          {timelineReady && hasActivity ? (
+                            <MessageScrollerButton
+                              data-testid="scroll-to-bottom"
+                              direction="end"
+                              behavior="smooth"
+                              title={t(locale, "thread.scrollToBottom")}
+                              aria-label={t(locale, "thread.scrollToBottom")}
+                              className={cn(
+                                "pointer-events-auto z-20 size-7 rounded-full border border-border bg-popover text-foreground",
+                                "shadow-[0_4px_16px_rgb(0_0_0/0.28)] hover:bg-accent",
+                                // Defeat MessageScrollerButton’s default data-[direction=end]:bottom-4.
+                                "data-[direction=end]:bottom-[calc(100%+12px)]",
                               )}
-                              queuedMessages={queuedMessages}
-                              onClearQueue={() => void clearQueuedMessages()}
+                              style={{
+                                left: "50%",
+                                marginLeft: -14, // half of size-7 (28px)
+                              }}
+                            >
+                              <ArrowDown className="size-3.5" strokeWidth={2.25} />
+                              <span className="sr-only">{t(locale, "thread.scrollToBottom")}</span>
+                            </MessageScrollerButton>
+                          ) : null}
+                          {hasActivity && timelineReady ? (
+                            <div
+                              className="composer-dock-fade pointer-events-none absolute inset-x-0 top-0 z-[1] h-10 -translate-y-full"
+                              aria-hidden
                             />
-                          </div>
-                        </MessageScrollerContent>
-                      </MessageScrollerViewport>
-                    </MessageScroller>
-                  </MessageScrollerProvider>
+                          ) : null}
+                          <Composer
+                            locale={locale}
+                            prompt={prompt}
+                            onPromptChange={setPrompt}
+                            onSubmit={(event) => void sendPrompt(event)}
+                            onAbort={() => void abort()}
+                            onKeyDown={onComposerKeyDown}
+                            running={running}
+                            composerRef={composerRef}
+                            workspacePath={workspacePath}
+                            recentWorkspaces={recentWorkspaces}
+                            onOpenProject={(path) =>
+                              void openWorkspacePath(path, { resumeRecent: true })
+                            }
+                            onAddProject={() => void openWorkspacePicker()}
+                            showProjectBar={timelineReady && !hasActivity}
+                            accessMode={accessMode}
+                            onAccessMode={applyAccessMode}
+                            accessVisibility={accessVisibility}
+                            modelOptions={modelOptions}
+                            modelValue={
+                              displayModel ? `${displayModel.provider}/${displayModel.id}` : ""
+                            }
+                            onModelChange={(provider, id) => void changeModel(provider, id)}
+                            thinkingLevel={displayThinkingLevel}
+                            thinkingLevels={displayThinkingLevels}
+                            onThinkingChange={(level) => void changeThinking(level)}
+                            serviceTier={displayServiceTier}
+                            serviceTiers={displayServiceTiers}
+                            onServiceTierChange={(tier) => void changeServiceTier(tier)}
+                            contextPercent={snapshot?.usage?.context?.percent ?? undefined}
+                            contextTokens={
+                              snapshot?.usage?.context?.tokens ??
+                              snapshot?.usage?.tokens.total ??
+                              undefined
+                            }
+                            showContextUsage={showContextUsage}
+                            projectTrusted={snapshot?.projectTrusted}
+                            runState={runState}
+                            piThemeLabel={piThemeLabel(snapshot)}
+                            attachments={attachments}
+                            onPickAttachments={pickComposerAttachments}
+                            onRemoveAttachment={(path) =>
+                              setAttachments((current) => current.filter((item) => item !== path))
+                            }
+                            onAddAttachments={(paths) =>
+                              setAttachments((current) =>
+                                [...new Set([...current, ...paths])].slice(0, 12),
+                              )
+                            }
+                            packages={packages}
+                            slashCommands={buildUnifiedSlashCatalog(snapshot, locale).map(
+                              (item) => ({
+                                name: item.name,
+                                description: item.upcoming
+                                  ? `${item.description}${t(locale, "slash.upcomingSuffix")}`
+                                  : item.description,
+                                source:
+                                  item.source === "skill" ||
+                                  item.source === "prompt" ||
+                                  item.source === "extension" ||
+                                  item.source === "builtin"
+                                    ? item.source
+                                    : "builtin",
+                                ...(item.argumentHint ? { argumentHint: item.argumentHint } : {}),
+                              }),
+                            )}
+                            queuedMessages={queuedMessages}
+                            onClearQueue={() => void clearQueuedMessages()}
+                          />
+                        </div>
+                      </>
+                    }
+                  />
                 </div>
               )}
 

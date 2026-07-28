@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  Clock,
   Copy,
   File,
   FileArchive,
@@ -37,16 +38,20 @@ import {
   AttachmentTrigger,
 } from "@/components/ui/attachment";
 import { Badge } from "@/components/ui/badge";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { Message, MessageContent, MessageFooter } from "@/components/ui/message";
 import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
 import {
   attachmentLabel,
   attachmentPresentation,
+  isPreviewableImagePath,
   type AttachmentKind,
 } from "../lib/composer-suggestions.ts";
+import { formatWorkspaceRelativePath } from "../lib/content-rendering.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import {
   classifyToolName,
@@ -131,19 +136,14 @@ function activityLabel(
 
 /** Icons only for trailing live status — process header (“已处理”) is text-only. */
 function liveStatusIcon(phase: ProcessActivityPhase): ReactNode {
-  const common = { className: "size-3.5", strokeWidth: 1.75 } as const;
+  const common = { className: "size-3.5 opacity-80", strokeWidth: 1.75 } as const;
   if (phase === "processed") return null;
-  if (phase === "thinking") return <Brain {...common} className="size-3.5 opacity-80" />;
-  if (phase === "executing") return <Terminal {...common} className="size-3.5 opacity-80" />;
-  if (phase === "compacting") return <Minimize2 {...common} className="size-3.5 opacity-80" />;
-  if (phase === "summarizing") return <GitBranch {...common} className="size-3.5 opacity-80" />;
-  if (phase === "waiting") {
-    return (
-      <span className="inline-flex size-3.5 items-center justify-center text-[11px] leading-none text-amber-400/90">
-        ◐
-      </span>
-    );
-  }
+  if (phase === "thinking") return <Brain {...common} />;
+  if (phase === "executing") return <Terminal {...common} />;
+  if (phase === "compacting") return <Minimize2 {...common} />;
+  if (phase === "summarizing") return <GitBranch {...common} />;
+  // Waiting for user input — Lucide Clock (not a Unicode glyph).
+  if (phase === "waiting") return <Clock {...common} />;
   return <LoaderCircle {...common} className="size-3.5 animate-spin opacity-80" />;
 }
 
@@ -167,7 +167,7 @@ function useTimelineAttachmentPreviews(paths: string[]): Record<string, string> 
   const key = paths.join("\0");
   useEffect(() => {
     let cancelled = false;
-    const images = paths.filter((p) => /\.(?:png|jpe?g|gif|webp|bmp)$/i.test(p));
+    const images = paths.filter(isPreviewableImagePath);
     if (images.length === 0) {
       setMap({});
       return;
@@ -198,44 +198,41 @@ function useTimelineAttachmentPreviews(paths: string[]): Record<string, string> 
 function AttachmentList(props: { paths: string[] }) {
   const previews = useTimelineAttachmentPreviews(props.paths);
   return (
-    <AttachmentGroup
-      className="timeline-attachment-group max-w-full gap-2 py-0"
-      data-testid="timeline-attachments"
-    >
+    <AttachmentGroup className="max-w-full items-start" data-testid="timeline-attachments">
       {props.paths.map((path) => {
         const presentation = attachmentPresentation(path);
         const preview = previews[path];
+        const isImage = presentation.kind === "image";
         return (
           <Attachment
             key={path}
             state="done"
-            size="sm"
-            orientation={preview ? "vertical" : "horizontal"}
+            size={isImage ? "default" : "sm"}
+            orientation={isImage ? "vertical" : "horizontal"}
             data-kind={presentation.kind}
-            className={
-              preview
-                ? "w-[7.5rem] max-w-[7.5rem] shrink-0 cursor-pointer"
-                : "max-w-[min(220px,100%)] shrink-0 cursor-pointer"
-            }
-            title={path}
+            data-preview={preview ? "true" : "false"}
+            className="cursor-pointer"
+            {...(!isImage ? { title: path } : {})}
           >
             <AttachmentTrigger
               onClick={() => void window.pix?.workspace?.openFile?.(path)}
               aria-label={attachmentLabel(path)}
             />
-            {preview ? (
-              <AttachmentMedia variant="image">
-                <img src={preview} alt="" draggable={false} />
+            {isImage ? (
+              <AttachmentMedia variant={preview ? "image" : "icon"}>
+                {preview ? <img src={preview} alt="" draggable={false} /> : attachmentIcon("image")}
               </AttachmentMedia>
             ) : (
-              <AttachmentMedia variant="icon">{attachmentIcon(presentation.kind)}</AttachmentMedia>
+              <>
+                <AttachmentMedia variant="icon">
+                  {attachmentIcon(presentation.kind)}
+                </AttachmentMedia>
+                <AttachmentContent>
+                  <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
+                  <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
+                </AttachmentContent>
+              </>
             )}
-            <AttachmentContent>
-              <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
-              {!preview ? (
-                <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
-              ) : null}
-            </AttachmentContent>
           </Attachment>
         );
       })}
@@ -317,7 +314,20 @@ function ToolCard(props: { item: Extract<TimelineItem, { kind: "tool" }>; locale
         <CollapsibleContent className="content-tool-body">
           {item.args !== undefined ? (
             <ToolSection title={t(props.locale, "timeline.toolInput")}>
-              <pre className="pix-scroll">{structuredText(item.args)}</pre>
+              <pre className="pix-scroll">
+                {(() => {
+                  // read/list: path only — same as process-step expand (not args JSON).
+                  const kind = classifyToolName(item.toolName);
+                  if (kind === "read" || kind === "list") {
+                    const path = toolSummary(item.args);
+                    return path || structuredText(item.args);
+                  }
+                  if (kind === "run") {
+                    return extractCommandFromArgs(item.args) || structuredText(item.args);
+                  }
+                  return structuredText(item.args);
+                })()}
+              </pre>
             </ToolSection>
           ) : null}
           {item.output ? (
@@ -454,7 +464,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.kind === "user" ? item.text : "");
   const [copied, setCopied] = useState(false);
-  const editRootRef = useRef<HTMLElement | null>(null);
+  const editRootRef = useRef<HTMLDivElement | null>(null);
   const editActionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -525,14 +535,15 @@ export const TimelineRow = memo(function TimelineRow(props: {
   if (item.kind === "user") {
     if (editing) {
       return (
-        <article
+        <Message
           ref={editRootRef}
-          className="timeline-user-row"
+          align="end"
+          className="relative z-3 mt-1 mb-7"
           data-kind="user"
           data-editing="true"
           data-testid="timeline-user-edit-row"
         >
-          <div className="timeline-user-content timeline-user-edit">
+          <MessageContent>
             <textarea
               className="timeline-user-edit-input"
               value={draft}
@@ -541,9 +552,9 @@ export const TimelineRow = memo(function TimelineRow(props: {
               autoFocus
               data-testid="timeline-user-edit"
             />
-            <div
+            <MessageFooter
               ref={editActionsRef}
-              className="timeline-user-edit-actions"
+              className="timeline-user-edit-actions w-full px-0"
               data-testid="timeline-user-edit-actions"
             >
               <Button
@@ -573,35 +584,36 @@ export const TimelineRow = memo(function TimelineRow(props: {
               >
                 {t(props.locale, "timeline.send")}
               </Button>
-            </div>
-          </div>
-        </article>
+            </MessageFooter>
+          </MessageContent>
+        </Message>
       );
     }
 
-    // Native layout (not Message/Bubble stack): shadcn Message is w-full and fights
-    // .timeline-user-row / .timeline-user-content flex-end constraints → misaligned bubbles.
     return (
-      <article className="timeline-user-row group/msg" data-kind="user">
-        <div className="timeline-user-content">
-          {item.text ? (
-            <div className="timeline-user-bubble">
-              <p className="m-0 whitespace-pre-wrap">{item.text}</p>
-            </div>
-          ) : null}
+      <Message align="end" className="mt-1 mb-7" data-kind="user">
+        <MessageContent>
           {item.attachments?.length ? <AttachmentList paths={item.attachments} /> : null}
-          {/* User: 日期时间 · 复制 · 编辑重发 */}
-          <MetaActions
-            locale={props.locale}
-            order={["time", "copy", "edit"]}
-            {...(item.timestamp ? { time: item.timestamp } : {})}
-            {...(item.text ? { onCopy: () => void handleCopy(item.text) } : {})}
-            {...(props.onEditUser ? { onEdit: () => setEditing(true) } : {})}
-            copied={copied}
-            className="timeline-meta-actions-user"
-          />
-        </div>
-      </article>
+          {item.text ? (
+            <Bubble align="end" variant="secondary">
+              <BubbleContent>
+                <p className="m-0 whitespace-pre-wrap">{item.text}</p>
+              </BubbleContent>
+            </Bubble>
+          ) : null}
+          <MessageFooter className="px-0">
+            {/* User: 日期时间 · 复制 · 编辑重发 */}
+            <MetaActions
+              locale={props.locale}
+              order={["time", "copy", "edit"]}
+              {...(item.timestamp ? { time: item.timestamp } : {})}
+              {...(item.text ? { onCopy: () => void handleCopy(item.text) } : {})}
+              {...(props.onEditUser ? { onEdit: () => setEditing(true) } : {})}
+              copied={copied}
+            />
+          </MessageFooter>
+        </MessageContent>
+      </Message>
     );
   }
 
@@ -671,7 +683,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
         <Marker
           variant="default"
           shimmer
-          className="timeline-live-status min-h-0 gap-1.5 py-1 text-[13px]"
+          className="timeline-live-status min-h-0 gap-1.5 py-1 text-[12.5px] text-muted-foreground"
           data-kind="system"
           data-testid="timeline-compaction-marker"
           data-tone="info"
@@ -972,7 +984,8 @@ function ProcessPathLink(props: {
   workspacePath?: string | undefined;
   className?: string | undefined;
 }) {
-  const fileName = props.path.split(/[/\\]/).pop() || props.path;
+  // Same relative shortening as markdown source citations (not bare basename).
+  const label = formatWorkspaceRelativePath(props.path, props.workspacePath);
   return (
     <button
       type="button"
@@ -983,7 +996,7 @@ function ProcessPathLink(props: {
         void window.pix?.workspace?.openFile?.(props.path);
       }}
     >
-      {fileName}
+      {label}
     </button>
   );
 }
@@ -1001,8 +1014,9 @@ function processToolExpandBodies(
   // - edit: oldText → newText (red/green)
   // - write: full new content as all-additions (+)
   const toolKind = view.kind === "generic" ? classifyToolName(item.toolName) : view.kind;
+  const output = item.output?.trim() ? item.output : undefined;
+
   if (toolKind === "edit" || toolKind === "write") {
-    const output = item.output?.trim() ? item.output : undefined;
     // Prefer agent details.diff (pi display format with real file line numbers).
     const fromDetails = extractToolDiffDetails(item.details);
     if (fromDetails) {
@@ -1024,12 +1038,23 @@ function processToolExpandBodies(
     }
   }
 
+  // read / list: only the file path — never dump full args JSON in the expand panel.
+  if (toolKind === "read" || toolKind === "list") {
+    const path = view.path?.trim() || undefined;
+    return {
+      ...(path ? { input: path } : {}),
+      ...(output ? { output } : {}),
+    };
+  }
+
   let input: string | undefined;
   if (item.args !== undefined) {
     // Prefer a single-line command string for shell tools when we can extract it.
     if (view.kind === "run") {
       const cmd = extractCommandFromArgs(item.args);
       input = cmd || structuredText(item.args);
+    } else if (view.path) {
+      input = view.path;
     } else {
       input = structuredText(item.args);
     }
@@ -1039,7 +1064,6 @@ function processToolExpandBodies(
     else if (view.kind === "search" && view.detail.trim()) input = view.detail;
     else if (view.detail.trim()) input = view.detail;
   }
-  const output = item.output?.trim() ? item.output : undefined;
   // Tool result that is already a patch (e.g. apply_patch output / git-style).
   if (output && looksLikeDiffText(output) && (view.kind === "edit" || view.kind === "write")) {
     return {
@@ -1188,9 +1212,19 @@ function ProcessToolRow(props: {
       <MarkerContent className="process-step-content min-w-0 flex-1">
         {open ? (
           <span className={cn("process-step-verb", running && "shimmer")}>{openTitle}</span>
+        ) : running ? (
+          // One shimmer node owns all glyphs (shadcn). Nested .shimmer on path/detail
+          // made text fully transparent when background-clip did not paint on <button>.
+          <span className="process-step-verb shimmer">
+            {parts.verb}
+            {parts.path ? ` ${formatWorkspaceRelativePath(parts.path, props.workspacePath)}` : ""}
+            {parts.mid ? ` ${parts.mid}` : ""}
+            {parts.detail ? ` ${parts.detail}` : ""}
+            {parts.suffix ? ` ${parts.suffix}` : ""}
+          </span>
         ) : (
           <>
-            <span className={cn("process-step-verb", running && "shimmer")}>{parts.verb}</span>
+            <span className="process-step-verb">{parts.verb}</span>
             {parts.path ? (
               <>
                 {" "}
@@ -1200,7 +1234,7 @@ function ProcessToolRow(props: {
             {parts.mid ? (
               <>
                 {" "}
-                <span className={cn("process-step-verb", running && "shimmer")}>{parts.mid}</span>
+                <span className="process-step-verb">{parts.mid}</span>
               </>
             ) : null}
             {parts.detail ? (
@@ -1323,7 +1357,7 @@ function ProcessToolGroup(props: {
           variant="default"
           shimmer={anyRunning}
           className={cn(
-            "process-step-row process-step-group-row min-h-0 gap-2 text-[13px]",
+            "process-step-row process-step-group-row min-h-0 gap-2 text-[12.5px]",
             anyError && "is-error",
             anyRunning && "is-running",
             open && "is-open",
@@ -1338,8 +1372,9 @@ function ProcessToolGroup(props: {
               processToolIcon(props.kind)
             )}
           </MarkerIcon>
-          <MarkerContent className="min-w-0 flex-1 truncate">
-            <span className={cn("process-step-verb", anyRunning && "shimmer")}>{label}</span>
+          {/* Text directly in MarkerContent so Marker shimmer utility applies once. */}
+          <MarkerContent className="process-step-verb min-w-0 flex-1 truncate">
+            {label}
           </MarkerContent>
           <ChevronRight
             className={cn(
@@ -1438,17 +1473,14 @@ function ProcessSteps(props: {
   return <div className="process-steps">{nodes}</div>;
 }
 
-/** Brief pause so “已处理” paints before the body collapses. */
-const PROCESS_AUTO_COLLAPSE_MS = 280;
-
 /**
  * Collapsible process block.
  * Header is text-only (“已处理 12 秒” / live phase labels) — no leading icon.
  * Duration is this reply segment only (first thinking/tool → done / now).
  * Body: Codex-style narrative + compact tool activity rows.
  *
- * Open while the turn is live; auto-collapses once content is complete (“已处理”).
- * User can still expand/collapse manually afterward.
+ * Never auto-expand — only the user opens/closes via the summary.
+ * Header label still tracks live phase while the turn is active.
  */
 export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
   locale: Locale;
@@ -1478,34 +1510,8 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
     props.durationLabel;
   const label = activityLabel(props.locale, activity, liveDuration);
 
-  // Uncontrolled <details> (native open) so summary clicks always toggle in Electron.
-  // We only imperatively open while live and auto-collapse after “已处理”.
-  const detailsRef = useRef<HTMLDetailsElement | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(active);
-  const prevActiveRef = useRef(active);
-
-  useEffect(() => {
-    const el = detailsRef.current;
-    if (!el) return;
-    if (active) {
-      el.open = true;
-      setDetailsOpen(true);
-    }
-  }, [active]);
-
-  useEffect(() => {
-    const wasActive = prevActiveRef.current;
-    prevActiveRef.current = active;
-    if (active === wasActive || active) return;
-
-    // Process steps finished → show “已处理”, then fold the body.
-    const timer = window.setTimeout(() => {
-      const el = detailsRef.current;
-      if (el) el.open = false;
-      setDetailsOpen(false);
-    }, PROCESS_AUTO_COLLAPSE_MS);
-    return () => window.clearTimeout(timer);
-  }, [active]);
+  // Uncontrolled <details>: starts closed; only summary clicks toggle open state.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
     <div
@@ -1516,19 +1522,20 @@ export const TimelineProcessBlock = memo(function TimelineProcessBlock(props: {
       data-details-open={detailsOpen ? "true" : "false"}
     >
       <details
-        ref={detailsRef}
         className="timeline-process-details"
-        open={active ? true : undefined}
         onToggle={(event) => {
           setDetailsOpen(event.currentTarget.open);
         }}
       >
-        {/* summary hosts shadcn Marker (border) — same pattern as chat markers. */}
+        {/*
+          Underline = Marker variant="border" only (border-b + pb-2).
+          Do not pass py-0 / pb-0 — tailwind-merge would kill the variant’s pb-2 and
+          make the rule sit flush against the label.
+        */}
         <summary className="timeline-process-summary group/process-trigger w-full text-left">
           <Marker
             variant="border"
-            shimmer={active}
-            className="timeline-process-marker w-full min-h-0 gap-1 py-0 text-[12.5px]"
+            className="timeline-process-marker w-full text-[12.5px] text-muted-foreground"
           >
             <MarkerContent className="timeline-process-label min-w-0 flex-1 truncate">
               {label}
@@ -1569,7 +1576,7 @@ export const TimelineLiveStatus = memo(function TimelineLiveStatus(props: {
     <Marker
       variant="default"
       shimmer={active}
-      className="timeline-live-status min-h-0 gap-1.5 py-1 text-[13px]"
+      className="timeline-live-status min-h-0 gap-1.5 py-1 text-[12.5px] text-muted-foreground"
       data-testid="timeline-live-status"
       data-phase={props.activity.phase}
       role="status"

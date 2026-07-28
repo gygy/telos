@@ -51,11 +51,16 @@
 }
 
 /*
- * Lightweight text shimmer — attachment upload/processing, timeline process
- * markers (thinking / processing / executing / live status), running tool verbs.
- * Uses currentColor so it inherits muted / foreground from the parent.
+ * shadcn chat text shimmer — use the `shimmer` utility only:
+ *   <span className="shimmer">Thinking…</span>
+ *   MarkerContent: group-data-[shimmer=true]/marker:shimmer
+ *   AttachmentTitle: group-data-[state=uploading|processing]/attachment:shimmer
+ *
+ * Do not hand-roll extra keyframe selectors / !important overrides.
+ * Stops use muted tokens (not currentColor): color is transparent while
+ * animating, so currentColor would paint an invisible gradient.
  */
-@keyframes pix-shimmer {
+@keyframes shimmer {
   0% {
     background-position: 100% 0;
   }
@@ -63,23 +68,21 @@
     background-position: -100% 0;
   }
 }
-/*
- * Shimmer fill must NOT use currentColor: this rule sets color:transparent,
- * so currentColor would paint an invisible gradient (e.g. “正在执行” vanishes).
- */
 @utility shimmer {
   background-image: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--text-subtle, var(--muted-foreground)) 40%, transparent) 0%,
-    var(--muted-foreground) 50%,
-    color-mix(in srgb, var(--text-subtle, var(--muted-foreground)) 40%, transparent) 100%
+    color-mix(in srgb, var(--muted-foreground) 40%, transparent) 0%,
+    var(--muted-foreground) 45%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 55%,
+    color-mix(in srgb, var(--muted-foreground) 40%, transparent) 100%
   );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: pix-shimmer 1.4s linear infinite;
+  animation: shimmer 1.4s linear infinite;
 }
 
 :root,
@@ -106,7 +109,7 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: oklch(0.985 0.004 260);
   --muted: #222222;
-  --muted-foreground: oklch(0.74 0.014 260);
+  --muted-foreground: #acacac;
   --hover-fill: var(--surface-muted);
   --hover-fill-foreground: oklch(0.985 0.004 260);
   --accent: var(--hover-fill);
@@ -142,7 +145,7 @@
   --surface-selected: var(--hover-fill);
   --text: var(--foreground);
   --text-muted: var(--muted-foreground);
-  --text-subtle: #6e6e6e;
+  --text-subtle: var(--muted-foreground);
   --bg-composer: var(--surface-panel);
   --composer-border: color-mix(in srgb, #ffffff 11%, var(--surface-panel));
   --composer-protrusion: #212121;
@@ -210,7 +213,7 @@
   --secondary: var(--surface-muted);
   --secondary-foreground: #171717;
   --muted: #f1f2f4;
-  --muted-foreground: #5c5c57;
+  --muted-foreground: #808182;
   --hover-fill: var(--surface-muted);
   --hover-fill-foreground: #171717;
   --accent: var(--hover-fill);
@@ -239,7 +242,7 @@
   --surface-selected: var(--hover-fill);
   --text: var(--foreground);
   --text-muted: var(--muted-foreground);
-  --text-subtle: #8a8a84;
+  --text-subtle: var(--muted-foreground);
   --bg-composer: var(--surface-panel);
   --composer-border: color-mix(in srgb, #9aa0ab 36%, #ffffff);
   --composer-protrusion: #f5f5f5;
@@ -1010,25 +1013,21 @@ html[data-custom-window-controls="true"] .page-header {
  * Attachment strip: horizontal scroll when chips overflow (shadcn AttachmentGroup).
  * Override default scrollbar-none so users can actually scroll the row.
  */
-.composer-attachments,
-.timeline-attachment-group {
+.composer-attachments {
   min-width: 0;
   max-width: 100%;
 }
-.composer-attachment-group,
-.timeline-attachment-group {
+.composer-attachment-group {
   max-width: 100%;
   overflow-x: auto !important;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
 }
-.composer-attachment-group::-webkit-scrollbar,
-.timeline-attachment-group::-webkit-scrollbar {
+.composer-attachment-group::-webkit-scrollbar {
   height: 6px;
 }
-.composer-attachment-group::-webkit-scrollbar-thumb,
-.timeline-attachment-group::-webkit-scrollbar-thumb {
+.composer-attachment-group::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
 }
@@ -1276,6 +1275,17 @@ html[data-custom-window-controls="true"] .page-header {
   color: var(--link, #379cfc);
   @apply underline-offset-2 hover:underline;
 }
+/* File source chips use their own chrome — don't paint as plain blue underlined links. */
+.pix-md a.content-file-link,
+.pix-md a.content-source-cite {
+  color: var(--foreground);
+  text-decoration: none;
+}
+.pix-md a.content-file-link:hover,
+.pix-md a.content-source-cite:hover {
+  color: var(--foreground);
+  text-decoration: none;
+}
 .pix-md code {
   @apply rounded bg-[var(--muted)] px-1 py-0.5 font-mono text-[0.9em];
 }
@@ -1305,51 +1315,6 @@ html[data-custom-window-controls="true"] .page-header {
   @apply font-semibold;
 }
 
-.timeline-user-row {
-  display: flex;
-  justify-content: flex-end;
-  margin: 4px 0 28px;
-}
-/* Edit mode: expand to full message column width (like Codex). */
-.timeline-user-row[data-editing="true"] {
-  justify-content: stretch;
-  position: relative;
-  z-index: 3;
-}
-.timeline-user-content {
-  display: flex;
-  width: min(78%, 30rem);
-  min-width: 0;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.timeline-user-row[data-editing="true"] .timeline-user-content {
-  width: 100%;
-  max-width: 100%;
-}
-.timeline-user-bubble {
-  align-self: flex-end;
-  max-width: 100%;
-  /* Match composer input card (`.composer-card`) radius */
-  border-radius: var(--radius-panel);
-  background: var(--user-bubble);
-  color: var(--user-bubble-fg);
-  padding: 10px 16px;
-}
-.timeline-user-bubble p {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  font-weight: var(--font-weight-regular, 400);
-  line-height: 1.45;
-}
-.timeline-user-edit {
-  gap: 10px;
-  align-self: stretch;
-  width: 100%;
-}
 .timeline-user-edit-input {
   display: block;
   width: 100%;
@@ -1410,14 +1375,12 @@ html[data-custom-window-controls="true"] .page-header {
   transition: opacity 0.14s ease;
   pointer-events: none;
 }
+.group\/message:hover .timeline-meta-actions,
+.group\/message:focus-within .timeline-meta-actions,
 .group\/msg:hover .timeline-meta-actions,
 .group\/msg:focus-within .timeline-meta-actions {
   opacity: 1;
   pointer-events: auto;
-}
-.timeline-meta-actions-user {
-  justify-content: flex-end;
-  margin-top: 4px;
 }
 .timeline-meta-actions-assistant {
   justify-content: flex-start;
@@ -1465,7 +1428,7 @@ html[data-custom-window-controls="true"] .page-header {
 .timeline-process-details {
   border: none;
 }
-/* Process header: native <summary> wraps shadcn Marker variant=border. */
+/* Process header: summary only resets native details chrome; line comes from Marker variant=border. */
 .timeline-process-summary {
   display: block;
   width: 100%;
@@ -1476,26 +1439,15 @@ html[data-custom-window-controls="true"] .page-header {
   border: 0;
   padding: 0;
   text-align: left;
-  color: var(--text-subtle);
 }
 .timeline-process-summary::-webkit-details-marker {
   display: none;
-}
-.timeline-process-summary:hover {
-  color: var(--muted-foreground);
-}
-.timeline-process-marker {
-  color: inherit;
 }
 .timeline-process-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* Active process header (“思考中… / 处理中…”) — stronger base for shimmer. */
-.timeline-process[data-active="true"] .timeline-process-summary {
-  color: var(--muted-foreground);
 }
 /* Collapsed → right; open → down */
 .timeline-process-chevron {
@@ -1505,10 +1457,11 @@ html[data-custom-window-controls="true"] .page-header {
 .timeline-process-details[data-state="open"] .timeline-process-chevron {
   transform: rotate(90deg);
 }
+/* Space below the Marker border rule (variant already supplies pb-2 above the line). */
 .timeline-process-body {
-  margin-top: 10px;
-  padding-top: 2px;
-  border-top: none;
+  margin-top: 0.5rem; /* mt-2 — same scale as Marker border pb-2 */
+  padding-top: 0;
+  border-top: none; /* no second custom rule; line is only Marker variant=border */
 }
 /* Compaction system rows — Marker separator (shadcn chat pattern). */
 .timeline-compaction-marker {
@@ -1597,15 +1550,16 @@ html[data-custom-window-controls="true"] .page-header {
 .process-step-row.is-error {
   color: var(--text-subtle);
 }
-.process-step-row.is-error .process-step-verb,
-.process-step-row.is-error .process-step-suffix {
+/* Error: verb/suffix use full error red; skip when shimmer is running. */
+.process-step-row.is-error .process-step-verb:not(.shimmer),
+.process-step-row.is-error .process-step-suffix:not(.shimmer) {
   color: var(--destructive);
   font-weight: 500;
 }
-.process-step-row.is-error:hover .process-step-verb,
-.process-step-row.is-error:hover .process-step-suffix,
-.process-step-trigger:hover .process-step-row.is-error .process-step-verb,
-.process-step-trigger:hover .process-step-row.is-error .process-step-suffix {
+.process-step-row.is-error:hover .process-step-verb:not(.shimmer),
+.process-step-row.is-error:hover .process-step-suffix:not(.shimmer),
+.process-step-trigger:hover .process-step-row.is-error .process-step-verb:not(.shimmer),
+.process-step-trigger:hover .process-step-row.is-error .process-step-suffix:not(.shimmer) {
   color: color-mix(in srgb, var(--destructive) 88%, var(--foreground));
 }
 .process-step-body,
@@ -1646,18 +1600,23 @@ html[data-custom-window-controls="true"] .page-header {
   white-space: nowrap;
 }
 .process-step-verb {
-  color: inherit;
   font-weight: 400;
   flex-shrink: 0;
 }
+/* Shimmer owns color:transparent — don't let inherit re-paint solid text. */
+.process-step-verb:not(.shimmer) {
+  color: inherit;
+}
 /* Mono detail = structure only, never louder than the verb by default. */
 .process-step-detail {
-  color: inherit;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.94em;
   font-weight: 400;
   opacity: 0.92;
   transition: opacity 0.12s ease;
+}
+.process-step-detail:not(.shimmer) {
+  color: inherit;
 }
 .process-step-detail-command,
 .process-step-detail-query,
@@ -1670,6 +1629,9 @@ html[data-custom-window-controls="true"] .page-header {
 .process-step-row:hover .process-step-detail,
 .process-step-trigger:hover .process-step-detail {
   opacity: 1;
+}
+.process-step-row:hover .process-step-detail:not(.shimmer),
+.process-step-trigger:hover .process-step-detail:not(.shimmer) {
   color: inherit;
 }
 .process-step-path {
@@ -1678,7 +1640,6 @@ html[data-custom-window-controls="true"] .page-header {
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
   font: inherit;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.94em;
@@ -1689,14 +1650,18 @@ html[data-custom-window-controls="true"] .page-header {
     color 0.12s ease,
     text-decoration-color 0.12s ease;
 }
+.process-step-path:not(.shimmer) {
+  color: inherit;
+}
 /* Path: underline only on direct hover — not whole-row blue. */
-.process-step-row:hover .process-step-path,
-.process-step-trigger:hover .process-step-path {
+/* :not(.shimmer) so running-line sweep is not painted solid on hover. */
+.process-step-row:hover .process-step-path:not(.shimmer),
+.process-step-trigger:hover .process-step-path:not(.shimmer) {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
 }
-.process-step-path:hover {
+.process-step-path:hover:not(.shimmer) {
   color: var(--link, #379cfc);
   text-decoration: underline;
   text-decoration-color: currentColor;
@@ -1853,7 +1818,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .timeline-live-status {
   margin: 2px 0 14px;
-  color: var(--muted-foreground);
+  /* Color/size set on Marker className — keep spacing only here. */
 }
 
 /*
@@ -2089,9 +2054,6 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 @media (max-width: 620px) {
-  .timeline-user-content {
-    width: 90%;
-  }
   .timeline-attachment-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2121,16 +2083,19 @@ html[data-custom-window-controls="true"] .page-header {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.content-code-language {
+  background: transparent;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+}
 .content-code-header button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  padding: 4px 6px;
   color: var(--text-subtle);
-  font-size: 10px;
   text-transform: none;
   transition:
     color 0.12s ease,
@@ -2270,7 +2235,6 @@ html[data-custom-window-controls="true"] .page-header {
   padding: 0 0.55rem 0 0.65rem;
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
-  opacity: 0.48;
   text-align: right;
   user-select: none;
   -webkit-user-select: none;
@@ -2353,6 +2317,11 @@ html[data-custom-window-controls="true"] .page-header {
   background: var(--muted);
   padding: 0;
   cursor: zoom-in;
+}
+.content-image-button.content-image-loading {
+  min-height: 120px;
+  cursor: default;
+  background: color-mix(in srgb, var(--muted) 80%, var(--border));
 }
 .content-image-button img {
   display: block;
@@ -2597,9 +2566,6 @@ html[data-custom-window-controls="true"] .page-header {
 @media (max-width: 620px) {
   .content-image-preview {
     padding: 54px 14px 18px;
-  }
-  .content-code-header button > span {
-    display: none;
   }
 }
 

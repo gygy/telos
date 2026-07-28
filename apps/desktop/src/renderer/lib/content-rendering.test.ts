@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { contentMediaKind, contentSourceUrl, parseContentLink } from "./content-rendering.ts";
+import {
+  contentMediaKind,
+  contentSourceUrl,
+  formatFileLinkLabel,
+  formatWorkspaceRelativePath,
+  parseContentLink,
+} from "./content-rendering.ts";
 
 describe("conversation content targets", () => {
   it("classifies video sources independently from images", () => {
@@ -28,5 +34,19 @@ describe("conversation content targets", () => {
 
   it("converts local media paths to encoded file URLs", () => {
     expect(contentSourceUrl("/tmp/design preview.png")).toBe("file:///tmp/design%20preview.png");
+  });
+
+  it("shortens absolute paths under the workspace for session display", () => {
+    expect(formatWorkspaceRelativePath("/work/project/src/app.ts", "/work/project")).toBe(
+      "src/app.ts",
+    );
+    expect(formatWorkspaceRelativePath("src/app.ts", "/work/project")).toBe("src/app.ts");
+    expect(formatWorkspaceRelativePath("/tmp/outside.ts", "/work/project")).toBe("outside.ts");
+    expect(formatFileLinkLabel("app.ts", "/work/project/src/app.ts", "/work/project")).toBe(
+      "src/app.ts",
+    );
+    expect(formatFileLinkLabel("Fixture file", "/work/project/fixture.txt", "/work/project")).toBe(
+      "Fixture file",
+    );
   });
 });

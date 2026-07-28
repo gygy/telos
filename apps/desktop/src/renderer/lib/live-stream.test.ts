@@ -140,4 +140,75 @@ describe("live stream (append-only)", () => {
     const assistant = state.items.find((item) => item.kind === "assistant");
     expect(assistant?.kind === "assistant" && assistant.text).toBe("The cat sat");
   });
+
+  it("keeps attachment chips on optimistic user rows and merges host echo paths", () => {
+    let state = emptyLiveStream();
+    const prompts = ["Inspect these"];
+    // Optimistic (or full) payload with attached-paths — same shape as sendPrompt.
+    state = applyRuntimeEventToLiveStream(
+      state,
+      {
+        type: "user.message",
+        content:
+          "Inspect these\n\n<attached-paths>\n  <path>/tmp/a.png</path>\n  <path>/tmp/note.md</path>\n</attached-paths>",
+      },
+      prompts,
+      { sequence: 1 },
+    );
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: "user",
+      text: "Inspect these",
+      attachments: ["/tmp/a.png", "/tmp/note.md"],
+    });
+
+    // Host re-echo with same text + paths must not drop chips or double the row.
+    state = applyRuntimeEventToLiveStream(
+      state,
+      {
+        type: "user.message",
+        content:
+          "Inspect these\n\n<attached-paths>\n  <path>/tmp/a.png</path>\n  <path>/tmp/note.md</path>\n  <path>/tmp/extra.txt</path>\n</attached-paths>",
+      },
+      prompts,
+      { sequence: 2 },
+    );
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: "user",
+      text: "Inspect these",
+      attachments: ["/tmp/a.png", "/tmp/note.md", "/tmp/extra.txt"],
+    });
+  });
+
+  it("fills attachments when optimistic row had text only", () => {
+    let state = emptyLiveStream();
+    const prompts = ["Look"];
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "user.message", content: "Look" },
+      prompts,
+      { sequence: 1 },
+    );
+    expect(state.items[0]).toMatchObject({ kind: "user", text: "Look" });
+    expect(
+      state.items[0]?.kind === "user" ? state.items[0].attachments : undefined,
+    ).toBeUndefined();
+
+    state = applyRuntimeEventToLiveStream(
+      state,
+      {
+        type: "user.message",
+        content: "Look\n\n<attached-paths>\n  <path>/tmp/photo.webp</path>\n</attached-paths>",
+      },
+      prompts,
+      { sequence: 2 },
+    );
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: "user",
+      text: "Look",
+      attachments: ["/tmp/photo.webp"],
+    });
+  });
 });

@@ -74,6 +74,44 @@ describe("session history projection", () => {
     ]);
   });
 
+  it("preserves edit tool details.diff with real file line numbers", () => {
+    const details = {
+      diff: " 41 return 42;\n+42 return 43;",
+      patch: "--- a/x\n+++ b/x\n@@ -41,1 +41,1 @@\n-return 42;\n+return 43;\n",
+      firstChangedLine: 42,
+    };
+    expect(
+      projectSessionHistory(
+        [
+          {
+            role: "toolResult",
+            toolName: "edit",
+            content: "Successfully replaced 1 block(s) in x.ts.",
+            args: {
+              path: "x.ts",
+              edits: [{ oldText: "return 42;", newText: "return 43;" }],
+            },
+            details,
+          },
+        ],
+        ["entry-edit"],
+      ),
+    ).toEqual([
+      {
+        role: "tool",
+        text: "Successfully replaced 1 block(s) in x.ts.",
+        toolName: "edit",
+        isError: false,
+        args: {
+          path: "x.ts",
+          edits: [{ oldText: "return 42;", newText: "return 43;" }],
+        },
+        details,
+        entryId: "entry-edit",
+      },
+    ]);
+  });
+
   it("pairs assistant toolCall args onto later toolResult by toolCallId (pi session shape)", () => {
     const history = projectHistoryFromSessionManager({
       getEntries: () => [

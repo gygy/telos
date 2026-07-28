@@ -11,6 +11,7 @@
  * TimelineLiveStatus (same as main.tsx chat timeline).
  */
 import { IPC_PROTOCOL_VERSION, type HostEvent } from "@pix/contracts";
+import { SUPPORTED_ATTACHMENT_EXTENSIONS } from "./lib/composer-suggestions.ts";
 import type { TimelineItem } from "./lib/timeline.ts";
 
 const iso = (sec: number) => new Date(Date.UTC(2026, 6, 27, 10, 0, sec)).toISOString();
@@ -18,12 +19,27 @@ const iso = (sec: number) => new Date(Date.UTC(2026, 6, 27, 10, 0, sec)).toISOSt
 /** Workspace for file-link / media path resolution (demo stub + product workspacePath). */
 export const DEMO_WORKSPACE = "/work/pix-demo-project";
 
+/** Every recognized extension plus folder and unknown-file fallbacks. */
+export const DEMO_USER_ATTACHMENT_PATHS = [
+  `${DEMO_WORKSPACE}/samples/folder`,
+  ...SUPPORTED_ATTACHMENT_EXTENSIONS.map(
+    (extension) => `${DEMO_WORKSPACE}/samples/sample.${extension}`,
+  ),
+  `${DEMO_WORKSPACE}/samples/unknown.bin`,
+];
+
 /**
  * Same kitchen-sink reply the fake OpenAI server returns for
  * “Render the rich content fixture.” (packages/test-utils).
  * Paths rewritten to DEMO_WORKSPACE so MarkdownContent file/media links resolve.
  */
-export function richAssistantMarkdown(workspace = DEMO_WORKSPACE): string {
+/**
+ * Kitchen-sink assistant body matching packages/test-utils fake-openai rich fixture shape.
+ * File/media links are **workspace-relative** (product agent style); callers pass
+ * `workspacePath={DEMO_WORKSPACE}` so MarkdownContent resolves them like the real session.
+ */
+export function richAssistantMarkdown(_workspace = DEMO_WORKSPACE): string {
+  void _workspace;
   return [
     "## Rich content",
     "",
@@ -47,8 +63,9 @@ export function richAssistantMarkdown(workspace = DEMO_WORKSPACE): string {
     "```",
     "",
     "```diff",
-    "-old",
-    "+new",
+    "@@ -128,1 +128,1 @@",
+    "-const sessionRenderer = createRenderer({ preserveVisibleLineNumbers: false, stickyGutter: false, horizontalOverflow: 'hidden' });",
+    "+const sessionRenderer = createRenderer({ preserveVisibleLineNumbers: true, stickyGutter: true, horizontalOverflow: 'auto' });",
     "```",
     "",
     "```mermaid",
@@ -58,11 +75,13 @@ export function richAssistantMarkdown(workspace = DEMO_WORKSPACE): string {
     "",
     "See the fixture file[^1] and the external docs[^docs].",
     "",
-    `[Fixture file](${workspace}/fixture.txt#L1C1)`,
+    // Relative paths + #L/#C — same shape as product agent replies / e2e rich fixture
+    // (workspacePath resolves them; labels render as workspace-relative source chips).
+    "[fixture.txt](fixture.txt#L1C1)",
     "[External docs](https://example.com/docs)",
     "",
-    `![Preview image](${workspace}/photo.png)`,
-    `![Demo video](${workspace}/demo.mp4)`,
+    "![Preview image](photo.png)",
+    "![Demo video](demo.mp4)",
     "",
     "[^1]: Primary source for the fixture path.",
     "[^docs]: https://example.com/docs",
@@ -91,6 +110,32 @@ export type DemoScenario = {
   events?: HostEvent[];
 };
 
+/** User attachment coverage: every supported extension goes through the product timeline row. */
+export function scenarioUserAttachments(): DemoScenario {
+  return {
+    id: "user-attachments",
+    title: "用户消息 · 全格式附件",
+    description: `覆盖 ${SUPPORTED_ATTACHMENT_EXTENSIONS.length} 种已识别扩展名，以及文件夹和未知格式回退。附件组右对齐并位于消息上方；图片只显示预览。`,
+    items: [
+      {
+        id: "u-attachments",
+        kind: "user",
+        text: "请检查这些附件并按类型整理。",
+        attachments: DEMO_USER_ATTACHMENT_PATHS,
+        timestamp: iso(0),
+        entryId: "e-u-attachments",
+      },
+      {
+        id: "asst-attachments",
+        kind: "assistant",
+        text: "已收到全部附件。",
+        timestamp: iso(1),
+        entryId: "e-asst-attachments",
+      },
+    ],
+  };
+}
+
 /** Closed turn: process → final assistant (rich fixture) — history-like, not running. */
 export function scenarioCompletedTurn(): DemoScenario {
   const appPath = `${DEMO_WORKSPACE}/src/app.ts`;
@@ -101,7 +146,7 @@ export function scenarioCompletedTurn(): DemoScenario {
     id: "completed",
     title: "已完成一轮",
     description:
-      "与产品一致：user → process（thinking / tools / 中间叙述）→ 最终 assistant。running=false，process 默认折叠为「已处理」。",
+      "与产品一致：user → process（thinking / tools / 中间叙述）→ 最终 assistant。running=false，process 头为「已处理」且默认折叠（仅手动展开）。",
     items: [
       {
         id: "u1",
@@ -412,6 +457,7 @@ export function scenarioWaiting(): DemoScenario {
 export function allDemoScenarios(): DemoScenario[] {
   return [
     scenarioCompletedTurn(),
+    scenarioUserAttachments(),
     scenarioLiveExecuting(),
     scenarioLiveResponding(),
     scenarioCompacting(),

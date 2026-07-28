@@ -112,6 +112,32 @@ describe("runtime timeline", () => {
     expect(splitAttachedPaths("plain text")).toEqual({ text: "plain text", paths: [] });
   });
 
+  it("forwards edit tool details.diff so UI can show real file line numbers", () => {
+    const details = {
+      diff: " 41 return 42;\n+42 return 43;",
+      firstChangedLine: 42,
+    };
+    expect(
+      historyToTimeline([
+        {
+          role: "tool",
+          text: "Successfully replaced 1 block(s) in app.ts.",
+          toolName: "edit",
+          args: {
+            path: "app.ts",
+            edits: [{ oldText: "return 42;", newText: "return 43;" }],
+          },
+          details,
+        },
+      ])[0],
+    ).toMatchObject({
+      kind: "tool",
+      toolName: "edit",
+      status: "completed",
+      details,
+    });
+  });
+
   it("shows shell output from live and persisted sessions", () => {
     expect(
       historyToTimeline([

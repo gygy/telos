@@ -809,10 +809,7 @@ export function ProjectList(props: ProjectListProps) {
           >
             {/* Spacer = Folder icon width so「无会话」lines up with the project name. */}
             <span className="inline-block size-4 shrink-0" aria-hidden />
-            <span
-              className="min-w-0 text-left text-[12px] leading-relaxed"
-              style={{ color: "#535458" }}
-            >
+            <span className="min-w-0 text-left text-[12px] leading-relaxed text-muted-foreground">
               {tr("session.empty")}
             </span>
           </div>

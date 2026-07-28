@@ -1,5 +1,5 @@
 /** Streaming-safe rich content renderer for assistant messages. */
-import { memo, useState, type MouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { BookMarked, ExternalLink, FileCode2, Maximize2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -11,10 +11,38 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
-import { contentMediaKind, contentSourceUrl, parseContentLink } from "../lib/content-rendering.ts";
+import {
+  contentMediaKind,
+  contentSourceUrl,
+  formatFileLinkLabel,
+  parseContentLink,
+} from "../lib/content-rendering.ts";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize.ts";
 import { t, type Locale } from "../lib/i18n.ts";
 import { cn } from "../lib/utils.ts";
+
+/** Browsers block file:// media when the page is served over http(s) (session-content demo). */
+function pageBlocksFileMedia(): boolean {
+  if (typeof window === "undefined") return false;
+  const protocol = window.location.protocol;
+  return protocol === "http:" || protocol === "https:";
+}
+
+const PREVIEWABLE_IMAGE = /\.(?:png|jpe?g|gif|webp|bmp)$/i;
+
+/** Absolute local image path for workspace.readAttachmentPreview, when applicable. */
+function localPreviewableImagePath(
+  src: string | undefined,
+  workspacePath?: string,
+): string | undefined {
+  if (!src?.trim()) return undefined;
+  if (contentMediaKind(src) === "video") return undefined;
+  if (/^(https?:|data:|blob:)/i.test(src.trim())) return undefined;
+  const target = parseContentLink(src.trim(), workspacePath);
+  if (target.kind !== "file") return undefined;
+  if (!PREVIEWABLE_IMAGE.test(target.path)) return undefined;
+  return target.path;
+}
 
 function safeMarkdownUrl(url: string, key: string): string {
   if (/^(javascript:|vbscript:)/i.test(url)) return "";
@@ -254,6 +282,25 @@ function MarkdownLink(props: {
         : target.path
       : undefined;
 
+  // Flatten simple text children so path labels can be shortened like tool rows.
+  const childrenText = (() => {
+    if (typeof props.children === "string" || typeof props.children === "number") {
+      return String(props.children);
+    }
+    if (Array.isArray(props.children)) {
+      return props.children
+        .map((child) =>
+          typeof child === "string" || typeof child === "number" ? String(child) : "",
+        )
+        .join("");
+    }
+    return "";
+  })();
+  const fileLabel =
+    target.kind === "file"
+      ? formatFileLinkLabel(childrenText, target.path, props.workspacePath)
+      : undefined;
+
   return (
     <a
       href={href}
@@ -265,7 +312,9 @@ function MarkdownLink(props: {
       {target.kind === "file" ? (
         <FileCode2 className="content-source-cite-icon" aria-hidden strokeWidth={1.75} />
       ) : null}
-      <span className="content-source-cite-label">{props.children}</span>
+      <span className="content-source-cite-label">
+        {target.kind === "file" && fileLabel ? fileLabel : props.children}
+      </span>
       {target.kind === "file" && target.line != null ? (
         <span className="content-source-line" aria-hidden>
           :{target.line}
@@ -287,15 +336,70 @@ function MediaContent(props: {
   locale: Locale;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const source = props.src ? contentSourceUrl(props.src, props.workspacePath) : "";
   const kind = contentMediaKind(props.src ?? "");
+  const fallback = props.src ? contentSourceUrl(props.src, props.workspacePath) : "";
+  const filePath = useMemo(
+    () => localPreviewableImagePath(props.src, props.workspacePath),
+    [props.src, props.workspacePath],
+  );
+  // http(s) pages cannot load file:// — resolve via IPC/stub data URL instead (demo + safety).
+  const needsPreviewBridge = pageBlocksFileMedia() && Boolean(filePath);
+  const [source, setSource] = useState(() => (needsPreviewBridge ? "" : fallback));
 
-  if (!source) return null;
+  useEffect(() => {
+    if (!needsPreviewBridge || !filePath) {
+      setSource(fallback);
+      return;
+    }
+    let cancelled = false;
+    setSource("");
+    void window.pix?.workspace
+      ?.readAttachmentPreview?.(filePath)
+      .then((url) => {
+        if (cancelled) return;
+        setSource(url || fallback);
+      })
+      .catch(() => {
+        if (!cancelled) setSource(fallback);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsPreviewBridge, filePath, fallback]);
+
+  // file:// may still fail (missing path / sandbox): last-resort data URL from preview API.
+  async function handleImageError() {
+    if (!filePath || source.startsWith("data:")) return;
+    try {
+      const url = await window.pix?.workspace?.readAttachmentPreview?.(filePath);
+      if (url) setSource(url);
+    } catch {
+      // leave broken state
+    }
+  }
+
+  if (!fallback && !source) return null;
   if (kind === "video") {
     return (
-      <video className="content-video" src={source} controls preload="metadata" title={props.title}>
+      <video
+        className="content-video"
+        src={fallback}
+        controls
+        preload="metadata"
+        title={props.title}
+      >
         {props.alt}
       </video>
+    );
+  }
+
+  if (!source) {
+    return (
+      <div
+        className="content-image-button content-image-loading"
+        aria-busy="true"
+        title={props.title || props.alt || t(props.locale, "timeline.imagePreview")}
+      />
     );
   }
 
@@ -307,7 +411,12 @@ function MediaContent(props: {
         onClick={() => setPreviewOpen(true)}
         title={props.title || props.alt || t(props.locale, "timeline.imagePreview")}
       >
-        <img src={source} alt={props.alt ?? ""} loading="lazy" />
+        <img
+          src={source}
+          alt={props.alt ?? ""}
+          loading="lazy"
+          onError={() => void handleImageError()}
+        />
         <span className="content-image-expand" aria-hidden>
           <Maximize2 className="size-3.5" />
         </span>
@@ -336,6 +445,7 @@ function MediaContent(props: {
             src={source}
             alt={props.alt ?? ""}
             className="max-h-[min(90vh,920px)] w-full rounded-lg object-contain"
+            onError={() => void handleImageError()}
           />
         </DialogContent>
       </Dialog>

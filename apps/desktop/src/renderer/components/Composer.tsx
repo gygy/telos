@@ -77,6 +77,7 @@ import {
 } from "./FloatingMenu.tsx";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
@@ -426,6 +427,64 @@ function formatContext(percent: number | undefined, tokens: number | undefined):
   }
   // No live usage yet — show empty capacity, never a dash.
   return "0%";
+}
+
+function ContextUsageIndicator(props: {
+  label: string;
+  percent: number | undefined;
+  tokens: number | undefined;
+}) {
+  const rawPercent = props.percent;
+  const hasPercent = rawPercent != null && Number.isFinite(rawPercent);
+  const value = hasPercent ? Math.min(100, Math.max(0, Math.round(rawPercent))) : 0;
+  const detail = formatContext(props.percent, props.tokens);
+  const accessibleLabel = `${props.label}: ${detail}`;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex size-8 shrink-0 cursor-help items-center justify-center rounded-full text-muted-foreground"
+            data-testid="usage-chip"
+            data-context-percent={value}
+            role="meter"
+            aria-label={accessibleLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            {...(hasPercent ? { "aria-valuenow": value } : {})}
+          >
+            <svg className="size-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <circle
+                cx="10"
+                cy="10"
+                r="7"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                opacity="0.2"
+              />
+              {value > 0 ? (
+                <circle
+                  cx="10"
+                  cy="10"
+                  r="7"
+                  pathLength="100"
+                  stroke="currentColor"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeDasharray="100"
+                  strokeDashoffset={100 - value}
+                  transform="rotate(-90 10 10)"
+                />
+              ) : null}
+            </svg>
+            <span className="sr-only">{detail}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{accessibleLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 const ICON_SM = { className: "size-4 shrink-0", strokeWidth: 1.75 } as const;
@@ -1416,13 +1475,11 @@ export function Composer(props: ComposerProps) {
           {/* Right: context + model + send */}
           <div className="flex shrink-0 items-center gap-1">
             {props.showContextUsage !== false ? (
-              <span
-                className="inline-flex h-8 items-center rounded-full px-2 text-[11px] tabular-nums text-[var(--text-subtle)]"
-                data-testid="usage-chip"
-                title={tr("composer.context")}
-              >
-                {formatContext(props.contextPercent, props.contextTokens)}
-              </span>
+              <ContextUsageIndicator
+                label={tr("composer.context")}
+                percent={props.contextPercent}
+                tokens={props.contextTokens}
+              />
             ) : null}
             <button
               type="button"

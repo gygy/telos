@@ -92,6 +92,60 @@ function encodeFilePath(path: string): string {
     .join("/");
 }
 
+function pathBasename(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/");
+  return parts[parts.length - 1] || path;
+}
+
+/**
+ * Display path for session UI (tool rows, source citations).
+ * Prefer workspace-relative (`src/app.ts`); fall back to basename when outside workspace.
+ * Matches how product chat shortens absolute tool paths under the open project.
+ */
+export function formatWorkspaceRelativePath(path: string, workspacePath?: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalized) return path;
+  const base = workspacePath?.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (base) {
+    if (normalized === base) return pathBasename(normalized);
+    if (normalized.startsWith(`${base}/`)) {
+      const relative = normalized.slice(base.length + 1);
+      if (relative) return relative;
+    }
+  }
+  // Already relative (no leading / or drive) — keep as authored.
+  if (!isAbsolutePath(normalized)) return normalized;
+  return pathBasename(normalized);
+}
+
+/**
+ * Label for a markdown file citation: keep author text when it's a real name,
+ * but collapse absolute/full paths to the workspace-relative form.
+ */
+export function formatFileLinkLabel(
+  childrenText: string,
+  absolutePath: string,
+  workspacePath?: string,
+): string {
+  const display = formatWorkspaceRelativePath(absolutePath, workspacePath);
+  const raw = childrenText.replace(/\s+/g, " ").trim();
+  if (!raw) return display;
+  const base = pathBasename(absolutePath);
+  const normChild = raw.replace(/\\/g, "/");
+  const normAbs = absolutePath.replace(/\\/g, "/");
+  // Author used the full path or basename as the link text → show relative form.
+  if (
+    normChild === normAbs ||
+    normChild === display ||
+    normChild === base ||
+    normChild.endsWith(`/${base}`) ||
+    normChild.endsWith(`\\${base}`)
+  ) {
+    return display;
+  }
+  return raw;
+}
+
 export function contentSourceUrl(source: string, workspacePath?: string): string {
   const value = source.trim();
   if (/^(https?:|data:|blob:|file:)/i.test(value)) return value;

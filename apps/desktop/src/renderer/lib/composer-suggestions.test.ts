@@ -6,10 +6,12 @@ import {
   attachmentPresentation,
   filterResourceCommands,
   filterSlashCommands,
+  isPreviewableImagePath,
   isPromptImagePath,
   pathTokenBeforeCursor,
   promptWithAttachedPaths,
   slashCommandQuery,
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from "./composer-suggestions.ts";
 
 describe("composer suggestions", () => {
@@ -68,6 +70,18 @@ describe("composer suggestions", () => {
     );
     expect(isPromptImagePath("/tmp/photo.webp")).toBe(true);
     expect(isPromptImagePath("/tmp/vector.svg")).toBe(false);
+    expect(isPreviewableImagePath("/tmp/vector.svg")).toBe(true);
+    expect(isPreviewableImagePath("/tmp/photo.avif")).toBe(true);
+    expect(isPreviewableImagePath("/tmp/notes.txt")).toBe(false);
+  });
+
+  it("exports every recognized attachment extension for complete demo coverage", () => {
+    expect(SUPPORTED_ATTACHMENT_EXTENSIONS).toHaveLength(
+      new Set(SUPPORTED_ATTACHMENT_EXTENSIONS).size,
+    );
+    for (const extension of SUPPORTED_ATTACHMENT_EXTENSIONS) {
+      expect(attachmentPresentation(`/tmp/sample.${extension}`).kind).not.toBe("file");
+    }
   });
 
   it("detects path tokens and applies Tab completions", () => {
