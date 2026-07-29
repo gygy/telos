@@ -1,6 +1,7 @@
 /**
- * OpenAI Responses-family request priority (service_tier).
- * Distinct from thinking level — this is latency/cost priority, not reasoning depth.
+ * OpenAI-family request priority (service_tier).
+ * Distinct from thinking level — latency/cost priority, not reasoning depth.
+ * Host only exposes tiers for OpenAI / Codex / Azure Responses models.
  */
 
 export type ServiceTierId = "flex" | "default" | "priority";

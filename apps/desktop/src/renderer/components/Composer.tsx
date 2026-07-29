@@ -2049,7 +2049,7 @@ export function Composer(props: ComposerProps) {
             ))}
           </FlyoutRow>
 
-          {/* Real OpenAI service_tier only — hidden as disabled when model has no support. */}
+          {/* OpenAI-family service_tier only — disabled when host reports no tiers. */}
           <FlyoutRow
             icon={<Gauge className="size-3.5" strokeWidth={1.75} />}
             label={tr("composer.model.speed")}

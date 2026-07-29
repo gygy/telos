@@ -500,10 +500,11 @@ const messages = {
     "piSettings.agentDirHint": "与命令行工具共用同一套配置",
     "piSettings.sessionDefaults": "会话默认",
     "piSettings.defaultThinking": "默认思考强度",
-    "piSettings.defaultThinkingHint": "按默认模型的真实能力设置；可在输入框随时改",
+    "piSettings.defaultThinkingHint":
+      "选项来自默认模型的官方能力（pi thinkingLevelMap）；可在输入框随时改",
     "piSettings.defaultServiceTier": "默认请求优先级",
     "piSettings.defaultServiceTierHint":
-      "真实写入 OpenAI Responses 请求；优先级越高，延迟和费用通常越高",
+      "仅当当前默认模型在官方能力上支持 OpenAI service_tier 时可用（OpenAI/Codex/Azure 产品；自定义代理仅当模型 id 对应此类产品）。优先级越高，延迟和费用通常越高",
     "piSettings.thinking.off": "关闭",
     "piSettings.thinking.minimal": "最低",
     "piSettings.thinking.low": "低",
@@ -1593,10 +1594,10 @@ const messages = {
     "piSettings.sessionDefaults": "Session defaults",
     "piSettings.defaultThinking": "Default thinking level",
     "piSettings.defaultThinkingHint":
-      "Uses the default model's real capabilities; change anytime in the composer",
+      "Options come from the default model's official capabilities (pi thinkingLevelMap); change anytime in the composer",
     "piSettings.defaultServiceTier": "Default request priority",
     "piSettings.defaultServiceTierHint":
-      "Sent as a real OpenAI Responses request field; higher priority usually increases cost",
+      "Only when the default model officially supports OpenAI service_tier (OpenAI/Codex/Azure products; custom proxies only if the model id matches such a product). Higher priority usually increases cost",
     "piSettings.thinking.off": "off",
     "piSettings.thinking.minimal": "minimal",
     "piSettings.thinking.low": "low",

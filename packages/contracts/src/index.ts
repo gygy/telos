@@ -249,8 +249,10 @@ export interface HostSnapshot {
   thinkingLevel?: string;
   availableThinkingLevels?: string[];
   /**
-   * OpenAI Responses-family `service_tier` (flex | default | priority).
-   * Empty available list = current model does not support request priority.
+   * OpenAI `service_tier` (flex | default | priority) when the active model
+   * officially supports it (OpenAI/Codex/Azure product; custom proxy only if
+   * model id matches such a catalog product). Empty = unsupported.
+   * Not a pi session field — Pix preference applied via request payload hook.
    */
   serviceTier?: "flex" | "default" | "priority";
   availableServiceTiers?: Array<"flex" | "default" | "priority">;
@@ -565,9 +567,9 @@ export interface PiSettingsView {
   };
   quietStartup: boolean;
   enableSkillCommands: boolean;
-  /** Thinking levels supported by the configured default model. */
+  /** Thinking levels for the configured default model (pi thinkingLevelMap). */
   availableThinkingLevels: string[];
-  /** Request priorities supported by the configured default model. */
+  /** OpenAI-family service_tier options for the default model; empty if unsupported. */
   availableServiceTiers: Array<"flex" | "default" | "priority">;
   steeringMode: QueueDeliveryMode;
   followUpMode: QueueDeliveryMode;
@@ -1711,8 +1713,9 @@ export interface PixDesktopApi {
     set(level: string): Promise<HostSnapshot>;
   };
   /**
-   * OpenAI Responses-family request priority (`service_tier`).
-   * The preference is retained across models; unsupported APIs receive no request field.
+   * OpenAI-family request priority (`service_tier`).
+   * Pix-only preference (not pi session state); retained across models.
+   * Unsupported models never receive a service_tier request field.
    */
   serviceTier: {
     set(tier: string): Promise<HostSnapshot>;

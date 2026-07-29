@@ -63,10 +63,12 @@ import {
   installServiceTierPayloadHook,
   isServiceTier,
   type ServiceTier,
+  type ServiceTierModel,
 } from "./service-tier.ts";
 import {
   availableThinkingLevelsForModel,
   clampThinkingLevelForModel,
+  enrichModelThinkingFromCatalog,
   isThinkingLevel,
 } from "./thinking-levels.ts";
 import {
@@ -107,6 +109,7 @@ export {
 export {
   applyServiceTierToPayload,
   availableServiceTiersForModel,
+  catalogModelIsOpenAIServiceTierProduct,
   installServiceTierPayloadHook,
   isServiceTier,
   modelSupportsServiceTier,
@@ -115,6 +118,8 @@ export {
 export {
   availableThinkingLevelsForModel,
   clampThinkingLevelForModel,
+  enrichModelThinkingFromCatalog,
+  findCatalogThinkingLevelMap,
   isThinkingLevel,
 } from "./thinking-levels.ts";
 
@@ -129,6 +134,62 @@ function getRuntimeServiceTier(runtime: object): ServiceTier {
 
 function setRuntimeServiceTier(runtime: object, tier: ServiceTier): void {
   serviceTierByRuntime.set(runtime, tier);
+}
+
+type CatalogModelPeer = {
+  id?: string;
+  provider?: string;
+  api?: string;
+  reasoning?: boolean;
+  thinkingLevelMap?: Partial<Record<string, string | null>>;
+};
+
+/** Live registry peers for official capability lookups (thinking map + service_tier). */
+function catalogModelPeers(services: AgentSessionServices): readonly CatalogModelPeer[] {
+  return services.modelRuntime.getModels() as readonly CatalogModelPeer[];
+}
+
+/**
+ * Attach official catalog thinkingLevelMap when models.json only set reasoning:true.
+ * Capability comes from the same model id + api in the pi catalog — not user preference.
+ */
+async function ensureSessionModelThinkingMap(
+  session: AgentSessionRuntime["session"],
+  services: AgentSessionServices,
+): Promise<void> {
+  const current = session.model;
+  if (!current) return;
+  const enriched = enrichModelThinkingFromCatalog(
+    current as typeof current & CatalogModelPeer,
+    catalogModelPeers(services),
+  );
+  if (!enriched || enriched === current) return;
+  await session.setModel(enriched);
+}
+
+function resolveModelWithCatalogThinking<T extends CatalogModelPeer>(
+  model: T | undefined,
+  services: AgentSessionServices,
+): T | undefined {
+  return enrichModelThinkingFromCatalog(model, catalogModelPeers(services)) ?? model;
+}
+
+function serviceTierModelRef(
+  model:
+    | {
+        id?: string;
+        api?: unknown;
+        provider?: string;
+      }
+    | null
+    | undefined,
+): ServiceTierModel | undefined {
+  if (!model) return undefined;
+  const ref: ServiceTierModel = {};
+  if (model.id) ref.id = model.id;
+  if (typeof model.api === "string" && model.api) ref.api = model.api;
+  if (model.provider) ref.provider = model.provider;
+  return ref;
 }
 
 export function resolveGitHubCliCommand(
@@ -1373,11 +1434,15 @@ function createSnapshot(
     };
   }
   snapshot.thinkingLevel = String(runtime.session.thinkingLevel);
+  // Official levels from the (possibly catalog-enriched) session model.
   snapshot.availableThinkingLevels = runtime.session
     .getAvailableThinkingLevels()
     .map((level) => String(level));
-  // Real OpenAI service_tier only — empty list means current model has no request-priority control.
-  const availableServiceTiers = availableServiceTiersForModel(model ?? undefined);
+  // Official OpenAI service_tier only (catalog product check for custom proxies).
+  const availableServiceTiers = availableServiceTiersForModel(
+    serviceTierModelRef(model),
+    catalogModelPeers(services),
+  );
   snapshot.availableServiceTiers = availableServiceTiers;
   if (availableServiceTiers.length > 0) {
     snapshot.serviceTier = getRuntimeServiceTier(runtime);
@@ -1477,7 +1542,7 @@ export async function createPixRuntime(
           `pi did not provide the requested model: ${options.model.provider}/${options.model.id}`,
         );
       }
-      sessionOptions.model = model;
+      sessionOptions.model = resolveModelWithCatalogThinking(model, services) ?? model;
     }
     // Product = visual pi: omit tools/noTools so SDK uses CLI defaults
     // (read/bash/edit/write + settings exclusions). Only pass restrictions when asked.
@@ -1533,15 +1598,27 @@ export async function createPixRuntime(
   });
 
   await bindExtensionUi();
+  // Official catalog thinkingLevelMap for custom models that only set reasoning:true.
+  await ensureSessionModelThinkingMap(runtime.session, runtime.services);
+  const serviceTierCatalogPeers = () => catalogModelPeers(runtime.services);
   // Install after extensions bind so the request hook remains the outermost payload transform.
-  installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
+  installServiceTierPayloadHook(
+    runtime.session.agent,
+    () => getRuntimeServiceTier(runtime),
+    serviceTierCatalogPeers,
+  );
 
   async function afterSessionReplacement<T>(operation: () => Promise<T>): Promise<T> {
     extensionUi.reload();
     const result = await operation();
     await bindExtensionUi();
+    await ensureSessionModelThinkingMap(runtime.session, runtime.services);
     // New Agent instance after switch/fork/new — bind after extensions so this stays outermost.
-    installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
+    installServiceTierPayloadHook(
+      runtime.session.agent,
+      () => getRuntimeServiceTier(runtime),
+      serviceTierCatalogPeers,
+    );
     return result;
   }
 
@@ -1552,7 +1629,12 @@ export async function createPixRuntime(
         extensionUi.reload();
       },
     });
-    installServiceTierPayloadHook(runtime.session.agent, () => getRuntimeServiceTier(runtime));
+    await ensureSessionModelThinkingMap(runtime.session, runtime.services);
+    installServiceTierPayloadHook(
+      runtime.session.agent,
+      () => getRuntimeServiceTier(runtime),
+      serviceTierCatalogPeers,
+    );
   }
 
   return {
@@ -1698,7 +1780,8 @@ export async function createPixRuntime(
     async setModel(provider, id) {
       const model = runtime.services.modelRuntime.getModel(provider, id);
       if (!model) throw new Error(`Unknown model ${provider}/${id}`);
-      await runtime.session.setModel(model);
+      const resolved = resolveModelWithCatalogThinking(model, runtime.services) ?? model;
+      await runtime.session.setModel(resolved);
       return createSnapshot(
         runtimeId,
         runtime,
@@ -1737,8 +1820,8 @@ export async function createPixRuntime(
       if (!isServiceTier(normalized)) {
         throw new Error(`Unknown service tier: ${tier} (use flex | default | priority)`);
       }
-      // Keep the preference across model/session switches. The payload hook applies it only
-      // when the active API supports service_tier; unsupported models receive no extra field.
+      // Pix preference only (not a pi session field). Payload hook injects service_tier only
+      // for OpenAI-family Responses models; others never receive the field.
       setRuntimeServiceTier(runtime, normalized);
       return createSnapshot(
         runtimeId,
@@ -2088,10 +2171,13 @@ function resolveSettingsModel(
 ) {
   const provider = services.settingsManager.getDefaultProvider();
   const modelId = services.settingsManager.getDefaultModel();
-  if (provider || modelId) {
-    return provider && modelId ? services.modelRuntime.getModel(provider, modelId) : undefined;
-  }
-  return session?.model;
+  const raw =
+    provider || modelId
+      ? provider && modelId
+        ? services.modelRuntime.getModel(provider, modelId)
+        : undefined
+      : session?.model;
+  return resolveModelWithCatalogThinking(raw ?? undefined, services) ?? raw;
 }
 
 function projectPiSettings(
@@ -2128,13 +2214,15 @@ function projectPiSettings(
   }
   const configuredThinking = sm.getDefaultThinkingLevel();
   const settingsModel = resolveSettingsModel(services, session);
-  const availableThinkingLevels = availableThinkingLevelsForModel(settingsModel);
+  // Official levels for the configured default model (catalog-enriched when needed).
+  const availableThinkingLevels = availableThinkingLevelsForModel(settingsModel ?? undefined);
   const thinking = configuredThinking
-    ? clampThinkingLevelForModel(settingsModel, configuredThinking)
+    ? clampThinkingLevelForModel(settingsModel ?? undefined, configuredThinking)
     : undefined;
   const compaction = sm.getCompactionSettings();
   const retry = sm.getRetrySettings();
   const thinkingBudgets = sm.getThinkingBudgets();
+  const peers = catalogModelPeers(services);
   const view: PiSettingsView = {
     agentDir: services.agentDir,
     defaultProjectTrust: sm.getDefaultProjectTrust(),
@@ -2147,9 +2235,9 @@ function projectPiSettings(
     hideThinkingBlock: sm.getHideThinkingBlock(),
     quietStartup: sm.getQuietStartup(),
     enableSkillCommands: sm.getEnableSkillCommands(),
-    // Settings follow the configured default model; unsupported levels are not offered.
+    // Only levels/tiers the default model officially supports.
     availableThinkingLevels,
-    availableServiceTiers: availableServiceTiersForModel(settingsModel),
+    availableServiceTiers: availableServiceTiersForModel(serviceTierModelRef(settingsModel), peers),
     steeringMode: sm.getSteeringMode(),
     followUpMode: sm.getFollowUpMode(),
     doubleEscapeAction: sm.getDoubleEscapeAction(),

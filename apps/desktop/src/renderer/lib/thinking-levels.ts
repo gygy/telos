@@ -1,7 +1,7 @@
 /**
  * Composer thinking-level helpers.
- * Session HostSnapshot.availableThinkingLevels is model-specific (pi getSupportedThinkingLevels).
- * Settings → Agent keeps the full set for the global default only.
+ * HostSnapshot.availableThinkingLevels is the official list for the active model
+ * (pi getSupportedThinkingLevels / thinkingLevelMap). Never invent extra levels in UI.
  */
 
 /** Full pi ThinkingLevel set (settings/rpc + thinkingLevelMap keys). */
