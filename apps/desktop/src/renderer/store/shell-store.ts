@@ -456,26 +456,38 @@ export const useShellStore = create<ShellState>((set, get) => ({
     // Never toggle global `running` without a session identity — that stuck the
     // composer/sidebar after switches when sessionFile was briefly empty.
     if (!key) return;
-    clearMarkerTimer(key);
+    // Path/id aliases share the same marker object. Transition every linked key
+    // together so a mirrored id cannot remain "running" after the path settles.
+    const currentMarker = get().sessionMarkers[key];
+    const linkedKeys = currentMarker
+      ? Object.entries(get().sessionMarkers)
+          .filter(([candidate, marker]) => candidate === key || marker === currentMarker)
+          .map(([candidate]) => candidate)
+      : [key];
+    for (const linkedKey of linkedKeys) clearMarkerTimer(linkedKey);
     set((state) => {
       const sessionMarkers = { ...state.sessionMarkers };
       const runningSessions = { ...state.runningSessions };
       const runningRuntimeIds = { ...state.runningRuntimeIds };
       const lastSessionByRuntime = { ...state.lastSessionByRuntime };
       if (markerState === "idle") {
-        delete sessionMarkers[key];
-        delete runningSessions[key];
+        for (const linkedKey of linkedKeys) {
+          delete sessionMarkers[linkedKey];
+          delete runningSessions[linkedKey];
+        }
       } else {
         const marker: SessionMarker = { state: markerState };
         if (options?.reason?.trim()) marker.reason = options.reason.trim();
-        sessionMarkers[key] = marker;
-        if (isBusyRunState(markerState)) runningSessions[key] = true;
-        else delete runningSessions[key];
+        for (const linkedKey of linkedKeys) {
+          sessionMarkers[linkedKey] = marker;
+          if (isBusyRunState(markerState)) runningSessions[linkedKey] = true;
+          else delete runningSessions[linkedKey];
+        }
       }
       if (options?.runtimeId) {
         const rid = options.runtimeId;
         if (markerState === "idle") {
-          if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
+          if (linkedKeys.includes(runningRuntimeIds[rid] ?? "")) delete runningRuntimeIds[rid];
           // Drop durable map so a recycled runtime cannot re-target this row.
           delete lastSessionByRuntime[rid];
         } else if (isBusyRunState(markerState)) {
@@ -484,9 +496,9 @@ export const useShellStore = create<ShellState>((set, get) => ({
           runningRuntimeIds[rid] = key;
           lastSessionByRuntime[rid] = key;
           // A new busy turn owns this session — drop other runtimes' durable maps
-          // that still point here (stale abort/fail settles must not win later).
+          // that still point at this path/id alias group.
           for (const [otherRid, sessionKeyForRid] of Object.entries(lastSessionByRuntime)) {
-            if (otherRid !== rid && sessionKeyForRid === key) {
+            if (otherRid !== rid && linkedKeys.includes(sessionKeyForRid)) {
               delete lastSessionByRuntime[otherRid];
             }
           }
@@ -495,7 +507,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
           // Clearing lastSessionByRuntime here is required: abort() sets aborted via
           // setSessionMarker (not settleSessionByRuntime), and a late settle from the
           // old runtime would otherwise re-apply failed/aborted after recovery.
-          if (runningRuntimeIds[rid] === key) delete runningRuntimeIds[rid];
+          if (linkedKeys.includes(runningRuntimeIds[rid] ?? "")) delete runningRuntimeIds[rid];
           delete lastSessionByRuntime[rid];
         }
       }

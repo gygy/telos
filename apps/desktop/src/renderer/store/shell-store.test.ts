@@ -1,7 +1,7 @@
 import { IPC_PROTOCOL_VERSION, type HostEvent } from "@pix/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { loadContentModeForSession, saveContentModeForSession } from "../lib/content-mode-prefs.ts";
-import { isBusyRunState } from "../lib/session-markers.ts";
+import { COMPLETED_MARKER_MS, isBusyRunState } from "../lib/session-markers.ts";
 import {
   classifyRuntimeEventDelivery,
   sessionKeyFromSnapshot,
@@ -220,7 +220,8 @@ describe("per-session running", () => {
     vi.useRealTimers();
   });
 
-  it("soft-completes busy markers when prompt IPC ends before settle", () => {
+  it("soft-completes path/id marker aliases together when prompt IPC ends", () => {
+    vi.useFakeTimers();
     useShellStore.setState({
       running: true,
       sessionMarkers: {},
@@ -245,11 +246,19 @@ describe("per-session running", () => {
     });
     useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", true, "rt-1");
     expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("running");
+    expect(useShellStore.getState().sessionMarkers.s1?.state).toBe("running");
     // Prompt IPC returns while still "running" in the map (settle not yet applied).
     useShellStore.getState().setSessionRunning("/tmp/s1.jsonl", false, "rt-1");
     // Must not wipe to idle — rail would blank during terminal/session hops.
     expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]?.state).toBe("completed");
+    expect(useShellStore.getState().sessionMarkers.s1?.state).toBe("completed");
+    expect(useShellStore.getState().runningSessions.s1).toBeUndefined();
     expect(useShellStore.getState().running).toBe(false);
+
+    vi.advanceTimersByTime(COMPLETED_MARKER_MS);
+    expect(useShellStore.getState().sessionMarkers["/tmp/s1.jsonl"]).toBeUndefined();
+    expect(useShellStore.getState().sessionMarkers.s1).toBeUndefined();
+    vi.useRealTimers();
   });
 
   it("preserves busy markers across applySessionOpen when runtime still bound", () => {

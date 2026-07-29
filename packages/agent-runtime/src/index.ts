@@ -817,18 +817,33 @@ export function threadSummaryFromLiveSession(
 
 /**
  * Merge a live (possibly unflushed) session into a disk-backed list.
- * Replaces a same-id disk row so title/recency reflect in-memory first user message.
+ * Keeps the freshest activity timestamp while taking title/active metadata from memory.
  */
+function compareThreadRecency(left: SessionThreadSummary, right: SessionThreadSummary): number {
+  const modified = right.modifiedAt.localeCompare(left.modifiedAt);
+  if (modified !== 0) return modified;
+  return left.id.localeCompare(right.id);
+}
+
 export function mergeLiveSessionThread(
   threads: SessionThreadSummary[],
   live: SessionThreadSummary | undefined,
 ): SessionThreadSummary[] {
   if (!live) return threads;
+  const disk = threads.find((t) => t.id === live.id || t.path === live.path);
+  const freshest = disk && compareThreadRecency(live, disk) >= 0 ? disk : live;
+  const merged: SessionThreadSummary = {
+    ...freshest,
+    // Live metadata is authoritative for the in-memory title and active session.
+    title: live.title,
+    ...(live.titleBase !== undefined ? { titleBase: live.titleBase } : {}),
+    modifiedAt: freshest.modifiedAt,
+    messageCount: Math.max(freshest.messageCount, live.messageCount),
+    active: live.active,
+  };
   const without = threads.filter((t) => t.id !== live.id && t.path !== live.path);
   const marked = without.map((t) => (live.active ? { ...t, active: false } : t));
-  return disambiguateSessionTitles([live, ...marked]).sort((left, right) =>
-    right.modifiedAt.localeCompare(left.modifiedAt),
-  );
+  return disambiguateSessionTitles([merged, ...marked]).sort(compareThreadRecency);
 }
 
 /**

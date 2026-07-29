@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import type { QueuedMessages } from "@pix/contracts";
-import { ComposerQueueCard, removeQueuedItem } from "./components/ComposerQueueCard.tsx";
+import { ComposerQueueCard } from "./components/ComposerQueueCard.tsx";
 import { SessionTimelineScroller } from "./components/SessionTimelineContent.tsx";
 import { applyDocumentTheme } from "./lib/theme.ts";
 import {
@@ -101,33 +101,6 @@ function ScenarioTimeline(props: { scenario: DemoScenario; locale: "zh" | "en" }
             paused={paused && queueCount > 0}
             onClearQueue={() => {
               setQueuedMessages(EMPTY_QUEUE);
-              setPaused(false);
-            }}
-            onRemoveItem={(kind, index) => {
-              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
-            }}
-            onSendNow={(kind, index, message) => {
-              // Demo: 立即发送 → drop the row (product delivers via host).
-              void message;
-              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
-              setPaused(false);
-            }}
-            onEditItem={(kind, index, message) => {
-              // Demo: 编辑 → remove from queue; product also fills the composer.
-              console.info("[session-content-demo] edit queue item", message);
-              setQueuedMessages((current) => removeQueuedItem(current, kind, index));
-            }}
-            onContinue={() => {
-              // Demo: drop the head row and leave the rest unpaused (visual only).
-              setQueuedMessages((current) => {
-                if (current.steering.length > 0) {
-                  return removeQueuedItem(current, "steering", 0);
-                }
-                if (current.followUp.length > 0) {
-                  return removeQueuedItem(current, "followUp", 0);
-                }
-                return current;
-              });
               setPaused(false);
             }}
           />

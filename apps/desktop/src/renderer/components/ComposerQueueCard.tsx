@@ -1,7 +1,7 @@
 /**
  * Queued steer / follow-up strip above the composer input.
  *
- * Per-row: 立即发送 / 编辑 / 取消
+ * Rows mirror Pi's native queue; only clear-all is mutable.
  * Card-level: 清空全部 (host clearQueue)
  *
  * Shared by product Composer and the session-content demo.
@@ -11,11 +11,9 @@ import { ListTodo } from "lucide-react";
 import { t, type Locale } from "../lib/i18n.ts";
 import { cn } from "../lib/utils.ts";
 
-export type QueueItemKind = "steering" | "followUp";
-
 export type ComposerQueueItem = {
   message: string;
-  kind: QueueItemKind;
+  kind: "steering" | "followUp";
   /** Index within steering[] or followUp[]. */
   index: number;
 };
@@ -39,54 +37,12 @@ export function flattenQueuedMessages(queued: QueuedMessages): ComposerQueueItem
   ];
 }
 
-export function removeQueuedItem(
-  queued: QueuedMessages,
-  kind: QueueItemKind,
-  index: number,
-): QueuedMessages {
-  if (kind === "steering") {
-    return {
-      steering: queued.steering.filter((_, i) => i !== index),
-      followUp: queued.followUp,
-    };
-  }
-  return {
-    steering: queued.steering,
-    followUp: queued.followUp.filter((_, i) => i !== index),
-  };
-}
-
-/** Replace one queue row's text (edit). */
-export function replaceQueuedItem(
-  queued: QueuedMessages,
-  kind: QueueItemKind,
-  index: number,
-  message: string,
-): QueuedMessages {
-  if (kind === "steering") {
-    return {
-      steering: queued.steering.map((m, i) => (i === index ? message : m)),
-      followUp: queued.followUp,
-    };
-  }
-  return {
-    steering: queued.steering,
-    followUp: queued.followUp.map((m, i) => (i === index ? message : m)),
-  };
-}
-
 export function ComposerQueueCard(props: {
   locale: Locale;
   queuedMessages: QueuedMessages;
   /** When true, show the interrupted/paused banner + Continue. */
   paused?: boolean;
   onClearQueue: () => void;
-  onRemoveItem?: (kind: QueueItemKind, index: number) => void;
-  /** 立即发送 this queued message. */
-  onSendNow?: (kind: QueueItemKind, index: number, message: string) => void;
-  /** 编辑：load message into the composer and drop it from the queue. */
-  onEditItem?: (kind: QueueItemKind, index: number, message: string) => void;
-  onContinue?: () => void;
   className?: string;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
@@ -96,11 +52,6 @@ export function ComposerQueueCard(props: {
   if (queuedItems.length === 0) return null;
 
   const paused = Boolean(props.paused);
-
-  function removeItem(item: ComposerQueueItem) {
-    if (props.onRemoveItem) props.onRemoveItem(item.kind, item.index);
-    else props.onClearQueue();
-  }
 
   return (
     <div
@@ -119,16 +70,6 @@ export function ComposerQueueCard(props: {
           {tr("composer.queue.count", { count: String(queuedItems.length) })}
         </span>
         <div className="composer-queue-toolbar-actions">
-          {paused ? (
-            <button
-              type="button"
-              className="composer-queue-action"
-              data-testid="composer-queue-continue"
-              onClick={props.onContinue}
-            >
-              {tr("composer.queue.continue")}
-            </button>
-          ) : null}
           <button
             type="button"
             className="composer-queue-action"
@@ -158,35 +99,6 @@ export function ComposerQueueCard(props: {
             <span className="composer-queue-item-text" title={item.message}>
               {queuedMessagePreview(item.message)}
             </span>
-            <div className="composer-queue-actions">
-              <button
-                type="button"
-                className="composer-queue-action"
-                data-testid="composer-queue-send-now"
-                title={tr("composer.queue.sendNow")}
-                onClick={() => props.onSendNow?.(item.kind, item.index, item.message)}
-              >
-                {tr("composer.queue.sendNow")}
-              </button>
-              <button
-                type="button"
-                className="composer-queue-action"
-                data-testid="composer-queue-edit"
-                title={tr("composer.queue.edit")}
-                onClick={() => props.onEditItem?.(item.kind, item.index, item.message)}
-              >
-                {tr("composer.queue.edit")}
-              </button>
-              <button
-                type="button"
-                className="composer-queue-action"
-                data-testid="composer-queue-cancel"
-                title={tr("composer.queue.cancelTitle")}
-                onClick={() => removeItem(item)}
-              >
-                {tr("composer.queue.cancel")}
-              </button>
-            </div>
           </li>
         ))}
       </ul>

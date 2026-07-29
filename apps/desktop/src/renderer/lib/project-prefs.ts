@@ -1,6 +1,7 @@
 /** Desktop-only project chrome prefs (pin / archive / rename / expand). */
 
 const PINNED_KEY = "pix.projects.pinned";
+const PROJECT_MANUAL_ORDER_KEY = "pix.projects.manualOrder";
 const ARCHIVED_KEY = "pix.projects.archived";
 const ALIASES_KEY = "pix.projects.aliases";
 const EXPANDED_KEY = "pix.projects.expanded";
@@ -11,6 +12,7 @@ export const PROJECT_THREADS_PAGE = 5;
 const THREAD_ALIASES_KEY = "pix.threads.aliases";
 const THREAD_ARCHIVED_KEY = "pix.threads.archived";
 const THREAD_PINNED_KEY = "pix.threads.pinned";
+const THREAD_MANUAL_ORDER_KEY = "pix.threads.manualOrder";
 const THREAD_UNREAD_KEY = "pix.threads.unread";
 const THREAD_DELETED_KEY = "pix.threads.deleted";
 
@@ -43,6 +45,22 @@ export function loadPinnedProjects(): string[] {
 
 export function savePinnedProjects(paths: string[]): void {
   writeJson(PINNED_KEY, paths.map(normalizePath));
+}
+
+export function loadProjectManualOrder(): string[] {
+  const list = readJson<string[]>(PROJECT_MANUAL_ORDER_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return [
+    ...new Set(list.filter((path) => typeof path === "string" && path.trim()).map(normalizePath)),
+  ];
+}
+
+export function saveProjectManualOrder(paths: readonly string[]): string[] {
+  const next = [
+    ...new Set(paths.filter((path) => typeof path === "string" && path.trim()).map(normalizePath)),
+  ];
+  writeJson(PROJECT_MANUAL_ORDER_KEY, next);
+  return next;
 }
 
 export function togglePinnedProject(path: string): string[] {
@@ -115,12 +133,11 @@ export function saveExpandedProjects(paths: string[]): void {
   writeJson(EXPANDED_KEY, paths.map(normalizePath));
 }
 
-export function toggleExpandedProject(path: string): string[] {
+export function toggleExpandedProject(path: string, expanded = loadExpandedProjects()): string[] {
   const key = normalizePath(path);
-  const current = loadExpandedProjects();
-  const next = current.some((p) => normalizePath(p) === key)
-    ? current.filter((p) => normalizePath(p) !== key)
-    : [...current, path];
+  const next = expanded.some((p) => normalizePath(p) === key)
+    ? expanded.filter((p) => normalizePath(p) !== key)
+    : [...expanded, path];
   saveExpandedProjects(next);
   return next;
 }
@@ -193,18 +210,20 @@ export function partitionProjects(
   return { pinned: orderedPinned, rest };
 }
 
-export type ProjectSortMode = "priority" | "recent";
+export type ProjectSortMode = "priority" | "recent" | "manual";
 
 /**
  * Order projects in the 项目 section (pinned live in 置顶 and are not passed here).
- * - priority: alphabetical by folder name
+ * - priority: preserve input order (pinned projects are partitioned by the caller)
  * - recent: follow recentOrder (most recent first); unknowns last
+ * - manual: saved paths first, then new/unknown paths in input order
  */
 export function sortProjectPaths(
   paths: readonly string[],
   mode: ProjectSortMode,
   options?: {
     recentOrder?: readonly string[];
+    manualOrder?: readonly string[];
   },
 ): string[] {
   const list = [...paths];
@@ -224,14 +243,21 @@ export function sortProjectPaths(
     });
   }
 
-  // priority — alphabetical by folder name, then full path
-  return list.sort((a, b) => {
-    const an = normalizePath(a).split("/").pop() ?? a;
-    const bn = normalizePath(b).split("/").pop() ?? b;
-    const byName = an.localeCompare(bn, undefined, { sensitivity: "base" });
-    if (byName !== 0) return byName;
-    return normalizePath(a).localeCompare(normalizePath(b));
-  });
+  if (mode === "manual") {
+    const manualIndex = new Map(
+      (options?.manualOrder ?? []).map((path, i) => [normalizePath(path), i]),
+    );
+    return list.sort((a, b) => {
+      const ai = manualIndex.get(normalizePath(a));
+      const bi = manualIndex.get(normalizePath(b));
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return 0;
+    });
+  }
+
+  return list;
 }
 
 /** Thread display aliases (desktop-only; does not rewrite session files). */
@@ -338,6 +364,18 @@ export function isPinnedThread(id: string, pinned: readonly string[]): boolean {
   return pinned.includes(id);
 }
 
+export function loadThreadManualOrder(): string[] {
+  const list = readJson<string[]>(THREAD_MANUAL_ORDER_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return [...new Set(list.filter((id) => typeof id === "string" && id.trim()))];
+}
+
+export function saveThreadManualOrder(ids: readonly string[]): string[] {
+  const next = [...new Set(ids.filter((id) => typeof id === "string" && id.trim()))];
+  writeJson(THREAD_MANUAL_ORDER_KEY, next);
+  return next;
+}
+
 export function loadUnreadThreads(): string[] {
   const list = readJson<string[]>(THREAD_UNREAD_KEY, []);
   return Array.isArray(list) ? list.filter((p) => typeof p === "string") : [];
@@ -442,6 +480,7 @@ export function deleteThreadLocal(id: string): string[] {
   // clean related prefs
   savePinnedThreads(loadPinnedThreads().filter((p) => p !== id));
   saveArchivedThreads(loadArchivedThreads().filter((p) => p !== id));
+  saveThreadManualOrder(loadThreadManualOrder().filter((p) => p !== id));
   markThreadUnread(id, false);
   const aliases = { ...loadThreadAliases() };
   delete aliases[id];
@@ -453,28 +492,92 @@ export function isDeletedThread(id: string, deleted: readonly string[]): boolean
   return deleted.includes(id);
 }
 
-/** Sort: pinned first (pin order), then by modifiedAt desc. */
-export function sortThreadsWithPins<T extends { id: string; modifiedAt: string }>(
-  threads: T[],
-  pinned: readonly string[],
-): T[] {
+/** Compare activity timestamps, then stable identity so equal timestamps cannot reshuffle rows. */
+function compareThreadRecency<T extends { id: string; modifiedAt: string; createdAt?: string }>(
+  left: T,
+  right: T,
+): number {
+  const modified = right.modifiedAt.localeCompare(left.modifiedAt);
+  if (modified !== 0) return modified;
+  const created = (right.createdAt ?? right.modifiedAt).localeCompare(
+    left.createdAt ?? left.modifiedAt,
+  );
+  return created !== 0 ? created : left.id.localeCompare(right.id);
+}
+
+/** A sidebar row exists only after its session has real conversation content. */
+export function hasThreadMessages(thread: { messageCount: number; title?: string }): boolean {
+  return thread.messageCount > 0 && thread.title?.trim().toLowerCase() !== "(no messages)";
+}
+
+/** Merge refreshes monotonically so a visible live row cannot disappear or become empty. */
+export function mergeThreadRows<
+  T extends { id: string; modifiedAt: string; createdAt?: string; messageCount?: number },
+>(current: readonly T[], incoming: readonly T[]): T[] {
+  const mergedById = new Map(current.map((row) => [row.id, row]));
+  for (const row of incoming) {
+    const previous = mergedById.get(row.id);
+    const wouldLoseMessages = (previous?.messageCount ?? 0) > 0 && (row.messageCount ?? 0) === 0;
+    const freshest =
+      previous && (wouldLoseMessages || compareThreadRecency(row, previous) >= 0) ? previous : row;
+    mergedById.set(row.id, freshest);
+  }
+  return [...mergedById.values()];
+}
+
+/** Sort: pinned first (pin order), then preserve the remaining input order. */
+export function sortThreadsWithPins<
+  T extends { id: string; modifiedAt: string; createdAt?: string },
+>(threads: T[], pinned: readonly string[]): T[] {
   return sortThreadsByMode(threads, "priority", pinned);
 }
 
-export type ThreadSortMode = "priority" | "recent";
+export type ThreadSortMode = "priority" | "recent" | "manual";
+export type ManualDropPosition = "before" | "after";
+
+/** Move one visible item relative to another without mutating the current order. */
+export function moveItemInManualOrder(
+  currentIds: readonly string[],
+  draggedId: string,
+  targetId: string,
+  position: ManualDropPosition,
+): string[] {
+  const unique = [...new Set(currentIds)];
+  if (draggedId === targetId || !unique.includes(draggedId) || !unique.includes(targetId)) {
+    return unique;
+  }
+
+  const next = unique.filter((id) => id !== draggedId);
+  const targetIndex = next.indexOf(targetId);
+  next.splice(targetIndex + (position === "after" ? 1 : 0), 0, draggedId);
+  return next;
+}
 
 /**
  * Sort sidebar threads/conversations.
- * - priority: pinned first (pin order), then modifiedAt desc
+ * - priority: pinned first (pin order), then preserve the remaining input order
  * - recent: modifiedAt desc only
+ * - manual: saved ids first, then new/unknown ids in input order
  */
-export function sortThreadsByMode<T extends { id: string; modifiedAt: string }>(
+export function sortThreadsByMode<T extends { id: string; modifiedAt: string; createdAt?: string }>(
   threads: T[],
   mode: ThreadSortMode,
   pinned: readonly string[],
+  manualOrder: readonly string[] = [],
 ): T[] {
-  if (mode === "recent") {
-    return [...threads].sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  const compare = (left: T, right: T) => compareThreadRecency(left, right);
+  if (mode === "recent") return [...threads].sort(compare);
+
+  if (mode === "manual") {
+    const manualIndex = new Map(manualOrder.map((id, i) => [id, i]));
+    return [...threads].sort((a, b) => {
+      const ai = manualIndex.get(a.id);
+      const bi = manualIndex.get(b.id);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return 0;
+    });
   }
 
   const pinIndex = new Map(pinned.map((id, i) => [id, i]));
@@ -485,6 +588,6 @@ export function sortThreadsByMode<T extends { id: string; modifiedAt: string }>(
     if (ap && bp) return (pinIndex.get(a.id) ?? 0) - (pinIndex.get(b.id) ?? 0);
     if (ap) return -1;
     if (bp) return 1;
-    return b.modifiedAt.localeCompare(a.modifiedAt);
+    return 0;
   });
 }

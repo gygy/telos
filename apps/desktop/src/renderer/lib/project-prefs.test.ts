@@ -2,15 +2,19 @@ import { describe, expect, it, beforeEach } from "vite-plus/test";
 import {
   PROJECT_THREADS_PAGE,
   getVisibleThreadCount,
+  hasThreadMessages,
   isArchivedProject,
   isPinnedProject,
   isUnreadThread,
   loadUnreadThreads,
   markThreadUnread,
+  mergeThreadRows,
+  moveItemInManualOrder,
   markUnreadOnAgentSettle,
   partitionProjects,
   sortProjectPaths,
   sortThreadsByMode,
+  toggleExpandedProject,
 } from "./project-prefs.ts";
 
 describe("project prefs helpers", () => {
@@ -28,22 +32,91 @@ describe("project prefs helpers", () => {
     expect(getVisibleThreadCount("/x", { "/x": 10 })).toBe(10);
   });
 
-  it("sorts threads by priority / recent", () => {
+  it("toggles expanded projects from the supplied state", () => {
+    expect(toggleExpandedProject("/b", ["/a"])).toEqual(["/a", "/b"]);
+    expect(toggleExpandedProject("/b", ["/a", "/b"])).toEqual(["/a"]);
+  });
+
+  it("sorts threads by priority / recent / manual", () => {
     const threads = [
       { id: "a", modifiedAt: "2026-01-01T00:00:00.000Z" },
       { id: "b", modifiedAt: "2026-03-01T00:00:00.000Z" },
       { id: "c", modifiedAt: "2026-02-01T00:00:00.000Z" },
     ];
     expect(sortThreadsByMode(threads, "recent", []).map((t) => t.id)).toEqual(["b", "c", "a"]);
-    expect(sortThreadsByMode(threads, "priority", ["c"]).map((t) => t.id)).toEqual(["c", "b", "a"]);
+    expect(sortThreadsByMode(threads, "priority", ["c"]).map((t) => t.id)).toEqual(["c", "a", "b"]);
+    expect(sortThreadsByMode(threads, "manual", [], ["b", "a"]).map((t) => t.id)).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
   });
 
-  it("sorts project paths by priority / recent", () => {
+  it("moves threads before or after a manual drop target", () => {
+    expect(moveItemInManualOrder(["a", "b", "c"], "c", "a", "before")).toEqual(["c", "a", "b"]);
+    expect(moveItemInManualOrder(["a", "b", "c"], "a", "c", "after")).toEqual(["b", "c", "a"]);
+  });
+
+  it("sorts project paths by priority / recent / manual", () => {
     const paths = ["/z/zebra", "/a/alpha", "/m/mid"];
-    expect(sortProjectPaths(paths, "priority")).toEqual(["/a/alpha", "/m/mid", "/z/zebra"]);
+    expect(sortProjectPaths(paths, "priority")).toEqual(paths);
     expect(
       sortProjectPaths(paths, "recent", { recentOrder: ["/m/mid", "/z/zebra", "/a/alpha"] }),
     ).toEqual(["/m/mid", "/z/zebra", "/a/alpha"]);
+    expect(sortProjectPaths(paths, "manual", { manualOrder: ["/z/zebra", "/m/mid"] })).toEqual([
+      "/z/zebra",
+      "/m/mid",
+      "/a/alpha",
+    ]);
+  });
+
+  it("keeps equal-time rows deterministic and ignores stale refreshes", () => {
+    const current = [{ id: "session", modifiedAt: "2026-03-01T00:00:00.000Z" }];
+    const stale = [{ id: "session", modifiedAt: "2026-02-01T00:00:00.000Z" }];
+    const newer = [{ id: "session", modifiedAt: "2026-04-01T00:00:00.000Z" }];
+    expect(mergeThreadRows(current, stale)).toEqual(current);
+    expect(mergeThreadRows(current, newer)).toEqual(newer);
+    expect(mergeThreadRows([], [...stale, ...newer])).toEqual(newer);
+    expect(
+      sortThreadsByMode(
+        [
+          { id: "b", modifiedAt: "2026-03-01T00:00:00.000Z" },
+          { id: "a", modifiedAt: "2026-03-01T00:00:00.000Z" },
+        ],
+        "recent",
+        [],
+      ).map((thread) => thread.id),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("keeps an established session through incomplete and empty refreshes", () => {
+    const visible = {
+      id: "visible",
+      title: "First prompt",
+      modifiedAt: "2026-03-01T00:00:00.000Z",
+      messageCount: 1,
+    };
+    const other = {
+      id: "other",
+      title: "Other prompt",
+      modifiedAt: "2026-02-01T00:00:00.000Z",
+      messageCount: 2,
+    };
+    const emptyRefresh = {
+      ...visible,
+      title: "(no messages)",
+      modifiedAt: "2026-04-01T00:00:00.000Z",
+      messageCount: 0,
+    };
+
+    expect(mergeThreadRows([visible, other], [])).toEqual([visible, other]);
+    expect(mergeThreadRows([visible, other], [emptyRefresh])).toEqual([visible, other]);
+  });
+
+  it("hides empty and placeholder sessions until they contain messages", () => {
+    expect(hasThreadMessages({ messageCount: 0, title: "(no messages)" })).toBe(false);
+    expect(hasThreadMessages({ messageCount: 1, title: "(no messages)" })).toBe(false);
+    expect(hasThreadMessages({ messageCount: 1, title: "First prompt" })).toBe(true);
   });
 });
 

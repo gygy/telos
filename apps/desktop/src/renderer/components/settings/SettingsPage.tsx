@@ -55,6 +55,7 @@ import {
   setEnvPanelSectionVisible,
   type EnvPanelSectionId,
 } from "../../lib/env-panel-prefs.ts";
+import { requestMacNotificationPermission } from "../../lib/notification-permission.ts";
 import {
   loadNotificationPrefs,
   patchNotificationPrefs,
@@ -1012,9 +1013,20 @@ function NotificationsSection(
     setPrefs(patchNotificationPrefs(patch));
   }
 
+  async function updateEnabled(enabled: boolean) {
+    update({ enabled });
+    if (enabled && !(await requestMacNotificationPermission())) {
+      showAppError(tr("notify.permissionDenied"));
+    }
+  }
+
   async function sendTest() {
     setTesting(true);
     try {
+      if (!(await requestMacNotificationPermission())) {
+        showAppError(tr("notify.permissionDenied"));
+        return;
+      }
       // Test always posts even when focused (diagnostics).
       const ok = await window.pix.notifications.show({
         title: tr("notify.testTitle"),
@@ -1041,7 +1053,7 @@ function NotificationsSection(
           control={
             <SettingsToggle
               checked={prefs.enabled}
-              onChange={(on) => update({ enabled: on })}
+              onChange={(on) => void updateEnabled(on)}
               testId="settings-notify-enabled"
               aria-label={tr("notify.master")}
             />

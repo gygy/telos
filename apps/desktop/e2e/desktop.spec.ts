@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { test, expect, startHost, conversationSessionButtons, sendPrompt } from "./fixtures.ts";
 
 test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
@@ -191,6 +192,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       await expect(page.getByTestId("composer-queue-card")).toContainText("Queued follow-up", {
         timeout: 10_000,
       });
+      await expect(page.getByTestId("composer-queue-send-now")).toHaveCount(0);
+      await expect(page.getByTestId("composer-queue-edit")).toHaveCount(0);
+      await expect(page.getByTestId("composer-queue-cancel")).toHaveCount(0);
       await page
         .getByTestId("composer-queue-clear")
         .click({ force: true })
@@ -276,6 +280,39 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       const base = path.split(/[/\\]/).pop() ?? path;
       expect(request.includes(path) || request.includes(base)).toBe(true);
     }
+  });
+
+  test("top New session targets the selected project", async ({ page }) => {
+    await startHost(page);
+
+    // Use the checked-out desktop package as a durable project; e2e temp paths are
+    // intentionally classified as conversations and cannot appear in the project rail.
+    const projectPath = resolve(import.meta.dirname, "..");
+    await page.evaluate(async (path) => {
+      await window.pix.workspace.openPath(path, { resumeRecent: false });
+    }, projectPath);
+    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project", {
+      timeout: 30_000,
+    });
+
+    // The section-level action always starts a conversation and clears project selection.
+    await page.getByTestId("threads-new-btn").click({ force: true });
+    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "conversation", {
+      timeout: 30_000,
+    });
+
+    const project = page.locator(
+      `[data-testid="recent-workspace-item"][data-path="${projectPath}"]`,
+    );
+    await project.click();
+    await expect(project).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project");
+
+    await page.getByTestId("start-host").click();
+    await expect(page.getByTestId("runtime-snapshot").first()).toContainText(projectPath, {
+      timeout: 45_000,
+    });
+    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project");
   });
 
   test("sessions: create a second conversation and switch back", async ({ page }) => {

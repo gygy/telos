@@ -77,7 +77,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ComposerAttachmentList } from "./ComposerAttachmentList.tsx";
-import { ComposerQueueCard, type QueueItemKind } from "./ComposerQueueCard.tsx";
+import { ComposerQueueCard } from "./ComposerQueueCard.tsx";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { t, thinkingLevelLabel, type Locale } from "../lib/i18n.ts";
 import { modelSupportsServiceTier, type ServiceTierId } from "../lib/service-tier.ts";
@@ -154,13 +154,8 @@ export interface ComposerProps {
   queuedMessages: QueuedMessages;
   onClearQueue: () => void;
   /** Abort left pending queue items — show paused banner + Continue. */
-  queuePaused?: boolean;
-  onContinueQueue?: () => void;
-  onRemoveQueuedItem?: (kind: QueueItemKind, index: number) => void;
   /** 引导：send this queued item immediately. */
-  onSendQueuedNow?: (kind: QueueItemKind, index: number, message: string) => void;
   /** … → 编辑：load into composer and drop from queue. */
-  onEditQueuedItem?: (kind: QueueItemKind, index: number, message: string) => void;
   /**
    * Project / local / branch bar that protrudes above the input.
    * Hidden once the session already has conversation content.
@@ -1280,12 +1275,7 @@ export function Composer(props: ComposerProps) {
       <ComposerQueueCard
         locale={props.locale}
         queuedMessages={props.queuedMessages}
-        paused={Boolean(props.queuePaused)}
         onClearQueue={props.onClearQueue}
-        {...(props.onRemoveQueuedItem ? { onRemoveItem: props.onRemoveQueuedItem } : {})}
-        {...(props.onContinueQueue ? { onContinue: props.onContinueQueue } : {})}
-        {...(props.onSendQueuedNow ? { onSendNow: props.onSendQueuedNow } : {})}
-        {...(props.onEditQueuedItem ? { onEditItem: props.onEditQueuedItem } : {})}
       />
 
       {/*

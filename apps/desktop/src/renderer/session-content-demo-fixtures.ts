@@ -470,7 +470,7 @@ export function scenarioLiveQueue(): DemoScenario {
     id: "live-queue",
     title: "进行中 · 消息队列",
     description:
-      "running=true + 队列。整队「清空」+ 每行：立即发送 / 编辑 / 取消；排队消息不进时间线 user 行。",
+      "running=true + Pi 原生队列。仅提供整队「清空」；排队消息在 Pi 投递前不进入时间线 user 行。",
     running: true,
     queuedMessages: {
       steering: ["4", "5", "6"],

@@ -25,10 +25,6 @@ import { ArrowDown } from "lucide-react";
 import { AppSidebar } from "./components/AppSidebar.tsx";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import { Composer } from "./components/Composer.tsx";
-import {
-  flattenQueuedMessages,
-  removeQueuedItem as dropQueuedItem,
-} from "./components/ComposerQueueCard.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
@@ -89,6 +85,7 @@ import {
   type AccessMode,
   type AccessVisibility,
 } from "./lib/settings-prefs.ts";
+import { requestMacNotificationPermission } from "./lib/notification-permission.ts";
 import { loadNotificationPrefs } from "./lib/notification-prefs.ts";
 import { installOverlayScroll, syncOverlayScroll } from "./lib/overlay-scroll.ts";
 import { sidebarRailWidth } from "./lib/sidebar-prefs.ts";
@@ -99,6 +96,7 @@ import { loadTerminalPrefs, resolveTerminalTheme } from "./lib/terminal-prefs.ts
 import {
   loadPinnedProjects,
   markUnreadOnAgentSettle,
+  mergeThreadRows,
   savePinnedProjects,
 } from "./lib/project-prefs.ts";
 import {
@@ -228,6 +226,12 @@ function hostPillState(status: string, running: boolean): string {
 }
 
 function App() {
+  useEffect(() => {
+    if (loadNotificationPrefs().enabled) {
+      void requestMacNotificationPermission();
+    }
+  }, []);
+
   const status = useShellStore((s) => s.status);
   const snapshot = useShellStore((s) => s.snapshot);
   const events = useShellStore((s) => s.events);
@@ -455,14 +459,17 @@ function App() {
   const [trustPromptDismissTick, setTrustPromptDismissTick] = useState(0);
   const [trustPromptBusy, setTrustPromptBusy] = useState(false);
   /**
-   * Selected project for composer chrome / rail highlight.
-   * Global「新建会话」clears this (pure conversation) but must keep the project
-   * visible via recentWorkspaces — never leave a frame where it vanishes.
+   * Project backing the current composer/session chrome. Pure conversations clear it,
+   * while a rail-only project selection remains independent until a session is created.
    */
   const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string | undefined>();
-  /** Always-current selection for async helpers (avoids stale closures after setState). */
+  /** Always-current workspace for async helpers (avoids stale closures after setState). */
   const selectedWorkspacePathRef = useRef<string | undefined>(undefined);
   selectedWorkspacePathRef.current = selectedWorkspacePath;
+  /** Explicit project-row selection, independent from the workspace of the active session. */
+  const [selectedProjectPath, setSelectedProjectPath] = useState<string | undefined>();
+  const selectedProjectPathRef = useRef<string | undefined>(undefined);
+  selectedProjectPathRef.current = selectedProjectPath;
   /**
    * True while global「新建会话」is in flight. Forces conversation empty chrome
    * (title + no project highlight) without wiping snapshot model/thinking mid-flight.
@@ -470,9 +477,17 @@ function App() {
   const [pendingPureConversation, setPendingPureConversation] = useState(false);
   const pendingPureConversationRef = useRef(false);
 
+  function selectProjectPath(path: string | undefined) {
+    const projectPath = asProjectPath(path);
+    selectedProjectPathRef.current = projectPath;
+    setSelectedProjectPath(projectPath);
+  }
+
   function selectWorkspacePath(path: string | undefined) {
     selectedWorkspacePathRef.current = path;
     setSelectedWorkspacePath(path);
+    // Workspace/session navigation selects its session row, not the containing project row.
+    selectProjectPath(undefined);
   }
 
   /** Last known model chrome — survives snapshot gaps so composer never flashes "未选择模型". */
@@ -585,13 +600,32 @@ function App() {
     return path.replace(/\\/g, "/").replace(/\/+$/, "");
   }
 
+  /** Keep optimistic/live rows when a slower disk scan returns older metadata. */
+  function mergeSidebarThreads(
+    previous: SessionThreadSummary[],
+    incoming: SessionThreadSummary[],
+  ): SessionThreadSummary[] {
+    const merged = mergeThreadRows(previous, incoming);
+    const incomingById = new Map(incoming.map((row) => [row.id, row]));
+    return merged.map((row) => {
+      const latest = incomingById.get(row.id);
+      return latest ? { ...row, active: latest.active } : row;
+    });
+  }
+
   async function refreshThreads() {
     try {
       const listed = await window.pix.session.list();
-      setThreads(listed.threads);
+      setThreads(mergeSidebarThreads(useShellStore.getState().threads, listed.threads));
       const cwd = useShellStore.getState().snapshot?.cwd;
       if (cwd) {
-        setThreadsByCwd((prev) => ({ ...prev, [normalizeCwdKey(cwd)]: listed.threads }));
+        setThreadsByCwd((prev) => ({
+          ...prev,
+          [normalizeCwdKey(cwd)]: mergeSidebarThreads(
+            prev[normalizeCwdKey(cwd)] ?? [],
+            listed.threads,
+          ),
+        }));
       }
     } catch {
       // Host may be stopped.
@@ -671,7 +705,9 @@ function App() {
     );
     setThreadsByCwd((prev) => {
       const next = { ...prev };
-      for (const [cwd, threads] of results) next[cwd] = threads;
+      for (const [cwd, threads] of results) {
+        next[cwd] = mergeSidebarThreads(prev[cwd] ?? [], threads);
+      }
       return next;
     });
   }
@@ -686,7 +722,10 @@ function App() {
       const threads = await window.pix.session.listForCwd(convCwd);
       setThreadsByCwd((prev) => ({
         ...prev,
-        [normalizeCwdKey(convCwd)]: threads,
+        [normalizeCwdKey(convCwd)]: mergeSidebarThreads(
+          prev[normalizeCwdKey(convCwd)] ?? [],
+          threads,
+        ),
       }));
     } catch {
       // Host may be stopped or conversation home unavailable.
@@ -831,12 +870,13 @@ function App() {
           store.resetAfterCrash(event.message);
           maybeNotify("crash", event.message);
         } else if (event.type === "session.list") {
-          store.setThreads(event.threads);
+          store.setThreads(mergeSidebarThreads(store.threads, event.threads));
           const cwd = store.snapshot?.cwd;
           if (cwd && event.threads.length > 0) {
+            const key = normalizeCwdKey(cwd);
             setThreadsByCwd((prev) => ({
               ...prev,
-              [normalizeCwdKey(cwd)]: event.threads,
+              [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
             }));
           }
         } else if (event.type === "session.opened") {
@@ -846,9 +886,10 @@ function App() {
           if (switchingSessionRef.current || pendingPureConversationRef.current) {
             const cwd = event.snapshot.cwd;
             if (cwd && event.threads.length > 0) {
+              const key = normalizeCwdKey(cwd);
               setThreadsByCwd((prev) => ({
                 ...prev,
-                [normalizeCwdKey(cwd)]: event.threads,
+                [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
               }));
             }
             return;
@@ -859,9 +900,10 @@ function App() {
           // Keep sidebar caches in sync without clearing other projects' lists.
           const cwd = event.snapshot.cwd;
           if (cwd && event.threads.length > 0) {
+            const key = normalizeCwdKey(cwd);
             setThreadsByCwd((prev) => ({
               ...prev,
-              [normalizeCwdKey(cwd)]: event.threads,
+              [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
             }));
           }
         } else if (event.type === "packages.progress") {
@@ -1006,12 +1048,17 @@ function App() {
               .list()
               .then((listed) => {
                 if (!listed?.threads) return;
-                useShellStore.getState().setThreads(listed.threads);
+                useShellStore
+                  .getState()
+                  .setThreads(
+                    mergeSidebarThreads(useShellStore.getState().threads, listed.threads),
+                  );
                 const cwd = useShellStore.getState().snapshot?.cwd;
                 if (cwd && listed.threads.length > 0) {
+                  const key = normalizeCwdKey(cwd);
                   setThreadsByCwd((prev) => ({
                     ...prev,
-                    [cwd.replace(/\\/g, "/").replace(/\/+$/, "")]: listed.threads,
+                    [key]: mergeSidebarThreads(prev[key] ?? [], listed.threads),
                   }));
                 }
               })
@@ -1022,12 +1069,17 @@ function App() {
               .list()
               .then((listed) => {
                 if (!listed?.threads) return;
-                useShellStore.getState().setThreads(listed.threads);
+                useShellStore
+                  .getState()
+                  .setThreads(
+                    mergeSidebarThreads(useShellStore.getState().threads, listed.threads),
+                  );
                 const cwd = useShellStore.getState().snapshot?.cwd;
                 if (cwd && listed.threads.length > 0) {
+                  const key = normalizeCwdKey(cwd);
                   setThreadsByCwd((prev) => ({
                     ...prev,
-                    [cwd.replace(/\\/g, "/").replace(/\/+$/, "")]: listed.threads,
+                    [key]: mergeSidebarThreads(prev[key] ?? [], listed.threads),
                   }));
                 }
               })
@@ -1755,179 +1807,6 @@ function App() {
     }
   }
 
-  /**
-   * Rebuild host queue as `next`.
-   * Host only exposes clear-all, so we clear then re-queue when mid-turn;
-   * when idle, host is empty and remainder is kept in the UI store only.
-   */
-  async function replaceHostQueue(next: { steering: string[]; followUp: string[] }): Promise<void> {
-    const remaining = flattenQueuedMessages(next);
-    const cleared = await window.pix.agent.clearQueue();
-    acceptSnapshot(cleared);
-    if (useShellStore.getState().running && remaining.length > 0) {
-      let snap = cleared;
-      for (const item of remaining) {
-        snap = await window.pix.agent.prompt(
-          item.message,
-          item.kind === "steering" ? "steer" : "followUp",
-        );
-      }
-      acceptSnapshot(snap);
-    } else {
-      // Idle (or empty remainder): keep UI remainder for paused Continue / edit.
-      useShellStore.getState().setQueuedMessages(next);
-    }
-  }
-
-  /** Re-queue items onto a live host (must already be mid-turn / streaming). */
-  async function enqueueOnHost(
-    items: Array<{ message: string; kind: "steering" | "followUp" }>,
-  ): Promise<void> {
-    if (items.length === 0) return;
-    let snap = useShellStore.getState().snapshot;
-    for (const item of items) {
-      snap = await window.pix.agent.prompt(
-        item.message,
-        item.kind === "steering" ? "steer" : "followUp",
-      );
-    }
-    if (snap) acceptSnapshot(snap);
-  }
-
-  async function removeQueuedItem(kind: "steering" | "followUp", index: number) {
-    const current = useShellStore.getState().queuedMessages;
-    const next = dropQueuedItem(current, kind, index);
-    // Optimistic UI so the row disappears immediately.
-    useShellStore.getState().setQueuedMessages(next);
-    try {
-      await replaceHostQueue(next);
-      setStatus(
-        next.steering.length + next.followUp.length === 0
-          ? "Queued messages cleared"
-          : "Queue item removed",
-      );
-    } catch (error) {
-      useShellStore.getState().setQueuedMessages(current);
-      reportAppError(error, "移除排队消息失败");
-    }
-  }
-
-  /**
-   * 立即发送：把该条从队列拿掉并立刻投递。
-   * - 进行中 → clear 后优先 steer 这条，再把剩余按原顺序排回
-   * - 空闲/暂停 → clear 后作为新回合 prompt；剩余稍后重新入队
-   * 任一步失败都恢复原队列，避免「闪一下就丢了」。
-   */
-  async function sendQueuedItemNow(kind: "steering" | "followUp", index: number, message: string) {
-    const text = message.trim();
-    if (!text) return;
-
-    const current = useShellStore.getState().queuedMessages;
-    // Prefer identity by kind+index; fall back to message match if list shifted.
-    let rest = dropQueuedItem(current, kind, index);
-    const atIndex = kind === "steering" ? current.steering[index] : current.followUp[index];
-    if (atIndex !== undefined && atIndex !== message) {
-      // Index drifted — drop first exact text match in that lane.
-      const lane = kind === "steering" ? current.steering : current.followUp;
-      const found = lane.indexOf(message);
-      if (found >= 0) rest = dropQueuedItem(current, kind, found);
-    }
-    const remaining = flattenQueuedMessages(rest);
-    const wasBusy = useShellStore.getState().running;
-
-    // Optimistic: row leaves the card immediately.
-    useShellStore.getState().setQueuedMessages(rest);
-
-    try {
-      const cleared = await window.pix.agent.clearQueue();
-      // acceptSnapshot applies host empty queue — re-apply remainder so the card
-      // does not stay blank while we deliver (queue.updated can also race empty).
-      acceptSnapshot(cleared);
-      useShellStore.getState().setQueuedMessages(rest);
-
-      if (wasBusy || useShellStore.getState().running) {
-        // Live turn: inject this message first, then re-arm the tail.
-        // Use steer so a mid-turn host does not throw "already processing".
-        let snap = await window.pix.agent.prompt(text, "steer");
-        acceptSnapshot(snap);
-        // Keep showing remainder until host confirms the rebuilt queue.
-        useShellStore.getState().setQueuedMessages(rest);
-        if (remaining.length > 0) {
-          for (const item of remaining) {
-            snap = await window.pix.agent.prompt(
-              item.message,
-              item.kind === "steering" ? "steer" : "followUp",
-            );
-          }
-          acceptSnapshot(snap);
-        }
-        setStatus("已立即发送");
-        return;
-      }
-
-      // Idle / paused after abort: start a real turn with this text.
-      const turn = sendPrompt(undefined, undefined, { text });
-      // While the turn is starting, put remaining items back on the host queue.
-      if (remaining.length > 0) {
-        for (let i = 0; i < 80 && !useShellStore.getState().running; i++) {
-          await new Promise((r) => window.setTimeout(r, 25));
-        }
-        if (useShellStore.getState().running) {
-          await enqueueOnHost(remaining);
-        } else {
-          // Turn never flipped busy (failed/switched) — keep remainder visible.
-          useShellStore.getState().setQueuedMessages(rest);
-        }
-      }
-      await turn;
-      setStatus("已立即发送");
-    } catch (error) {
-      // Restore full queue so the user does not lose the row after a failed send.
-      useShellStore.getState().setQueuedMessages(current);
-      try {
-        if (useShellStore.getState().running) {
-          await window.pix.agent.clearQueue();
-          await enqueueOnHost(flattenQueuedMessages(current));
-        }
-      } catch {
-        // ignore restore errors — UI already has `current`
-      }
-      reportAppError(error, "立即发送失败");
-    }
-  }
-
-  /** 编辑：pull text into composer and drop the queue row. */
-  async function editQueuedItem(kind: "steering" | "followUp", index: number, message: string) {
-    const current = useShellStore.getState().queuedMessages;
-    const rest = dropQueuedItem(current, kind, index);
-    useShellStore.getState().setQueuedMessages(rest);
-    try {
-      await replaceHostQueue(rest);
-      // Display text only (strip attached-paths markup if present).
-      const display = message.split("\n\n<attached-paths>", 1)[0]?.trim() || message.trim();
-      setPrompt(display);
-      setStatus("已移到输入框");
-      requestAnimationFrame(() => composerRef.current?.focus());
-    } catch (error) {
-      useShellStore.getState().setQueuedMessages(current);
-      reportAppError(error, "编辑排队消息失败");
-    }
-  }
-
-  /** Resume a paused queue after abort — deliver the first item as a normal turn. */
-  async function continueQueuedMessages() {
-    const current = useShellStore.getState().queuedMessages;
-    const first =
-      current.steering[0] !== undefined
-        ? { kind: "steering" as const, message: current.steering[0], index: 0 }
-        : current.followUp[0] !== undefined
-          ? { kind: "followUp" as const, message: current.followUp[0], index: 0 }
-          : undefined;
-    if (!first) return;
-    // Reuse send-now: head item is delivered, remainder stays queued.
-    await sendQueuedItemNow(first.kind, first.index, first.message);
-  }
-
   async function pickComposerAttachments(mode: "files" | "folders" = "files") {
     try {
       // Windows/Linux require separate dialogs for files vs folders (Electron limitation).
@@ -2198,10 +2077,10 @@ function App() {
     setStatus("Agent Host ready");
     // Single list refresh after open — active flag comes from the live host once.
     const listed = await window.pix.session.list();
-    setThreads(listed.threads);
+    setThreads(mergeSidebarThreads(useShellStore.getState().threads, listed.threads));
     setThreadsByCwd((prev) => ({
       ...prev,
-      [normalizeCwdKey(cwd)]: listed.threads,
+      [normalizeCwdKey(cwd)]: mergeSidebarThreads(prev[normalizeCwdKey(cwd)] ?? [], listed.threads),
     }));
     await refreshRecentWorkspaces();
   }
@@ -2369,10 +2248,10 @@ function App() {
   const newBlankTaskInFlightRef = useRef(false);
 
   /**
-   * Global「新建会话」(sidebar top + 对话 section header):
+   * Unscoped「新建会话」(no selected project, or 对话 section header):
    * Pure conversation — NOT bound to any project.
    * Host cwd = Documents/Pix/conversations (hidden from 项目 rail / recent).
-   * Only the project-row ✏️ creates a session under that project.
+   * A selected project or its row action uses newThreadForProject instead.
    *
    * Lifecycle (clear/start/create) runs as one main-process exclusive op so rapid
    * clicks cannot kill a mid-start host (Windows exit code 0).
@@ -2466,7 +2345,7 @@ function App() {
     }
   }
 
-  /** Project-row only: open that project if needed, then create a new session under it. */
+  /** Open the selected project if needed, then create a new session under it. */
   async function newThreadForProject(path: string) {
     // Do not abort a generating session — main parks the busy host.
     try {
@@ -2513,6 +2392,9 @@ function App() {
       const selectedKey = selectedWorkspacePathRef.current
         ? normalizeCwdKey(selectedWorkspacePathRef.current)
         : "";
+      const selectedProjectKey = selectedProjectPathRef.current
+        ? normalizeCwdKey(selectedProjectPathRef.current)
+        : "";
       const snapCwd = useShellStore.getState().snapshot?.cwd;
       const openCwd = asProjectPath(selectedWorkspacePathRef.current) ?? asProjectPath(snapCwd);
       const wasActive =
@@ -2534,6 +2416,7 @@ function App() {
 
       // Removing the open project must clear UI current workspace, otherwise
       // ProjectList keeps injecting workspacePath into allPaths and it never disappears.
+      if (selectedProjectKey === pathKey) selectProjectPath(undefined);
       if (wasActive) {
         selectWorkspacePath(undefined);
         await window.pix.workspace.clearActive().catch(() => undefined);
@@ -2601,9 +2484,10 @@ function App() {
       setPrompt(opened.selectedText ?? "");
       const cwd = opened.snapshot.cwd;
       if (cwd) {
+        const key = normalizeCwdKey(cwd);
         setThreadsByCwd((prev) => ({
           ...prev,
-          [normalizeCwdKey(cwd)]: opened.threads,
+          [key]: mergeSidebarThreads(prev[key] ?? [], opened.threads),
         }));
       }
       requestContentReveal();
@@ -2741,9 +2625,10 @@ function App() {
       }
       selectWorkspacePath(nextProject);
       if (cwd) {
+        const key = normalizeCwdKey(cwd);
         setThreadsByCwd((prev) => ({
           ...prev,
-          [normalizeCwdKey(cwd)]: opened.threads,
+          [key]: mergeSidebarThreads(prev[key] ?? [], opened.threads),
         }));
       }
       setEvents([]);
@@ -2830,9 +2715,10 @@ function App() {
         // titles lag behind store.threads and sidebar markers look incomplete.
         const cwd = opened.snapshot.cwd?.trim();
         if (cwd && opened.threads.length > 0) {
+          const key = normalizeCwdKey(cwd);
           setThreadsByCwd((prev) => ({
             ...prev,
-            [normalizeCwdKey(cwd)]: opened.threads,
+            [key]: mergeSidebarThreads(prev[key] ?? [], opened.threads),
           }));
         }
         contentReloaded = true;
@@ -2853,7 +2739,12 @@ function App() {
   }
 
   async function toggleContentModeSurface() {
-    if (useShellStore.getState().contentMode === "terminal") {
+    const store = useShellStore.getState();
+    if (store.running) {
+      reportAppError(new Error("Agent busy"), t(locale, "contentMode.waitForTurn"));
+      return;
+    }
+    if (store.contentMode === "terminal") {
       await leaveTerminalMode();
     } else {
       await enterTerminalMode();
@@ -3055,6 +2946,7 @@ function App() {
         translucent={sidebarTranslucent}
         snapshot={snapshot}
         workspacePath={workspacePath}
+        selectedProjectPath={selectedProjectPath}
         workspace={workspace}
         recentWorkspaces={recentWorkspaces}
         threads={threads}
@@ -3083,6 +2975,7 @@ function App() {
         onToggleCollapse={() => toggleSidebarCollapsed()}
         onResizeWidth={(px) => setSidebarWidthPx(px)}
         onNewThread={() => void newBlankTask()}
+        onSelectProject={(path) => selectProjectPath(path)}
         onOpenPackages={() => void openPackages()}
         onOpenResources={() => void openResources()}
         onOpenSettings={() => void openSettings()}
@@ -3135,6 +3028,7 @@ function App() {
                 workspacePath={workspacePath}
                 sessionId={snapshot?.sessionId}
                 collapsed={sidebarCollapsed}
+                contentModeSwitchLocked={running}
                 onToggleContentMode={() => void toggleContentModeSurface()}
               />
             ) : null}
@@ -3346,19 +3240,6 @@ function App() {
                             )}
                             queuedMessages={queuedMessages}
                             onClearQueue={() => void clearQueuedMessages()}
-                            queuePaused={
-                              !running &&
-                              foregroundMarkerState === "aborted" &&
-                              queuedMessages.steering.length + queuedMessages.followUp.length > 0
-                            }
-                            onContinueQueue={() => void continueQueuedMessages()}
-                            onRemoveQueuedItem={(kind, index) => void removeQueuedItem(kind, index)}
-                            onSendQueuedNow={(kind, index, message) =>
-                              void sendQueuedItemNow(kind, index, message)
-                            }
-                            onEditQueuedItem={(kind, index, message) =>
-                              void editQueuedItem(kind, index, message)
-                            }
                           />
                         </div>
                       </>

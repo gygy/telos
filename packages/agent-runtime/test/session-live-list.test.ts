@@ -127,6 +127,23 @@ describe("mergeLiveSessionThread", () => {
     expect(out[0]?.modifiedAt).toBe("2026-04-03T00:00:00.000Z");
   });
 
+  it("does not regress recency when the live projection lags disk", () => {
+    const out = mergeLiveSessionThread(
+      [diskRow({ id: "a", title: "Disk title", modifiedAt: "2026-04-05T00:00:00.000Z" })],
+      diskRow({
+        id: "a",
+        title: "Live title",
+        modifiedAt: "2026-04-03T00:00:00.000Z",
+        active: true,
+      }),
+    );
+    expect(out[0]).toMatchObject({
+      title: "Live title",
+      modifiedAt: "2026-04-05T00:00:00.000Z",
+      active: true,
+    });
+  });
+
   it("returns disk list unchanged when live is undefined", () => {
     const disk = [diskRow({ id: "a", title: "A" })];
     expect(mergeLiveSessionThread(disk, undefined)).toBe(disk);

@@ -70,6 +70,7 @@ export interface AppSidebarProps {
   translucent: boolean;
   snapshot: HostSnapshot | undefined;
   workspacePath: string | undefined;
+  selectedProjectPath: string | undefined;
   workspace: { name: string; detail?: string };
   recentWorkspaces: string[];
   threads: SessionThreadSummary[];
@@ -84,6 +85,7 @@ export interface AppSidebarProps {
   onToggleCollapse: () => void;
   onResizeWidth: (px: number) => void;
   onNewThread: () => void;
+  onSelectProject: (path: string | undefined) => void;
   onOpenPackages: () => void;
   onOpenResources: () => void;
   onOpenSettings: () => void;
@@ -300,6 +302,7 @@ function ProductRail(
   },
 ) {
   const { tr } = props;
+  const newThreadProjectPath = props.selectedProjectPath ?? props.workspacePath;
   return (
     <>
       {/* Brand row: title left-aligned with nav/list rows (same px-2.5 content inset). */}
@@ -333,7 +336,14 @@ function ProductRail(
           data-testid="start-host"
           title={tr("nav.newThread")}
           className="nav-item nav-item-primary"
-          onClick={props.onNewThread}
+          data-target={newThreadProjectPath ? "project" : "conversation"}
+          onClick={() => {
+            if (newThreadProjectPath) {
+              props.onNewThreadForProject(newThreadProjectPath);
+              return;
+            }
+            props.onNewThread();
+          }}
         >
           <SquarePen className="size-4 shrink-0 opacity-85" strokeWidth={1.6} />
           <span className="truncate">{tr("nav.newThread")}</span>
@@ -359,6 +369,7 @@ function ProductRail(
       <ProjectList
         locale={props.locale}
         workspacePath={props.workspacePath}
+        selectedProjectPath={props.selectedProjectPath}
         recentWorkspaces={props.recentWorkspaces}
         threads={props.threads}
         threadsByCwd={props.threadsByCwd}
@@ -368,6 +379,7 @@ function ProductRail(
         {...(props.sessionMarkers ? { sessionMarkers: props.sessionMarkers } : {})}
         {...(props.runningSessions ? { runningSessions: props.runningSessions } : {})}
         onOpenRecent={props.onOpenRecent}
+        onSelectProject={props.onSelectProject}
         onNewThread={(path) => {
           if (path) props.onNewThreadForProject(path);
           else props.onNewThread();

@@ -39,7 +39,8 @@ publish:
   repo: pix
   releaseType: release
 mac:
-  identity: null
+  # Auto-discover Developer ID / CSC_LINK signing. macOS rejects notification
+  # registration for unsigned application bundles.
   icon: icon.icns
   # zip is required for electron-updater (Squirrel.Mac); dmg is manual install only.
   target:

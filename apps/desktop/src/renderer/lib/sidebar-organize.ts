@@ -1,7 +1,8 @@
 /** Desktop-only organize / sort prefs for the projects & conversations rail. */
 
 export type GroupMode = "project" | "list";
-export type SortMode = "priority" | "recent";
+export type SortMode = "priority" | "recent" | "manual";
+export type ConversationSortMode = SortMode;
 
 const GROUP_KEY = "pix.sidebar.groupMode";
 const SORT_KEY = "pix.sidebar.sortMode";
@@ -56,7 +57,7 @@ export function saveGroupMode(mode: GroupMode): void {
 
 export function loadSortMode(): SortMode {
   const v = loadString(SORT_KEY, "priority");
-  // Legacy "manual" maps to priority.
+  if (v === "manual") return "manual";
   return v === "recent" ? "recent" : "priority";
 }
 
@@ -64,12 +65,13 @@ export function saveSortMode(mode: SortMode): void {
   saveString(SORT_KEY, mode);
 }
 
-export function loadConversationSortMode(): SortMode {
+export function loadConversationSortMode(): ConversationSortMode {
   const v = loadString(CONVERSATION_SORT_KEY, "priority");
+  if (v === "manual") return "manual";
   return v === "recent" ? "recent" : "priority";
 }
 
-export function saveConversationSortMode(mode: SortMode): void {
+export function saveConversationSortMode(mode: ConversationSortMode): void {
   saveString(CONVERSATION_SORT_KEY, mode);
 }
 

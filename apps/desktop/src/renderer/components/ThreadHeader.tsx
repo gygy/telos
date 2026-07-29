@@ -59,6 +59,8 @@ export function ThreadHeader(props: {
   collapsed?: boolean;
   /** Enter/leave real pi TUI (exclusive with chat). */
   onToggleContentMode?: (() => void) | undefined;
+  /** A running turn must keep its current surface until it settles. */
+  contentModeSwitchLocked?: boolean;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
     t(props.locale, key, vars);
@@ -226,20 +228,27 @@ export function ThreadHeader(props: {
             "no-drag inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
             "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--foreground)]",
             contentMode === "terminal" && "bg-[var(--accent)] text-[var(--foreground)]",
+            props.contentModeSwitchLocked && "cursor-not-allowed opacity-40",
           )}
           title={
-            contentMode === "terminal"
-              ? tr("contentMode.toggleToChat")
-              : tr("contentMode.toggleToTerminal")
+            props.contentModeSwitchLocked
+              ? tr("contentMode.waitForTurn")
+              : contentMode === "terminal"
+                ? tr("contentMode.toggleToChat")
+                : tr("contentMode.toggleToTerminal")
           }
           aria-label={
-            contentMode === "terminal"
-              ? tr("contentMode.toggleToChat")
-              : tr("contentMode.toggleToTerminal")
+            props.contentModeSwitchLocked
+              ? tr("contentMode.waitForTurn")
+              : contentMode === "terminal"
+                ? tr("contentMode.toggleToChat")
+                : tr("contentMode.toggleToTerminal")
           }
           aria-pressed={contentMode === "terminal"}
           data-content-mode={contentMode}
+          disabled={props.contentModeSwitchLocked}
           onClick={() => {
+            if (props.contentModeSwitchLocked) return;
             if (props.onToggleContentMode) props.onToggleContentMode();
             else toggleContentModePref();
           }}
