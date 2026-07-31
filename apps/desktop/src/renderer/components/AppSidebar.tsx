@@ -9,6 +9,7 @@ import {
   Archive,
   ArrowLeft,
   Bell,
+  CircleAlert,
   Boxes,
   Download,
   FolderGit2,
@@ -731,17 +732,13 @@ function GitHubMark(props: { className?: string }) {
   );
 }
 
-type SidebarUpdatePhase = "github" | "available" | "downloading" | "downloaded";
+type SidebarUpdatePhase = "github" | "available" | "downloading" | "downloaded" | "error";
 
 function sidebarUpdatePhase(status: AppUpdateStatus): SidebarUpdatePhase {
+  if (status.state === "error") return "error";
   if (status.state === "downloading") return "downloading";
   if (status.state === "downloaded") return "downloaded";
-  if (
-    status.state === "available" ||
-    (status.state === "error" && Boolean(status.availableVersion))
-  ) {
-    return "available";
-  }
+  if (status.state === "available") return "available";
   return "github";
 }
 
@@ -786,10 +783,14 @@ function SidebarUpdateButton(props: {
       void window.pix.workspace.openExternal(GITHUB_REPO_URL).catch(() => undefined);
       return;
     }
-    if (phase === "available") {
+    if (phase === "available" || phase === "error") {
       setBusy(true);
       try {
-        setStatus(await window.pix.app.downloadUpdate());
+        const next =
+          phase === "error" && !status.availableVersion
+            ? await window.pix.app.checkForUpdates()
+            : await window.pix.app.downloadUpdate();
+        setStatus(next);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus((prev) => ({ ...prev, state: "error", error: message }));
@@ -815,17 +816,19 @@ function SidebarUpdateButton(props: {
   }
 
   const title =
-    phase === "available"
-      ? tr("nav.update.available", { version: status.availableVersion ?? "?" })
-      : phase === "downloading"
-        ? percent === undefined
-          ? tr("nav.update.downloading")
-          : tr("nav.update.downloadingPct", { percent: String(percent) })
-        : phase === "downloaded"
-          ? tr("nav.update.restartInstall", {
-              version: status.availableVersion ?? "?",
-            })
-          : tr("nav.update.github");
+    phase === "error"
+      ? tr("nav.update.error", { error: status.error ?? "Unknown error" })
+      : phase === "available"
+        ? tr("nav.update.available", { version: status.availableVersion ?? "?" })
+        : phase === "downloading"
+          ? percent === undefined
+            ? tr("nav.update.downloading")
+            : tr("nav.update.downloadingPct", { percent: String(percent) })
+          : phase === "downloaded"
+            ? tr("nav.update.restartInstall", {
+                version: status.availableVersion ?? "?",
+              })
+            : tr("nav.update.github");
 
   const accent = phase !== "github";
 
@@ -839,9 +842,11 @@ function SidebarUpdateButton(props: {
       aria-label={title}
       className={cn(
         "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 transition-colors",
-        accent
-          ? "text-blue-500 hover:bg-blue-500/10 hover:text-blue-600"
-          : "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]",
+        phase === "error"
+          ? "text-red-500 hover:bg-red-500/10 hover:text-red-600"
+          : accent
+            ? "text-blue-500 hover:bg-blue-500/10 hover:text-blue-600"
+            : "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]",
         phase === "downloading" && "cursor-default",
       )}
       onClick={(event) => {
@@ -852,6 +857,8 @@ function SidebarUpdateButton(props: {
     >
       {phase === "github" ? (
         <GitHubMark className="size-4" />
+      ) : phase === "error" ? (
+        <CircleAlert className="size-4" strokeWidth={1.85} />
       ) : phase === "available" ? (
         <Download className="size-4" strokeWidth={1.85} />
       ) : phase === "downloading" ? (

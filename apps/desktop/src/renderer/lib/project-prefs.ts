@@ -5,7 +5,6 @@ const PROJECT_MANUAL_ORDER_KEY = "pix.projects.manualOrder";
 const ARCHIVED_KEY = "pix.projects.archived";
 const ALIASES_KEY = "pix.projects.aliases";
 const EXPANDED_KEY = "pix.projects.expanded";
-const VISIBLE_KEY = "pix.projects.visibleCount";
 
 export const PROJECT_THREADS_PAGE = 5;
 
@@ -147,9 +146,12 @@ export function isExpandedProject(path: string, expanded: readonly string[]): bo
   return expanded.some((p) => normalizePath(p) === key);
 }
 
+/**
+ * In-session only — do not persist "show more" depth across app restarts.
+ * Restart always returns to the default page size so "展开显示" appears again.
+ */
 export function loadVisibleThreadCounts(): Record<string, number> {
-  const map = readJson<Record<string, number>>(VISIBLE_KEY, {});
-  return map && typeof map === "object" ? map : {};
+  return {};
 }
 
 export function getVisibleThreadCount(path: string, counts: Record<string, number>): number {
@@ -163,12 +165,10 @@ export function increaseVisibleThreadCount(
   counts: Record<string, number>,
 ): Record<string, number> {
   const key = normalizePath(path);
-  const next = {
+  return {
     ...counts,
     [key]: getVisibleThreadCount(path, counts) + PROJECT_THREADS_PAGE,
   };
-  writeJson(VISIBLE_KEY, next);
-  return next;
 }
 
 /** Build ordered project paths: pinned first, then others; drop archived. */

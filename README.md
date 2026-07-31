@@ -130,7 +130,7 @@ git push origin main --tags
 
 Tag must match desktop version (`v` + semver). That builds unsigned installers plus the three electron-updater feeds (`latest.yml` / `latest-mac.yml` / `latest-linux.yml`) and mac zip archives, then attaches them to the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
 
-> **macOS note:** auto-update works best with a signed/notarized app. Unsigned builds may fail code-signature verification when installing updates; Windows NSIS and Linux AppImage are the more reliable unsigned paths today.
+> **macOS note:** first open of an unsigned download may need `xattr -cr /Applications/Pix.app` (Gatekeeper quarantine). Auto-update does **not** require an Apple Developer ID — Pix verifies the release zip (`sha512` via electron-updater) and replaces the `.app` itself (same model as Tauri updater + minisign). Optional `CSC_LINK` / `CSC_KEY_PASSWORD` still improve Gatekeeper UX and notifications when present.
 
 ## Architecture
 

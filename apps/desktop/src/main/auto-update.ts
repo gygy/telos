@@ -5,12 +5,17 @@
  * Feed config lives in Resources/app-update.yml (written by electron-builder
  * PublishManager for installer targets, and always by scripts/after-pack.mjs
  * so directory packs also work).
+ *
+ * macOS: electron-updater only checks + downloads the zip (sha512 verified).
+ * Install replaces the .app without Squirrel.Mac so unsigned / ad-hoc builds work
+ * (see mac-install-update.ts). Windows / Linux keep electron-updater installers.
  */
 import type { AppUpdateStatus, AppUpdateState } from "@pix/contracts";
 import { app } from "electron";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { installMacUpdateFromZip, resolveMacAppBundlePath } from "./mac-install-update.ts";
 
 export type AutoUpdateBroadcast = (status: AppUpdateStatus) => void;
 
@@ -84,16 +89,29 @@ export function createAutoUpdateController(options: {
   isPackaged?: boolean;
   /** Injected for tests. */
   getVersion?: () => string;
+  /** Injected for platform-specific install path tests. */
+  platform?: NodeJS.Platform;
+  /** Injected for mac install tests. */
+  installMacUpdate?: (zipPath: string) => Promise<void>;
+  /** Injected for mac install tests. */
+  getExecPath?: () => string;
+  /** Called after a successful mac install before process exit (tests). */
+  relaunchApp?: () => void;
 }): AutoUpdateController {
   const isPackaged = options.isPackaged ?? app.isPackaged;
   const getVersion = options.getVersion ?? (() => app.getVersion());
+  const platform = options.platform ?? process.platform;
   const startupDelayMs = options.startupDelayMs ?? 8_000;
+  const isDarwin = platform === "darwin";
 
   let status: AppUpdateStatus = snapshotStatus({ state: "idle" }, getVersion(), isPackaged);
   let disposed = false;
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
   let updater: UpdaterLike | null = null;
   let listenersAttached = false;
+  /** Absolute path to the downloaded mac zip (from update-downloaded). */
+  let downloadedFile: string | undefined;
+  let macInstallInFlight = false;
 
   function setStatus(fields: StatusFields): AppUpdateStatus {
     status = snapshotStatus(fields, getVersion(), isPackaged);
@@ -160,7 +178,9 @@ export function createAutoUpdateController(options: {
     if (listenersAttached) return;
     listenersAttached = true;
     instance.autoDownload = false;
-    instance.autoInstallOnAppQuit = true;
+    // macOS: never hand the zip to Squirrel.Mac (rejects unsigned/ad-hoc apps).
+    // Windows/Linux still auto-install on quit after download.
+    instance.autoInstallOnAppQuit = !isDarwin;
     instance.allowPrerelease = false;
     instance.logger = console;
 
@@ -200,6 +220,10 @@ export function createAutoUpdateController(options: {
         info && typeof info === "object" && "version" in info
           ? String((info as { version: unknown }).version)
           : status.availableVersion;
+      if (info && typeof info === "object" && "downloadedFile" in info) {
+        const path = String((info as { downloadedFile: unknown }).downloadedFile);
+        if (path) downloadedFile = path;
+      }
       setStatus({
         state: "downloaded",
         ...(version ? { availableVersion: version } : {}),
@@ -296,6 +320,8 @@ export function createAutoUpdateController(options: {
         ...(status.availableVersion ? { availableVersion: status.availableVersion } : {}),
       });
       await instance.downloadUpdate();
+      // On darwin autoInstallOnAppQuit=false so download resolves after zip is on disk
+      // (no Squirrel.Mac). Mark downloaded if events did not already.
       if (status.state === "downloading") {
         return setStatus({
           state: "downloaded",
@@ -314,8 +340,48 @@ export function createAutoUpdateController(options: {
     }
   }
 
+  async function installMacAndRelaunch(): Promise<void> {
+    if (macInstallInFlight) return;
+    macInstallInFlight = true;
+    try {
+      const zipPath = downloadedFile;
+      if (!zipPath || !existsSync(zipPath)) {
+        throw new Error(
+          "macOS update archive is missing. Download the update again, then restart to install.",
+        );
+      }
+      const install =
+        options.installMacUpdate ??
+        ((path: string) =>
+          installMacUpdateFromZip({
+            zipPath: path,
+            appBundlePath: resolveMacAppBundlePath(options.getExecPath?.() ?? process.execPath),
+          }));
+      await install(zipPath);
+      if (options.relaunchApp) {
+        options.relaunchApp();
+        return;
+      }
+      // Relaunch then exit; before-quit must not cancel via preventDefault during install exit.
+      app.relaunch();
+      app.exit(0);
+    } catch (error) {
+      macInstallInFlight = false;
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus({
+        state: "error",
+        error: message,
+        ...(status.availableVersion ? { availableVersion: status.availableVersion } : {}),
+      });
+    }
+  }
+
   function quitAndInstall(): void {
     if (!isPackaged) return;
+    if (isDarwin) {
+      void installMacAndRelaunch();
+      return;
+    }
     const instance = load();
     if (!instance) return;
     // isSilent=false, isForceRunAfter=true

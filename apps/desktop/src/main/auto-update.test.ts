@@ -52,6 +52,7 @@ describe("createAutoUpdateController", () => {
       isPackaged: false,
       getVersion: () => "0.4.0",
       loadUpdater,
+      platform: "win32",
       startupDelayMs: 60_000,
     });
 
@@ -69,7 +70,7 @@ describe("createAutoUpdateController", () => {
     controller.dispose();
   });
 
-  it("checks once via injected updater when packaged", async () => {
+  it("checks once via injected updater when packaged (Windows path)", async () => {
     const broadcast = vi.fn();
     const checkForUpdates = vi.fn(async () => ({
       updateInfo: { version: "0.5.0" },
@@ -103,6 +104,7 @@ describe("createAutoUpdateController", () => {
       isPackaged: true,
       getVersion: () => "0.4.0",
       loadUpdater: () => updater,
+      platform: "win32",
       startupDelayMs: 60_000,
     });
 
@@ -129,6 +131,75 @@ describe("createAutoUpdateController", () => {
     controller.dispose();
   });
 
+  it("installs mac updates without Squirrel.Mac", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "pix-mac-update-test-"));
+    const zipPath = join(dir, "Pix-0.5.2-mac-arm64.zip");
+    writeFileSync(zipPath, "zip");
+
+    const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    const quitAndInstall = vi.fn();
+    const installMacUpdate = vi.fn(async () => undefined);
+    const relaunchApp = vi.fn();
+
+    const updater = {
+      autoDownload: true,
+      autoInstallOnAppQuit: true,
+      allowPrerelease: true,
+      logger: null as typeof console | null,
+      checkForUpdates: vi.fn(async () => ({ updateInfo: { version: "0.5.2" } })),
+      downloadUpdate: vi.fn(async () => {
+        for (const listener of listeners.get("update-downloaded") ?? []) {
+          listener({ version: "0.5.2", downloadedFile: zipPath });
+        }
+      }),
+      quitAndInstall,
+      setFeedURL: vi.fn(),
+      on(event: string, listener: (...args: unknown[]) => void) {
+        const list = listeners.get(event) ?? [];
+        list.push(listener);
+        listeners.set(event, list);
+      },
+      removeAllListeners() {
+        listeners.clear();
+      },
+    };
+
+    try {
+      const controller = createAutoUpdateController({
+        broadcast: vi.fn(),
+        isPackaged: true,
+        getVersion: () => "0.5.0",
+        loadUpdater: () => updater,
+        platform: "darwin",
+        installMacUpdate,
+        relaunchApp,
+        startupDelayMs: 60_000,
+      });
+
+      await controller.checkForUpdates();
+      expect(updater.autoInstallOnAppQuit).toBe(false);
+
+      const downloaded = await controller.downloadUpdate();
+      expect(downloaded.state).toBe("downloaded");
+      expect(downloaded.availableVersion).toBe("0.5.2");
+
+      controller.quitAndInstall();
+      // Async install path — wait until relaunch is scheduled.
+      for (let i = 0; i < 20 && relaunchApp.mock.calls.length === 0; i += 1) {
+        await Promise.resolve();
+      }
+      expect(installMacUpdate).toHaveBeenCalledWith(zipPath);
+      expect(quitAndInstall).not.toHaveBeenCalled();
+      expect(relaunchApp).toHaveBeenCalled();
+      controller.dispose();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("surfaces updater errors", async () => {
     const controller = createAutoUpdateController({
       broadcast: () => undefined,
@@ -151,6 +222,7 @@ describe("createAutoUpdateController", () => {
           // no-op
         },
       }),
+      platform: "win32",
       startupDelayMs: 60_000,
     });
 

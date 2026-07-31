@@ -39,10 +39,11 @@ publish:
   repo: pix
   releaseType: release
 mac:
-  # Auto-discover Developer ID / CSC_LINK signing. macOS rejects notification
-  # registration for unsigned application bundles.
+  # Optional Developer ID via CSC_LINK. Auto-update does not require it — mac
+  # installs replace the .app from the release zip (see mac-install-update.ts).
+  # Signing still helps Gatekeeper first-open and notification registration.
   icon: icon.icns
-  # zip is required for electron-updater (Squirrel.Mac); dmg is manual install only.
+  # zip is the auto-update payload; dmg is manual install only.
   target:
     - dmg
     - zip
