@@ -583,20 +583,67 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     ).toHaveCount(0);
   });
 
-  test("m2: settings providers list has non-secret auth status", async ({ page }) => {
+  test("m2: models settings includes non-secret auth status", async ({ page }) => {
     await startHost(page);
     await page.getByTestId("nav-settings").click();
     await expect(page.getByTestId("settings-page")).toBeVisible();
     await expect(page.getByTestId("settings-rail")).toBeVisible();
-    await page.getByTestId("settings-nav-providers").click();
-    await expect(page.getByTestId("providers-list")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("provider-row-pix-fake")).toBeVisible();
+    await page.getByTestId("settings-nav-models").click();
+    await expect(page.getByTestId("settings-models")).toBeVisible();
+    await expect(page.getByTestId("models-custom")).toBeVisible();
+    await expect(page.getByTestId("models-builtin")).toBeVisible();
+    const providerToggle = page.getByTestId("models-custom-group-custom:pix-fake-toggle");
+    await expect(providerToggle).toHaveAttribute("aria-expanded", "false");
+    await providerToggle.click();
+    await expect(providerToggle).toHaveAttribute("aria-expanded", "true");
+    const providerRow = page.getByTestId("provider-row-pix-fake");
+    await expect(providerRow).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("provider-configured-pix-fake")).toContainText(
       /configured|missing|已配置|未配置/i,
     );
-    const body = await page.getByTestId("providers-list").innerText();
+    const body = await providerRow.innerText();
     expect(body.toLowerCase()).not.toContain("test-key");
     expect(body).not.toMatch(/sk-[a-z0-9]{8,}/i);
+
+    await page.getByTestId("models-add-custom").click();
+    const customDialog = page.getByTestId("models-custom-dialog");
+    const modelIdInput = customDialog.getByTestId("models-custom-model-id");
+    await expect(modelIdInput).toHaveCount(1);
+    await modelIdInput.click();
+    const suggestions = page.getByTestId("models-custom-model-suggestions");
+    await expect(suggestions).toBeHidden();
+    await modelIdInput.fill(" ");
+    await expect(suggestions).toBeVisible();
+    await expect(suggestions.getByTestId("models-custom-model-option")).not.toHaveCount(0);
+    const firstCatalogId = await suggestions
+      .getByTestId("models-custom-model-option")
+      .first()
+      .locator("span")
+      .first()
+      .innerText();
+    await modelIdInput.fill(firstCatalogId);
+    await expect(modelIdInput).toHaveValue(firstCatalogId);
+    await expect(customDialog.getByTestId("models-custom-model-name")).toBeEditable();
+    await customDialog.getByTestId("models-custom-provider").click();
+    await expect(suggestions).toBeHidden();
+    await modelIdInput.fill(" ");
+    await expect(suggestions).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(modelIdInput).not.toHaveValue("");
+    await expect(suggestions).toBeHidden();
+    await modelIdInput.fill("");
+    await expect(suggestions).toBeVisible();
+    await suggestions.getByTestId("models-custom-model-option").first().click();
+    await expect(modelIdInput).not.toHaveValue("");
+    await expect(suggestions).toBeHidden();
+    await customDialog.getByTestId("models-custom-api-key").fill("pix-e2e-key");
+    const authHeader = customDialog.getByTestId("models-custom-auth-header");
+    await expect(authHeader).toBeChecked();
+    await authHeader.uncheck();
+    await customDialog.getByTestId("models-custom-api-key").fill("pix-e2e-key-2");
+    await expect(authHeader).not.toBeChecked();
+    await customDialog.getByTestId("models-custom-cancel").click();
 
     await page.getByTestId("settings-nav-usage").click();
     await expect(page.getByTestId("settings-usage")).toBeVisible();
@@ -626,12 +673,23 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     });
     await startHost(page);
     await page.getByTestId("nav-settings").click();
-    await page.getByTestId("settings-nav-providers").click();
-    await page.getByTestId("providers-search").fill("openai-codex");
+    await page.getByTestId("settings-nav-models").click();
 
+    const codexToggle = page.getByTestId("models-builtin-group-openai-codex-toggle");
+    await expect(codexToggle).toHaveAttribute("aria-expanded", "false");
+    await codexToggle.click();
+    await expect(codexToggle).toHaveAttribute("aria-expanded", "true");
     const row = page.getByTestId("provider-row-openai-codex");
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.getByTestId("provider-oauth-openai-codex").click();
+    await row.getByTestId("provider-configure-openai-codex").click();
+    const configDialog = page.getByTestId("provider-config-dialog");
+    await expect(configDialog).toBeVisible();
+    await expect(configDialog.locator(".settings-status-chip")).toHaveCount(0);
+    const configFooter = configDialog.getByTestId("provider-config-footer");
+    const oauthButton = configFooter.getByTestId("provider-oauth-openai-codex");
+    await expect(oauthButton).toBeVisible();
+    await expect(configFooter.getByTestId("provider-clear-openai-codex")).toBeVisible();
+    await oauthButton.click();
 
     const dialog = page.getByTestId("provider-oauth-dialog");
     await expect(dialog).toBeVisible();
@@ -654,7 +712,8 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       .click();
 
     await expect(row).toContainText(/OAuth 已登录|Signed in with OAuth/);
-    await expect(row.getByTestId("provider-oauth-openai-codex")).toContainText(
+    await row.getByTestId("provider-configure-openai-codex").click();
+    await expect(configDialog.getByTestId("provider-oauth-openai-codex")).toContainText(
       /重新登录|Sign in again/,
     );
     await expect(row).not.toContainText(/access.?token|refresh.?token/i);

@@ -32,7 +32,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t, thinkingLevelLabel, type Locale, type MessageKey } from "../../lib/i18n.ts";
@@ -131,6 +131,15 @@ import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace
 import { useShellStore, type SettingsSection } from "../../store/shell-store.ts";
 import { PiSdkSection } from "./PiSdkSection.tsx";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "../ui/command.tsx";
+import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover.tsx";
+import {
   PI_DOCS_SETTINGS_URL,
   PI_DOCS_USAGE_URL,
   SettingsButton,
@@ -213,8 +222,6 @@ export function SettingsPage(props: SettingsPageProps) {
           <ShortcutsSection {...props} tr={tr} />
         ) : props.section === "proxy" ? (
           <ProxySection {...props} tr={tr} />
-        ) : props.section === "providers" ? (
-          <ProvidersSection {...props} tr={tr} />
         ) : props.section === "models" ? (
           <ModelsSection {...props} tr={tr} />
         ) : props.section === "piSettings" ? (
@@ -2658,14 +2665,23 @@ function applyOAuthEvent(state: OAuthDialogState, event: ProviderOAuthEvent): OA
   }
 }
 
-function ProvidersSection(
-  props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
+type ProviderAuthControls = {
+  getProvider: (provider: string) => ProviderAuthSummary | undefined;
+  loading: boolean;
+  openConfig: (provider: string) => void;
+  refresh: () => Promise<void>;
+};
+
+function ProviderAuthScope(
+  props: SettingsPageProps & {
+    tr: (key: MessageKey, vars?: Record<string, string>) => string;
+    children: (controls: ProviderAuthControls) => ReactNode;
+  },
 ) {
   const { tr } = props;
   const [providers, setProviders] = useState<ProviderAuthSummary[]>([]);
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [keyProvider, setKeyProvider] = useState("");
+  const [configProvider, setConfigProvider] = useState<ProviderAuthSummary>();
   const [apiKey, setApiKey] = useState("");
   const [oauthDialog, setOAuthDialog] = useState<OAuthDialogState>();
   const [oauthValue, setOAuthValue] = useState("");
@@ -2680,7 +2696,6 @@ function ProvidersSection(
       await props.onEnsureHost();
       const list = await window.pix.providers.list();
       setProviders(list);
-      if (!keyProvider && list[0]) setKeyProvider(list[0].provider);
       for (const row of list) {
         if ("key" in row || "apiKey" in row || "token" in row) {
           throw new Error("Provider projection leaked secrets");
@@ -2727,26 +2742,17 @@ function ProvidersSection(
     });
   }, [showAppError]);
 
-  const filteredProviders = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return providers;
-    return providers.filter((provider) => {
-      const haystack =
-        `${provider.provider} ${provider.displayName} ${provider.source ?? ""} ${provider.label ?? ""}`.toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [providers, query]);
-
   async function saveApiKey(event: FormEvent) {
     event.preventDefault();
-    if (!keyProvider.trim() || !apiKey.trim()) {
+    if (!configProvider || !apiKey.trim()) {
       showAppError(tr("auth.apiKeyRequired"));
       return;
     }
     setLoading(true);
     try {
-      const list = await window.pix.providers.setApiKey(keyProvider.trim(), apiKey.trim());
+      const list = await window.pix.providers.setApiKey(configProvider.provider, apiKey.trim());
       setProviders(list);
+      setConfigProvider(list.find((item) => item.provider === configProvider.provider));
       setApiKey("");
     } catch (error) {
       showAppError(error instanceof Error ? error.message : "Failed to save API key");
@@ -2755,10 +2761,28 @@ function ProvidersSection(
     }
   }
 
+  function openConfig(providerId: string) {
+    const provider = providers.find((item) => item.provider === providerId);
+    if (!provider) {
+      showAppError(`Provider ${providerId} is unavailable`);
+      return;
+    }
+    setApiKey("");
+    setConfigProvider(provider);
+  }
+
+  function closeConfig() {
+    if (loading) return;
+    setApiKey("");
+    setConfigProvider(undefined);
+  }
+
   async function clearAuth(provider: string) {
     setLoading(true);
     try {
-      setProviders(await window.pix.providers.clearAuth(provider));
+      const list = await window.pix.providers.clearAuth(provider);
+      setProviders(list);
+      setConfigProvider(list.find((item) => item.provider === provider));
     } catch (error) {
       showAppError(error instanceof Error ? error.message : "Failed to clear auth");
     } finally {
@@ -2772,6 +2796,7 @@ function ProvidersSection(
     openedOAuthUrls.current.clear();
     setOAuthValue("");
     setOAuthBusy(true);
+    setConfigProvider(undefined);
     setOAuthDialog({
       operationId,
       provider: provider.provider,
@@ -2823,128 +2848,117 @@ function ProvidersSection(
   const oauthPrompt: ProviderOAuthPrompt | undefined = oauthDialog?.prompt?.prompt;
 
   return (
-    <SettingsPageShell title={tr("section.auth")} testId="settings-providers">
-      <div className="mb-3 flex items-center gap-2">
-        <SettingsSearchField
-          testId="providers-search"
-          value={query}
-          onChange={setQuery}
-          placeholder={tr("auth.search")}
-        />
-        <SettingsPillButton
-          label={loading ? "…" : tr("auth.refresh")}
-          testId="providers-refresh"
-          onClick={() => void refreshProviders()}
-          disabled={loading}
-        />
-      </div>
+    <>
+      {props.children({
+        getProvider: (provider) => providers.find((item) => item.provider === provider),
+        loading,
+        openConfig,
+        refresh: refreshProviders,
+      })}
 
-      <SettingsSectionBlock label={tr("auth.apiKey")}>
-        <form
-          className="settings-provider-form"
-          data-testid="provider-key-form"
-          onSubmit={(e) => void saveApiKey(e)}
-        >
-          <label className="settings-field settings-provider-field">
-            <span>{tr("auth.provider")}</span>
-            <SettingsSelect
-              testId="provider-select"
-              fullWidth
-              className="settings-provider-select"
-              value={keyProvider || (providers[0]?.provider ?? "")}
-              onChange={setKeyProvider}
-              disabled={loading}
-              options={
-                providers.length === 0
-                  ? [{ value: "", label: "—" }]
-                  : providers.map((p) => ({ value: p.provider, label: p.displayName }))
-              }
-            />
-          </label>
-          <label className="settings-field settings-provider-field settings-provider-field-key">
-            <span>{tr("auth.apiKey")}</span>
-            <div className="settings-key-row">
-              <SettingsInput
-                data-testid="provider-api-key-input"
-                type="password"
-                autoComplete="off"
-                className="min-w-0 w-full flex-1"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                disabled={loading}
-                placeholder="••••••••"
-              />
-              <SettingsButton
-                type="submit"
-                variant="default"
-                testId="provider-save-key"
-                disabled={loading || !keyProvider || !apiKey.trim()}
-              >
-                {loading ? tr("auth.saving") : tr("auth.saveKey")}
-              </SettingsButton>
-            </div>
-          </label>
-        </form>
-      </SettingsSectionBlock>
-
-      <SettingsSectionBlock label={tr("section.auth")}>
-        <div className="settings-provider-list" data-testid="providers-list">
-          {filteredProviders.map((provider, index) => (
+      {configProvider && typeof document !== "undefined"
+        ? createPortal(
             <div
-              key={provider.provider}
-              className={cn(
-                "settings-row",
-                index === filteredProviders.length - 1 && "settings-row-last",
-              )}
-              data-testid={`provider-row-${provider.provider}`}
+              className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/50 p-4"
+              data-testid="provider-config-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="provider-config-dialog-title"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) closeConfig();
+              }}
             >
-              <div className="settings-row-copy min-w-0 flex-1">
-                <div className="settings-row-title">{provider.displayName}</div>
-                <div className="settings-row-desc">
-                  {provider.provider} · {provider.modelCount}
-                  {provider.source ? ` · ${provider.source}` : ""}
-                  {provider.oauthActive ? ` · ${tr("auth.oauthActive")}` : ""}
+              <form
+                className="provider-oauth-dialog surface-panel w-full max-w-[32rem] overflow-hidden shadow-2xl"
+                data-testid="provider-key-form"
+                onSubmit={(event) => void saveApiKey(event)}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="provider-oauth-header">
+                  <div className="provider-oauth-heading">
+                    <span className="provider-oauth-icon" aria-hidden>
+                      <LogIn size={17} strokeWidth={1.8} />
+                    </span>
+                    <div>
+                      <h2 id="provider-config-dialog-title" className="provider-oauth-title">
+                        {configProvider.displayName}
+                      </h2>
+                      <p>{configProvider.provider}</p>
+                    </div>
+                  </div>
+                  <SettingsIconButton
+                    className="provider-oauth-close"
+                    aria-label={tr("common.cancel")}
+                    disabled={loading}
+                    onClick={closeConfig}
+                  >
+                    <X size={16} />
+                  </SettingsIconButton>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span
-                  className="settings-status-chip"
-                  data-configured={provider.configured ? "true" : "false"}
-                  data-testid={`provider-configured-${provider.provider}`}
+
+                <div className="provider-oauth-body">
+                  <label className="provider-oauth-prompt">
+                    <span>{tr("auth.apiKey")}</span>
+                    <div className="provider-oauth-input-row">
+                      <SettingsInput
+                        data-testid="provider-api-key-input"
+                        type="password"
+                        autoComplete="off"
+                        value={apiKey}
+                        onChange={(event) => setApiKey(event.target.value)}
+                        disabled={loading}
+                        placeholder="••••••••"
+                      />
+                      <SettingsButton
+                        type="submit"
+                        variant="default"
+                        testId="provider-save-key"
+                        disabled={loading || !apiKey.trim()}
+                      >
+                        {loading ? tr("auth.saving") : tr("auth.saveKey")}
+                      </SettingsButton>
+                    </div>
+                  </label>
+                </div>
+
+                <div
+                  className="provider-oauth-footer provider-config-footer"
+                  data-testid="provider-config-footer"
                 >
-                  {provider.configured ? tr("auth.configured") : tr("auth.missing")}
-                </span>
-                {provider.oauthSupported ? (
-                  <SettingsPillButton
-                    label={provider.oauthActive ? tr("auth.oauthRelogin") : tr("auth.oauthSignIn")}
-                    testId={`provider-oauth-${provider.provider}`}
-                    disabled={loading || Boolean(oauthDialog)}
-                    onClick={() => void startOAuth(provider)}
-                  />
-                ) : null}
-                <SettingsPillButton
-                  label={tr("auth.clear")}
-                  danger
-                  testId={`provider-clear-${provider.provider}`}
-                  disabled={loading || !provider.configured}
-                  onClick={() => void clearAuth(provider.provider)}
-                />
-              </div>
-            </div>
-          ))}
-          {filteredProviders.length === 0 ? (
-            <div className="settings-row settings-row-last">
-              <div className="settings-row-desc">
-                {query.trim()
-                  ? tr("auth.searchEmpty")
-                  : providers.length === 0
-                    ? tr("auth.listEmpty")
-                    : tr("auth.searchEmpty")}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </SettingsSectionBlock>
+                  <div className="provider-config-footer-left">
+                    {configProvider.oauthSupported ? (
+                      <SettingsPillButton
+                        label={
+                          configProvider.oauthActive
+                            ? tr("auth.oauthRelogin")
+                            : tr("auth.oauthSignIn")
+                        }
+                        testId={`provider-oauth-${configProvider.provider}`}
+                        disabled={loading || Boolean(oauthDialog)}
+                        onClick={() => void startOAuth(configProvider)}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="provider-config-footer-right">
+                    <SettingsPillButton
+                      label={tr("auth.clear")}
+                      danger
+                      testId={`provider-clear-${configProvider.provider}`}
+                      disabled={loading || !configProvider.configured}
+                      onClick={() => void clearAuth(configProvider.provider)}
+                    />
+                    <SettingsPillButton
+                      label={tr("common.cancel")}
+                      disabled={loading}
+                      onClick={closeConfig}
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {oauthDialog && typeof document !== "undefined"
         ? createPortal(
@@ -3178,7 +3192,37 @@ function ProvidersSection(
             document.body,
           )
         : null}
-    </SettingsPageShell>
+    </>
+  );
+}
+
+function ProviderAuthSummaryRow(props: {
+  provider: ProviderAuthSummary | undefined;
+  loading: boolean;
+  onConfigure: (provider: string) => void;
+  tr: (key: MessageKey, vars?: Record<string, string>) => string;
+}) {
+  const { provider, tr } = props;
+  if (!provider) return null;
+  return (
+    <div className="settings-row" data-testid={`provider-row-${provider.provider}`}>
+      <div className="settings-row-copy min-w-0 flex-1">
+        <div className="settings-row-title">{tr("section.auth")}</div>
+        <div className="settings-row-desc">
+          {provider.provider}
+          {provider.source ? ` · ${provider.source}` : ""}
+          {provider.oauthActive ? ` · ${tr("auth.oauthActive")}` : ""}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <SettingsPillButton
+          label={tr("auth.configure")}
+          testId={`provider-configure-${provider.provider}`}
+          disabled={props.loading}
+          onClick={() => props.onConfigure(provider.provider)}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -3196,6 +3240,49 @@ const CUSTOM_MODEL_API_OPTIONS: Array<{ value: CustomModelApi; label: string }> 
 ];
 
 const CUSTOM_MODEL_API_VALUES = new Set<string>(CUSTOM_MODEL_API_OPTIONS.map((opt) => opt.value));
+const MANUAL_MODEL_CATALOG_VALUE = "__pix_manual_model__";
+
+type PiCatalogModel = ModelSummary & {
+  api: CustomModelApi;
+  input: Array<"text" | "image">;
+  contextWindow: number;
+  maxTokens: number;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+};
+
+function modelCatalogKey(model: Pick<ModelSummary, "provider" | "id">): string {
+  return `${model.provider}/${model.id}`;
+}
+
+/** Only offer catalog records that can be written back to pi's custom-provider format. */
+function isPiCatalogModel(model: ModelSummary): model is PiCatalogModel {
+  const cost = model.cost;
+  return (
+    model.source === "builtin" &&
+    CUSTOM_MODEL_API_VALUES.has(model.api ?? "") &&
+    Array.isArray(model.input) &&
+    model.input.length > 0 &&
+    model.input.every((input) => input === "text" || input === "image") &&
+    typeof model.contextWindow === "number" &&
+    model.contextWindow > 0 &&
+    typeof model.maxTokens === "number" &&
+    model.maxTokens > 0 &&
+    typeof cost?.input === "number" &&
+    typeof cost?.output === "number" &&
+    typeof cost?.cacheRead === "number" &&
+    typeof cost?.cacheWrite === "number"
+  );
+}
+
+function findCatalogModelForId(catalog: PiCatalogModel[], modelId: string): PiCatalogModel | undefined {
+  const matches = catalog.filter((model) => model.id === modelId);
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 /** Split enabledModels into exact provider/id picks vs free-form globs (pi-style). */
 function splitEnabledModels(
@@ -3244,8 +3331,11 @@ function buildEnabledModelsPatterns(selected: Set<string>, globText: string): st
   return [...exact, ...extra];
 }
 
-function ModelsSection(
-  props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
+function ModelsSectionContent(
+  props: SettingsPageProps & {
+    tr: (key: MessageKey, vars?: Record<string, string>) => string;
+    auth: ProviderAuthControls;
+  },
 ) {
   const { tr } = props;
   const [models, setModels] = useState<ModelSummary[]>([]);
@@ -3256,6 +3346,9 @@ function ModelsSection(
   const [scopedBusy, setScopedBusy] = useState(false);
   const [defaultKey, setDefaultKey] = useState("");
   const [query, setQuery] = useState("");
+  const [expandedProviderGroups, setExpandedProviderGroups] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -3268,9 +3361,15 @@ function ModelsSection(
   const [api, setApi] = useState<CustomModelApi>("openai-completions");
   const [apiKey, setApiKey] = useState("");
   const [authHeader, setAuthHeader] = useState(false);
+  const [authHeaderTouched, setAuthHeaderTouched] = useState(false);
   /** HTTP User-Agent for proxy providers; default PixDesktop/{appVersion}. */
   const [userAgent, setUserAgent] = useState("PixDesktop/0.0.0");
   const [appVersion, setAppVersion] = useState("0.0.0");
+  const [catalogModelKey, setCatalogModelKey] = useState(MANUAL_MODEL_CATALOG_VALUE);
+  const [modelSuggestionsOpen, setModelSuggestionsOpen] = useState(false);
+  const [activeCatalogModelIndex, setActiveCatalogModelIndex] = useState(0);
+  const modelIdInputRef = useRef<HTMLInputElement>(null);
+  const modelSuggestionsContentRef = useRef<HTMLDivElement>(null);
   const [modelId, setModelId] = useState("");
   const [modelName, setModelName] = useState("");
   const [reasoning, setReasoning] = useState(false);
@@ -3285,6 +3384,19 @@ function ModelsSection(
     props.snapshot?.model != null
       ? `${props.snapshot.model.provider}/${props.snapshot.model.id}`
       : "";
+  const catalogModels = useMemo(() => models.filter(isPiCatalogModel), [models]);
+  const selectedCatalogModel = useMemo(
+    () => catalogModels.find((model) => modelCatalogKey(model) === catalogModelKey),
+    [catalogModelKey, catalogModels],
+  );
+  const matchingCatalogModels = useMemo(() => {
+    const query = modelId.trim().toLowerCase();
+    if (!query) return catalogModels;
+    return catalogModels.filter((model) =>
+      `${model.id} ${model.provider}`.toLowerCase().includes(query),
+    );
+  }, [catalogModels, modelId]);
+  const catalogMetadataLocked = selectedCatalogModel !== undefined;
 
   const showAppError = useShellStore((s) => s.showAppError);
 
@@ -3314,7 +3426,11 @@ function ModelsSection(
     setApi("openai-completions");
     setApiKey("");
     setAuthHeader(false);
+    setAuthHeaderTouched(false);
     setUserAgent(defaultUserAgent());
+    setCatalogModelKey(MANUAL_MODEL_CATALOG_VALUE);
+    setModelSuggestionsOpen(false);
+    setActiveCatalogModelIndex(0);
     setModelId("");
     setModelName("");
     setReasoning(false);
@@ -3325,6 +3441,57 @@ function ModelsSection(
     setCostOutput("0");
     setCostCacheRead("0");
     setCostCacheWrite("0");
+  }
+
+  function applyCatalogModel(model: PiCatalogModel) {
+    setCatalogModelKey(modelCatalogKey(model));
+    setModelId(model.id);
+    setModelName(model.name || model.id);
+    setApi(model.api);
+    setReasoning(model.reasoning);
+    setInputMode(model.input.includes("image") ? "text-image" : "text");
+    setContextWindow(String(model.contextWindow));
+    setMaxTokens(String(model.maxTokens));
+    setCostInput(String(model.cost.input));
+    setCostOutput(String(model.cost.output));
+    setCostCacheRead(String(model.cost.cacheRead));
+    setCostCacheWrite(String(model.cost.cacheWrite));
+  }
+
+  function setModelIdFromInput(value: string) {
+    setCatalogModelKey(MANUAL_MODEL_CATALOG_VALUE);
+    setModelId(value);
+    setModelSuggestionsOpen(true);
+    setActiveCatalogModelIndex(0);
+  }
+
+  function chooseCatalogModel(model: PiCatalogModel) {
+    applyCatalogModel(model);
+    setModelSuggestionsOpen(false);
+    setActiveCatalogModelIndex(0);
+  }
+
+  function handleModelIdKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    const count = matchingCatalogModels.length;
+    if (event.key === "Escape") {
+      setModelSuggestionsOpen(false);
+      return;
+    }
+    if (!modelSuggestionsOpen || count === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveCatalogModelIndex((current) => Math.min(current + 1, count - 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveCatalogModelIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      chooseCatalogModel(matchingCatalogModels[Math.min(activeCatalogModelIndex, count - 1)]!);
+    }
   }
 
   async function refresh() {
@@ -3436,6 +3603,7 @@ function ModelsSection(
         setApi(provider.api as CustomModelApi);
       }
       setAuthHeader(provider.authHeader === true);
+      setAuthHeaderTouched(true);
       setUserAgent(provider.userAgent?.trim() || defaultUserAgent());
       const entry = provider.models.find((row) => row.id === model.id);
       if (entry) {
@@ -3449,6 +3617,8 @@ function ModelsSection(
         if (entry.costCacheRead != null) setCostCacheRead(String(entry.costCacheRead));
         if (entry.costCacheWrite != null) setCostCacheWrite(String(entry.costCacheWrite));
       }
+      const catalogModel = findCatalogModelForId(catalogModels, model.id);
+      if (catalogModel) applyCatalogModel(catalogModel);
     } catch (err) {
       showError(err, "Failed to load custom model");
     } finally {
@@ -3459,6 +3629,7 @@ function ModelsSection(
   function closeCustomDialog() {
     if (dialogBusy) return;
     setDialogOpen(false);
+    setModelSuggestionsOpen(false);
     setEditingOrigin(null);
   }
 
@@ -3537,7 +3708,7 @@ function ModelsSection(
       await window.pix.models.upsertCustomProvider(payload);
       resetCustomForm();
       setDialogOpen(false);
-      await refresh();
+      await Promise.all([refresh(), props.auth.refresh()]);
     } catch (err) {
       showError(err, "Failed to save custom model");
     } finally {
@@ -3552,7 +3723,7 @@ function ModelsSection(
     try {
       await props.onEnsureHost();
       await window.pix.models.removeCustomModel(model.provider, model.id);
-      await refresh();
+      await Promise.all([refresh(), props.auth.refresh()]);
     } catch (err) {
       showError(err, "Failed to delete custom model");
     } finally {
@@ -3582,6 +3753,10 @@ function ModelsSection(
   const builtinProviderGroups = useMemo(
     () => groupModelsByProvider(builtinModels, tr("models.group.custom")),
     [builtinModels, props.locale],
+  );
+  const customProviderGroups = useMemo(
+    () => groupModelsByProvider(customModels, tr("models.group.custom")),
+    [customModels, props.locale],
   );
 
   function renderModelRow(
@@ -3689,62 +3864,106 @@ function ModelsSection(
     );
   }
 
-  function renderModelRows(
-    list: ModelSummary[],
-    emptyLabel: string,
-    options?: { allowEdit?: boolean },
+  const searching = query.trim().length > 0;
+
+  function toggleProviderGroup(key: string) {
+    setExpandedProviderGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function renderProviderGroupCard(
+    group: (typeof builtinProviderGroups)[number],
+    source: "builtin" | "custom",
   ) {
-    if (list.length === 0) {
-      return (
-        <div className="settings-row settings-row-last">
-          <div className="settings-row-desc">{emptyLabel}</div>
+    const provider = props.auth.getProvider(group.models[0]?.provider ?? "");
+    const expanded = searching || expandedProviderGroups.has(group.key);
+    const contentId = `models-provider-content-${group.key}`;
+    const testId = `models-${source}-group-${group.key}`;
+
+    return (
+      <div key={group.key} className="models-provider-section" data-testid={testId}>
+        <div className="settings-card">
+          <button
+            type="button"
+            className="models-provider-card-trigger"
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            data-testid={`${testId}-toggle`}
+            onClick={() => toggleProviderGroup(group.key)}
+          >
+            <span className="models-provider-card-title">{group.label}</span>
+            <span className="models-provider-card-summary">
+              <span className="models-provider-card-count">
+                {tr("models.providerCount", { count: String(group.models.length) })}
+              </span>
+              {provider ? (
+                <span
+                  className="settings-status-chip"
+                  data-configured={provider.configured ? "true" : "false"}
+                  data-testid={`provider-configured-${provider.provider}`}
+                >
+                  {provider.configured ? tr("auth.configured") : tr("auth.missing")}
+                </span>
+              ) : null}
+            </span>
+            <ChevronRight
+              className="models-provider-card-chevron"
+              data-expanded={expanded ? "true" : "false"}
+              size={17}
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          </button>
+
+          {expanded ? (
+            <div id={contentId} className="models-provider-card-content">
+              <ProviderAuthSummaryRow
+                provider={provider}
+                loading={loading || props.auth.loading}
+                onConfigure={props.auth.openConfig}
+                tr={tr}
+              />
+              <div data-testid={`models-list-${source}-${group.key}`}>
+                {group.models.map((model, index) =>
+                  renderModelRow(model, {
+                    last: index === group.models.length - 1,
+                    hideProviderPrefix: true,
+                    ...(source === "custom" ? { allowEdit: true } : {}),
+                  }),
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
-      );
-    }
-    return list.map((model, index) =>
-      renderModelRow(model, {
-        last: index === list.length - 1,
-        ...(options?.allowEdit ? { allowEdit: true } : {}),
-      }),
+      </div>
     );
   }
 
-  const searching = query.trim().length > 0;
-
-  /**
-   * Built-in providers as first-class settings groups (same chrome as other config cards).
-   * Models render as normal settings rows under each provider label.
-   */
-  function renderBuiltinProviderSections(emptyLabel: string) {
-    // builtinProviderGroups only contains non-custom (same as Settings list of catalog providers).
-    if (builtinProviderGroups.length === 0) {
-      return (
-        <SettingsSectionBlock label={tr("models.group.builtin")} testId="models-builtin">
-          <div className="settings-row settings-row-last">
-            <div className="settings-row-desc">{emptyLabel}</div>
-          </div>
-        </SettingsSectionBlock>
-      );
-    }
+  function renderModelCategory(
+    source: "builtin" | "custom",
+    groups: typeof builtinProviderGroups,
+    emptyLabel: string,
+  ) {
+    const testId = `models-${source}`;
     return (
-      <>
-        {builtinProviderGroups.map((group) => (
-          <SettingsSectionBlock
-            key={group.key}
-            label={group.label}
-            testId={`models-builtin-group-${group.key}`}
-          >
-            <div data-testid={`models-list-${group.key}`}>
-              {group.models.map((model, index) =>
-                renderModelRow(model, {
-                  last: index === group.models.length - 1,
-                  hideProviderPrefix: true,
-                }),
-              )}
+      <section className="settings-section-block" data-testid={testId}>
+        <h2 className="settings-section-label">{tr(`models.group.${source}`)}</h2>
+        <div className="models-category-groups">
+          {groups.length > 0 ? (
+            groups.map((group) => renderProviderGroupCard(group, source))
+          ) : (
+            <div className="settings-card">
+              <div className="settings-row settings-row-last">
+                <div className="settings-row-desc">{emptyLabel}</div>
+              </div>
             </div>
-          </SettingsSectionBlock>
-        ))}
-      </>
+          )}
+        </div>
+      </section>
     );
   }
 
@@ -3765,13 +3984,12 @@ function ModelsSection(
         />
         <SettingsPillButton
           label={loading ? "…" : tr("models.reloadCatalog")}
-          onClick={() => void refresh()}
-          disabled={loading}
+          onClick={() => void Promise.all([refresh(), props.auth.refresh()])}
+          disabled={loading || props.auth.loading}
           testId="models-refresh"
         />
       </div>
 
-      {/* Page order: wildcard (top) → custom → builtin (catalog order). */}
       <SettingsSectionBlock
         label={tr("models.wildcardSection")}
         labelHintAria={tr("models.wildcardHelpTitle")}
@@ -3832,36 +4050,15 @@ function ModelsSection(
         </div>
       </SettingsSectionBlock>
 
-      {customModels.length === 0 ? (
-        <SettingsSectionBlock label={tr("models.group.custom")} testId="models-custom">
-          <div data-testid="models-list-custom">
-            {renderModelRows(
-              [],
-              searching ? tr("models.searchEmpty") : tr("models.group.customEmpty"),
-            )}
-          </div>
-        </SettingsSectionBlock>
-      ) : (
-        groupModelsByProvider(customModels, tr("models.group.custom")).map((group) => (
-          <SettingsSectionBlock
-            key={group.key}
-            label={group.label}
-            testId={`models-custom-group-${group.key}`}
-          >
-            <div data-testid={`models-list-custom-${group.key}`}>
-              {group.models.map((model, index) =>
-                renderModelRow(model, {
-                  last: index === group.models.length - 1,
-                  hideProviderPrefix: true,
-                  allowEdit: true,
-                }),
-              )}
-            </div>
-          </SettingsSectionBlock>
-        ))
+      {renderModelCategory(
+        "custom",
+        customProviderGroups,
+        searching ? tr("models.searchEmpty") : tr("models.group.customEmpty"),
       )}
 
-      {renderBuiltinProviderSections(
+      {renderModelCategory(
+        "builtin",
+        builtinProviderGroups,
         searching ? tr("models.searchEmpty") : tr("models.group.builtinEmpty"),
       )}
 
@@ -3879,6 +4076,16 @@ function ModelsSection(
             >
               <div
                 className="models-custom-dialog surface-panel flex max-h-[min(88vh,720px)] w-full max-w-[40rem] flex-col overflow-hidden shadow-2xl"
+                onMouseDownCapture={(event) => {
+                  const target = event.target;
+                  if (
+                    target === modelIdInputRef.current ||
+                    (target instanceof Node && modelSuggestionsContentRef.current?.contains(target))
+                  ) {
+                    return;
+                  }
+                  setModelSuggestionsOpen(false);
+                }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="models-custom-dialog-header">
@@ -3913,7 +4120,7 @@ function ModelsSection(
                           fullWidth
                           value={api}
                           onChange={(v) => setApi(v as CustomModelApi)}
-                          disabled={dialogBusy}
+                          disabled={dialogBusy || catalogMetadataLocked}
                           options={CUSTOM_MODEL_API_OPTIONS.map((opt) => ({
                             value: opt.value,
                             label: opt.label,
@@ -3937,22 +4144,84 @@ function ModelsSection(
                           data-testid="models-custom-api-key"
                           type="password"
                           value={apiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setApiKey(value);
+                            if (value.trim() && !authHeaderTouched) setAuthHeader(true);
+                          }}
                           placeholder={tr("models.customApiKeyPh")}
                           disabled={dialogBusy}
                           autoComplete="off"
                         />
                       </label>
-                      <label className="models-custom-field">
+                      <label className="models-custom-field models-custom-field-span">
                         <span>{tr("models.customModelId")}</span>
-                        <SettingsInput
-                          data-testid="models-custom-model-id"
-                          value={modelId}
-                          onChange={(e) => setModelId(e.target.value)}
-                          placeholder={tr("models.customModelIdPh")}
-                          disabled={dialogBusy}
-                          autoComplete="off"
-                        />
+                        <Popover
+                          open={modelSuggestionsOpen && catalogModels.length > 0}
+                          onOpenChange={(open) => {
+                            setModelSuggestionsOpen(open);
+                            if (open) setActiveCatalogModelIndex(0);
+                          }}
+                        >
+                          <PopoverAnchor asChild>
+                            <SettingsInput
+                              ref={modelIdInputRef}
+                              data-testid="models-custom-model-id"
+                              value={modelId}
+                              onChange={(e) => setModelIdFromInput(e.target.value)}
+                              onKeyDown={handleModelIdKeyDown}
+                              placeholder={tr("models.customModelIdPh")}
+                              disabled={dialogBusy}
+                              autoComplete="off"
+                              aria-autocomplete="list"
+                              aria-expanded={modelSuggestionsOpen}
+                            />
+                          </PopoverAnchor>
+                          <PopoverContent
+                            ref={modelSuggestionsContentRef}
+                            className="z-[12000] w-[var(--radix-popover-trigger-width)] p-0"
+                            align="start"
+                            onOpenAutoFocus={(e) => e.preventDefault()}
+                            onInteractOutside={(e) => {
+                              if (e.target === modelIdInputRef.current) e.preventDefault();
+                            }}
+                            data-testid="models-custom-model-suggestions"
+                          >
+                            <Command shouldFilter={false}>
+                              <CommandList className="max-h-56">
+                                {matchingCatalogModels.length === 0 ? (
+                                  <CommandEmpty>{tr("models.searchEmpty")}</CommandEmpty>
+                                ) : (
+                                  <CommandGroup>
+                                    {matchingCatalogModels.map((model, index) => (
+                                      <CommandItem
+                                        key={modelCatalogKey(model)}
+                                        value={modelCatalogKey(model)}
+                                        data-active={
+                                          index === activeCatalogModelIndex ? "true" : "false"
+                                        }
+                                        data-testid="models-custom-model-option"
+                                        className="data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
+                                        onMouseMove={() => setActiveCatalogModelIndex(index)}
+                                        onSelect={() => {
+                                          chooseCatalogModel(model);
+                                        }}
+                                      >
+                                        <span className="min-w-0 truncate font-mono">{model.id}</span>
+                                        <CommandShortcut>{model.provider}</CommandShortcut>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <p className="m-0 text-[11px] leading-snug text-[var(--text-subtle)]">
+                          {catalogMetadataLocked
+                            ? tr("models.customModelCatalogLocked")
+                            : tr("models.customModelManualHint")}
+                        </p>
                       </label>
                       <label className="models-custom-field">
                         <span>{tr("models.customModelName")}</span>
@@ -3960,7 +4229,7 @@ function ModelsSection(
                           data-testid="models-custom-model-name"
                           value={modelName}
                           onChange={(e) => setModelName(e.target.value)}
-                          disabled={dialogBusy}
+                          disabled={dialogBusy || catalogMetadataLocked}
                           autoComplete="off"
                         />
                       </label>
@@ -3971,7 +4240,7 @@ function ModelsSection(
                           inputMode="numeric"
                           value={contextWindow}
                           onChange={(e) => setContextWindow(e.target.value)}
-                          disabled={dialogBusy}
+                          disabled={dialogBusy || catalogMetadataLocked}
                           autoComplete="off"
                         />
                       </label>
@@ -3982,7 +4251,7 @@ function ModelsSection(
                           inputMode="numeric"
                           value={maxTokens}
                           onChange={(e) => setMaxTokens(e.target.value)}
-                          disabled={dialogBusy}
+                          disabled={dialogBusy || catalogMetadataLocked}
                           autoComplete="off"
                         />
                       </label>
@@ -3998,7 +4267,7 @@ function ModelsSection(
                             data-testid="models-custom-input-text"
                             checked={inputMode === "text"}
                             onChange={() => setInputMode("text")}
-                            disabled={dialogBusy}
+                            disabled={dialogBusy || catalogMetadataLocked}
                           />
                           {tr("models.customInputText")}
                         </label>
@@ -4012,7 +4281,7 @@ function ModelsSection(
                             data-testid="models-custom-input"
                             checked={inputMode === "text-image"}
                             onChange={() => setInputMode("text-image")}
-                            disabled={dialogBusy}
+                            disabled={dialogBusy || catalogMetadataLocked}
                           />
                           {tr("models.customInputTextImage")}
                         </label>
@@ -4025,7 +4294,7 @@ function ModelsSection(
                             data-testid="models-custom-reasoning"
                             checked={reasoning}
                             onChange={(e) => setReasoning(e.target.checked)}
-                            disabled={dialogBusy}
+                            disabled={dialogBusy || catalogMetadataLocked}
                           />
                           {tr("models.customReasoning")}
                         </label>
@@ -4037,7 +4306,10 @@ function ModelsSection(
                             type="checkbox"
                             data-testid="models-custom-auth-header"
                             checked={authHeader}
-                            onChange={(e) => setAuthHeader(e.target.checked)}
+                            onChange={(e) => {
+                              setAuthHeader(e.target.checked);
+                              setAuthHeaderTouched(true);
+                            }}
                             disabled={dialogBusy}
                           />
                           {tr("models.customAuthHeader")}
@@ -4068,7 +4340,7 @@ function ModelsSection(
                               inputMode="decimal"
                               value={costInput}
                               onChange={(e) => setCostInput(e.target.value)}
-                              disabled={dialogBusy}
+                              disabled={dialogBusy || catalogMetadataLocked}
                               autoComplete="off"
                             />
                           </label>
@@ -4079,7 +4351,7 @@ function ModelsSection(
                               inputMode="decimal"
                               value={costOutput}
                               onChange={(e) => setCostOutput(e.target.value)}
-                              disabled={dialogBusy}
+                              disabled={dialogBusy || catalogMetadataLocked}
                               autoComplete="off"
                             />
                           </label>
@@ -4090,7 +4362,7 @@ function ModelsSection(
                               inputMode="decimal"
                               value={costCacheRead}
                               onChange={(e) => setCostCacheRead(e.target.value)}
-                              disabled={dialogBusy}
+                              disabled={dialogBusy || catalogMetadataLocked}
                               autoComplete="off"
                             />
                           </label>
@@ -4101,7 +4373,7 @@ function ModelsSection(
                               inputMode="decimal"
                               value={costCacheWrite}
                               onChange={(e) => setCostCacheWrite(e.target.value)}
-                              disabled={dialogBusy}
+                              disabled={dialogBusy || catalogMetadataLocked}
                               autoComplete="off"
                             />
                           </label>
@@ -4138,6 +4410,16 @@ function ModelsSection(
           )
         : null}
     </SettingsPageShell>
+  );
+}
+
+function ModelsSection(
+  props: SettingsPageProps & { tr: (key: MessageKey, vars?: Record<string, string>) => string },
+) {
+  return (
+    <ProviderAuthScope {...props}>
+      {(auth) => <ModelsSectionContent {...props} auth={auth} />}
+    </ProviderAuthScope>
   );
 }
 

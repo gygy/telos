@@ -2508,6 +2508,18 @@ function projectModelSummaries(services: AgentSessionServices): ModelSummary[] {
       id: model.id,
       name: model.name ?? model.id,
       reasoning: Boolean(model.reasoning),
+      api: String(model.api),
+      input: model.input.filter(
+        (input): input is "text" | "image" => input === "text" || input === "image",
+      ),
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+      cost: {
+        input: model.cost.input,
+        output: model.cost.output,
+        cacheRead: model.cost.cacheRead,
+        cacheWrite: model.cost.cacheWrite,
+      },
       source,
     };
     if (source === "custom") custom.push(summary);

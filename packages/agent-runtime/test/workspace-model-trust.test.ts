@@ -96,6 +96,13 @@ describe("Workspace model trust resume", () => {
       const models = handle.listModels();
       expect(models.some((m) => m.id === "pix-fake")).toBe(true);
       expect(models.some((m) => m.id === "pix-fake-b")).toBe(true);
+      expect(models.find((m) => m.id === "pix-fake")).toMatchObject({
+        api: "openai-completions",
+        input: ["text"],
+        contextWindow: 8192,
+        maxTokens: 1024,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      });
 
       // setModel may require auth; pix-fake has key in models.json
       const afterModel = await handle.setModel("pix-fake", "pix-fake-b");

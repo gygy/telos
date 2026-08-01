@@ -3573,6 +3573,40 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .settings-card > .settings-row {
   background: transparent;
 }
+.models-category-groups {
+  @apply flex flex-col gap-4;
+}
+.models-provider-section {
+  @apply flex flex-col gap-2;
+}
+.models-provider-card-trigger {
+  @apply flex w-full cursor-pointer items-center justify-between gap-4 px-4 py-3 text-left outline-none transition-colors;
+  color: var(--foreground);
+}
+.models-provider-card-trigger:hover {
+  background: var(--hover-fill);
+}
+.models-provider-card-trigger:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 65%, transparent);
+}
+.models-provider-card-summary {
+  @apply flex min-w-0 items-center gap-2;
+}
+.models-provider-card-title {
+  @apply min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--foreground)];
+}
+.models-provider-card-count {
+  @apply text-[12px] text-[var(--muted-foreground)];
+}
+.models-provider-card-chevron {
+  @apply shrink-0 text-[var(--text-subtle)] transition-transform;
+}
+.models-provider-card-chevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+.models-provider-card-content {
+  border-top: 1px solid var(--border);
+}
 /*
  * Row rules are inset (left/right) — same idea as the sidebar divider above
  * 「系统设置」(does not run edge-to-edge of the container).
@@ -3748,21 +3782,6 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .models-custom-dialog-footer {
   @apply flex shrink-0 items-center justify-end gap-2 px-6 pt-3 pb-5;
 }
-.settings-provider-form {
-  @apply flex w-full min-w-0 flex-col gap-1 border-b border-[var(--border)] pb-3;
-}
-/* API key form: provider select + key row fill the settings card width. */
-.settings-provider-field {
-  @apply w-full min-w-0 max-w-none;
-}
-.settings-provider-field-key {
-  @apply w-full min-w-0 max-w-none;
-}
-.settings-provider-select {
-  width: 100% !important;
-  max-width: none;
-  min-width: 0;
-}
 .provider-oauth-dialog {
   border-radius: calc(var(--radius-panel) + 3px);
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -3910,6 +3929,13 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .provider-oauth-footer {
   @apply flex justify-end border-t px-5 py-3.5;
   border-color: color-mix(in srgb, var(--border) 72%, transparent);
+}
+.provider-config-footer {
+  justify-content: space-between;
+}
+.provider-config-footer-left,
+.provider-config-footer-right {
+  @apply flex items-center gap-2;
 }
 .settings-form-error {
   @apply m-0 text-[12px] text-red-400;

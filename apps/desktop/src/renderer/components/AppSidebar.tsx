@@ -15,7 +15,6 @@ import {
   FolderGit2,
   GitBranch,
   Keyboard,
-  KeyRound,
   LoaderCircle,
   Network,
   Package,
@@ -565,12 +564,6 @@ function SettingsRail(props: {
       id: "models",
       labelKey: "settings.group.models",
       items: [
-        {
-          section: "providers",
-          testId: "settings-nav-providers",
-          labelKey: "section.auth",
-          icon: <KeyRound className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
-        },
         {
           section: "models",
           testId: "settings-nav-models",

@@ -552,4 +552,43 @@ describe("host contract validation", () => {
       }),
     ).toBe(true);
   });
+
+  it("accepts catalog metadata on model list events", () => {
+    expect(
+      isHostEvent({
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "model.list",
+        models: [
+          {
+            provider: "openai",
+            id: "gpt-5",
+            name: "GPT-5",
+            reasoning: true,
+            api: "openai-responses",
+            input: ["text", "image"],
+            contextWindow: 400_000,
+            maxTokens: 128_000,
+            cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+            source: "builtin",
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isHostEvent({
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "model.list",
+        models: [
+          {
+            provider: "openai",
+            id: "gpt-5",
+            name: "GPT-5",
+            reasoning: true,
+            input: ["text", "audio"],
+            source: "builtin",
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
 });

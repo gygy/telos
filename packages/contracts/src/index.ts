@@ -8,11 +8,29 @@ export interface ResourceCounts {
   contextFiles: number;
 }
 
+/** Non-secret per-million-token rates from pi-ai's model catalog. */
+export interface ModelCostSummary {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
 export interface ModelSummary {
   provider: string;
   id: string;
   name: string;
   reasoning: boolean;
+  /** pi-ai request API (for example, `openai-responses`). */
+  api?: string;
+  /** Input modalities advertised by pi-ai for this model. */
+  input?: Array<"text" | "image">;
+  /** Maximum context length advertised by pi-ai. */
+  contextWindow?: number;
+  /** Maximum generated-token count advertised by pi-ai. */
+  maxTokens?: number;
+  /** Non-secret catalog pricing, in USD per million tokens. */
+  cost?: ModelCostSummary;
   /**
    * `builtin` — pi/pi-ai catalog providers.
    * `custom` — user models.json / extension-registered providers.
@@ -2044,14 +2062,48 @@ function isModelsJsonConfigView(value: unknown): value is ModelsJsonConfigView {
 }
 
 function isModelSummary(value: unknown): value is ModelSummary {
-  return (
-    isRecord(value) &&
-    typeof value.provider === "string" &&
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.reasoning === "boolean" &&
-    (value.source === "builtin" || value.source === "custom")
-  );
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.provider !== "string" ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.reasoning !== "boolean" ||
+    (value.source !== "builtin" && value.source !== "custom")
+  ) {
+    return false;
+  }
+  if (value.api !== undefined && typeof value.api !== "string") return false;
+  if (
+    value.input !== undefined &&
+    (!Array.isArray(value.input) ||
+      !value.input.every((item) => item === "text" || item === "image"))
+  ) {
+    return false;
+  }
+  if (
+    (value.contextWindow !== undefined &&
+      (typeof value.contextWindow !== "number" || !Number.isFinite(value.contextWindow))) ||
+    (value.maxTokens !== undefined &&
+      (typeof value.maxTokens !== "number" || !Number.isFinite(value.maxTokens)))
+  ) {
+    return false;
+  }
+  if (value.cost !== undefined) {
+    if (
+      !isRecord(value.cost) ||
+      typeof value.cost.input !== "number" ||
+      !Number.isFinite(value.cost.input) ||
+      typeof value.cost.output !== "number" ||
+      !Number.isFinite(value.cost.output) ||
+      typeof value.cost.cacheRead !== "number" ||
+      !Number.isFinite(value.cost.cacheRead) ||
+      typeof value.cost.cacheWrite !== "number" ||
+      !Number.isFinite(value.cost.cacheWrite)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function isProviderAuthSummary(value: unknown): value is ProviderAuthSummary {
