@@ -198,7 +198,7 @@ const READY_MAX_MS = 2_400;
 const READY_MAX_RESUMED_MS = 600;
 
 /** Nudge PTY size so parked pi TUI full-repaints into a fresh Ghostty canvas. */
-function forcePtyRepaint(cols: number, rows: number): void {
+function forcePtyRepaint(cols: number, rows: number, requestRedraw = false): void {
   const c = Math.max(20, Math.floor(cols));
   const r = Math.max(5, Math.floor(rows));
   const altC = c > 20 ? c - 1 : c + 1;
@@ -206,6 +206,9 @@ function forcePtyRepaint(cols: number, rows: number): void {
   void window.pix.terminal.resize(altC, altR).catch(() => undefined);
   window.setTimeout(() => {
     void window.pix.terminal.resize(c, r).catch(() => undefined);
+    // Some TUI builds ignore a resize while an edit frame is idle. Ctrl+L redraws
+    // without submitting or modifying the current input buffer.
+    if (requestRedraw) void window.pix.terminal.write("\x0c").catch(() => undefined);
   }, 16);
 }
 
@@ -363,7 +366,7 @@ export function PiTuiTerminal(props: {
           repaintAttempts += 1;
           try {
             fit?.fit();
-            forcePtyRepaint(term.cols, term.rows);
+            forcePtyRepaint(term.cols, term.rows, openedResumed && repaintAttempts >= 3);
           } catch {
             // ignore
           }

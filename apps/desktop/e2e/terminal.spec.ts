@@ -90,8 +90,8 @@ async function inspectTerminalPaint(page: Page) {
       (canvasW >= 40 || (canvasRect?.width ?? 0) >= 40) &&
       (canvasH >= 40 || (canvasRect?.height ?? 0) >= 40);
     const visibleOk = ready && opacity > 0.9;
-    // Prefer pixel samples; if WebGL blocks readback, require PTY bytes + grid.
-    const paintOk = nonBlankSamples > 0 || (bytes >= 8 && gridOk && sizeOk && Boolean(canvas));
+    // A uniform themed background is nonblank too, so require actual PTY output as well
+    const paintOk = bytes >= 1 && (nonBlankSamples > 0 || (gridOk && sizeOk && Boolean(canvas)));
 
     return {
       ok: visibleOk && gridOk && sizeOk && paintOk && Boolean(canvas),
@@ -138,7 +138,7 @@ async function expectTerminalPainted(page: Page, sessionFile: string): Promise<v
   expect(paint.hostW, `host width: ${JSON.stringify(paint)}`).toBeGreaterThanOrEqual(80);
   expect(paint.hostH, `host height: ${JSON.stringify(paint)}`).toBeGreaterThanOrEqual(40);
   expect(paint.opacity, `host hidden: ${JSON.stringify(paint)}`).toBeGreaterThan(0.9);
-  // After hop, pi must have pushed at least some VT into Ghostty.
+  // The poll above requires actual PTY bytes, so a themed but empty canvas cannot pass
   expect(paint.bytes, `no PTY paint bytes: ${JSON.stringify(paint)}`).toBeGreaterThanOrEqual(1);
 }
 

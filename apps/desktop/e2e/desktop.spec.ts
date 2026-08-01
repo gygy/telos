@@ -46,8 +46,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     const javascript = page.locator('.content-code-block[data-language="javascript"]');
     await expect(javascript.locator(".hljs")).toBeVisible();
-    await javascript.getByRole("button").click();
-    await expect(javascript.getByRole("button")).toContainText(/Copied|已复制/i);
+    const copyButton = javascript.getByRole("button");
+    await copyButton.click();
+    await expect(copyButton).toHaveAccessibleName(/Copied|已复制/i);
     expect(
       await page.evaluate(() => (window as Window & { __copiedCode?: string }).__copiedCode),
     ).toBe("const answer = 42;");
@@ -62,9 +63,11 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     if ((await footnotes.count()) > 0) {
       await expect(footnotes).toContainText(/Sources|来源|Primary source/i);
     }
-    const fileLink = timeline.locator("a.content-file-link").first();
+    const fileLink = timeline.getByRole("link", { name: /Fixture file/i });
     if ((await fileLink.count()) > 0) {
-      await fileLink.click({ force: true });
+      await fileLink.scrollIntoViewIfNeeded();
+      await expect(fileLink).toBeVisible();
+      await fileLink.click();
       await expect
         .poll(async () => {
           const opened = await pix.app.evaluate(
@@ -762,19 +765,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     const railW = sidebarBox!.width;
     expect(Math.abs(packagesBox!.width - (shellMain!.width - railW))).toBeLessThan(24);
     expect(packagesBox!.x).toBeGreaterThanOrEqual(sidebarBox!.x + railW - 4);
-    await page
-      .getByTestId("settings-back")
-      .or(page.getByRole("button", { name: /Back|返回/i }))
-      .first()
-      .click()
-      .catch(async () => {
-        // Packages page back button
-        await page.getByRole("button", { name: /Back to thread|返回对话|返回应用/i }).click();
-      });
-    // Prefer packages back
-    if (await page.getByTestId("packages-page").count()) {
-      await page.getByRole("button", { name: /Back to thread|返回对话|返回应用|Back/i }).click();
-    }
+    // Product pages use the persistent rail for navigation; start a fresh thread to return
+    await startHost(page);
+    await expect(page.getByTestId("composer-dock")).toBeVisible();
 
     await page.getByTestId("sidebar-collapse").click();
     await expect(page.getByTestId("sidebar")).toHaveAttribute("data-collapsed", "true");
@@ -787,11 +780,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(page.getByTestId("sidebar-collapse")).toBeVisible();
     await expect(page.getByTestId("nav-packages")).toHaveCount(0);
 
-    await page.getByTestId("prompt-input").fill("after collapse");
-    await page.getByTestId("send-prompt").click();
-    await expect(page.getByTestId("host-status").first()).toContainText("Agent settled", {
-      timeout: 60_000,
-    });
+    await sendPrompt(page, "after collapse");
 
     await page.getByTestId("sidebar-collapse").click();
     await expect(page.getByTestId("sidebar")).toHaveAttribute("data-collapsed", "false");
@@ -851,8 +840,11 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       .poll(() => thumb.evaluate((el) => getComputedStyle(el, "::before").width))
       .toBe("6px");
 
-    await thumb.hover();
-    await expect(thumb).toHaveAttribute("data-hovered", "true");
+    await expect(async () => {
+      await host.evaluate((el) => el.dispatchEvent(new Event("scroll", { bubbles: true })));
+      await thumb.hover();
+      await expect(thumb).toHaveAttribute("data-hovered", "true");
+    }).toPass({ timeout: 5_000 });
     await expect
       .poll(() => thumb.evaluate((el) => getComputedStyle(el, "::before").width))
       .toBe("8px");

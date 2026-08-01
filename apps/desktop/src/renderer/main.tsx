@@ -125,15 +125,19 @@ function reportAppError(error: unknown, fallback: string): string {
   return message;
 }
 
+function unknownErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : typeof error === "string" ? error : "";
+}
+
 /** Host still mid-turn while UI thought it was idle (stale running flag / prior IPC orphan). */
 function isAlreadyProcessingError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const message = unknownErrorMessage(error);
   return /already processing/i.test(message);
 }
 
 /** Abort timed out and main recycled the host — in-flight prompt IPC is expected to die. */
 function isAbortRecycleError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const message = unknownErrorMessage(error);
   return /recycled after abort|timed out handling agent\.abort/i.test(message);
 }
 
@@ -1833,7 +1837,7 @@ function App() {
         setRunning(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error ?? "");
+      const message = unknownErrorMessage(error);
       // Abort IPC timed out (or host recycled mid-abort). Do NOT mark idle — a ghost
       // mid-turn would make the next send trip "already processing" without steer.
       // Keep the stop control up until agent.settled / host.restarted clears it.

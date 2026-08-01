@@ -19,6 +19,8 @@ import { join } from "node:path";
  *   owner?: string,
  *   repo?: string,
  *   releaseType?: string,
+ *   url?: string,
+ *   channel?: string,
  *   updaterCacheDirName?: string,
  *   [key: string]: unknown,
  * }} publish
@@ -32,8 +34,8 @@ export function serializeAppUpdateYml(publish, updaterCacheDirName) {
   if (publish.repo != null) lines.push(`repo: ${yamlScalar(publish.repo)}`);
   if (publish.provider != null) lines.push(`provider: ${yamlScalar(publish.provider)}`);
   if (publish.releaseType != null) lines.push(`releaseType: ${yamlScalar(publish.releaseType)}`);
-  if (publish.url != null) lines.push(`url: ${yamlScalar(String(publish.url))}`);
-  if (publish.channel != null) lines.push(`channel: ${yamlScalar(String(publish.channel))}`);
+  if (publish.url != null) lines.push(`url: ${yamlScalar(publish.url)}`);
+  if (publish.channel != null) lines.push(`channel: ${yamlScalar(publish.channel)}`);
   lines.push(`updaterCacheDirName: ${yamlScalar(updaterCacheDirName)}`);
   return `${lines.join("\n")}\n`;
 }

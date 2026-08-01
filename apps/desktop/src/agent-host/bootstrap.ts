@@ -26,5 +26,5 @@ if (source === "global" && root) {
 }
 
 // Sibling module produced by vite multi-entry (not bundled into this file).
-const appSpecifier = new URL("./agent-host-app.mjs", import.meta.url).href;
+const appSpecifier = new URL(/* @vite-ignore */ "./agent-host-app.mjs", import.meta.url).href;
 await import(/* @vite-ignore */ appSpecifier);

@@ -786,13 +786,13 @@ async function pruneManagedWorktrees(repoCwd: string): Promise<void> {
     Number.isFinite(prefs.worktreeAutoDeleteLimit)
       ? Math.min(100, Math.max(1, Math.floor(prefs.worktreeAutoDeleteLimit)))
       : 10;
-  const root = resolveWorktreeRoot(repoCwd, prefs.worktreeRoot).replace(/\\/g, "/");
+  const root = normalizeRecentPathKey(resolveWorktreeRoot(repoCwd, prefs.worktreeRoot));
   const items = await listGitWorktrees(repoCwd);
   const managed = items
     .filter((w) => !w.main && !w.bare)
     .map((w) => ({
       path: w.path,
-      key: w.path.replace(/\\/g, "/").replace(/\/+$/, ""),
+      key: normalizeRecentPathKey(w.path),
     }))
     .filter((w) => w.key === root || w.key.startsWith(`${root}/`));
   if (managed.length <= limit) return;
@@ -1040,9 +1040,9 @@ async function gitPull(cwd: string): Promise<GitStatusSummary> {
 async function gitPush(cwd: string): Promise<GitStatusSummary> {
   const force = getGitPrefs().forcePush;
   if (force) {
-    await runGit(cwd, ["push", "--force", "-u", "HEAD"]);
+    await runGit(cwd, ["push", "--force", "-u", "origin", "HEAD"]);
   } else {
-    await runGit(cwd, ["push", "-u", "HEAD"]);
+    await runGit(cwd, ["push", "-u", "origin", "HEAD"]);
   }
   return gitStatus(cwd);
 }
@@ -1893,7 +1893,8 @@ function loadDesktopPrefs(): DesktopPrefs {
 }
 
 function normalizeRecentPathKey(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return normalized.startsWith("/private/var/") ? normalized.slice("/private".length) : normalized;
 }
 
 function rememberWorkspace(cwd: string): void {
@@ -2844,7 +2845,8 @@ class HostSupervisor {
       this.#acceptSnapshot(event.snapshot);
       return event.snapshot;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error ?? "");
+      const message =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "";
       if (!/timed out/i.test(message)) throw error;
       // Host is hard-stuck (event loop blocked or abort never idles). Kill without
       // parking so the next prompt is not blocked by a ghost mid-turn, then reopen
