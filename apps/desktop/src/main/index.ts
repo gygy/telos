@@ -3545,6 +3545,21 @@ class HostSupervisor {
     return event.config;
   }
 
+  async removeCustomModel(provider: string, modelId: string): Promise<ModelsJsonConfigView> {
+    if (!this.#host) await this.start();
+    const event = await this.#request({
+      protocolVersion: IPC_PROTOCOL_VERSION,
+      type: "models.config.remove-model",
+      requestId: randomUUID(),
+      provider,
+      modelId,
+    });
+    if (event.type !== "models.config") {
+      throw new Error("Agent Host returned an unexpected models.config.remove-model response");
+    }
+    return event.config;
+  }
+
   async #resolveAgentDir(): Promise<string> {
     if (this.#snapshot?.agentDir) return this.#snapshot.agentDir;
     if (process.env.PI_CODING_AGENT_DIR?.trim()) return process.env.PI_CODING_AGENT_DIR.trim();
@@ -5035,6 +5050,9 @@ void app
     );
     ipcMain.handle("pix:models:remove-custom", (_event, provider: string) =>
       supervisor?.removeCustomProvider(provider),
+    );
+    ipcMain.handle("pix:models:remove-custom-model", (_event, provider: string, modelId: string) =>
+      supervisor?.removeCustomModel(provider, modelId),
     );
     ipcMain.handle("pix:models:open-config", () => supervisor?.openModelsJson());
     ipcMain.handle("pix:models:reveal-config", () => supervisor?.revealModelsJson());

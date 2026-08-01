@@ -148,6 +148,8 @@ const api: PixDesktopApi = {
     getConfig: () => ipcRenderer.invoke("pix:models:get-config"),
     upsertCustomProvider: (input) => ipcRenderer.invoke("pix:models:upsert-custom", input),
     removeCustomProvider: (provider) => ipcRenderer.invoke("pix:models:remove-custom", provider),
+    removeCustomModel: (provider, modelId) =>
+      ipcRenderer.invoke("pix:models:remove-custom-model", provider, modelId),
     openConfig: () => ipcRenderer.invoke("pix:models:open-config"),
     revealConfig: () => ipcRenderer.invoke("pix:models:reveal-config"),
     listScoped: () => ipcRenderer.invoke("pix:models:list-scoped"),

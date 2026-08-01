@@ -53,6 +53,7 @@ import { deleteProviderCredential, persistProviderApiKey } from "./auth-json.ts"
 import {
   listModelsJsonProviderIds,
   readModelsJsonConfig,
+  removeCustomModelFromModelsJson,
   removeCustomProviderFromModelsJson,
   upsertCustomProviderInModelsJson,
 } from "./models-json.ts";
@@ -90,6 +91,7 @@ export {
   listModelsJsonProviderIds,
   modelsJsonPath,
   readModelsJsonConfig,
+  removeCustomModelFromModelsJson,
   removeCustomProviderFromModelsJson,
   upsertCustomProviderInModelsJson,
 } from "./models-json.ts";
@@ -315,6 +317,7 @@ export interface PixRuntimeHandle {
   getModelsJsonConfig(): Promise<ModelsJsonConfigView>;
   upsertCustomProvider(input: UpsertCustomProviderInput): Promise<ModelsJsonConfigView>;
   removeCustomProvider(provider: string): Promise<ModelsJsonConfigView>;
+  removeCustomModel(provider: string, modelId: string): Promise<ModelsJsonConfigView>;
   getPiSettings(): PiSettingsView;
   patchPiSettings(patch: PiSettingsPatch): PiSettingsView | Promise<PiSettingsView>;
   getSessionTree(): SessionTreeView;
@@ -1898,6 +1901,25 @@ export async function createPixRuntime(
         await runtime.services.modelRuntime.removeRuntimeApiKey(providerId);
       } catch {
         // ignore
+      }
+      await runtime.services.modelRuntime.refresh();
+      return config;
+    },
+    async removeCustomModel(provider, modelId) {
+      const providerId = provider.trim();
+      const config = await removeCustomModelFromModelsJson(
+        runtime.services.agentDir,
+        providerId,
+        modelId,
+      );
+      // Credentials are shared by models from the same provider.
+      if (!config.providers.some((entry) => entry.provider === providerId)) {
+        await deleteProviderCredential(runtime.services.agentDir, providerId);
+        try {
+          await runtime.services.modelRuntime.removeRuntimeApiKey(providerId);
+        } catch {
+          // ignore
+        }
       }
       await runtime.services.modelRuntime.refresh();
       return config;

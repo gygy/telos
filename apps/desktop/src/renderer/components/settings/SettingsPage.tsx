@@ -3545,6 +3545,21 @@ function ModelsSection(
     }
   }
 
+  async function removeCustomModel(model: ModelSummary) {
+    const name = model.name || model.id;
+    if (!window.confirm(tr("models.customDeleteConfirm", { name }))) return;
+    setLoading(true);
+    try {
+      await props.onEnsureHost();
+      await window.pix.models.removeCustomModel(model.provider, model.id);
+      await refresh();
+    } catch (err) {
+      showError(err, "Failed to delete custom model");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const filteredModels = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return models;
@@ -3637,6 +3652,18 @@ function ModelsSection(
               aria-label={tr("models.scopeToggle")}
             />
           </div>
+          {options?.allowEdit ? (
+            <SettingsIconButton
+              danger
+              disabled={loading || dialogBusy}
+              onClick={() => void removeCustomModel(model)}
+              testId={`model-delete-${model.provider}-${model.id}`}
+              title={tr("models.customDelete")}
+              aria-label={tr("models.customDelete")}
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
+            </SettingsIconButton>
+          ) : null}
           {options?.allowEdit ? (
             <SettingsPillButton
               label={tr("models.customEdit")}

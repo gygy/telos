@@ -785,6 +785,16 @@ async function handleCommand(command: HostCommand): Promise<void> {
         });
         break;
       }
+      case "models.config.remove-model": {
+        if (!handle) throw new Error("Agent Host is not ready");
+        post({
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          type: "models.config",
+          requestId: command.requestId,
+          config: await handle.removeCustomModel(command.provider, command.modelId),
+        });
+        break;
+      }
       case "thinking.set": {
         if (!handle) throw new Error("Agent Host is not ready");
         const snapshot = handle.setThinkingLevel(command.level);

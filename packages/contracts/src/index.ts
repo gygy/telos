@@ -890,6 +890,13 @@ export type HostCommand =
     }
   | {
       protocolVersion: typeof IPC_PROTOCOL_VERSION;
+      type: "models.config.remove-model";
+      requestId: string;
+      provider: string;
+      modelId: string;
+    }
+  | {
+      protocolVersion: typeof IPC_PROTOCOL_VERSION;
       type: "thinking.set";
       requestId: string;
       level: string;
@@ -1700,6 +1707,8 @@ export interface PixDesktopApi {
     upsertCustomProvider(input: UpsertCustomProviderInput): Promise<ModelsJsonConfigView>;
     /** Remove a provider block from models.json. */
     removeCustomProvider(provider: string): Promise<ModelsJsonConfigView>;
+    /** Remove one custom model from models.json. */
+    removeCustomModel(provider: string, modelId: string): Promise<ModelsJsonConfigView>;
     /** Open models.json in the OS default editor (creates a template if missing). */
     openConfig(): Promise<void>;
     /** Reveal models.json in the file manager. */
@@ -2414,6 +2423,9 @@ export function isHostCommand(value: unknown): value is HostCommand {
   if (value.type === "models.config.get") return true;
   if (value.type === "models.config.upsert") return isUpsertCustomProviderInput(value.input);
   if (value.type === "models.config.remove") return typeof value.provider === "string";
+  if (value.type === "models.config.remove-model") {
+    return typeof value.provider === "string" && typeof value.modelId === "string";
+  }
   if (value.type === "thinking.set") return typeof value.level === "string";
   if (value.type === "serviceTier.set") return typeof value.tier === "string";
   if (value.type === "providers.list" || value.type === "providers.usage") return true;

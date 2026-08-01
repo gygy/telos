@@ -6,6 +6,7 @@ import {
   defaultCustomProviderUserAgent,
   DEFAULT_CUSTOM_PROVIDER_USER_AGENT,
   readModelsJsonConfig,
+  removeCustomModelFromModelsJson,
   removeCustomProviderFromModelsJson,
   upsertCustomProviderInModelsJson,
 } from "../src/models-json.ts";
@@ -15,6 +16,24 @@ async function tempAgentDir(): Promise<string> {
 }
 
 describe("models.json helpers", () => {
+  it("removes one model while preserving its provider and remaining models", async () => {
+    const agentDir = await tempAgentDir();
+    const input = {
+      provider: "ollama",
+      baseUrl: "http://localhost:11434/v1",
+      api: "openai-completions" as const,
+    };
+    await upsertCustomProviderInModelsJson(agentDir, { ...input, modelId: "llama3.1:8b" });
+    await upsertCustomProviderInModelsJson(agentDir, { ...input, modelId: "qwen2.5-coder:7b" });
+
+    const remaining = await removeCustomModelFromModelsJson(agentDir, "ollama", "llama3.1:8b");
+    expect(remaining.providers).toHaveLength(1);
+    expect(remaining.providers[0]?.models.map((model) => model.id)).toEqual(["qwen2.5-coder:7b"]);
+
+    const empty = await removeCustomModelFromModelsJson(agentDir, "ollama", "qwen2.5-coder:7b");
+    expect(empty.providers).toHaveLength(0);
+  });
+
   it("upserts a full pi-native model entry without writing apiKey secrets", async () => {
     const agentDir = await tempAgentDir();
     const view = await upsertCustomProviderInModelsJson(agentDir, {
