@@ -24,8 +24,40 @@ describe("MarkdownContent", () => {
     expect(diffHtml).toContain("content-diff-line");
     // File line numbers from the hunk (not 1..n display index)
     expect(diffHtml).toContain(">5<");
-    expect(render("| A | B |\n| - | - |\n| 1 | 2 |")).toContain("content-table-scroll");
+    const tableHtml = render("| A | B |\n| - | - |\n| 1 | 2 |");
+    expect(tableHtml).toContain("content-table-scroll");
+    expect(tableHtml).toContain('data-testid="markdown-table"');
+    expect(tableHtml).toContain("<thead>");
+    expect(tableHtml).toContain("<tbody>");
+    expect(tableHtml).not.toContain('node="[object Object]"');
     expect(render("```mermaid\ngraph TD; A--&gt;B\n```")).toContain("content-mermaid-loading");
+  });
+
+  it("renders GFM pipe tables with CJK text, code spans, and alignment", () => {
+    const html = render(
+      [
+        "清理完成。",
+        "",
+        "**已清理**",
+        "",
+        "| 类别 | 内容 | 约释放 |",
+        "| :--- | :---: | ---: |",
+        "| 归档会话 | 3 个旧 `.jsonl`（保留当前会话） | ~540KB |",
+        "| MCP 缓存 | `mcp-cache.json` | ~68KB |",
+        "",
+        "**已保留**",
+      ].join("\n"),
+    );
+    expect(html).toContain('data-testid="markdown-table"');
+    expect(html).toContain("<table");
+    expect(html).toContain("归档会话");
+    expect(html).toContain("<code>");
+    expect(html).toContain("mcp-cache.json");
+    expect(html).toMatch(/text-align:\s*left|text-align:left/);
+    expect(html).toMatch(/text-align:\s*center|text-align:center/);
+    expect(html).toMatch(/text-align:\s*right|text-align:right/);
+    // Must not fall back to raw pipe paragraphs.
+    expect(html).not.toMatch(/<p>\| 类别 \|/);
   });
 
   it("renders LaTeX parenthesis and bracket delimiters", () => {

@@ -1583,7 +1583,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .pix-md th,
 .pix-md td {
-  @apply border border-[var(--border)] px-2 py-1 text-left;
+  @apply border border-[var(--border)] px-2 py-1.5 text-left align-top;
 }
 .pix-md th {
   @apply bg-[var(--muted)] font-medium;
@@ -2679,26 +2679,51 @@ html[data-custom-window-controls="true"] .page-header {
 .content-table-scroll {
   max-width: 100%;
   overflow-x: auto;
-  margin: 10px 0;
+  margin: 0.65rem 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel, var(--background)) 92%, transparent);
+  -webkit-overflow-scrolling: touch;
 }
 .pix-md .content-table-scroll table {
+  width: max-content;
   min-width: 100%;
   margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.92em;
+}
+.pix-md .content-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--muted) 88%, var(--surface-panel, var(--background)));
+  font-weight: 600;
 }
 .pix-md .content-table-scroll th,
 .pix-md .content-table-scroll td {
   border-width: 0 1px 1px 0;
-  padding: 7px 10px;
-  white-space: nowrap;
-}
-.pix-md .content-table-scroll tr:last-child td {
-  border-bottom: 0;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  padding: 0.55rem 0.75rem;
+  vertical-align: top;
+  /* Prefer readable wrap for CJK / prose; keep wide code cells scrollable via the shell. */
+  white-space: normal;
+  word-break: break-word;
 }
 .pix-md .content-table-scroll th:last-child,
 .pix-md .content-table-scroll td:last-child {
   border-right: 0;
+}
+.pix-md .content-table-scroll tr:last-child th,
+.pix-md .content-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+.pix-md .content-table-scroll tbody tr:hover td {
+  background: color-mix(in srgb, var(--hover-fill, var(--muted)) 55%, transparent);
+}
+.pix-md .content-table-scroll code {
+  white-space: nowrap;
 }
 .pix-md .contains-task-list {
   padding-left: 0;

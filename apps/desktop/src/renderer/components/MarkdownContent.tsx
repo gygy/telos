@@ -477,6 +477,12 @@ function FootnotesSection(props: {
   );
 }
 
+/** Drop react-markdown / hast runtime props that must not hit the DOM. */
+function domProps<T extends Record<string, unknown>>(props: T): Omit<T, "node"> {
+  const { node: _node, ...rest } = props;
+  return rest;
+}
+
 export const MarkdownContent = memo(function MarkdownContent(props: {
   children: string;
   className?: string | undefined;
@@ -490,6 +496,7 @@ export const MarkdownContent = memo(function MarkdownContent(props: {
   return (
     <div className={cn("pix-md", props.className)} data-testid="markdown-content">
       <ReactMarkdown
+        // remark-gfm enables GFM tables, strikethrough, task lists, and autolinks.
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema], rehypeKatex]}
         urlTransform={safeMarkdownUrl}
@@ -557,10 +564,25 @@ export const MarkdownContent = memo(function MarkdownContent(props: {
           },
           table({ children, ...tableProps }) {
             return (
-              <div className="content-table-scroll">
-                <table {...tableProps}>{children}</table>
+              <div className="content-table-scroll" data-testid="markdown-table">
+                <table {...domProps(tableProps as Record<string, unknown>)}>{children}</table>
               </div>
             );
+          },
+          thead({ children, ...elProps }) {
+            return <thead {...domProps(elProps as Record<string, unknown>)}>{children}</thead>;
+          },
+          tbody({ children, ...elProps }) {
+            return <tbody {...domProps(elProps as Record<string, unknown>)}>{children}</tbody>;
+          },
+          tr({ children, ...elProps }) {
+            return <tr {...domProps(elProps as Record<string, unknown>)}>{children}</tr>;
+          },
+          th({ children, ...elProps }) {
+            return <th {...domProps(elProps as Record<string, unknown>)}>{children}</th>;
+          },
+          td({ children, ...elProps }) {
+            return <td {...domProps(elProps as Record<string, unknown>)}>{children}</td>;
           },
           section({ className, children, id, ...rest }) {
             const restProps = rest as Record<string, unknown>;
