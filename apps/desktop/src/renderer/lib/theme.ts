@@ -31,6 +31,19 @@ export function resolveColorMode(
   return preference;
 }
 
+/**
+ * Electron `nativeTheme.themeSource` for chrome / `prefers-color-scheme`.
+ * Must stay `"system"` while the user (and skin) follow the OS — forcing the
+ * resolved light/dark value locks Chromium's media query and breaks follow-system.
+ */
+export function resolveNativeThemeSource(
+  preference: ThemePreference,
+  skinAppearance: "auto" | "light" | "dark" | undefined = "auto",
+): "light" | "dark" | "system" {
+  if (skinAppearance === "light" || skinAppearance === "dark") return skinAppearance;
+  return preference;
+}
+
 /** Best-effort map from pi theme name to shell color mode. Does not write pi settings. */
 export function colorModeFromPiTheme(
   themeName: string | undefined | null,

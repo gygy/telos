@@ -58,10 +58,13 @@ import {
   resolveBuiltinSlash,
 } from "./lib/slash-parity.ts";
 import { applyAppearancePrefs } from "./lib/appearance-prefs.ts";
-import { applyDocumentTheme, colorModeFromPiTheme, piThemeLabel } from "./lib/theme.ts";
-
-// Apply stored typography before first paint (CSS vars on <html>).
-applyAppearancePrefs();
+import {
+  applyDocumentTheme,
+  colorModeFromPiTheme,
+  piThemeLabel,
+  resolveNativeThemeSource,
+} from "./lib/theme.ts";
+import { activeThemePack, applyThemeSelection, resolveSkinColorMode } from "./lib/theme-packs.ts";
 import { cn } from "./lib/utils.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
@@ -117,6 +120,11 @@ import {
   useShellStore,
 } from "./store/shell-store.ts";
 import "./styles.css";
+
+const initialThemeState = useShellStore.getState();
+applyDocumentTheme(initialThemeState.colorMode);
+applyThemeSelection(initialThemeState.themeSelection, initialThemeState.colorMode);
+applyAppearancePrefs();
 
 /** Surface app-level errors as a modal (agent timeline errors stay in-chat). */
 function reportAppError(error: unknown, fallback: string): string {
@@ -260,6 +268,13 @@ function App() {
   const ecoLoading = useShellStore((s) => s.ecoLoading);
   const colorMode = useShellStore((s) => s.colorMode);
   const themePreference = useShellStore((s) => s.themePreference);
+  const themeSelection = useShellStore((s) => s.themeSelection);
+  const themeLibrary = useShellStore((s) => s.themeLibrary);
+  const themePreview = useShellStore((s) => s.themePreview);
+  const activeSkinPack = activeThemePack(themeSelection, themeLibrary.skins, themePreview).config;
+  const activeSkinMode = resolveSkinColorMode(activeSkinPack, colorMode);
+  /** Electron chrome source — keep "system" when following OS so matchMedia can update. */
+  const nativeThemeSource = resolveNativeThemeSource(themePreference, activeSkinPack.appearance);
   const locale = useShellStore((s) => s.locale);
   const sidebarCollapsed = useShellStore((s) => s.sidebarCollapsed);
   const sidebarWidthPx = useShellStore((s) => s.sidebarWidthPx);
@@ -378,6 +393,9 @@ function App() {
   const setResources = useShellStore((s) => s.setResources);
   const setEcoLoading = useShellStore((s) => s.setEcoLoading);
   const setThemePreference = useShellStore((s) => s.setThemePreference);
+  const setThemeSelection = useShellStore((s) => s.setThemeSelection);
+  const setThemeLibrary = useShellStore((s) => s.setThemeLibrary);
+  const setThemePreview = useShellStore((s) => s.setThemePreview);
   const toggleColorMode = useShellStore((s) => s.toggleColorMode);
   const syncSystemTheme = useShellStore((s) => s.syncSystemTheme);
   const toggleSidebarCollapsed = useShellStore((s) => s.toggleSidebarCollapsed);
@@ -738,11 +756,27 @@ function App() {
 
   useEffect(() => {
     applyDocumentTheme(colorMode);
-  }, [colorMode]);
+    applyThemeSelection(themeSelection, colorMode, themeLibrary.skins, themePreview);
+  }, [colorMode, themeLibrary.skins, themePreview, themeSelection]);
 
   useEffect(() => {
-    void window.pix.appearance.setThemeSource(themePreference);
-  }, [themePreference]);
+    let cancelled = false;
+    void window.pix.themes
+      .list()
+      .then((library) => {
+        if (cancelled) return;
+        setThemeLibrary(library);
+        setThemeSelection({ id: library.activeId });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [setThemeLibrary, setThemeSelection]);
+
+  useEffect(() => {
+    void window.pix.appearance.setThemeSource(nativeThemeSource);
+  }, [nativeThemeSource]);
 
   // Overlay auto-hide scrollbars for main content panes (settings / packages / thread…).
   useEffect(() => installOverlayScroll(), []);
@@ -2920,10 +2954,12 @@ function App() {
         } as React.CSSProperties
       }
       data-testid="pix-app"
-      data-theme={colorMode}
+      data-theme={activeSkinMode}
+      data-theme-skin={themeSelection.id}
       data-sidebar-translucent={sidebarTranslucent ? "true" : "false"}
       data-bootstrap-ready={bootstrapReady ? "true" : "false"}
     >
+      <div className="skin-wallpaper" aria-hidden data-testid="skin-wallpaper" />
       {/* Linux only (customWindowControls); Windows uses native titleBarOverlay. */}
       <WindowCaptionButtons />
       {!bootstrapReady ? (
@@ -3292,6 +3328,8 @@ function App() {
             section={settingsSection}
             colorMode={colorMode}
             themePreference={themePreference}
+            themeSelection={themeSelection}
+            themeLibrary={themeLibrary}
             sidebarTranslucent={sidebarTranslucent}
             sidebarWidthPx={sidebarWidthPx}
             accessVisibility={accessVisibility}
@@ -3306,6 +3344,9 @@ function App() {
             onSnapshot={acceptSnapshot}
             onLocale={setLocale}
             onThemePreference={setThemePreference}
+            onThemeSelection={setThemeSelection}
+            onThemeLibrary={setThemeLibrary}
+            onThemePreview={setThemePreview}
             onTranslucent={setSidebarTranslucent}
             onSidebarWidth={setSidebarWidthPx}
             onToggleTrust={() => void toggleTrust()}

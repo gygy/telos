@@ -41,9 +41,11 @@ import {
   dialog,
   ipcMain,
   Menu,
+  net,
   nativeImage,
   nativeTheme,
   Notification,
+  protocol,
   screen,
   shell,
   utilityProcess,
@@ -65,7 +67,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findParkedSessionKeyByCwd,
   MAX_PARKED_HOSTS,
@@ -103,6 +105,14 @@ import {
 } from "./proxy-prefs.ts";
 import { discoverLocalProxies } from "./proxy-discover.ts";
 import { applyProcessPathAugmentation, augmentEnvPath } from "./shell-path.ts";
+import { ThemeLibrary } from "./theme-library.ts";
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "pix-theme",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
+]);
 
 // Packaged Dock/Finder launches get a minimal PATH. Augment before any snapshot of
 // process.env (LAUNCH_ENV) or child spawn so pi/node/npm resolve like in dev shells.
@@ -1675,6 +1685,8 @@ interface DesktopPrefs {
   lastWorkspace?: string;
   /** Last main window position / size. */
   window?: WindowBoundsPrefs;
+  /** Whole-app renderer scale as a percentage. */
+  appScale?: number;
   /** Absolute root for new git worktrees; empty/undefined = Documents/Pix/worktrees/<repo>. */
   worktreeRoot?: string;
   /** When false, disable auto-prune. Default / unset = enabled (recommended). */
@@ -1717,6 +1729,9 @@ interface DesktopPrefs {
 
 const WINDOW_MIN_WIDTH = 760;
 const WINDOW_MIN_HEIGHT = 560;
+const APP_SCALE_DEFAULT = 100;
+const APP_SCALE_MIN = 80;
+const APP_SCALE_MAX = 150;
 const WINDOW_DEFAULT_WIDTH = 1440;
 const WINDOW_DEFAULT_HEIGHT = 900;
 
@@ -1890,6 +1905,31 @@ function loadDesktopPrefs(): DesktopPrefs {
   } catch {
     return { recentWorkspaces: [] };
   }
+}
+
+function normalizeAppScale(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return APP_SCALE_DEFAULT;
+  return Math.min(APP_SCALE_MAX, Math.max(APP_SCALE_MIN, Math.round(raw)));
+}
+
+function getAppScale(): number {
+  return normalizeAppScale(loadDesktopPrefs().appScale);
+}
+
+function applyAppScale(win: BrowserWindow | null | undefined, scale: number): void {
+  if (!win || win.isDestroyed()) return;
+  try {
+    win.webContents.setZoomFactor(scale / 100);
+  } catch (error) {
+    console.warn("[pix] set app scale failed:", error);
+  }
+}
+
+function setAppScale(raw: unknown): number {
+  const scale = normalizeAppScale(raw);
+  saveDesktopPrefs({ ...loadDesktopPrefs(), appScale: scale });
+  applyAppScale(mainWindow, scale);
+  return scale;
 }
 
 function normalizeRecentPathKey(path: string): string {
@@ -4111,6 +4151,7 @@ class HostSupervisor {
 let mainWindow: BrowserWindow | undefined;
 let autoUpdate: AutoUpdateController | undefined;
 let supervisor: HostSupervisor | undefined;
+let themeLibrary: ThemeLibrary | undefined;
 
 /** App package root (apps/desktop) whether running from src or dist/main. */
 function packageRoot(): string {
@@ -4286,7 +4327,8 @@ async function createWindow(): Promise<void> {
   const iconPath = resolveAppIconPath();
   applyAppBranding();
 
-  const savedWindow = resolveWindowCreateOptions(loadDesktopPrefs().window);
+  const desktopPrefs = loadDesktopPrefs();
+  const savedWindow = resolveWindowCreateOptions(desktopPrefs.window);
   const chrome = titleBarChromeColors();
 
   mainWindow = new BrowserWindow({
@@ -4333,6 +4375,7 @@ async function createWindow(): Promise<void> {
       preload: join(currentDirectory, "..", "preload", "preload.cjs"),
     },
   });
+  applyAppScale(mainWindow, normalizeAppScale(desktopPrefs.appScale));
   attachWindowBoundsPersistence(mainWindow);
   const emitWindowState = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -4524,6 +4567,18 @@ void app
   .then(async () => {
     // Name + About/Dock icon (must be after ready for About panel iconPath on some builds).
     applyAppBranding();
+    themeLibrary = new ThemeLibrary(app.getPath("userData"));
+    protocol.handle("pix-theme", async (request) => {
+      try {
+        const url = new URL(request.url);
+        const assetPath =
+          url.pathname === "/background" ? themeLibrary?.backgroundPath(url.hostname) : undefined;
+        if (!assetPath) return new Response("Not found", { status: 404 });
+        return net.fetch(pathToFileURL(assetPath).toString());
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    });
     // App-channel proxy before any network from Chromium / main.
     await applyAppSessionProxy();
     // Default Electron File/Edit/View/Window menu is English-only and not product chrome.
@@ -4626,6 +4681,38 @@ void app
       }
       nativeTheme.themeSource = source;
       applyNonMacWindowChrome(mainWindow);
+    });
+    ipcMain.handle("pix:appearance:get-app-scale", () => getAppScale());
+    ipcMain.handle("pix:appearance:set-app-scale", (_event, scale: unknown) => setAppScale(scale));
+    const requireThemeLibrary = (): ThemeLibrary => {
+      if (!themeLibrary) throw new Error("Theme library is not ready");
+      return themeLibrary;
+    };
+    ipcMain.handle("pix:themes:list", () => requireThemeLibrary().list());
+    ipcMain.handle("pix:themes:activate", (_event, id: unknown) =>
+      requireThemeLibrary().activate(id),
+    );
+    ipcMain.handle("pix:themes:save", (_event, input: unknown) =>
+      requireThemeLibrary().save(input),
+    );
+    ipcMain.handle("pix:themes:remove", (_event, id: unknown) => requireThemeLibrary().remove(id));
+    ipcMain.handle("pix:themes:import-pick", async () => {
+      if (!mainWindow) return undefined;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: "Import Pix theme skin",
+        properties: ["openDirectory"],
+      });
+      if (result.canceled || !result.filePaths[0]) return undefined;
+      return requireThemeLibrary().importDirectory(result.filePaths[0]);
+    });
+    ipcMain.handle("pix:themes:export-pick", async (_event, id: unknown) => {
+      if (!mainWindow) return {};
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: "Export Pix theme skin",
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || !result.filePaths[0]) return {};
+      return { outputPath: requireThemeLibrary().exportDirectory(id, result.filePaths[0]) };
     });
     nativeTheme.on("updated", () => {
       applyNonMacWindowChrome(mainWindow);

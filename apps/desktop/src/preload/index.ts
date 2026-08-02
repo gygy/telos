@@ -79,6 +79,16 @@ const api: PixDesktopApi = {
   },
   appearance: {
     setThemeSource: (source) => ipcRenderer.invoke("pix:appearance:set-theme-source", source),
+    getAppScale: () => ipcRenderer.invoke("pix:appearance:get-app-scale"),
+    setAppScale: (scale) => ipcRenderer.invoke("pix:appearance:set-app-scale", scale),
+  },
+  themes: {
+    list: () => ipcRenderer.invoke("pix:themes:list"),
+    activate: (id) => ipcRenderer.invoke("pix:themes:activate", id),
+    save: (input) => ipcRenderer.invoke("pix:themes:save", input),
+    remove: (id) => ipcRenderer.invoke("pix:themes:remove", id),
+    importPick: () => ipcRenderer.invoke("pix:themes:import-pick"),
+    exportPick: (id) => ipcRenderer.invoke("pix:themes:export-pick", id),
   },
   host: {
     start: (options) => ipcRenderer.invoke("pix:host:start", options),

@@ -4,6 +4,7 @@ import {
   isThemePreference,
   nextThemePreference,
   resolveColorMode,
+  resolveNativeThemeSource,
 } from "./theme.ts";
 
 describe("resolveColorMode", () => {
@@ -34,5 +35,15 @@ describe("resolveColorMode", () => {
     expect(colorModeFromPiTheme("default")).toBe("light");
     expect(colorModeFromPiTheme("solarized")).toBeUndefined();
     expect(colorModeFromPiTheme(undefined)).toBeUndefined();
+  });
+
+  it("keeps Electron themeSource as system when preference and skin follow OS", () => {
+    expect(resolveNativeThemeSource("system", "auto")).toBe("system");
+    expect(resolveNativeThemeSource("system", undefined)).toBe("system");
+    expect(resolveNativeThemeSource("light", "auto")).toBe("light");
+    expect(resolveNativeThemeSource("dark", "auto")).toBe("dark");
+    expect(resolveNativeThemeSource("system", "dark")).toBe("dark");
+    expect(resolveNativeThemeSource("light", "dark")).toBe("dark");
+    expect(resolveNativeThemeSource("dark", "light")).toBe("light");
   });
 });

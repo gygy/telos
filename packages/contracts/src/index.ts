@@ -1435,6 +1435,106 @@ export type AppUpdateStatus = {
   checkedAt?: string;
 };
 
+/** Native desktop skin appearance policy. */
+export type ThemeSkinAppearance = "auto" | "light" | "dark";
+
+/** Named colors accepted by the native skin renderer. */
+export type ThemeSkinColors = Partial<{
+  background: string;
+  panel: string;
+  panelAlt: string;
+  accent: string;
+  accentAlt: string;
+  secondary: string;
+  highlight: string;
+  text: string;
+  muted: string;
+  line: string;
+}>;
+
+/** Per-light/dark overrides for a skin. */
+export type ThemeSkinVariant = {
+  background?: string;
+  colors?: ThemeSkinColors;
+  /** Compatibility bridge for Pix's original token-only theme packs. */
+  tokens?: Record<string, string>;
+};
+
+/** Wallpaper framing and the stronger task-page readability treatment. */
+export type ThemeSkinArt = Partial<{
+  focusX: number;
+  focusY: number;
+  zoom: number;
+  dim: number;
+  safeArea: "left" | "center" | "right";
+  taskIntensity: number;
+}>;
+
+/** Glass/material controls shared by Pix chrome. */
+export type ThemeSkinMaterials = Partial<{
+  sidebarOpacity: number;
+  pageOpacity: number;
+  panelOpacity: number;
+  blur: number;
+  radius: number;
+  borderAlpha: number;
+  shadow: "none" | "soft" | "strong";
+  density: "compact" | "standard" | "comfortable";
+}>;
+
+/** Portable Pix skin data. Background bytes are stored separately by the desktop shell. */
+export type ThemeSkinConfig = {
+  schemaVersion: 1;
+  id?: string;
+  name: string;
+  description?: string;
+  appearance?: ThemeSkinAppearance;
+  /** File name in an exported skin directory. Never interpreted as an arbitrary path. */
+  image?: string;
+  colors?: ThemeSkinColors;
+  light?: ThemeSkinVariant;
+  dark?: ThemeSkinVariant;
+  art?: ThemeSkinArt;
+  materials?: ThemeSkinMaterials;
+  /** Scoped, resource-free CSS validated by the desktop shell before persistence. */
+  customCss?: string;
+};
+
+/** A saved user skin plus the renderer-safe URL for its managed background asset. */
+export type ThemeSkinRecord = {
+  id: string;
+  config: ThemeSkinConfig;
+  createdAt: string;
+  updatedAt: string;
+  backgroundUrl?: string;
+  /** Bundled wallpaper retained by a custom copy of an editable built-in skin. */
+  backgroundBuiltinId?: string;
+};
+
+export type ThemeLibrarySnapshot = {
+  activeId: string;
+  skins: ThemeSkinRecord[];
+};
+
+export type ThemeSkinSaveInput = {
+  /**
+   * Existing custom skin id (`skin-<uuid>`), or a built-in preset id to edit that
+   * preset in place. Omit to create a brand-new custom skin.
+   */
+  id?: string;
+  config: ThemeSkinConfig;
+  /** Absolute source selected through Electron's file picker; copied into userData by main. */
+  backgroundPath?: string;
+  /** Built-in wallpaper retained when a skin keeps factory art (including in-place built-in edits). */
+  backgroundBuiltinId?: string;
+  /** Removes the managed background instead of retaining it. */
+  removeBackground?: boolean;
+};
+
+export type ThemeSkinExportResult = {
+  outputPath?: string;
+};
+
 export interface PixDesktopApi {
   app: {
     /** OS platform + packaging flags for chrome layout / dev tools. */
@@ -1544,6 +1644,21 @@ export interface PixDesktopApi {
   appearance: {
     /** Keep native window materials aligned with the renderer theme. */
     setThemeSource(source: "light" | "dark" | "system"): Promise<void>;
+    /** Whole-app scale as a percentage, persisted by the desktop shell. */
+    getAppScale(): Promise<number>;
+    /** Apply and persist a whole-app scale percentage. */
+    setAppScale(scale: number): Promise<number>;
+  };
+  /** User-owned desktop skins and their managed wallpaper assets. */
+  themes: {
+    list(): Promise<ThemeLibrarySnapshot>;
+    activate(id: string): Promise<ThemeLibrarySnapshot>;
+    save(input: ThemeSkinSaveInput): Promise<ThemeLibrarySnapshot>;
+    remove(id: string): Promise<ThemeLibrarySnapshot>;
+    /** Choose a directory containing theme.json and an optional background image. */
+    importPick(): Promise<ThemeLibrarySnapshot | undefined>;
+    /** Export the selected skin into a new portable directory. */
+    exportPick(id: string): Promise<ThemeSkinExportResult>;
   };
   host: {
     start(options?: {

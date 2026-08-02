@@ -425,7 +425,166 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("light");
     await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(0);
-    await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
+
+    const zhangRuonanCard = page.getByTestId("appearance-theme-skin-zhang-ruonan");
+    const themeTrack = page.locator(".theme-skin-grid");
+    await expect
+      .poll(() =>
+        themeTrack.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return `${style.display}:${style.flexWrap}:${style.overflowX}`;
+        }),
+      )
+      .toBe("flex:nowrap:auto");
+    await expect(zhangRuonanCard.locator(".theme-skin-card-art")).toHaveCSS(
+      "background-image",
+      /zhang-ruonan/,
+    );
+    await zhangRuonanCard.click();
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme", "light");
+    await expect
+      .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
+      .toBe("light");
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--primary")))
+      .toBe("#cb5770");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
+        ),
+      )
+      .toContain("zhang-ruonan");
+    await expect(page.getByTestId("skin-wallpaper")).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.style.getPropertyValue("--skin-blur")),
+      )
+      .toBe("0px");
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
+    await expect(page.getByTestId("appearance-theme-skin-edit")).toBeVisible();
+    await expect(page.getByTestId("appearance-theme-skin-delete")).toHaveCount(0);
+
+    await page.getByTestId("appearance-theme-skin-new").click();
+    await expect(page.getByTestId("appearance-theme-skin-studio")).toBeVisible();
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
+    const studio = page.getByTestId("appearance-theme-skin-studio");
+    await expect
+      .poll(() =>
+        studio.evaluate((element) =>
+          getComputedStyle(element).getPropertyValue("--theme-dialog-background").trim(),
+        ),
+      )
+      .toBe("#f7fffc");
+    await expect(studio).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    const themePreview = studio.locator(".theme-skin-preview-app");
+    await expect(themePreview).toBeVisible();
+    await expect(themePreview.getByTestId("theme-skin-preview-empty-hero")).toBeVisible();
+    await expect(themePreview.locator(".theme-skin-preview-empty-logo")).toBeVisible();
+    await expect(themePreview.locator(".theme-skin-preview-composer-dock")).toBeVisible();
+    await expect(themePreview.locator(".theme-skin-preview-timeline")).toHaveCount(0);
+    await studio
+      .locator(".theme-skin-mode-switch button")
+      .filter({ hasText: /Dark|深色/ })
+      .click();
+    await expect(studio).toHaveAttribute("data-dialog-mode", "light");
+    await expect(studio.locator(".theme-skin-studio-preview")).toHaveAttribute(
+      "data-preview-mode",
+      "dark",
+    );
+    await expect
+      .poll(() =>
+        studio.evaluate((element) =>
+          getComputedStyle(element).getPropertyValue("--theme-dialog-background").trim(),
+        ),
+      )
+      .toBe("#f7fffc");
+    await studio
+      .locator(".theme-skin-mode-switch button")
+      .filter({ hasText: /Light|浅色/ })
+      .click();
+    await page.getByTestId("appearance-theme-skin-name").fill("E2E glass room");
+    await page
+      .getByTestId("appearance-theme-skin-background-file")
+      .setInputFiles(resolve(import.meta.dirname, "..", "build", "icon.png"));
+    await expect(page.getByTestId("appearance-theme-skin-logo-file")).toHaveCount(0);
+    await page.getByTestId("appearance-theme-skin-tab-css").click();
+    await expect(page.getByTestId("appearance-theme-skin-tab-css")).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    const customCssEditor = page.getByTestId("appearance-theme-skin-custom-css");
+    await expect(customCssEditor).toBeVisible();
+    const cssVariableSelect = page.getByTestId("appearance-theme-skin-css-variable");
+    await expect(cssVariableSelect).toBeVisible();
+    await cssVariableSelect.click();
+    const primaryVariable = page.getByTestId("appearance-theme-skin-css-variable-primary");
+    await expect(primaryVariable).toBeVisible();
+    await expect(primaryVariable).toContainText("var(--primary)");
+    await expect(primaryVariable).toContainText(/主操作与高亮色|Primary actions and highlights/);
+    // Trigger uses appearance-theme-skin-css-variable; items use ...-css-variable-<name>.
+    await expect(page.locator('[data-testid^="appearance-theme-skin-css-variable-"]')).toHaveCount(
+      35,
+    );
+    await expect(
+      page.getByText(/规则已限制在 Pix 主题表面|Rules are scoped to Pix theme surfaces/),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await customCssEditor.fill(".composer-card { border-radius: 27px; background: ; }");
+    await customCssEditor.evaluate((element) => {
+      const input = element as HTMLTextAreaElement;
+      const position = input.value.lastIndexOf(";");
+      input.focus();
+      input.setSelectionRange(position, position);
+    });
+    await cssVariableSelect.click();
+    await primaryVariable.click();
+    await expect(customCssEditor).toHaveValue(
+      ".composer-card { border-radius: 27px; background: var(--primary); }",
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
+        ),
+      )
+      .toContain("blob:");
+    await expect
+      .poll(() => page.locator("#pix-theme-custom-css").textContent())
+      .toContain('html[data-theme-skin-active="true"] .composer-card');
+    await expect(page.getByTestId("appearance-theme-skin-tab-file")).toHaveCount(0);
+    await expect(page.getByTestId("appearance-theme-skin-file-preview")).toHaveCount(0);
+    await page.getByTestId("appearance-theme-skin-save").click();
+    await expect(page.getByTestId("appearance-theme-skin-studio")).toBeHidden();
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", /^skin-/);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
+        ),
+      )
+      .toContain("pix-theme://");
+    await expect
+      .poll(() =>
+        themeTrack.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return (
+            style.display === "flex" && style.flexWrap === "nowrap" && style.overflowX === "auto"
+          );
+        }),
+      )
+      .toBe(true);
+    await expect(page.getByTestId("appearance-theme-skin-delete")).toBeVisible();
+    await expect
+      .poll(() =>
+        themeTrack.locator(".theme-skin-card").evaluateAll((cards) => {
+          const ids = cards.map((card) => card.getAttribute("data-testid"));
+          return ids.findIndex((id) => id?.startsWith("appearance-theme-skin-skin-"));
+        }),
+      )
+      .toBe(0);
 
     await page.getByTestId("appearance-translucent").click();
     await expect(page.getByTestId("sidebar")).toHaveAttribute("data-translucent", "false");
@@ -440,8 +599,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect
       .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("dark");
-    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(0);
-    await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
     await page.getByTestId("settings-back").click();
 
     await page.getByTestId("open-palette").click();

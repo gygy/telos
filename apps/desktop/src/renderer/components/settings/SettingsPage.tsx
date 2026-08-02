@@ -18,6 +18,7 @@ import type {
   ProviderOAuthPrompt,
   ProviderOAuthUpdate,
   ProviderUsageSnapshot,
+  ThemeLibrarySnapshot,
 } from "@pix/contracts";
 import {
   Check,
@@ -126,10 +127,12 @@ import {
   type AppearancePrefs,
 } from "../../lib/appearance-prefs.ts";
 import type { ThemePreference } from "../../lib/theme.ts";
+import type { ThemePreview, ThemeSelection } from "../../lib/theme-packs.ts";
 import { cn } from "../../lib/utils.ts";
 import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace.ts";
 import { useShellStore, type SettingsSection } from "../../store/shell-store.ts";
 import { PiSdkSection } from "./PiSdkSection.tsx";
+import { ThemeSkinStudio } from "./ThemeSkinStudio.tsx";
 import {
   Command,
   CommandEmpty,
@@ -164,6 +167,8 @@ export interface SettingsPageProps {
   section: SettingsSection;
   colorMode: "light" | "dark";
   themePreference: ThemePreference;
+  themeSelection: ThemeSelection;
+  themeLibrary: ThemeLibrarySnapshot;
   sidebarTranslucent: boolean;
   sidebarWidthPx: number;
   /** Which composer permission options are shown (independent toggles). */
@@ -181,10 +186,20 @@ export interface SettingsPageProps {
   onSnapshot: (snapshot: HostSnapshot) => void;
   onLocale: (locale: Locale) => void;
   onThemePreference: (mode: ThemePreference) => void;
+  onThemeSelection: (selection: ThemeSelection) => void;
+  onThemeLibrary: (library: ThemeLibrarySnapshot) => void;
+  onThemePreview: (preview: ThemePreview | undefined) => void;
   onTranslucent: (value: boolean) => void;
   onSidebarWidth: (px: number) => void;
   onToggleTrust: () => void;
 }
+
+const APP_SCALE_MIN = 80;
+const APP_SCALE_MAX = 150;
+const APP_SCALE_OPTIONS = Array.from(
+  { length: (APP_SCALE_MAX - APP_SCALE_MIN) / 10 + 1 },
+  (_, index) => APP_SCALE_MIN + index * 10,
+);
 
 export function SettingsPage(props: SettingsPageProps) {
   const tr = (key: MessageKey, vars?: Record<string, string>) => t(props.locale, key, vars);
@@ -2490,9 +2505,38 @@ function AppearanceSection(
 ) {
   const { tr } = props;
   const [prefs, setPrefs] = useState<AppearancePrefs>(loadAppearancePrefs);
+  const [appScale, setAppScale] = useState(100);
+  const appScaleRequestRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const request = ++appScaleRequestRef.current;
+    void window.pix.appearance
+      .getAppScale()
+      .then((scale) => {
+        if (!cancelled && request === appScaleRequestRef.current) setAppScale(scale);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function update(patch: Partial<AppearancePrefs>) {
     setPrefs(patchAppearancePrefs(patch));
+  }
+
+  function updateAppScale(value: string) {
+    const scale = Number(value);
+    if (!Number.isFinite(scale)) return;
+    const request = ++appScaleRequestRef.current;
+    setAppScale(scale);
+    void window.pix.appearance
+      .setAppScale(scale)
+      .then((savedScale) => {
+        if (request === appScaleRequestRef.current) setAppScale(savedScale);
+      })
+      .catch(() => undefined);
   }
 
   const uiFontOptions = Array.from({ length: UI_FONT_SIZE_MAX - UI_FONT_SIZE_MIN + 1 }, (_, i) => {
@@ -2523,6 +2567,39 @@ function AppearanceSection(
                 { value: "dark", label: tr("appearance.themeDark") },
                 { value: "light", label: tr("appearance.themeLight") },
               ]}
+            />
+          }
+          last
+        />
+      </SettingsSectionBlock>
+
+      <ThemeSkinStudio
+        locale={props.locale}
+        colorMode={props.colorMode}
+        selection={props.themeSelection}
+        library={props.themeLibrary}
+        onSelection={props.onThemeSelection}
+        onLibrary={props.onThemeLibrary}
+        onPreview={props.onThemePreview}
+      />
+
+      <SettingsSectionBlock label={tr("appearance.appScaleSection")}>
+        <SettingsRow
+          title={tr("appearance.appScale")}
+          description={tr("appearance.appScaleHint", {
+            min: String(APP_SCALE_MIN),
+            max: String(APP_SCALE_MAX),
+          })}
+          control={
+            <SettingsSelect
+              value={String(appScale)}
+              onChange={updateAppScale}
+              options={APP_SCALE_OPTIONS.map((scale) => ({
+                value: String(scale),
+                label: `${scale}%`,
+              }))}
+              testId="appearance-app-scale"
+              size="sm"
             />
           }
           last
@@ -3279,7 +3356,10 @@ function isPiCatalogModel(model: ModelSummary): model is PiCatalogModel {
   );
 }
 
-function findCatalogModelForId(catalog: PiCatalogModel[], modelId: string): PiCatalogModel | undefined {
+function findCatalogModelForId(
+  catalog: PiCatalogModel[],
+  modelId: string,
+): PiCatalogModel | undefined {
   const matches = catalog.filter((model) => model.id === modelId);
   return matches.length === 1 ? matches[0] : undefined;
 }
@@ -4207,7 +4287,9 @@ function ModelsSectionContent(
                                           chooseCatalogModel(model);
                                         }}
                                       >
-                                        <span className="min-w-0 truncate font-mono">{model.id}</span>
+                                        <span className="min-w-0 truncate font-mono">
+                                          {model.id}
+                                        </span>
                                         <CommandShortcut>{model.provider}</CommandShortcut>
                                       </CommandItem>
                                     ))}

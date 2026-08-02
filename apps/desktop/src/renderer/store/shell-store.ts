@@ -13,6 +13,7 @@ import type {
   RuntimeEvent,
   SessionHistoryMessage,
   SessionThreadSummary,
+  ThemeLibrarySnapshot,
 } from "@pix/contracts";
 import { create } from "zustand";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "../lib/i18n.ts";
@@ -40,6 +41,13 @@ import {
   type ResolvedColorMode,
   type ThemePreference,
 } from "../lib/theme.ts";
+import {
+  EMPTY_THEME_LIBRARY,
+  loadThemeSelection,
+  saveThemeSelection,
+  type ThemePreview,
+  type ThemeSelection,
+} from "../lib/theme-packs.ts";
 import {
   loadContentMode,
   saveContentMode,
@@ -154,6 +162,11 @@ export interface ShellState {
   resolvedColorMode: ResolvedColorMode;
   /** Resolved appearance applied to data-theme (alias of resolvedColorMode). */
   colorMode: ResolvedColorMode;
+  /** Persisted active skin id; skin data itself lives in Electron userData. */
+  themeSelection: ThemeSelection;
+  themeLibrary: ThemeLibrarySnapshot;
+  /** Ephemeral Studio state, never written to the theme library until the user saves it. */
+  themePreview: ThemePreview | undefined;
   paletteOpen: boolean;
   runtimeId: string | undefined;
   lastSequence: number;
@@ -235,6 +248,9 @@ export interface ShellState {
   setResources: (resources: ResourceSummary[]) => void;
   setEcoLoading: (loading: boolean) => void;
   setThemePreference: (preference: ThemePreference) => void;
+  setThemeSelection: (selection: ThemeSelection) => void;
+  setThemeLibrary: (library: ThemeLibrarySnapshot) => void;
+  setThemePreview: (preview: ThemePreview | undefined) => void;
   /** @deprecated use setThemePreference */
   setColorMode: (mode: ThemePreference) => void;
   /** Cycles system → light → dark. */
@@ -398,6 +414,9 @@ export const useShellStore = create<ShellState>((set, get) => ({
   resources: [],
   ecoLoading: false,
   ...themeState(loadThemePreference()),
+  themeSelection: loadThemeSelection(),
+  themeLibrary: EMPTY_THEME_LIBRARY,
+  themePreview: undefined,
   paletteOpen: false,
   runtimeId: undefined,
   lastSequence: 0,
@@ -701,6 +720,11 @@ export const useShellStore = create<ShellState>((set, get) => ({
     savePref("pix.colorMode", preference);
     set(themeState(preference));
   },
+  setThemeSelection: (selection) => {
+    set({ themeSelection: saveThemeSelection(selection) });
+  },
+  setThemeLibrary: (themeLibrary) => set({ themeLibrary }),
+  setThemePreview: (themePreview) => set({ themePreview }),
   setColorMode: (preference) => {
     get().setThemePreference(preference);
   },
