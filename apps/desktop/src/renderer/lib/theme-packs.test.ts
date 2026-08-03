@@ -7,15 +7,37 @@ import {
   BUILTIN_THEME_BACKGROUNDS,
   createThemeSkinDraft,
   DEFAULT_THEME_SELECTION,
+  isGlassThemeMaterials,
+  isSidebarGlassSkin,
   loadThemeSelection,
   MATERIAL_DEFAULTS,
   parseThemePackJson,
-  resolveSkinColorMode,
+  resolveSidebarMaterialGlass,
   resolveThemeVariant,
   saveThemeSelection,
+  themeEditorPreview,
   THEME_IMAGE_PRESET_IDS,
+  THEME_PRESET_IDS,
   THEME_PRESETS,
 } from "./theme-packs.ts";
+
+function contrastRatio(foreground: string | undefined, background: string | undefined): number {
+  const luminance = (value: string | undefined) => {
+    const match = value?.match(/^#([0-9a-f]{6})$/i);
+    if (!match) throw new Error(`Expected a six-digit hex color, received ${String(value)}`);
+    const channels = match[1]!
+      .match(/../g)!
+      .map((part) => Number.parseInt(part, 16) / 255)
+      .map((part) => (part <= 0.04045 ? part / 12.92 : ((part + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+  };
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
 
 describe("theme-packs", () => {
   let storage: Map<string, string>;
@@ -124,14 +146,8 @@ describe("theme-packs", () => {
     });
   });
 
-  it("ships classic defaults and image presets with adaptive palettes", () => {
-    expect(THEME_PRESETS["classic-light"].appearance).toBe("light");
-    expect(THEME_PRESETS["classic-dark"].appearance).toBe("dark");
-    expect(THEME_PRESETS["classic-light"].light?.tokens?.background).toBe("#ffffff");
-    expect(THEME_PRESETS["classic-dark"].dark?.tokens?.background).toBe("#191919");
-    expect(THEME_PRESETS["classic-light"].materials?.pageOpacity).toBe(1);
-    expect(THEME_PRESETS["classic-dark"].materials?.blur).toBe(0);
-
+  it("ships image presets with adaptive palettes", () => {
+    expect(THEME_PRESET_IDS).toEqual(THEME_IMAGE_PRESET_IDS);
     for (const id of THEME_IMAGE_PRESET_IDS) {
       expect(THEME_PRESETS[id].appearance).toBe("auto");
       expect(THEME_PRESETS[id].light?.colors?.text).toBeTruthy();
@@ -157,6 +173,13 @@ describe("theme-packs", () => {
     ).toThrow("external resources");
   });
 
+  it("ignores the removed per-skin translucent sidebar setting", () => {
+    const parsed = parseThemePackJson(
+      '{"schemaVersion":1,"name":"Legacy","sidebarTranslucent":true}',
+    );
+    expect(parsed).not.toHaveProperty("sidebarTranslucent");
+  });
+
   it("persists only the active skin id and migrates an old preset selection", () => {
     expect(saveThemeSelection({ id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" })).toEqual({
       id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -165,9 +188,14 @@ describe("theme-packs", () => {
 
     storage.set("pix.theme.selection.v2", JSON.stringify({ presetId: "lagoon" }));
     expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
+
+    storage.set("pix.theme.selection.v2", JSON.stringify({ id: "classic-light" }));
+    expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
+    storage.set("pix.theme.selection.v2", JSON.stringify({ presetId: "classic-dark" }));
+    expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
   });
 
-  it("applies saved and built-in wallpaper skins as native materials", () => {
+  it("applies saved skins and fully clears them when returning to default", () => {
     const skin: ThemeSkinRecord = {
       id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -187,6 +215,8 @@ describe("theme-packs", () => {
     applyThemeSelection({ id: skin.id }, "dark", [skin]);
     expect(dataset.themeSkin).toBe(skin.id);
     expect(dataset.themeSkinActive).toBe("true");
+    expect(dataset.themeSkinSidebarTranslucent).toBe("false");
+    expect(dataset.themeSkinSidebarGlass).toBe("true");
     expect(styles.get("--skin-wallpaper-image")).toContain("pix-theme://");
     expect(styles.get("--skin-blur")).toBe("24px");
     expect(styles.get("--primary")).toBe("#4fd1c5");
@@ -196,13 +226,52 @@ describe("theme-packs", () => {
       'html[data-theme-skin-active="true"] .composer-card',
     );
 
+    applyThemeSelection({ id: skin.id }, "dark", [skin], undefined, true);
+    expect(dataset.themeSkinSidebarTranslucent).toBe("true");
+    expect(dataset.themeSkinSidebarGlass).toBe("false");
+
     applyThemeSelection(DEFAULT_THEME_SELECTION, "light");
-    expect(dataset.themeSkin).toBe("miku-stage");
-    expect(dataset.themeSkinActive).toBe("true");
-    expect(styles.get("--skin-wallpaper-image")).toContain("miku-stage.jpg");
-    expect(styles.get("--primary")).toBe("#169ba8");
-    expect(dataset.themeSkinDensity).toBe("standard");
+    expect(dataset.theme).toBe("light");
+    expect(dataset.themeSkin).toBeUndefined();
+    expect(dataset.themeSkinActive).toBeUndefined();
+    expect(dataset.themeSkinMode).toBeUndefined();
+    expect(dataset.themeSkinSafeArea).toBeUndefined();
+    expect(dataset.themeSkinDensity).toBeUndefined();
+    expect(dataset.themeSkinSidebarTranslucent).toBeUndefined();
+    expect(dataset.themeSkinSidebarGlass).toBeUndefined();
+    expect(styles.get("--skin-wallpaper-image")).toBeUndefined();
+    expect(styles.get("--primary")).toBeUndefined();
     expect(customStyle).toBeUndefined();
+
+    applyThemeSelection(DEFAULT_THEME_SELECTION, "dark");
+    expect(dataset.theme).toBe("dark");
+    expect(styles.size).toBe(0);
+  });
+
+  it("derives readable semantic foregrounds without using text colors as fills", () => {
+    for (const id of THEME_IMAGE_PRESET_IDS) {
+      for (const mode of ["light", "dark"] as const) {
+        applyThemeSelection({ id }, mode);
+        expect(styles.get("--muted")).toBe(styles.get("--surface-muted"));
+        expect(styles.get("--muted")).not.toBe(styles.get("--muted-foreground"));
+        expect(styles.get("--hover-fill")).toBe(styles.get("--surface-muted"));
+        expect(styles.get("--accent")).toBe(styles.get("--surface-muted"));
+
+        for (const [foreground, background] of [
+          ["--primary-foreground", "--primary"],
+          ["--secondary-foreground", "--secondary"],
+          ["--muted-foreground", "--muted"],
+          ["--hover-fill-foreground", "--hover-fill"],
+          ["--user-bubble-fg", "--user-bubble"],
+          ["--code-fg", "--code-bg"],
+          ["--link", "--background"],
+        ] as const) {
+          expect(
+            contrastRatio(styles.get(foreground), styles.get(background)),
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
   });
 
   it("applies legacy CSS-variable token aliases without exposing arbitrary variables", () => {
@@ -223,13 +292,46 @@ describe("theme-packs", () => {
     expect(styles.get("undefined")).toBeUndefined();
   });
 
+  it("uses CSS-variable aliases in both material chrome and studio previews", () => {
+    const config = {
+      schemaVersion: 1 as const,
+      name: "Token aliases",
+      light: {
+        tokens: {
+          "--background": "#f8fafc",
+          "--surface-panel": "#dbeafe",
+          "--foreground": "#172554",
+          "--primary": "#1d4ed8",
+          "--sidebar": "#eff6ff",
+          "--sidebar-border": "#93c5fd",
+          "--composer-border": "#60a5fa",
+        },
+      },
+    };
+    const preview = themeEditorPreview(config, "light");
+    expect(preview.backgroundSolid).toBe("#f8fafc");
+    expect(preview.surface).toBe("#dbeafe");
+    expect(preview.text).toBe("#172554");
+    expect(preview.primary).toBe("#1d4ed8");
+    expect(contrastRatio(preview.primaryForeground, preview.primary)).toBeGreaterThanOrEqual(4.5);
+    expect(preview.sidebar).toBe("#eff6ff");
+    expect(preview.sidebarMaterialBorder).toBe("#93c5fd");
+    expect(preview.composerMaterialBorder).toBe("#60a5fa");
+
+    applyThemeSelection({ id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" }, "light", [
+      {
+        id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        config,
+      },
+    ]);
+    expect(styles.get("--skin-panel-rgb")).toBe("219 234 254");
+    expect(styles.get("--skin-sidebar-border")).toBe("#93c5fd");
+    expect(styles.get("--skin-composer-border")).toBe("#60a5fa");
+  });
+
   it("resolves built-ins and a saved library record without leaking unknown ids", () => {
-    expect(activeThemePack({ id: "classic-light" })).toEqual({
-      config: THEME_PRESETS["classic-light"],
-    });
-    expect(activeThemePack({ id: "classic-dark" })).toEqual({
-      config: THEME_PRESETS["classic-dark"],
-    });
     for (const id of THEME_IMAGE_PRESET_IDS) {
       expect(activeThemePack({ id })).toEqual({
         config: THEME_PRESETS[id],
@@ -242,27 +344,34 @@ describe("theme-packs", () => {
     });
   });
 
-  it("forces classic light/dark appearance regardless of shell color mode", () => {
-    expect(resolveSkinColorMode(THEME_PRESETS["classic-light"], "dark")).toBe("light");
-    expect(resolveSkinColorMode(THEME_PRESETS["classic-dark"], "light")).toBe("dark");
+  it("keeps the outer native translucent setting and material opacity mutually exclusive", () => {
+    expect(isSidebarGlassSkin(THEME_PRESETS["miku-stage"].materials)).toBe(true);
+    expect(resolveSidebarMaterialGlass(THEME_PRESETS["miku-stage"], false)).toBe(true);
+    expect(resolveSidebarMaterialGlass(THEME_PRESETS["miku-stage"], true)).toBe(false);
+    expect(isSidebarGlassSkin({ sidebarOpacity: 1, blur: 36 })).toBe(false);
   });
 
-  it("applies classic tokens without a wallpaper image", () => {
-    applyThemeSelection({ id: "classic-light" }, "dark");
-    expect(dataset.themeSkin).toBe("classic-light");
-    expect(dataset.theme).toBe("light");
-    expect(styles.get("--skin-wallpaper-image")).toBe("none");
-    expect(styles.get("--background")).toBe("#ffffff");
-    expect(styles.get("--primary")).toBe("#171717");
-    expect(styles.get("--skin-page-opacity")).toBe("1");
-
-    applyThemeSelection({ id: "classic-dark" }, "light");
-    expect(dataset.themeSkin).toBe("classic-dark");
-    expect(dataset.theme).toBe("dark");
-    expect(styles.get("--skin-wallpaper-image")).toBe("none");
-    expect(styles.get("--background")).toBe("#191919");
-    expect(styles.get("--link")).toBe("#379cfc");
-    expect(styles.get("--skin-blur")).toBe("0px");
+  it("marks image skins as glass in the studio preview", () => {
+    expect(isGlassThemeMaterials(THEME_PRESETS["miku-stage"].materials, true)).toBe(true);
+    expect(isSidebarGlassSkin(THEME_PRESETS["miku-stage"].materials)).toBe(true);
+    const mikuLight = themeEditorPreview(THEME_PRESETS["miku-stage"], "light", {
+      hasWallpaper: true,
+    });
+    expect(mikuLight.glass).toBe(true);
+    expect(mikuLight.sidebarTranslucent).toBe(false);
+    expect(mikuLight.sidebarGlass).toBe(true);
+    expect(mikuLight.surface).toBe("#f3fffc");
+    const nativeMikuLight = themeEditorPreview(THEME_PRESETS["miku-stage"], "light", {
+      hasWallpaper: true,
+      sidebarTranslucent: true,
+    });
+    expect(nativeMikuLight.sidebarTranslucent).toBe(true);
+    expect(nativeMikuLight.sidebarGlass).toBe(false);
+    const mikuDark = themeEditorPreview(THEME_PRESETS["miku-stage"], "dark", {
+      hasWallpaper: true,
+    });
+    expect(mikuDark.surface).toBe("#12343b");
+    expect(mikuDark.text).toBe("#eefffd");
   });
 
   it("keeps the selected bundled wallpaper for an editable built-in copy", () => {

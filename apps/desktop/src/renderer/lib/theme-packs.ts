@@ -55,22 +55,21 @@ export type ThemeTokens = Partial<Record<ThemeTokenName, string>>;
 export type ThemePack = ThemeSkinConfig;
 export type ThemeSelection = { id: string };
 export type ThemePreview = Pick<ThemeSkinRecord, "config" | "backgroundUrl">;
+/** Special selection that leaves the original light/dark shell completely unskinned. */
+export const DEFAULT_THEME_ID = "default" as const;
 /** Built-in skins that ship with a bundled wallpaper. */
 export type ThemeImagePresetId = "miku-stage" | "venom-noir" | "zhang-ruonan";
-export type ThemePresetId = "classic-light" | "classic-dark" | ThemeImagePresetId;
+export type ThemePresetId = ThemeImagePresetId;
 
 export const THEME_IMAGE_PRESET_IDS: readonly ThemeImagePresetId[] = [
   "miku-stage",
   "venom-noir",
   "zhang-ruonan",
 ];
-export const THEME_PRESET_IDS: readonly ThemePresetId[] = [
-  "classic-light",
-  "classic-dark",
-  ...THEME_IMAGE_PRESET_IDS,
-];
+export const THEME_PRESET_IDS: readonly ThemePresetId[] = [...THEME_IMAGE_PRESET_IDS];
+/** Fallback only for invalid skin ids; the product default is the unskinned shell. */
 export const DEFAULT_THEME_PRESET_ID: ThemePresetId = "miku-stage";
-export const DEFAULT_THEME_SELECTION: ThemeSelection = { id: DEFAULT_THEME_PRESET_ID };
+export const DEFAULT_THEME_SELECTION: ThemeSelection = { id: DEFAULT_THEME_ID };
 
 export const BUILTIN_THEME_BACKGROUNDS: Record<ThemeImagePresetId, string> = {
   "miku-stage": mikuStageUrl,
@@ -80,6 +79,8 @@ export const BUILTIN_THEME_BACKGROUNDS: Record<ThemeImagePresetId, string> = {
 
 const BUILTIN_BACKGROUND_URLS = new Set(Object.values(BUILTIN_THEME_BACKGROUNDS));
 const LEGACY_THEME_PRESET_IDS = new Set([
+  "classic-light",
+  "classic-dark",
   "neutral",
   "lagoon",
   "cinder",
@@ -123,154 +124,7 @@ export const MATERIAL_DEFAULTS: Required<ThemeSkinMaterials> = {
   density: "standard",
 };
 
-/** Opaque chrome matching pre-skin shell (no wallpaper translucency). */
-const CLASSIC_ART = {
-  focusX: 0.5,
-  focusY: 0.5,
-  zoom: 1,
-  dim: 0,
-  safeArea: "center" as const,
-  taskIntensity: 0,
-};
-
-const CLASSIC_MATERIALS: Required<ThemeSkinMaterials> = {
-  sidebarOpacity: 1,
-  pageOpacity: 1,
-  panelOpacity: 1,
-  blur: 0,
-  radius: 12,
-  borderAlpha: 0.22,
-  shadow: "none",
-  density: "standard",
-};
-
-/** Pre-skin light shell tokens from `styles.css` `[data-theme="light"]`. */
-const CLASSIC_LIGHT_TOKENS: ThemeTokens = {
-  background: "#ffffff",
-  foreground: "#171717",
-  surfacePanel: "#ffffff",
-  surfaceMuted: "#f6f6f6",
-  surfaceSoft: "#f5f5f5",
-  primary: "#171717",
-  primaryForeground: "#fafafa",
-  secondary: "#f6f6f6",
-  secondaryForeground: "#171717",
-  muted: "#f1f2f4",
-  mutedForeground: "#808182",
-  hoverFill: "#f6f6f6",
-  hoverFillForeground: "#171717",
-  accent: "#f6f6f6",
-  accentForeground: "#171717",
-  destructive: "#dc2626",
-  border: "#d7d9e0",
-  borderSubtle: "color-mix(in srgb, #9aa0ab 30%, #ffffff)",
-  divider: "color-mix(in srgb, #9aa0ab 24%, #ffffff)",
-  input: "#d7d9e0",
-  ring: "#0a84ff",
-  link: "#379cfc",
-  switchOn: "#379cfc",
-  sidebar: "#f1f2f4",
-  sidebarForeground: "#171717",
-  sidebarPrimary: "#171717",
-  sidebarPrimaryForeground: "#fafafa",
-  sidebarBorder: "#cdd0d8",
-  sidebarRing: "#0a84ff",
-  composerBorder: "color-mix(in srgb, #9aa0ab 36%, #ffffff)",
-  composerProtrusion: "#f5f5f5",
-  userBubble: "#f5f5f5",
-  userBubbleForeground: "#171717",
-  codeBg: "#f1f2f4",
-  codeFg: "#171717",
-};
-
-/** Pre-skin dark shell tokens from `styles.css` `:root` / `[data-theme="dark"]`. */
-const CLASSIC_DARK_TOKENS: ThemeTokens = {
-  background: "#191919",
-  foreground: "oklch(0.985 0.004 260)",
-  surfacePanel: "#2d2d2d",
-  surfaceMuted: "#383838",
-  surfaceSoft: "#272727",
-  primary: "oklch(0.72 0.12 255)",
-  primaryForeground: "oklch(0.18 0.01 260)",
-  secondary: "#383838",
-  secondaryForeground: "oklch(0.985 0.004 260)",
-  muted: "#222222",
-  mutedForeground: "#acacac",
-  hoverFill: "#383838",
-  hoverFillForeground: "oklch(0.985 0.004 260)",
-  accent: "#383838",
-  accentForeground: "oklch(0.985 0.004 260)",
-  destructive: "oklch(0.72 0.17 25)",
-  border: "#3c3c3c",
-  borderSubtle: "color-mix(in srgb, #ffffff 11%, transparent)",
-  divider: "color-mix(in srgb, #ffffff 9%, transparent)",
-  input: "#3c3c3c",
-  ring: "oklch(0.62 0.09 255)",
-  link: "#379cfc",
-  switchOn: "#379cfc",
-  sidebar: "#151515",
-  sidebarForeground: "oklch(0.985 0.004 260)",
-  sidebarPrimary: "oklch(0.72 0.12 255)",
-  sidebarPrimaryForeground: "oklch(0.18 0.01 260)",
-  sidebarBorder: "#383838",
-  sidebarRing: "oklch(0.62 0.09 255)",
-  composerBorder: "color-mix(in srgb, #ffffff 11%, #2d2d2d)",
-  composerProtrusion: "#212121",
-  userBubble: "#272727",
-  userBubbleForeground: "oklch(0.985 0.004 260)",
-  codeBg: "#0f0f0f",
-  codeFg: "#e8e8e2",
-};
-
 export const THEME_PRESETS: Record<ThemePresetId, ThemePack> = {
-  "classic-light": {
-    schemaVersion: 1,
-    id: "classic-light",
-    name: "默认亮色",
-    appearance: "light",
-    art: { ...CLASSIC_ART },
-    materials: { ...CLASSIC_MATERIALS },
-    light: {
-      background: "#ffffff",
-      colors: {
-        background: "#ffffff",
-        panel: "#ffffff",
-        panelAlt: "#f6f6f6",
-        accent: "#171717",
-        accentAlt: "#454545",
-        secondary: "#f6f6f6",
-        highlight: "#0a84ff",
-        text: "#171717",
-        muted: "#808182",
-        line: "#d7d9e0",
-      },
-      tokens: CLASSIC_LIGHT_TOKENS,
-    },
-  },
-  "classic-dark": {
-    schemaVersion: 1,
-    id: "classic-dark",
-    name: "默认暗色",
-    appearance: "dark",
-    art: { ...CLASSIC_ART },
-    materials: { ...CLASSIC_MATERIALS },
-    dark: {
-      background: "#191919",
-      colors: {
-        background: "#191919",
-        panel: "#2d2d2d",
-        panelAlt: "#383838",
-        accent: "#4c8dff",
-        accentAlt: "#7aabff",
-        secondary: "#383838",
-        highlight: "#379cfc",
-        text: "#f5f5f5",
-        muted: "#acacac",
-        line: "#3c3c3c",
-      },
-      tokens: CLASSIC_DARK_TOKENS,
-    },
-  },
   "miku-stage": {
     schemaVersion: 1,
     id: "miku-stage",
@@ -712,6 +566,10 @@ export function isThemeImagePresetId(value: unknown): value is ThemeImagePresetI
   return typeof value === "string" && (THEME_IMAGE_PRESET_IDS as readonly string[]).includes(value);
 }
 
+export function isDefaultThemeSelection(selection: ThemeSelection): boolean {
+  return selection.id === DEFAULT_THEME_ID;
+}
+
 function builtinBackgroundUrl(id: string): string | undefined {
   return isThemeImagePresetId(id) ? BUILTIN_THEME_BACKGROUNDS[id] : undefined;
 }
@@ -831,40 +689,204 @@ export function resolveThemeColors(pack: ThemePack, colorMode: ResolvedColorMode
   return { ...pack.colors, ...resolveThemeVariant(pack, colorMode).colors };
 }
 
-export function themePreview(
-  pack: ThemePack,
-  colorMode: ResolvedColorMode,
-): {
+export type ThemePreviewColors = {
   background: string;
   backgroundSolid: string;
   surface: string;
+  /** Solid rail fill when not glass (classic --sidebar / derived panel). */
+  sidebar: string;
   primary: string;
+  primaryForeground: string;
   panelAlt: string;
+  /** Composer protrusion fill (panelAlt / token). */
+  composerProtrusion: string;
   text: string;
   muted: string;
   line: string;
   backgroundRgb: string;
   panelRgb: string;
+  panelAltRgb: string;
+  sidebarRgb: string;
   textRgb: string;
   accentRgb: string;
-} {
+  materialBorder: string;
+  sidebarMaterialBorder: string;
+  composerMaterialBorder: string;
+  /** True when the shell paints glass materials (wallpaper / opacity / blur). */
+  glass: boolean;
+  /** Native frosted rail (ignores material sidebar opacity). */
+  sidebarTranslucent: boolean;
+  /** Material glass rail (only when sidebarTranslucent is false). */
+  sidebarGlass: boolean;
+  shadow: "none" | "soft" | "strong";
+  density: "compact" | "standard" | "comfortable";
+};
+
+/**
+ * Material glass rail (sidebarOpacity / blur). Only applies when native translucent is off.
+ */
+export function isSidebarGlassSkin(materials: ThemeSkinMaterials | undefined): boolean {
+  const merged = { ...MATERIAL_DEFAULTS, ...materials };
+  // An opaque rail cannot reveal backdrop blur, regardless of the blur radius.
+  return numberOr(merged.sidebarOpacity, 1) < 0.999;
+}
+
+/** Effective material glass: disabled while native translucent is on. */
+export function resolveSidebarMaterialGlass(pack: ThemePack, sidebarTranslucent = false): boolean {
+  if (sidebarTranslucent) return false;
+  return isSidebarGlassSkin(pack.materials);
+}
+
+/** Whether skin materials paint glass chrome for panels/page (not only the rail). */
+export function isGlassThemeMaterials(
+  materials: ThemeSkinMaterials | undefined,
+  hasWallpaper = false,
+): boolean {
+  const merged = { ...MATERIAL_DEFAULTS, ...materials };
+  return (
+    hasWallpaper ||
+    isSidebarGlassSkin(materials) ||
+    numberOr(merged.pageOpacity, 1) < 0.999 ||
+    numberOr(merged.panelOpacity, 1) < 0.999
+  );
+}
+
+function normalizedThemeTokens(tokens: Record<string, string> | undefined): ThemeTokens {
+  const normalized: ThemeTokens = {};
+  for (const [name, value] of Object.entries(tokens ?? {})) {
+    const token = themeTokenName(name);
+    if (token) normalized[token] = value;
+  }
+  return normalized;
+}
+
+function explicitThemeToken(
+  tokens: Record<string, string> | undefined,
+  name: ThemeTokenName,
+): string | undefined {
+  return normalizedThemeTokens(tokens)[name];
+}
+
+function buildThemePreviewColors(
+  pack: ThemePack,
+  mode: ResolvedColorMode,
+  colors: Required<ThemeSkinColors>,
+  background: string | undefined,
+  materials: Required<ThemeSkinMaterials>,
+  hasWallpaper: boolean,
+  sidebarTranslucent: boolean,
+  tokens?: ThemeTokens,
+): ThemePreviewColors {
+  const glass = isGlassThemeMaterials(materials, hasWallpaper);
+  const sidebarGlass = resolveSidebarMaterialGlass(pack, sidebarTranslucent);
+  const derived = colorTokens(colors);
+  const normalizedTokens = normalizedThemeTokens(tokens);
+  const mergedTokens = ensureSemanticTokenContrast(
+    { ...derived, ...normalizedTokens },
+    normalizedTokens,
+  );
+  const backgroundSolid = mergedTokens.background ?? colors.background;
+  const surface = mergedTokens.surfacePanel ?? colors.panel;
+  const primary = mergedTokens.primary ?? colors.accent;
+  const primaryForeground =
+    mergedTokens.primaryForeground ?? accessibleForeground(colors.text, [primary]);
+  const panelAlt = mergedTokens.surfaceMuted ?? colors.panelAlt;
+  const text = mergedTokens.foreground ?? colors.text;
+  const muted = mergedTokens.mutedForeground ?? colors.muted;
+  const line = mergedTokens.border ?? colors.line;
+  const sidebar = mergedTokens.sidebar ?? colors.panel;
+  const composerProtrusion = mergedTokens.composerProtrusion ?? colors.panelAlt;
+  const materialBorder =
+    explicitThemeToken(tokens, "border") ??
+    "rgb(var(--preview-text-rgb) / var(--preview-border-alpha))";
+  return {
+    background: background ?? backgroundSolid,
+    backgroundSolid,
+    surface,
+    sidebar,
+    primary,
+    primaryForeground,
+    panelAlt,
+    composerProtrusion,
+    text,
+    muted,
+    line,
+    backgroundRgb: rgbValue(backgroundSolid, mode === "dark" ? "18 18 18" : "247 247 246"),
+    panelRgb: rgbValue(surface, mode === "dark" ? "32 32 32" : "255 255 255"),
+    panelAltRgb: rgbValue(panelAlt, mode === "dark" ? "42 42 42" : "245 245 245"),
+    sidebarRgb: rgbValue(sidebar, mode === "dark" ? "21 21 21" : "241 242 244"),
+    textRgb: rgbValue(text, mode === "dark" ? "245 245 245" : "25 25 25"),
+    accentRgb: rgbValue(primary, mode === "dark" ? "210 210 210" : "32 32 32"),
+    materialBorder,
+    sidebarMaterialBorder: explicitThemeToken(tokens, "sidebarBorder") ?? materialBorder,
+    composerMaterialBorder: explicitThemeToken(tokens, "composerBorder") ?? materialBorder,
+    glass,
+    sidebarTranslucent,
+    sidebarGlass,
+    shadow: materials.shadow,
+    density: materials.density,
+  };
+}
+
+export function themePreview(
+  pack: ThemePack,
+  colorMode: ResolvedColorMode,
+  options?: { hasWallpaper?: boolean; sidebarTranslucent?: boolean },
+): ThemePreviewColors {
   const mode = resolveSkinColorMode(pack, colorMode);
   const variant = resolveThemeVariant(pack, colorMode);
+  const materials = { ...MATERIAL_DEFAULTS, ...pack.materials };
   const colors = { ...paletteForMode(mode), ...resolveThemeColors(pack, colorMode) };
-  return {
-    background: variant.background ?? colors.background,
-    backgroundSolid: colors.background,
-    surface: colors.panel,
-    primary: colors.accent,
-    panelAlt: colors.panelAlt,
-    text: colors.text,
-    muted: colors.muted,
-    line: colors.line,
-    backgroundRgb: rgbValue(colors.background, mode === "dark" ? "18 18 18" : "247 247 246"),
-    panelRgb: rgbValue(colors.panel, mode === "dark" ? "32 32 32" : "255 255 255"),
-    textRgb: rgbValue(colors.text, mode === "dark" ? "245 245 245" : "25 25 25"),
-    accentRgb: rgbValue(colors.accent, mode === "dark" ? "210 210 210" : "32 32 32"),
+  return buildThemePreviewColors(
+    pack,
+    mode,
+    colors,
+    variant.background,
+    materials,
+    options?.hasWallpaper ?? false,
+    options?.sidebarTranslucent ?? false,
+    variant.tokens,
+  );
+}
+
+/**
+ * Studio mock preview for a forced light/dark switch.
+ * Uses the selected mode's own variant only (no cross-mode color fallback),
+ * so light/dark tabs match what that variant actually paints.
+ */
+export function themeEditorPreview(
+  pack: ThemePack,
+  mode: ResolvedColorMode,
+  options?: { hasWallpaper?: boolean; sidebarTranslucent?: boolean },
+): ThemePreviewColors {
+  const variant = pack[mode] ?? {};
+  const materials = { ...MATERIAL_DEFAULTS, ...pack.materials };
+  // Fill any missing keys from palette (partial variant colors).
+  const fullColors = {
+    ...paletteForMode(mode),
+    ...pack.colors,
+    ...variant.colors,
   };
+  return buildThemePreviewColors(
+    pack,
+    mode,
+    fullColors,
+    variant.background,
+    materials,
+    options?.hasWallpaper ?? false,
+    options?.sidebarTranslucent ?? false,
+    variant.tokens,
+  );
+}
+
+/** CSS box-shadow for studio chrome (mirrors shadowValue, with concrete rgb). */
+export function themePreviewShadow(
+  shadow: ThemeSkinMaterials["shadow"],
+  backgroundRgb: string,
+): string {
+  if (shadow === "none") return "none";
+  if (shadow === "strong") return `0 10px 28px rgb(${backgroundRgb} / 0.32)`;
+  return `0 8px 20px rgb(${backgroundRgb} / 0.22)`;
 }
 
 function paletteForMode(colorMode: ResolvedColorMode): Required<ThemeSkinColors> {
@@ -895,42 +917,104 @@ function paletteForMode(colorMode: ResolvedColorMode): Required<ThemeSkinColors>
       };
 }
 
+function ensureSemanticTokenContrast(
+  tokens: ThemeTokens,
+  explicitTokens: ThemeTokens,
+): ThemeTokens {
+  const resolved = { ...tokens };
+  const pairs: ReadonlyArray<
+    readonly [foreground: ThemeTokenName, backgrounds: readonly ThemeTokenName[], ratio?: number]
+  > = [
+    ["primaryForeground", ["primary"]],
+    ["sidebarPrimaryForeground", ["sidebarPrimary"]],
+    ["secondaryForeground", ["secondary"]],
+    ["mutedForeground", ["muted"]],
+    ["hoverFillForeground", ["hoverFill"]],
+    ["accentForeground", ["accent"]],
+    ["userBubbleForeground", ["userBubble"]],
+    ["codeFg", ["codeBg"]],
+    ["link", ["background", "surfacePanel"]],
+    ["ring", ["background", "surfacePanel"], 3],
+    ["sidebarRing", ["sidebar"], 3],
+  ];
+  for (const [foreground, backgroundNames, ratio] of pairs) {
+    if (explicitTokens[foreground]) continue;
+    const foregroundValue = resolved[foreground];
+    const backgrounds = backgroundNames
+      .map((name) => resolved[name])
+      .filter((value): value is string => Boolean(value));
+    if (!foregroundValue || backgrounds.length !== backgroundNames.length) continue;
+    resolved[foreground] = accessibleForeground(foregroundValue, backgrounds, ratio);
+  }
+  return resolved;
+}
+
 function colorTokens(colors: ThemeSkinColors): ThemeTokens {
   const tokens: ThemeTokens = {};
   if (colors.background) tokens.background = colors.background;
   if (colors.text) {
     tokens.foreground = colors.text;
     tokens.sidebarForeground = colors.text;
-    tokens.userBubbleForeground = colors.text;
   }
   if (colors.panel) {
     tokens.surfacePanel = colors.panel;
     tokens.sidebar = colors.panel;
-    tokens.codeBg = colors.panel;
   }
   if (colors.panelAlt) {
     tokens.surfaceMuted = colors.panelAlt;
     tokens.surfaceSoft = colors.panelAlt;
+    tokens.muted = colors.panelAlt;
+    tokens.hoverFill = colors.panelAlt;
+    tokens.accent = colors.panelAlt;
     tokens.userBubble = colors.panelAlt;
     tokens.composerProtrusion = colors.panelAlt;
+    tokens.codeBg = colors.panelAlt;
   }
   if (colors.accent) {
     tokens.primary = colors.accent;
     tokens.sidebarPrimary = colors.accent;
-    tokens.ring = colors.accent;
     tokens.switchOn = colors.accent;
   }
   if (colors.text && colors.accent) {
-    tokens.primaryForeground = colors.text;
-    tokens.sidebarPrimaryForeground = colors.text;
+    const foreground = accessibleForeground(colors.text, [colors.accent]);
+    tokens.primaryForeground = foreground;
+    tokens.sidebarPrimaryForeground = foreground;
   }
   if (colors.secondary) {
     tokens.secondary = colors.secondary;
-    tokens.link = colors.secondary;
+    if (colors.text) {
+      tokens.secondaryForeground = accessibleForeground(colors.text, [colors.secondary]);
+    }
+    tokens.link = accessibleForeground(
+      colors.secondary,
+      [colors.background, colors.panel].filter((value): value is string => Boolean(value)),
+    );
   }
   if (colors.muted) {
-    tokens.muted = colors.muted;
-    tokens.mutedForeground = colors.muted;
+    tokens.mutedForeground = accessibleForeground(
+      colors.muted,
+      [colors.background, colors.panel, colors.panelAlt].filter((value): value is string =>
+        Boolean(value),
+      ),
+    );
+  }
+  if (colors.text && colors.panelAlt) {
+    const surfaceForeground = accessibleForeground(colors.text, [colors.panelAlt]);
+    tokens.hoverFillForeground = surfaceForeground;
+    tokens.accentForeground = surfaceForeground;
+    tokens.userBubbleForeground = surfaceForeground;
+    tokens.codeFg = surfaceForeground;
+  }
+  if (colors.highlight) {
+    tokens.ring = accessibleForeground(
+      colors.highlight,
+      [colors.background, colors.panel].filter((value): value is string => Boolean(value)),
+      3,
+    );
+    tokens.sidebarRing = tokens.ring;
+  } else if (colors.accent) {
+    tokens.ring = colors.accent;
+    tokens.sidebarRing = colors.accent;
   }
   if (colors.line) {
     tokens.border = colors.line;
@@ -943,7 +1027,9 @@ function colorTokens(colors: ThemeSkinColors): ThemeTokens {
   return tokens;
 }
 
-function rgbValue(color: string, fallback: string): string {
+type RgbChannels = readonly [number, number, number];
+
+function rgbChannels(color: string): RgbChannels | undefined {
   const hex = color.trim().match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
   if (hex) {
     const compact = hex[1]!.length <= 4;
@@ -955,12 +1041,75 @@ function rgbValue(color: string, fallback: string): string {
           .join("")
       : hex[1]!.slice(0, 6);
     const number = Number.parseInt(value, 16);
-    return `${number >> 16} ${(number >> 8) & 255} ${number & 255}`;
+    return [number >> 16, (number >> 8) & 255, number & 255];
   }
-  const rgb = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
-  if (rgb)
-    return `${Math.round(Number(rgb[1]))} ${Math.round(Number(rgb[2]))} ${Math.round(Number(rgb[3]))}`;
-  return fallback;
+  const rgb = color.match(
+    /rgba?\(\s*([\d.]+)(%)?[\s,]+([\d.]+)(%)?[\s,]+([\d.]+)(%)?(?:\s*[/,][^)]+)?\s*\)/i,
+  );
+  if (!rgb) return undefined;
+  const channel = (value: string, percent: string | undefined) =>
+    Math.max(0, Math.min(255, Math.round(Number(value) * (percent ? 2.55 : 1))));
+  return [channel(rgb[1]!, rgb[2]), channel(rgb[3]!, rgb[4]), channel(rgb[5]!, rgb[6])];
+}
+
+function relativeLuminance([red, green, blue]: RgbChannels): number {
+  const linear = [red, green, blue].map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+function contrastRatio(foreground: RgbChannels, background: RgbChannels): number {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function mixChannels(from: RgbChannels, to: RgbChannels, amount: number): RgbChannels {
+  return from.map((channel, index) =>
+    Math.round(channel + (to[index]! - channel) * amount),
+  ) as unknown as RgbChannels;
+}
+
+function channelsToHex(channels: RgbChannels): string {
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Preserve the authored hue while nudging foregrounds to WCAG-readable contrast. */
+function accessibleForeground(
+  foreground: string,
+  backgrounds: readonly string[],
+  minimumRatio = 4.5,
+): string {
+  const foregroundChannels = rgbChannels(foreground);
+  const backgroundChannels = backgrounds.map(rgbChannels);
+  if (!foregroundChannels || backgroundChannels.some((value) => !value)) return foreground;
+  const resolvedBackgrounds = backgroundChannels as RgbChannels[];
+  const passes = (candidate: RgbChannels) =>
+    resolvedBackgrounds.every((background) => contrastRatio(candidate, background) >= minimumRatio);
+  if (passes(foregroundChannels)) return foreground;
+
+  const candidates: Array<{ amount: number; channels: RgbChannels }> = [];
+  for (const target of [[0, 0, 0] as const, [255, 255, 255] as const]) {
+    if (!passes(target)) continue;
+    let low = 0;
+    let high = 1;
+    for (let index = 0; index < 20; index += 1) {
+      const middle = (low + high) / 2;
+      if (passes(mixChannels(foregroundChannels, target, middle))) high = middle;
+      else low = middle;
+    }
+    candidates.push({ amount: high, channels: mixChannels(foregroundChannels, target, high) });
+  }
+  candidates.sort((left, right) => left.amount - right.amount);
+  return candidates[0] ? channelsToHex(candidates[0].channels) : foreground;
+}
+
+function rgbValue(color: string, fallback: string): string {
+  return rgbChannels(color)?.join(" ") ?? fallback;
 }
 
 function numberOr(value: number | undefined, fallback: number): number {
@@ -1030,12 +1179,18 @@ const SKIN_CSS_VARIABLES = [
   "--skin-text-rgb",
   "--skin-accent-rgb",
   "--skin-sidebar-opacity",
+  "--skin-sidebar-panel-opacity",
   "--skin-page-opacity",
+  "--skin-header-opacity",
   "--skin-panel-opacity",
+  "--skin-popover-opacity",
   "--skin-blur",
   "--skin-radius",
   "--skin-border-alpha",
   "--skin-border-inset-alpha",
+  "--skin-material-border",
+  "--skin-sidebar-border",
+  "--skin-composer-border",
   "--skin-shadow",
   "--skin-task-intensity",
 ] as const;
@@ -1057,15 +1212,37 @@ function applyCustomThemeCss(value: string | undefined): void {
   }
 }
 
+function clearAppliedThemeSkin(root: HTMLElement, colorMode: ResolvedColorMode): void {
+  root.dataset.theme = colorMode;
+  root.style.colorScheme = colorMode;
+  delete root.dataset.themeSkin;
+  delete root.dataset.themeSkinActive;
+  delete root.dataset.themeSkinMode;
+  delete root.dataset.themeSkinSafeArea;
+  delete root.dataset.themeSkinDensity;
+  delete root.dataset.themeSkinSidebarTranslucent;
+  delete root.dataset.themeSkinSidebarGlass;
+  for (const cssVariable of Object.values(THEME_TOKEN_CSS_VARIABLES)) {
+    root.style.removeProperty(cssVariable);
+  }
+  for (const cssVariable of SKIN_CSS_VARIABLES) root.style.removeProperty(cssVariable);
+  applyCustomThemeCss(undefined);
+}
+
 /** Apply a complete native skin while leaving agent and typography preferences untouched. */
 export function applyThemeSelection(
   selection: ThemeSelection,
   colorMode: ResolvedColorMode,
   skins: readonly ThemeSkinRecord[] = [],
   preview?: ThemePreview,
+  sidebarTranslucent = false,
 ): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  if (isDefaultThemeSelection(selection) && !preview) {
+    clearAppliedThemeSkin(root, colorMode);
+    return;
+  }
   const skin = activeThemePack(selection, skins, preview);
   const pack = skin.config;
   const mode = resolveSkinColorMode(pack, colorMode);
@@ -1085,19 +1262,35 @@ export function applyThemeSelection(
   for (const cssVariable of SKIN_CSS_VARIABLES) root.style.removeProperty(cssVariable);
   root.dataset.themeSkinDensity = materials.density;
 
-  const derivedTokens = colorTokens(resolveThemeColors(pack, colorMode));
-  const tokens = { ...derivedTokens, ...variant.tokens };
+  // Merge mode palette so skins without explicit panelAlt still get a muted
+  // protrusion fill (matches pre-skin --composer-protrusion behavior).
+  const derivedTokens = colorTokens({
+    ...paletteForMode(mode),
+    ...resolveThemeColors(pack, colorMode),
+  });
+  const normalizedVariantTokens = normalizedThemeTokens(variant.tokens);
+  const tokens = ensureSemanticTokenContrast(
+    { ...derivedTokens, ...normalizedVariantTokens },
+    normalizedVariantTokens,
+  );
   if (variant.background) root.style.setProperty("--theme-background", variant.background);
   for (const [token, value] of Object.entries(tokens)) {
     const tokenName = themeTokenName(token);
     if (tokenName) root.style.setProperty(THEME_TOKEN_CSS_VARIABLES[tokenName], value);
   }
-  root.style.setProperty("--skin-wallpaper-base", variant.background ?? colors.background);
+  const hasWallpaper = isSafeThemeAssetUrl(skin.backgroundUrl, true);
+  // Native frosted rail and material opacity glass are mutually exclusive.
+  root.dataset.themeSkinSidebarTranslucent = sidebarTranslucent ? "true" : "false";
+  root.dataset.themeSkinSidebarGlass = resolveSidebarMaterialGlass(pack, sidebarTranslucent)
+    ? "true"
+    : "false";
+  root.style.setProperty(
+    "--skin-wallpaper-base",
+    variant.background ?? tokens.background ?? colors.background,
+  );
   root.style.setProperty(
     "--skin-wallpaper-image",
-    isSafeThemeAssetUrl(skin.backgroundUrl, true)
-      ? `url(${JSON.stringify(skin.backgroundUrl)})`
-      : "none",
+    hasWallpaper ? `url(${JSON.stringify(skin.backgroundUrl)})` : "none",
   );
   root.style.setProperty(
     "--skin-art-position",
@@ -1110,32 +1303,32 @@ export function applyThemeSelection(
   root.style.setProperty("--skin-wallpaper-dim", String(numberOr(art.dim, ART_DEFAULTS.dim)));
   root.style.setProperty(
     "--skin-background-rgb",
-    rgbValue(colors.background, mode === "dark" ? "18 18 18" : "247 247 246"),
+    rgbValue(tokens.background ?? colors.background, mode === "dark" ? "18 18 18" : "247 247 246"),
   );
   root.style.setProperty(
     "--skin-panel-rgb",
-    rgbValue(colors.panel, mode === "dark" ? "32 32 32" : "255 255 255"),
+    rgbValue(tokens.surfacePanel ?? colors.panel, mode === "dark" ? "32 32 32" : "255 255 255"),
   );
   root.style.setProperty(
     "--skin-text-rgb",
-    rgbValue(colors.text, mode === "dark" ? "245 245 245" : "25 25 25"),
+    rgbValue(tokens.foreground ?? colors.text, mode === "dark" ? "245 245 245" : "25 25 25"),
   );
   root.style.setProperty(
     "--skin-accent-rgb",
-    rgbValue(colors.accent, mode === "dark" ? "210 210 210" : "32 32 32"),
+    rgbValue(tokens.primary ?? colors.accent, mode === "dark" ? "210 210 210" : "32 32 32"),
   );
+  const sidebarOpacity = numberOr(materials.sidebarOpacity, MATERIAL_DEFAULTS.sidebarOpacity);
+  const pageOpacity = numberOr(materials.pageOpacity, MATERIAL_DEFAULTS.pageOpacity);
+  const panelOpacity = numberOr(materials.panelOpacity, MATERIAL_DEFAULTS.panelOpacity);
+  root.style.setProperty("--skin-sidebar-opacity", String(sidebarOpacity));
   root.style.setProperty(
-    "--skin-sidebar-opacity",
-    String(numberOr(materials.sidebarOpacity, MATERIAL_DEFAULTS.sidebarOpacity)),
+    "--skin-sidebar-panel-opacity",
+    String(Math.min(1, sidebarOpacity + 0.08)),
   );
-  root.style.setProperty(
-    "--skin-page-opacity",
-    String(numberOr(materials.pageOpacity, MATERIAL_DEFAULTS.pageOpacity)),
-  );
-  root.style.setProperty(
-    "--skin-panel-opacity",
-    String(numberOr(materials.panelOpacity, MATERIAL_DEFAULTS.panelOpacity)),
-  );
+  root.style.setProperty("--skin-page-opacity", String(pageOpacity));
+  root.style.setProperty("--skin-header-opacity", String(Math.min(1, pageOpacity + 0.1)));
+  root.style.setProperty("--skin-panel-opacity", String(panelOpacity));
+  root.style.setProperty("--skin-popover-opacity", String(Math.min(1, panelOpacity + 0.06)));
   root.style.setProperty(
     "--skin-blur",
     `${Math.round(numberOr(materials.blur, MATERIAL_DEFAULTS.blur))}px`,
@@ -1151,6 +1344,18 @@ export function applyThemeSelection(
   root.style.setProperty(
     "--skin-border-inset-alpha",
     String(Math.min(1, numberOr(materials.borderAlpha, MATERIAL_DEFAULTS.borderAlpha) * 0.85)),
+  );
+  const materialBorder =
+    explicitThemeToken(variant.tokens, "border") ??
+    "rgb(var(--skin-text-rgb) / var(--skin-border-alpha))";
+  root.style.setProperty("--skin-material-border", materialBorder);
+  root.style.setProperty(
+    "--skin-sidebar-border",
+    explicitThemeToken(variant.tokens, "sidebarBorder") ?? materialBorder,
+  );
+  root.style.setProperty(
+    "--skin-composer-border",
+    explicitThemeToken(variant.tokens, "composerBorder") ?? materialBorder,
   );
   root.style.setProperty("--skin-shadow", shadowValue(materials.shadow));
   root.style.setProperty(

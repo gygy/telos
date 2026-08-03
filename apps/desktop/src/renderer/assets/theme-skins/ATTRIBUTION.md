@@ -5,20 +5,24 @@ The JPEG files in this directory are bundled with Pix and do not require a netwo
 ## miku-stage.jpg
 
 - Subject: Hatsune Miku
-- Source: https://images3.alphacoders.com/140/1402054.jpg
+- Source: https://wallhaven.cc/w/kxqzpq
+- Wallhaven purity: SFW
 - Resolution: 1920x1080
-- Changes: downloaded as a 1920x1080 JPEG without added overlays
+- Changes: scaled from the 2048x1152 Wallhaven JPEG to a 1920x1080 JPEG
 
 ## venom-noir.jpg
 
 - Subject: Venom
-- Source: https://images4.alphacoders.com/940/940349.jpg
+- Source: https://wallhaven.cc/w/2edo6g
+- Wallhaven purity: SFW
 - Resolution: 1920x1080
-- Changes: horizontally flipped so the subject sits on the right, then saved as a 1920x1080 JPEG
+- Changes: downloaded as a 1920x1080 JPEG without added overlays
 
 ## zhang-ruonan.jpg
 
 - Subject: Zhang Ruonan
-- Source: Bing-indexed portrait (blinds / grey tank top), commonly redistributed as a Zhang Ruonan photo set
+- Source: https://wallhaven.cc/w/vq81x8
+- Wallhaven purity: SFW
+- Wallhaven tags: AI art
 - Resolution: 1920x1080
-- Changes: resized and composed onto a soft blurred 16:9 canvas with the subject biased toward the right
+- Changes: scaled from the 2400x1350 Wallhaven PNG to a 1920x1080 JPEG

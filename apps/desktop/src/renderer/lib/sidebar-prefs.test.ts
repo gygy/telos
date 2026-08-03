@@ -19,11 +19,11 @@ describe("sidebar prefs helpers", () => {
     expect(SIDEBAR_COLLAPSED_WIDTH).toBe(0);
     expect(sidebarRailWidth(true, 280)).toBe(0);
     expect(sidebarRailWidth(false, 280)).toBe(280);
-  });
-
-  it("defaults translucency on and matches OpenCowork dark hex", () => {
     expect(SIDEBAR_DEFAULT_TRANSLUCENT).toBe(true);
     expect(SIDEBAR_TRANSLUCENT_MIX_PERCENT).toBe(0);
+  });
+
+  it("matches OpenCowork dark hex references", () => {
     expect(OPENCOWORK_DARK.background).toBe("#191919");
     expect(OPENCOWORK_DARK.sidebar).toBe("#151515");
     expect(OPENCOWORK_DARK.sidebarAccent).toBe("#252525");

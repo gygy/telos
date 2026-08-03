@@ -2578,6 +2578,7 @@ function AppearanceSection(
         colorMode={props.colorMode}
         selection={props.themeSelection}
         library={props.themeLibrary}
+        sidebarTranslucent={props.sidebarTranslucent}
         onSelection={props.onThemeSelection}
         onLibrary={props.onThemeLibrary}
         onPreview={props.onThemePreview}

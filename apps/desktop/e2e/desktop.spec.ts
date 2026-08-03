@@ -418,14 +418,39 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
         };
       });
 
+    const defaultCard = page.getByTestId("appearance-theme-skin-default");
+    await defaultCard.click();
+    await expect(defaultCard).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "default");
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "true");
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-glass", "false");
+    await expect(page.getByTestId("skin-wallpaper")).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          active: document.documentElement.getAttribute("data-theme-skin-active"),
+          primary: document.documentElement.style.getPropertyValue("--primary"),
+          wallpaper: document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
+        })),
+      )
+      .toEqual({ active: null, primary: "", wallpaper: "" });
+    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(0);
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
+
+    const translucentToggle = page.getByTestId("appearance-translucent");
+    await expect(translucentToggle).toHaveAttribute("data-state", "checked");
+    await translucentToggle.click();
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "false");
+    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(1);
+
     await page.getByTestId("appearance-theme").click();
     await page.getByRole("option", { name: /Light|浅色/ }).click();
     await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme", "light");
     await expect
       .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("light");
-    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(0);
-    await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
+    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(1);
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
 
     const zhangRuonanCard = page.getByTestId("appearance-theme-skin-zhang-ruonan");
     const themeTrack = page.locator(".theme-skin-grid");
@@ -469,6 +494,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     await page.getByTestId("appearance-theme-skin-new").click();
     await expect(page.getByTestId("appearance-theme-skin-studio")).toBeVisible();
+    await expect(page.getByTestId("appearance-theme-skin-sidebar-translucent")).toHaveCount(0);
     await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
     const studio = page.getByTestId("appearance-theme-skin-studio");
     await expect
@@ -477,7 +503,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
           getComputedStyle(element).getPropertyValue("--theme-dialog-background").trim(),
         ),
       )
-      .toBe("#f7fffc");
+      .toBe("#ffffff");
     await expect(studio).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     const themePreview = studio.locator(".theme-skin-preview-app");
     await expect(themePreview).toBeVisible();
@@ -500,7 +526,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
           getComputedStyle(element).getPropertyValue("--theme-dialog-background").trim(),
         ),
       )
-      .toBe("#f7fffc");
+      .toBe("#ffffff");
     await studio
       .locator(".theme-skin-mode-switch button")
       .filter({ hasText: /Light|浅色/ })
@@ -586,12 +612,30 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       )
       .toBe(0);
 
-    await page.getByTestId("appearance-translucent").click();
-    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-translucent", "false");
-    await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(1);
-    await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
-    await page.getByTestId("appearance-translucent").click();
-    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-translucent", "true");
+    // Returning from a custom wallpaper skin removes every skin-owned runtime effect.
+    await defaultCard.click();
+    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "default");
+    await expect(page.getByTestId("skin-wallpaper")).toBeHidden();
+    await expect(page.locator("#pix-theme-custom-css")).toHaveCount(0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          active: document.documentElement.getAttribute("data-theme-skin-active"),
+          primary: document.documentElement.style.getPropertyValue("--primary"),
+          wallpaper: document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
+        })),
+      )
+      .toEqual({ active: null, primary: "", wallpaper: "" });
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "false");
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-glass", "false");
+
+    // Removed classic light/dark skins never appear; image skins keep material glass.
+    await expect(page.getByTestId("appearance-theme-skin-classic-light")).toHaveCount(0);
+    await expect(page.getByTestId("appearance-theme-skin-classic-dark")).toHaveCount(0);
+    await page.getByTestId("appearance-theme-skin-miku-stage").click();
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "false");
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-glass", "true");
+    await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
 
     await page.getByTestId("appearance-theme").click();
     await page.getByRole("option", { name: /Dark|深色/ }).click();
@@ -967,7 +1011,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       }
     }
     await assertComposerAlignedToMain();
-    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-translucent", "true");
+    // Fresh installs use the unskinned default and its original native frosted rail.
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "true");
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-glass", "false");
     const mainExpanded = await page.getByTestId("shell-main").boundingBox();
 
     await page.getByTestId("nav-packages").click();
@@ -1015,7 +1061,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     }
     await page.getByTestId("settings-nav-appearance").click();
     await expect(page.getByTestId("settings-appearance")).toBeVisible();
-    await expect(page.getByTestId("appearance-translucent")).toHaveAttribute("data-on", "true");
+    await expect(page.getByTestId("appearance-sidebar-width")).toBeVisible();
     await expect(page.getByTestId("settings-back")).toContainText(/Back to app|返回应用/);
     await page.getByTestId("settings-back").click();
     await expect(page.getByTestId("composer-dock")).toBeVisible();

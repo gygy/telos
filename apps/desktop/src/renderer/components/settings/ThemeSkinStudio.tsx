@@ -53,17 +53,22 @@ import {
   validateThemeCustomCss,
 } from "../../../shared/theme-css.ts";
 import { t, type Locale, type MessageKey } from "../../lib/i18n.ts";
+import { cn } from "../../lib/utils.ts";
 import {
   activeThemePack,
   ART_DEFAULTS,
   BUILTIN_THEME_BACKGROUNDS,
   createThemeSkinDraft,
+  DEFAULT_THEME_ID,
   MATERIAL_DEFAULTS,
   serializeThemePack,
+  themeEditorPreview,
   themePreview,
+  themePreviewShadow,
   THEME_TOKEN_CSS_VARIABLES,
   THEME_PRESETS,
   THEME_PRESET_IDS,
+  isDefaultThemeSelection,
   isThemeImagePresetId,
   isThemePresetId,
   type ThemeImagePresetId,
@@ -225,6 +230,7 @@ type ThemeSkinStudioProps = {
   colorMode: "light" | "dark";
   selection: ThemeSelection;
   library: ThemeLibrarySnapshot;
+  sidebarTranslucent: boolean;
   onSelection: (selection: ThemeSelection) => void;
   onLibrary: (library: ThemeLibrarySnapshot) => void;
   onPreview: (preview: ThemePreview | undefined) => void;
@@ -289,8 +295,14 @@ function sliderValue(value: number | undefined, fallback: number): number {
   return typeof value === "number" ? value : fallback;
 }
 
-function previewForMode(config: ThemeSkinConfig, mode: ThemeEditorColorMode) {
-  return themePreview({ ...config, appearance: mode }, mode);
+/** Live shell preview for the forced light/dark tab (mode-local variant colors). */
+function previewForMode(
+  config: ThemeSkinConfig,
+  mode: ThemeEditorColorMode,
+  hasWallpaper = false,
+  sidebarTranslucent = false,
+) {
+  return themeEditorPreview(config, mode, { hasWallpaper, sidebarTranslucent });
 }
 
 function previewCustomCss(customCss: string | undefined): string {
@@ -314,22 +326,27 @@ function ThemeAppPreview(props: {
   config: ThemeSkinConfig;
   mode: ThemeEditorColorMode;
   locale: Locale;
+  sidebarTranslucent: boolean;
   backgroundUrl?: string;
 }) {
   const tr = (key: MessageKey) => t(props.locale, key);
-  const preview = previewForMode(props.config, props.mode);
-  const art = props.config.art ?? {};
-  const materials = props.config.materials ?? {};
+  const hasWallpaper = Boolean(props.backgroundUrl);
+  const preview = previewForMode(props.config, props.mode, hasWallpaper, props.sidebarTranslucent);
+  // Same merge order as applyThemeSelection so sliders match the live shell.
+  const art = { ...ART_DEFAULTS, ...props.config.art };
+  const materials = { ...MATERIAL_DEFAULTS, ...props.config.materials };
   const scopedCss = previewCustomCss(props.config.customCss);
-  const sidebarOpacity = sliderValue(materials.sidebarOpacity, MATERIAL_DEFAULTS.sidebarOpacity);
-  const pageOpacity = sliderValue(materials.pageOpacity, MATERIAL_DEFAULTS.pageOpacity);
-  const panelOpacity = sliderValue(materials.panelOpacity, MATERIAL_DEFAULTS.panelOpacity);
-  const taskIntensity = sliderValue(art.taskIntensity, ART_DEFAULTS.taskIntensity);
+  const sidebarOpacity = materials.sidebarOpacity;
+  const pageOpacity = materials.pageOpacity;
+  const panelOpacity = materials.panelOpacity;
+  const taskIntensity = art.taskIntensity;
   const safeArea = art.safeArea ?? ART_DEFAULTS.safeArea;
+  const panelShadow = themePreviewShadow(preview.shadow, preview.backgroundRgb);
   const previewStyle = {
     // Match the real shell: base fill + wallpaper layer, not a solid preview panel.
     background: preview.background,
     color: preview.text,
+    colorScheme: props.mode,
     "--preview-surface": preview.surface,
     "--preview-panel-alt": preview.panelAlt,
     "--preview-primary": preview.primary,
@@ -338,28 +355,46 @@ function ThemeAppPreview(props: {
     "--preview-line": preview.line,
     "--preview-background-rgb": preview.backgroundRgb,
     "--preview-panel-rgb": preview.panelRgb,
+    "--preview-panel-alt-rgb": preview.panelAltRgb,
+    "--preview-sidebar-rgb": preview.sidebarRgb,
     "--preview-text-rgb": preview.textRgb,
     "--preview-accent-rgb": preview.accentRgb,
+    "--background": preview.backgroundSolid,
     "--primary": preview.primary,
+    "--primary-foreground": preview.primaryForeground,
     "--foreground": preview.text,
     "--surface-panel": preview.surface,
+    "--surface-muted": preview.panelAlt,
+    "--muted-foreground": preview.muted,
+    "--composer-protrusion": preview.composerProtrusion,
+    "--composer-border": preview.composerMaterialBorder,
+    "--bg-composer": preview.surface,
+    "--sidebar": preview.sidebar,
+    "--sidebar-border": preview.line,
     "--border": preview.line,
+    "--preview-material-border": preview.materialBorder,
+    "--preview-sidebar-material-border": preview.sidebarMaterialBorder,
     "--preview-sidebar-opacity": String(sidebarOpacity),
+    "--preview-sidebar-panel-opacity": String(Math.min(1, sidebarOpacity + 0.08)),
     "--preview-page-opacity": String(pageOpacity),
+    "--preview-header-opacity": String(Math.min(1, pageOpacity + 0.1)),
     "--preview-panel-opacity": String(panelOpacity),
     "--preview-task-intensity": String(taskIntensity),
-    "--preview-blur": `${Math.round(sliderValue(materials.blur, MATERIAL_DEFAULTS.blur))}px`,
-    "--preview-radius": `${Math.round(sliderValue(materials.radius, MATERIAL_DEFAULTS.radius))}px`,
-    "--preview-border-alpha": String(
-      sliderValue(materials.borderAlpha, MATERIAL_DEFAULTS.borderAlpha),
-    ),
+    "--preview-blur": `${Math.round(materials.blur)}px`,
+    "--preview-radius": `${Math.round(materials.radius)}px`,
+    "--preview-border-alpha": String(materials.borderAlpha),
+    "--preview-panel-shadow": panelShadow,
   } as CSSProperties;
 
   return (
     <div
       className="theme-skin-studio-preview theme-skin-preview-scope"
       data-preview-mode={props.mode}
+      data-preview-glass={preview.glass ? "true" : "false"}
+      data-preview-sidebar-translucent={preview.sidebarTranslucent ? "true" : "false"}
+      data-preview-sidebar-glass={preview.sidebarGlass ? "true" : "false"}
       data-preview-safe-area={safeArea}
+      data-theme={props.mode}
       style={previewStyle}
     >
       {scopedCss ? <style>{scopedCss}</style> : null}
@@ -368,19 +403,24 @@ function ThemeAppPreview(props: {
           className="theme-skin-studio-wallpaper"
           style={{
             backgroundImage: `url(${JSON.stringify(props.backgroundUrl)})`,
-            backgroundPosition: `${Math.round(sliderValue(art.focusX, ART_DEFAULTS.focusX) * 100)}% ${Math.round(sliderValue(art.focusY, ART_DEFAULTS.focusY) * 100)}%`,
-            backgroundSize: `${Math.round(sliderValue(art.zoom, ART_DEFAULTS.zoom) * 100)}%`,
+            backgroundPosition: `${Math.round(art.focusX * 100)}% ${Math.round(art.focusY * 100)}%`,
+            backgroundSize: `${Math.round(art.zoom * 100)}%`,
           }}
         />
       ) : null}
       <span
         className="theme-skin-studio-scrim"
         style={{
-          background: `rgb(${preview.backgroundRgb} / ${sliderValue(art.dim, ART_DEFAULTS.dim)})`,
+          background: `rgb(${preview.backgroundRgb} / ${art.dim})`,
         }}
       />
       <div className="theme-skin-preview-app app-shell" aria-hidden="true">
-        <aside className="theme-skin-preview-sidebar pix-sidebar-translucent">
+        <aside
+          className="theme-skin-preview-sidebar"
+          data-preview-sidebar={
+            preview.sidebarTranslucent ? "native" : preview.sidebarGlass ? "glass" : "solid"
+          }
+        >
           <div className="theme-skin-preview-brand">
             <span className="theme-skin-preview-brand-name">{tr("app.name")}</span>
             <Search className="theme-skin-preview-brand-search" strokeWidth={1.7} />
@@ -429,7 +469,7 @@ function ThemeAppPreview(props: {
               <Folder aria-hidden="true" strokeWidth={1.75} />
               <span>{tr("composer.project.pick")}</span>
             </div>
-            <div className="theme-skin-preview-composer composer-card">
+            <div className="theme-skin-preview-composer composer-card composer-card-with-protrusion">
               <div className="theme-skin-preview-prompt">{tr("composer.placeholder")}</div>
               <div className="theme-skin-preview-composer-controls">
                 <div className="theme-skin-preview-composer-left">
@@ -496,6 +536,7 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
   const [message, setMessage] = useState<string | undefined>();
   /** Remount key so the CSS variable select returns to its placeholder after insert. */
   const [cssVariableSelectKey, setCssVariableSelectKey] = useState(0);
+  const defaultSelected = isDefaultThemeSelection(props.selection);
   const activeRecord = selectedRecord(props.selection, props.library);
   const activePack = activeThemePack(props.selection, props.library.skins);
   const editable = draft;
@@ -521,7 +562,16 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
             : undefined),
       record,
     });
-    // Custom skins first, then built-ins (factory or their in-place override — never both).
+    const defaultCard = {
+      id: DEFAULT_THEME_ID,
+      config: {
+        schemaVersion: 1 as const,
+        name: t(props.locale, "appearance.themeSkinDefault"),
+      },
+      backgroundUrl: undefined,
+      record: undefined as (typeof props.library.skins)[number] | undefined,
+    };
+    // Preserve custom-first ordering, then show the unskinned default before editable built-ins.
     const customCards = props.library.skins
       .filter((record) => !isThemePresetId(record.id))
       .map(cardForRecord);
@@ -535,8 +585,8 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
         record: undefined as (typeof props.library.skins)[number] | undefined,
       };
     });
-    return [...customCards, ...builtinCards];
-  }, [props.library.skins]);
+    return [...customCards, defaultCard, ...builtinCards];
+  }, [props.colorMode, props.library.skins, props.locale]);
 
   function updateTrackControls(): void {
     const track = themeTrack.current;
@@ -629,6 +679,7 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
   }
 
   function openEditEditor(): void {
+    if (defaultSelected) return;
     revokePreviewAssets();
     const sourcePresetId = isThemeImagePresetId(props.selection.id)
       ? props.selection.id
@@ -651,25 +702,62 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
     applyPreview(next, activePack.backgroundUrl);
   }
 
+  /**
+   * Factory config for "Restore defaults".
+   * Built-in presets must reload THEME_PRESETS (not the on-disk override),
+   * so materials match the product defaults again.
+   */
+  function factoryDraftConfig(): ThemeSkinConfig {
+    if (editorMode === "edit" && isThemePresetId(props.selection.id)) {
+      const factory = cloneConfig(THEME_PRESETS[props.selection.id]);
+      factory.id = props.selection.id;
+      return factory;
+    }
+    if (
+      editorMode === "edit" &&
+      initialBackgroundBuiltinId &&
+      isThemeImagePresetId(initialBackgroundBuiltinId)
+    ) {
+      // Custom skin that started from a built-in wallpaper: restore that preset's chrome defaults.
+      const factory = cloneConfig(THEME_PRESETS[initialBackgroundBuiltinId]);
+      if (editable?.id) factory.id = editable.id;
+      factory.name = editable?.name?.trim() || factory.name;
+      return factory;
+    }
+    if (editorMode === "edit" && editable) {
+      // Pure custom: keep identity, reset chrome to draft defaults.
+      const factory = createThemeSkinDraft(editable.name);
+      if (editable.id) factory.id = editable.id;
+      factory.name = editable.name;
+      return factory;
+    }
+    return createThemeSkinDraft(tr("appearance.themeSkinDefaultName"));
+  }
+
   function resetDraft(): void {
-    const next =
-      editorMode === "edit"
-        ? cloneConfig(activePack.config)
-        : createThemeSkinDraft(tr("appearance.themeSkinDefaultName"));
+    const next = factoryDraftConfig();
     revokePreviewAssets();
     setBackgroundPath(undefined);
-    setBackgroundBuiltinId(editorMode === "edit" ? initialBackgroundBuiltinId : undefined);
+    const restoreBuiltin =
+      editorMode === "edit" &&
+      isThemePresetId(props.selection.id) &&
+      isThemeImagePresetId(props.selection.id)
+        ? props.selection.id
+        : editorMode === "edit"
+          ? initialBackgroundBuiltinId
+          : undefined;
+    setBackgroundBuiltinId(restoreBuiltin);
     setRemoveBackground(false);
     setDraft(next);
-    applyPreview(
-      next,
+    const wallpaper =
       editorMode === "edit"
-        ? (activeRecord?.backgroundUrl ??
-            (initialBackgroundBuiltinId
-              ? BUILTIN_THEME_BACKGROUNDS[initialBackgroundBuiltinId]
-              : activePack.backgroundUrl))
-        : undefined,
-    );
+        ? isThemePresetId(props.selection.id) && isThemeImagePresetId(props.selection.id)
+          ? BUILTIN_THEME_BACKGROUNDS[props.selection.id]
+          : restoreBuiltin
+            ? BUILTIN_THEME_BACKGROUNDS[restoreBuiltin]
+            : undefined
+        : undefined;
+    applyPreview(next, wallpaper);
   }
 
   function changeDraft(next: ThemeSkinConfig): void {
@@ -739,7 +827,7 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
   }
 
   async function exportSkin(): Promise<void> {
-    if (busy) return;
+    if (busy || defaultSelected) return;
     if (!activeRecord) {
       downloadBuiltin(activePack.config);
       setMessage(tr("appearance.themeSkinExported"));
@@ -843,7 +931,12 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
   }
 
   // The dialog follows the active interface; only the mock app changes with the preview switch.
-  const dialogPreview = previewForMode(editable ?? activePack.config, props.colorMode);
+  const dialogPreview = previewForMode(
+    editable ?? activePack.config,
+    props.colorMode,
+    false,
+    props.sidebarTranslucent,
+  );
   const effectiveColors = {
     ...(editable ?? activePack.config).colors,
     ...(editable ?? activePack.config)[editorColorMode]?.colors,
@@ -855,6 +948,7 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
     "--theme-dialog-text": dialogPreview.text,
     "--theme-dialog-muted": dialogPreview.muted,
     "--theme-dialog-accent": dialogPreview.primary,
+    "--theme-dialog-accent-foreground": dialogPreview.primaryForeground,
     "--theme-dialog-line": dialogPreview.line,
   } as CSSProperties;
 
@@ -885,7 +979,12 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
               onWheel={onThemeTrackWheel}
             >
               {cards.map((skin) => {
-                const preview = themePreview(skin.config, props.colorMode);
+                const preview =
+                  skin.id === DEFAULT_THEME_ID
+                    ? undefined
+                    : themePreview(skin.config, props.colorMode, {
+                        sidebarTranslucent: props.sidebarTranslucent,
+                      });
                 const selected = skin.id === props.selection.id;
                 return (
                   <button
@@ -902,7 +1001,8 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                       className="theme-skin-card-art"
                       style={{
                         // Avoid the `background` shorthand so wallpaper images are not cleared.
-                        backgroundColor: preview.backgroundSolid || preview.background,
+                        backgroundColor:
+                          preview?.backgroundSolid || preview?.background || "var(--background)",
                         ...(skin.backgroundUrl
                           ? {
                               backgroundImage: `linear-gradient(135deg, rgb(0 0 0 / .04), rgb(0 0 0 / .3)), url(${JSON.stringify(skin.backgroundUrl)})`,
@@ -915,11 +1015,11 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                     >
                       <span
                         className="theme-skin-card-glass"
-                        style={{ background: preview.surface }}
+                        style={{ background: preview?.surface ?? "var(--surface-panel)" }}
                       >
                         <span
                           className="theme-skin-card-accent"
-                          style={{ background: preview.primary }}
+                          style={{ background: preview?.primary ?? "var(--primary)" }}
                         />
                       </span>
                     </span>
@@ -963,28 +1063,32 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
               <Upload className="size-3.5" strokeWidth={1.75} />
               {tr("appearance.themeSkinImport")}
             </SettingsButton>
-            <SettingsButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              testId="appearance-theme-skin-edit"
-              disabled={busy}
-              onClick={openEditEditor}
-            >
-              <Pencil className="size-3.5" strokeWidth={1.75} />
-              {tr("appearance.themeSkinEdit")}
-            </SettingsButton>
-            <SettingsButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              testId="appearance-theme-skin-export"
-              disabled={busy}
-              onClick={() => void exportSkin()}
-            >
-              <Download className="size-3.5" strokeWidth={1.75} />
-              {tr("appearance.themeSkinExport")}
-            </SettingsButton>
+            {!defaultSelected ? (
+              <>
+                <SettingsButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  testId="appearance-theme-skin-edit"
+                  disabled={busy}
+                  onClick={openEditEditor}
+                >
+                  <Pencil className="size-3.5" strokeWidth={1.75} />
+                  {tr("appearance.themeSkinEdit")}
+                </SettingsButton>
+                <SettingsButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  testId="appearance-theme-skin-export"
+                  disabled={busy}
+                  onClick={() => void exportSkin()}
+                >
+                  <Download className="size-3.5" strokeWidth={1.75} />
+                  {tr("appearance.themeSkinExport")}
+                </SettingsButton>
+              </>
+            ) : null}
             {activeRecord ? (
               <SettingsButton
                 type="button"
@@ -1076,6 +1180,7 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                         config={editable}
                         mode={editorColorMode}
                         locale={props.locale}
+                        sidebarTranslucent={props.sidebarTranslucent}
                         {...(editorBackgroundUrl ? { backgroundUrl: editorBackgroundUrl } : {})}
                       />
 
@@ -1274,8 +1379,24 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                           ] as const
                         ).map(([key, label, min, max, step, fallback]) => {
                           const value = sliderValue(editable.materials?.[key], fallback);
+                          // Native translucent ignores sidebarOpacity (and rail blur via glass path).
+                          const nativeTranslucent = props.sidebarTranslucent;
+                          const opacityLocked = nativeTranslucent && key === "sidebarOpacity";
                           return (
-                            <label key={key} className="theme-skin-slider">
+                            <label
+                              key={key}
+                              className={cn(
+                                "theme-skin-slider",
+                                opacityLocked && "theme-skin-slider-disabled",
+                              )}
+                              title={
+                                key === "sidebarOpacity"
+                                  ? nativeTranslucent
+                                    ? tr("appearance.themeSkinSidebarOpacityDisabledHint")
+                                    : tr("appearance.themeSkinSidebarOpacityHint")
+                                  : undefined
+                              }
+                            >
                               <span>
                                 {label}
                                 <output>
@@ -1290,6 +1411,12 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                                 max={max}
                                 step={step}
                                 value={value}
+                                disabled={opacityLocked}
+                                data-testid={
+                                  key === "sidebarOpacity"
+                                    ? "appearance-theme-skin-sidebar-opacity"
+                                    : undefined
+                                }
                                 onChange={(event) =>
                                   changeDraft(
                                     updateMaterials(editable, key, Number(event.target.value)),

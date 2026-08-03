@@ -67,7 +67,14 @@ export interface AppSidebarProps {
   runningSessions?: Record<string, true>;
   collapsed: boolean;
   widthPx: number;
+  /**
+   * Native frosted rail (legacy translucent). Mutually exclusive with material glass.
+   */
   translucent: boolean;
+  /**
+   * Material glass from sidebarOpacity / blur. Only when translucent is false.
+   */
+  glass: boolean;
   snapshot: HostSnapshot | undefined;
   workspacePath: string | undefined;
   selectedProjectPath: string | undefined;
@@ -169,12 +176,20 @@ export function AppSidebar(props: AppSidebarProps) {
           "absolute inset-y-0 left-0 z-30 flex h-full min-w-0 flex-col overflow-x-hidden text-[var(--sidebar-foreground)]",
           props.collapsed
             ? "pointer-events-none border-0"
-            : cn("border-r", props.translucent ? "pix-sidebar-translucent" : "pix-sidebar-opaque"),
+            : cn(
+                "border-r",
+                props.translucent
+                  ? "pix-sidebar-translucent"
+                  : props.glass
+                    ? "pix-sidebar-glass"
+                    : "pix-sidebar-solid",
+              ),
         )}
         style={{ width: railWidth }}
         data-testid="sidebar"
         data-collapsed={props.collapsed ? "true" : "false"}
-        data-translucent={props.translucent ? "true" : "false"}
+        data-sidebar-translucent={props.translucent ? "true" : "false"}
+        data-sidebar-glass={props.glass ? "true" : "false"}
         aria-hidden={props.collapsed ? true : undefined}
       >
         {!props.collapsed ? (

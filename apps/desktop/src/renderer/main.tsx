@@ -64,7 +64,13 @@ import {
   piThemeLabel,
   resolveNativeThemeSource,
 } from "./lib/theme.ts";
-import { activeThemePack, applyThemeSelection, resolveSkinColorMode } from "./lib/theme-packs.ts";
+import {
+  activeThemePack,
+  applyThemeSelection,
+  isDefaultThemeSelection,
+  resolveSidebarMaterialGlass,
+  resolveSkinColorMode,
+} from "./lib/theme-packs.ts";
 import { cn } from "./lib/utils.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
@@ -123,7 +129,13 @@ import "./styles.css";
 
 const initialThemeState = useShellStore.getState();
 applyDocumentTheme(initialThemeState.colorMode);
-applyThemeSelection(initialThemeState.themeSelection, initialThemeState.colorMode);
+applyThemeSelection(
+  initialThemeState.themeSelection,
+  initialThemeState.colorMode,
+  [],
+  undefined,
+  initialThemeState.sidebarTranslucent,
+);
 applyAppearancePrefs();
 
 /** Surface app-level errors as a modal (agent timeline errors stay in-chat). */
@@ -271,14 +283,23 @@ function App() {
   const themeSelection = useShellStore((s) => s.themeSelection);
   const themeLibrary = useShellStore((s) => s.themeLibrary);
   const themePreview = useShellStore((s) => s.themePreview);
-  const activeSkinPack = activeThemePack(themeSelection, themeLibrary.skins, themePreview).config;
-  const activeSkinMode = resolveSkinColorMode(activeSkinPack, colorMode);
+  const sidebarTranslucent = useShellStore((s) => s.sidebarTranslucent);
+  const defaultThemeActive = isDefaultThemeSelection(themeSelection) && !themePreview;
+  const activeSkin = defaultThemeActive
+    ? undefined
+    : activeThemePack(themeSelection, themeLibrary.skins, themePreview);
+  const activeSkinPack = activeSkin?.config;
+  const activeSkinMode = activeSkinPack
+    ? resolveSkinColorMode(activeSkinPack, colorMode)
+    : colorMode;
+  const sidebarGlass = activeSkinPack
+    ? resolveSidebarMaterialGlass(activeSkinPack, sidebarTranslucent)
+    : false;
   /** Electron chrome source — keep "system" when following OS so matchMedia can update. */
-  const nativeThemeSource = resolveNativeThemeSource(themePreference, activeSkinPack.appearance);
+  const nativeThemeSource = resolveNativeThemeSource(themePreference, activeSkinPack?.appearance);
   const locale = useShellStore((s) => s.locale);
   const sidebarCollapsed = useShellStore((s) => s.sidebarCollapsed);
   const sidebarWidthPx = useShellStore((s) => s.sidebarWidthPx);
-  const sidebarTranslucent = useShellStore((s) => s.sidebarTranslucent);
   const settingsSection = useShellStore((s) => s.settingsSection);
   const paletteOpen = useShellStore((s) => s.paletteOpen);
   const contentMode = useShellStore((s) => s.contentMode);
@@ -756,8 +777,14 @@ function App() {
 
   useEffect(() => {
     applyDocumentTheme(colorMode);
-    applyThemeSelection(themeSelection, colorMode, themeLibrary.skins, themePreview);
-  }, [colorMode, themeLibrary.skins, themePreview, themeSelection]);
+    applyThemeSelection(
+      themeSelection,
+      colorMode,
+      themeLibrary.skins,
+      themePreview,
+      sidebarTranslucent,
+    );
+  }, [colorMode, sidebarTranslucent, themeLibrary.skins, themePreview, themeSelection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2956,7 +2983,6 @@ function App() {
       data-testid="pix-app"
       data-theme={activeSkinMode}
       data-theme-skin={themeSelection.id}
-      data-sidebar-translucent={sidebarTranslucent ? "true" : "false"}
       data-bootstrap-ready={bootstrapReady ? "true" : "false"}
     >
       <div className="skin-wallpaper" aria-hidden data-testid="skin-wallpaper" />
@@ -2970,7 +2996,7 @@ function App() {
         />
       ) : null}
       <AppSidebar
-        colorMode={colorMode}
+        colorMode={activeSkinMode}
         themePreference={themePreference}
         locale={locale}
         view={view}
@@ -2984,6 +3010,7 @@ function App() {
         collapsed={sidebarCollapsed}
         widthPx={sidebarWidthPx}
         translucent={sidebarTranslucent}
+        glass={sidebarGlass}
         snapshot={snapshot}
         workspacePath={workspacePath}
         selectedProjectPath={selectedProjectPath}
@@ -3092,7 +3119,8 @@ function App() {
                   data-content-mode="terminal"
                   data-testid="thread-terminal-surface"
                   style={{
-                    background: resolveTerminalTheme(loadTerminalPrefs(), colorMode).background,
+                    background: resolveTerminalTheme(loadTerminalPrefs(), activeSkinMode)
+                      .background,
                   }}
                 >
                   {/* Unmounted while switching so the previous session canvas is gone. */}
@@ -3101,7 +3129,7 @@ function App() {
                       key={snapshot.sessionFile}
                       sessionFile={snapshot.sessionFile}
                       cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
-                      colorMode={colorMode}
+                      colorMode={activeSkinMode}
                       className="min-h-0 flex-1 p-2"
                       onReady={(info) => {
                         endSurfaceTransition(info.sessionFile);
@@ -3326,7 +3354,7 @@ function App() {
             status={status}
             locale={locale}
             section={settingsSection}
-            colorMode={colorMode}
+            colorMode={activeSkinMode}
             themePreference={themePreference}
             themeSelection={themeSelection}
             themeLibrary={themeLibrary}

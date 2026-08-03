@@ -20,14 +20,9 @@ import type {
 } from "@pix/contracts";
 import { validateThemeCustomCss } from "../shared/theme-css.ts";
 
-export const BUILTIN_THEME_SKIN_IDS = [
-  "classic-light",
-  "classic-dark",
-  "miku-stage",
-  "venom-noir",
-  "zhang-ruonan",
-] as const;
-export const DEFAULT_BUILTIN_THEME_SKIN_ID = "miku-stage";
+export const BUILTIN_THEME_SKIN_IDS = ["miku-stage", "venom-noir", "zhang-ruonan"] as const;
+/** Selects the original shell without loading a skin configuration. */
+export const DEFAULT_THEME_SELECTION_ID = "default";
 
 const BUILTIN_IDS = new Set<string>(BUILTIN_THEME_SKIN_IDS);
 const STORAGE_VERSION = 1;
@@ -356,6 +351,7 @@ function isStoredSkinId(value: unknown): value is string {
 
 function isKnownSkinId(value: unknown, skins: readonly DiskThemeSkinRecord[]): value is string {
   if (typeof value !== "string") return false;
+  if (value === DEFAULT_THEME_SELECTION_ID) return true;
   if (isBuiltinSkinId(value)) return true;
   return isCustomSkinId(value) && skins.some((skin) => skin.id === value);
 }
@@ -543,7 +539,7 @@ export class ThemeLibrary {
     state.skins = state.skins.filter((skin) => skin.id !== id);
     // Removing a built-in override restores the factory preset with the same id.
     if (state.activeId === id) {
-      state.activeId = isBuiltinSkinId(id) ? id : DEFAULT_BUILTIN_THEME_SKIN_ID;
+      state.activeId = isBuiltinSkinId(id) ? id : DEFAULT_THEME_SELECTION_ID;
     }
     this.#write(state);
     return this.#snapshot(state);
@@ -674,7 +670,7 @@ export class ThemeLibrary {
   #load(): DiskThemeLibrary {
     mkdirSync(this.#root, { recursive: true });
     if (!existsSync(this.#indexPath)) {
-      return { version: STORAGE_VERSION, activeId: DEFAULT_BUILTIN_THEME_SKIN_ID, skins: [] };
+      return { version: STORAGE_VERSION, activeId: DEFAULT_THEME_SELECTION_ID, skins: [] };
     }
     try {
       const parsed = JSON.parse(readFileSync(this.#indexPath, "utf8")) as unknown;
@@ -711,10 +707,10 @@ export class ThemeLibrary {
       }
       const activeId = isKnownSkinId(parsed.activeId, skins)
         ? parsed.activeId
-        : DEFAULT_BUILTIN_THEME_SKIN_ID;
+        : DEFAULT_THEME_SELECTION_ID;
       return { version: STORAGE_VERSION, activeId, skins };
     } catch {
-      return { version: STORAGE_VERSION, activeId: DEFAULT_BUILTIN_THEME_SKIN_ID, skins: [] };
+      return { version: STORAGE_VERSION, activeId: DEFAULT_THEME_SELECTION_ID, skins: [] };
     }
   }
 

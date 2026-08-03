@@ -948,6 +948,7 @@ const messages = {
     "appearance.themeSkinEdit": "编辑",
     "appearance.themeSkinNewTitle": "新建主题",
     "appearance.themeSkinEditTitle": "编辑主题",
+    "appearance.themeSkinDefault": "默认",
     "appearance.themeSkinDefaultName": "极光",
     "appearance.themeSkinScrollBack": "向前浏览主题",
     "appearance.themeSkinScrollForward": "向后浏览主题",
@@ -973,6 +974,9 @@ const messages = {
     "appearance.themeSkinDim": "壁纸压暗",
     "appearance.themeSkinTaskIntensity": "会话阅读遮罩",
     "appearance.themeSkinSidebarOpacity": "侧栏透明度",
+    "appearance.themeSkinSidebarOpacityHint":
+      "外层侧边栏半透明关闭时生效：低于 1 为玻璃材质，等于 1 为实色",
+    "appearance.themeSkinSidebarOpacityDisabledHint": "外层侧边栏半透明已开启，侧栏透明度暂不生效",
     "appearance.themeSkinPageOpacity": "页面透明度",
     "appearance.themeSkinPanelOpacity": "卡片透明度",
     "appearance.themeSkinBlur": "玻璃模糊",
@@ -1028,7 +1032,7 @@ const messages = {
     "appearance.languageEn": "English",
     "appearance.sidebarTranslucent": "侧边栏半透明",
     "appearance.sidebarTranslucentHint":
-      "侧栏使用原生磨砂玻璃，透出窗口后方内容；关闭后为不透明实色",
+      "统一使用原生磨砂玻璃；关闭后默认主题使用实色，主题皮肤由侧栏透明度控制",
     "appearance.sidebarWidth": "侧边栏宽度",
     "appearance.sidebarWidthHint": "拖动调整侧边栏宽度",
     "appearance.appScaleSection": "应用整体缩放",
@@ -2140,6 +2144,7 @@ const messages = {
     "appearance.themeSkinEdit": "Edit",
     "appearance.themeSkinNewTitle": "New theme",
     "appearance.themeSkinEditTitle": "Edit theme",
+    "appearance.themeSkinDefault": "Default",
     "appearance.themeSkinDefaultName": "Aurora",
     "appearance.themeSkinScrollBack": "Browse previous themes",
     "appearance.themeSkinScrollForward": "Browse more themes",
@@ -2165,6 +2170,10 @@ const messages = {
     "appearance.themeSkinDim": "Wallpaper dim",
     "appearance.themeSkinTaskIntensity": "Task readability scrim",
     "appearance.themeSkinSidebarOpacity": "Sidebar opacity",
+    "appearance.themeSkinSidebarOpacityHint":
+      "Applies when the outer translucent sidebar setting is off: below 1 is glass, 1 is solid",
+    "appearance.themeSkinSidebarOpacityDisabledHint":
+      "The outer translucent sidebar setting is on, so sidebar opacity has no effect",
     "appearance.themeSkinPageOpacity": "Page opacity",
     "appearance.themeSkinPanelOpacity": "Card opacity",
     "appearance.themeSkinBlur": "Glass blur",
@@ -2220,7 +2229,7 @@ const messages = {
     "appearance.languageEn": "English",
     "appearance.sidebarTranslucent": "Translucent sidebar",
     "appearance.sidebarTranslucentHint":
-      "Native frosted glass showing content behind the window; off uses a solid fill",
+      "Use native frosted glass everywhere; when off, the default theme is solid and skins use sidebar opacity",
     "appearance.sidebarWidth": "Sidebar width",
     "appearance.sidebarWidthHint": "Drag to resize the sidebar",
     "appearance.appScaleSection": "App scale",

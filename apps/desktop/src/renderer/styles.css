@@ -412,11 +412,20 @@ body {
   box-sizing: border-box;
 }
 
-/* Native theme skins paint one continuous wallpaper behind every shell surface. */
+/*
+ * Theme skins paint wallpaper behind shell chrome.
+ * Sidebar modes (per theme, mutually exclusive):
+ * 1) data-theme-skin-sidebar-translucent=true  → native frosted rail (old behavior)
+ * 2) translucent=false + sidebar-glass=true    → materials.sidebarOpacity glass
+ * 3) translucent=false + sidebar-glass=false   → solid --sidebar
+ */
 .skin-wallpaper {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
@@ -449,41 +458,94 @@ body {
 html[data-theme-skin-active="true"] .skin-wallpaper {
   display: block;
 }
+/* Native translucent: leave the rail clear so Electron vibrancy can show. */
+html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="true"] .skin-wallpaper {
+  left: var(--sidebar-current-width, 0px);
+}
 html[data-theme-skin-active="true"] .app-shell {
   z-index: 1;
   isolation: isolate;
 }
 html[data-theme-skin-active="true"] .shell-content {
   background: rgb(var(--skin-background-rgb) / var(--skin-page-opacity)) !important;
+  background: color-mix(
+    in srgb,
+    var(--background) calc(var(--skin-page-opacity) * 100%),
+    transparent
+  ) !important;
   background-attachment: initial;
   background-clip: content-box;
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(112%);
   backdrop-filter: blur(var(--skin-blur)) saturate(112%);
 }
-html[data-theme-skin-active="true"] .pix-sidebar-translucent {
+/*
+ * 1) Native frosted rail (legacy translucent) — ignores sidebarOpacity.
+ */
+html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="true"]
+  [data-testid="sidebar"] {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--sidebar-border) 22%, transparent) !important;
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #fff 8%, transparent),
+    1px 0 0 color-mix(in srgb, #000 12%, transparent);
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="true"][data-theme="light"]
+  [data-testid="sidebar"] {
+  border-color: color-mix(in srgb, var(--sidebar-border) 24%, transparent) !important;
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #fff 52%, transparent),
+    1px 0 0 color-mix(in srgb, #000 4%, transparent);
+}
+/*
+ * 2) Material glass rail — only when native translucent is off.
+ */
+html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="false"][data-theme-skin-sidebar-glass="true"]
+  [data-testid="sidebar"] {
   background: linear-gradient(
     150deg,
-    rgb(var(--skin-panel-rgb) / calc(var(--skin-sidebar-opacity) + 0.08)),
+    rgb(var(--skin-panel-rgb) / var(--skin-sidebar-panel-opacity)),
     rgb(var(--skin-background-rgb) / var(--skin-sidebar-opacity))
   ) !important;
-  border-color: rgb(var(--skin-text-rgb) / var(--skin-border-alpha)) !important;
+  background: linear-gradient(
+    150deg,
+    color-mix(
+      in srgb,
+      var(--surface-panel) calc(var(--skin-sidebar-panel-opacity) * 100%),
+      transparent
+    ),
+    color-mix(in srgb, var(--background) calc(var(--skin-sidebar-opacity) * 100%), transparent)
+  ) !important;
+  border-color: var(--skin-sidebar-border) !important;
   box-shadow:
     inset -1px 0 rgb(var(--skin-text-rgb) / var(--skin-border-inset-alpha)),
     8px 0 32px rgb(var(--skin-background-rgb) / 0.22) !important;
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(116%) !important;
   backdrop-filter: blur(var(--skin-blur)) saturate(116%) !important;
 }
-html[data-theme-skin-active="true"] .pix-sidebar-opaque {
-  background: rgb(var(--skin-panel-rgb)) !important;
-  border-color: rgb(var(--skin-text-rgb) / var(--skin-border-alpha)) !important;
-  box-shadow: inset -1px 0 rgb(var(--skin-text-rgb) / var(--skin-border-alpha));
+/*
+ * 3) Solid rail — translucent off and no material glass.
+ */
+html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="false"]:not(
+    [data-theme-skin-sidebar-glass="true"]
+  )
+  [data-testid="sidebar"] {
+  background: var(--sidebar) !important;
+  border-color: var(--sidebar-border) !important;
+  box-shadow: none !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
 html[data-theme-skin-active="true"] .thread-header,
 html[data-theme-skin-active="true"] .settings-page-top-cap,
 html[data-theme-skin-active="true"] .page-header {
-  background: rgb(var(--skin-background-rgb) / calc(var(--skin-page-opacity) + 0.1));
+  background: rgb(var(--skin-background-rgb) / var(--skin-header-opacity));
+  background: color-mix(
+    in srgb,
+    var(--background) calc(var(--skin-header-opacity) * 100%),
+    transparent
+  );
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(112%);
   backdrop-filter: blur(var(--skin-blur)) saturate(112%);
 }
@@ -525,26 +587,49 @@ html[data-theme-skin-active="true"] .composer-dock {
   background-image: none !important;
 }
 html[data-theme-skin-active="true"] .composer-card,
-html[data-theme-skin-active="true"] .composer-protrusion,
 html[data-theme-skin-active="true"] .composer-queue-card,
 html[data-theme-skin-active="true"] .surface-panel {
-  border-color: rgb(var(--skin-text-rgb) / var(--skin-border-alpha)) !important;
+  border-color: var(--skin-material-border) !important;
   background: rgb(var(--skin-panel-rgb) / var(--skin-panel-opacity)) !important;
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) calc(var(--skin-panel-opacity) * 100%),
+    transparent
+  ) !important;
   box-shadow: var(--skin-shadow) !important;
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(116%);
   backdrop-filter: blur(var(--skin-blur)) saturate(116%);
 }
-html[data-theme-skin-active="true"] .composer-card,
-html[data-theme-skin-active="true"] .composer-protrusion {
+html[data-theme-skin-active="true"] .composer-card {
+  border-color: var(--skin-composer-border) !important;
   border-radius: var(--skin-radius) !important;
 }
+/*
+ * Project protrusion above the input: keep pre-skin geometry.
+ * Top-only radius, distinct muted fill (--composer-protrusion), no panel chrome.
+ * (Earlier skin rules rounded all corners + reused panel fill/shadow, which broke every theme.)
+ */
+html[data-theme-skin-active="true"] .composer-protrusion {
+  border: none !important;
+  border-radius: var(--skin-radius) var(--skin-radius) 0 0 !important;
+  background: var(--composer-protrusion, var(--hover-fill)) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Pre-skin: card top corners use field radius (panel 12 → field 10). */
 html[data-theme-skin-active="true"] .composer-card-with-protrusion {
-  border-top-left-radius: calc(var(--skin-radius) - 5px) !important;
-  border-top-right-radius: calc(var(--skin-radius) - 5px) !important;
+  border-top-left-radius: max(0px, calc(var(--skin-radius) - 2px)) !important;
+  border-top-right-radius: max(0px, calc(var(--skin-radius) - 2px)) !important;
 }
 html[data-theme-skin-active="true"] [data-kind="user"] [data-slot="bubble-content"] {
-  border-color: rgb(var(--skin-text-rgb) / var(--skin-border-alpha));
+  border-color: var(--skin-material-border);
   background: rgb(var(--skin-panel-rgb) / var(--skin-panel-opacity));
+  background: color-mix(
+    in srgb,
+    var(--user-bubble) calc(var(--skin-panel-opacity) * 100%),
+    transparent
+  );
   box-shadow: 0 7px 22px rgb(var(--skin-background-rgb) / 0.18);
   -webkit-backdrop-filter: blur(var(--skin-blur));
   backdrop-filter: blur(var(--skin-blur));
@@ -558,9 +643,14 @@ html[data-theme-skin-active="true"] .page {
 html[data-theme-skin-active="true"] .settings-page-shell {
   margin-top: 1.25rem;
   margin-bottom: 2rem;
-  border: 1px solid rgb(var(--skin-text-rgb) / var(--skin-border-alpha));
+  border: 1px solid var(--skin-material-border);
   border-radius: calc(var(--skin-radius) + 2px);
   background: rgb(var(--skin-panel-rgb) / var(--skin-panel-opacity));
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) calc(var(--skin-panel-opacity) * 100%),
+    transparent
+  );
   box-shadow: var(--skin-shadow);
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(116%);
   backdrop-filter: blur(var(--skin-blur)) saturate(116%);
@@ -568,8 +658,13 @@ html[data-theme-skin-active="true"] .settings-page-shell {
 html[data-theme-skin-active="true"] [data-slot="dialog-content"],
 html[data-theme-skin-active="true"] [data-slot="select-content"],
 html[data-theme-skin-active="true"] [data-slot="popover-content"] {
-  border-color: rgb(var(--skin-text-rgb) / var(--skin-border-alpha)) !important;
-  background: rgb(var(--skin-panel-rgb) / calc(var(--skin-panel-opacity) + 0.06)) !important;
+  border-color: var(--skin-material-border) !important;
+  background: rgb(var(--skin-panel-rgb) / var(--skin-popover-opacity)) !important;
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) calc(var(--skin-popover-opacity) * 100%),
+    transparent
+  ) !important;
   box-shadow: var(--skin-shadow) !important;
   -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(118%);
   backdrop-filter: blur(var(--skin-blur)) saturate(118%);
@@ -585,8 +680,8 @@ html[data-theme-skin-active="true"][data-theme-skin-density="comfortable"] .sett
 
 @media (max-width: 800px) {
   html[data-theme-skin-active="true"] .shell-content,
-  html[data-theme-skin-active="true"] .pix-sidebar-translucent,
-  html[data-theme-skin-active="true"] .pix-sidebar-opaque,
+  html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="false"][data-theme-skin-sidebar-glass="true"]
+    [data-testid="sidebar"],
   html[data-theme-skin-active="true"] .composer-card {
     -webkit-backdrop-filter: blur(var(--skin-blur)) saturate(108%);
     backdrop-filter: blur(var(--skin-blur)) saturate(108%);
@@ -688,10 +783,8 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 /*
- * Native frosted rail:
- * - The web layer stays clear so macOS vibrancy is the only glass material
- * - Avoid a second CSS tint/filter that makes the native material look opaque
- * - Opaque app chrome lives only in .shell-content (to the right of the rail)
+ * Base rail chrome (overridden by theme-skin rules when a skin is active).
+ * Modes: native translucent | material glass | solid.
  */
 .pix-sidebar-translucent {
   background: transparent !important;
@@ -702,21 +795,26 @@ html[data-custom-window-controls="true"] .page-header {
     inset -1px 0 0 color-mix(in srgb, #fff 8%, transparent),
     1px 0 0 color-mix(in srgb, #000 12%, transparent);
 }
-
-.pix-sidebar-opaque {
-  background: var(--sidebar) !important;
-  border-color: var(--sidebar-border) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-
 [data-theme="light"] .pix-sidebar-translucent {
-  background: transparent !important;
   border-color: color-mix(in srgb, var(--sidebar-border) 24%, transparent) !important;
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, #fff 52%, transparent),
     1px 0 0 color-mix(in srgb, #000 4%, transparent);
+}
+.pix-sidebar-glass,
+.pix-sidebar-solid {
+  border-color: var(--sidebar-border);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.pix-sidebar-solid {
+  background: var(--sidebar) !important;
+  box-shadow: none;
+}
+.pix-sidebar-glass {
+  /* Fallback before skin CSS variables apply; live skins paint via html[data-theme-skin-*]. */
+  background: var(--sidebar) !important;
+  box-shadow: none;
 }
 
 .sidebar {
@@ -2736,7 +2834,7 @@ html[data-custom-window-controls="true"] .page-header {
 }
 .pix-md .task-list-item > input {
   margin-top: 0.4em;
-  accent-color: #168f86;
+  accent-color: var(--switch-on);
 }
 .pix-md .katex-display {
   max-width: 100%;
@@ -3946,6 +4044,7 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   );
   --muted-foreground: var(--theme-dialog-muted);
   --primary: var(--theme-dialog-accent);
+  --primary-foreground: var(--theme-dialog-accent-foreground);
   --ring: var(--theme-dialog-accent);
   --border: var(--theme-dialog-line);
   --input: var(--theme-dialog-line);
@@ -4067,12 +4166,21 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   min-height: 330px;
   flex: 1 1 auto;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--preview-text) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--preview-text) 18%, transparent);
   border-radius: 1rem;
-  box-shadow:
-    0 18px 38px rgb(0 0 0 / 0.2),
-    inset 0 1px rgb(255 255 255 / 0.16);
   isolation: isolate;
+}
+/* Frame chrome follows the previewed light/dark shell, not the dialog chrome. */
+.theme-skin-studio-preview[data-preview-mode="dark"] {
+  box-shadow:
+    0 18px 38px rgb(0 0 0 / 0.28),
+    inset 0 1px rgb(255 255 255 / 0.1);
+}
+.theme-skin-studio-preview[data-preview-mode="light"] {
+  border-color: color-mix(in srgb, var(--preview-text) 14%, transparent);
+  box-shadow:
+    0 14px 32px rgb(15 23 42 / 0.1),
+    inset 0 1px rgb(255 255 255 / 0.7);
 }
 .theme-skin-studio-wallpaper,
 .theme-skin-studio-scrim {
@@ -4087,6 +4195,10 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .theme-skin-studio-scrim {
   background: rgb(var(--preview-background-rgb) / 0.08);
   pointer-events: none;
+}
+/* Opaque skins need no dim scrim wash over their solid canvas. */
+.theme-skin-studio-preview[data-preview-glass="false"] .theme-skin-studio-scrim {
+  display: none;
 }
 .theme-skin-preview-toolbar {
   display: flex;
@@ -4121,7 +4233,7 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 }
 .theme-skin-mode-switch button[data-active="true"] {
   background: var(--theme-dialog-accent);
-  color: var(--theme-dialog-background);
+  color: var(--theme-dialog-accent-foreground);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--theme-dialog-accent) 24%, transparent);
 }
 .theme-skin-preview-app {
@@ -4132,21 +4244,83 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   grid-template-columns: minmax(7rem, 28%) minmax(0, 1fr);
   color: var(--preview-text);
   font-family: var(--font-sans, inherit);
+  background: transparent;
 }
+/*
+ * Sidebar: glass skins use material opacity over wallpaper; classic/opaque use solid panel
+ * (matches live [data-testid=sidebar] glass/solid rules).
+ */
 .theme-skin-preview-sidebar {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 0.08rem;
-  border-right: 1px solid rgb(var(--preview-text-rgb) / var(--preview-border-alpha, 0.3));
+  border-right: 1px solid var(--preview-sidebar-material-border);
+  padding: 0.7rem 0.55rem;
+}
+/* Preview rail: native translucent | material glass | solid (matches live shell). */
+.theme-skin-studio-preview[data-preview-sidebar-translucent="true"] .theme-skin-preview-sidebar {
+  background: transparent;
+  border-right-color: color-mix(in srgb, var(--preview-line) 50%, transparent);
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #fff 12%, transparent),
+    1px 0 0 color-mix(in srgb, #000 10%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.theme-skin-studio-preview[data-preview-mode="light"][data-preview-sidebar-translucent="true"]
+  .theme-skin-preview-sidebar {
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #fff 52%, transparent),
+    1px 0 0 color-mix(in srgb, #000 4%, transparent);
+}
+.theme-skin-studio-preview[data-preview-sidebar-translucent="false"][data-preview-sidebar-glass="true"]
+  .theme-skin-preview-sidebar {
   background: linear-gradient(
     150deg,
-    rgb(var(--preview-panel-rgb) / calc(var(--preview-sidebar-opacity) + 0.08)),
+    rgb(var(--preview-panel-rgb) / var(--preview-sidebar-panel-opacity)),
     rgb(var(--preview-background-rgb) / var(--preview-sidebar-opacity))
   );
-  padding: 0.7rem 0.55rem;
+  background: linear-gradient(
+    150deg,
+    color-mix(
+      in srgb,
+      var(--surface-panel) calc(var(--preview-sidebar-panel-opacity) * 100%),
+      transparent
+    ),
+    color-mix(in srgb, var(--background) calc(var(--preview-sidebar-opacity) * 100%), transparent)
+  );
   -webkit-backdrop-filter: blur(var(--preview-blur)) saturate(116%);
   backdrop-filter: blur(var(--preview-blur)) saturate(116%);
+  box-shadow:
+    inset -1px 0 rgb(var(--preview-text-rgb) / calc(var(--preview-border-alpha, 0.3) * 0.85)),
+    4px 0 16px rgb(var(--preview-background-rgb) / 0.12);
+}
+.theme-skin-studio-preview[data-preview-sidebar-translucent="false"][data-preview-sidebar-glass="false"]
+  .theme-skin-preview-sidebar {
+  background: var(--sidebar, rgb(var(--preview-sidebar-rgb, var(--preview-panel-rgb))));
+  border-right-color: var(--preview-line);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Boolean controls share the slider grid rhythm (label + control on one row). */
+.theme-skin-toggle-row {
+  justify-content: center;
+}
+.theme-skin-toggle-row > span {
+  align-items: center;
+  min-height: 1.35rem;
+}
+.theme-skin-toggle-row [data-slot="switch"],
+.theme-skin-toggle-row button[role="switch"] {
+  flex: 0 0 auto;
+}
+.theme-skin-slider-disabled {
+  opacity: 0.45;
+}
+.theme-skin-slider-disabled input {
+  pointer-events: none;
 }
 .theme-skin-preview-brand {
   display: flex;
@@ -4211,8 +4385,21 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   overflow: hidden;
   isolation: isolate;
   background: rgb(var(--preview-background-rgb) / var(--preview-page-opacity));
+  background: color-mix(
+    in srgb,
+    var(--background) calc(var(--preview-page-opacity) * 100%),
+    transparent
+  );
+}
+.theme-skin-studio-preview[data-preview-glass="true"] .theme-skin-preview-main {
   -webkit-backdrop-filter: blur(var(--preview-blur)) saturate(112%);
   backdrop-filter: blur(var(--preview-blur)) saturate(112%);
+}
+.theme-skin-studio-preview[data-preview-glass="false"] .theme-skin-preview-main {
+  /* Solid page: full canvas, no glass wash. */
+  background: var(--background);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .theme-skin-preview-main::before {
   content: "";
@@ -4226,6 +4413,10 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
     rgb(var(--preview-background-rgb) / calc(var(--preview-task-intensity, 0.6) * 0.86)) 52%,
     rgb(var(--preview-background-rgb) / calc(var(--preview-task-intensity, 0.6) * 0.42)) 100%
   );
+}
+/* No task scrim when a custom skin sets intensity to 0. */
+.theme-skin-studio-preview[data-preview-glass="false"] .theme-skin-preview-main::before {
+  display: none;
 }
 .theme-skin-studio-preview[data-preview-safe-area="right"] .theme-skin-preview-main::before {
   background: linear-gradient(
@@ -4251,8 +4442,21 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   min-height: 2.55rem;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--preview-line);
+  border-bottom: 1px solid color-mix(in srgb, var(--preview-line) 70%, transparent);
   padding: 0.42rem 0.62rem;
+}
+.theme-skin-studio-preview[data-preview-glass="true"] .theme-skin-preview-header {
+  background: rgb(var(--preview-background-rgb) / var(--preview-header-opacity));
+  background: color-mix(
+    in srgb,
+    var(--background) calc(var(--preview-header-opacity) * 100%),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(var(--preview-blur)) saturate(112%);
+  backdrop-filter: blur(var(--preview-blur)) saturate(112%);
+}
+.theme-skin-studio-preview[data-preview-glass="false"] .theme-skin-preview-header {
+  background: transparent;
 }
 .theme-skin-preview-header-title,
 .theme-skin-preview-header-actions {
@@ -4291,6 +4495,9 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   margin-bottom: 0.66rem;
   filter: drop-shadow(0 5px 10px rgb(0 0 0 / 0.16));
 }
+.theme-skin-studio-preview[data-preview-mode="light"] .theme-skin-preview-empty-logo {
+  filter: drop-shadow(0 4px 10px rgb(15 23 42 / 0.08));
+}
 .theme-skin-preview-empty-hero h1 {
   max-width: 13rem;
   margin: 0;
@@ -4311,41 +4518,70 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   position: relative;
   flex: 0 0 auto;
   padding: 0 0.58rem 0.56rem;
+  background: transparent;
 }
+/*
+ * Project protrusion: match live .composer-protrusion —
+ * full-width muted bar, top-only radius, no panel chrome/shadow.
+ */
 .theme-skin-preview-project-bar {
   display: flex;
-  width: max-content;
-  max-width: calc(100% - 0.8rem);
+  width: 100%;
+  min-width: 0;
   min-height: 1.46rem;
   align-items: center;
-  gap: 0.3rem;
-  margin: 0 auto -1px;
-  border: 1px solid rgb(var(--preview-text-rgb) / var(--preview-border-alpha, 0.3));
-  border-bottom: 0;
-  border-radius: calc(var(--preview-radius) * 0.44) calc(var(--preview-radius) * 0.44) 0 0;
-  background: rgb(var(--preview-panel-rgb) / var(--preview-panel-opacity));
-  padding: 0.22rem 0.52rem;
+  gap: 0.45rem;
+  margin: 0;
+  border: none;
+  border-radius: var(--preview-radius) var(--preview-radius) 0 0;
+  background: var(--composer-protrusion, var(--preview-panel-alt));
+  padding: 0.28rem 0.55rem;
   color: var(--preview-text);
   font-size: 0.5rem;
-  font-weight: 560;
-  -webkit-backdrop-filter: blur(var(--preview-blur)) saturate(116%);
-  backdrop-filter: blur(var(--preview-blur)) saturate(116%);
+  font-weight: 500;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-sizing: border-box;
 }
 .theme-skin-preview-project-bar > svg {
   width: 0.66rem;
   height: 0.66rem;
   flex: 0 0 auto;
   color: var(--preview-muted);
+  opacity: 0.85;
 }
 .theme-skin-preview-composer {
   min-height: 4.38rem;
-  border: 1px solid rgb(var(--preview-text-rgb) / var(--preview-border-alpha, 0.3));
-  border-radius: calc(var(--preview-radius) * 0.68);
-  background: rgb(var(--preview-panel-rgb) / var(--preview-panel-opacity));
+  border: 1px solid var(--composer-border, var(--preview-line));
+  border-radius: max(0px, calc(var(--preview-radius) - 2px));
+  background: var(--bg-composer, var(--preview-surface));
   padding: 0.52rem 0.48rem 0.36rem;
-  box-shadow: 0 7px 20px rgb(var(--preview-background-rgb) / 0.28);
+  box-shadow: none;
+  box-sizing: border-box;
+}
+/* Glass skins: translucent panel + material shadow on the input card only. */
+.theme-skin-studio-preview[data-preview-glass="true"] .theme-skin-preview-composer {
+  border-color: var(--composer-border);
+  border-radius: var(--preview-radius);
+  background: rgb(var(--preview-panel-rgb) / var(--preview-panel-opacity));
+  background: color-mix(
+    in srgb,
+    var(--surface-panel) calc(var(--preview-panel-opacity) * 100%),
+    transparent
+  );
+  box-shadow: var(--preview-panel-shadow, none);
   -webkit-backdrop-filter: blur(var(--preview-blur)) saturate(116%);
   backdrop-filter: blur(var(--preview-blur)) saturate(116%);
+}
+.theme-skin-studio-preview[data-preview-glass="true"]
+  .theme-skin-preview-composer.composer-card-with-protrusion {
+  border-top-left-radius: max(0px, calc(var(--preview-radius) - 2px));
+  border-top-right-radius: max(0px, calc(var(--preview-radius) - 2px));
+}
+.theme-skin-studio-preview[data-preview-mode="light"][data-preview-glass="false"]
+  .theme-skin-preview-composer {
+  border-color: color-mix(in srgb, var(--preview-line) 88%, #ffffff);
 }
 .theme-skin-preview-prompt {
   min-height: 1.6rem;
@@ -4447,13 +4683,45 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
-.theme-skin-slider input[type="range"] {
+.theme-skin-slider input[type="range"],
+.settings-page input[type="range"] {
   width: 100%;
+  height: 14px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
   accent-color: var(--ring);
 }
-.theme-skin-slider input[type="range"]:disabled {
+.theme-skin-slider input[type="range"]::-webkit-slider-runnable-track,
+.settings-page input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+}
+.theme-skin-slider input[type="range"]::-webkit-slider-thumb,
+.settings-page input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--surface-panel);
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--ring);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ring) 42%, transparent);
+}
+.theme-skin-slider input[type="range"]:focus-visible::-webkit-slider-thumb,
+.settings-page input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 24%, transparent);
+}
+.theme-skin-slider input[type="range"]:disabled,
+.settings-page input[type="range"]:disabled {
   cursor: not-allowed;
   opacity: 0.34;
+}
+.theme-skin-slider-disabled input[type="range"]:disabled {
+  opacity: 1;
 }
 .theme-skin-control-section {
   margin-top: 1rem;

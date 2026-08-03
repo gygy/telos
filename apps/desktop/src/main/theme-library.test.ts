@@ -20,7 +20,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { normalizeThemeSkinConfig, ThemeLibrary } from "./theme-library.ts";
+import { BUILTIN_THEME_SKIN_IDS, normalizeThemeSkinConfig, ThemeLibrary } from "./theme-library.ts";
 
 const temporaryRoots: string[] = [];
 
@@ -35,6 +35,17 @@ afterEach(() => {
 });
 
 describe("ThemeLibrary", () => {
+  it("starts with and persists the unskinned default selection", () => {
+    const root = temporaryRoot("pix-theme-library-");
+    const library = new ThemeLibrary(root);
+
+    expect(library.list()).toMatchObject({ activeId: "default", skins: [] });
+    expect(BUILTIN_THEME_SKIN_IDS).toEqual(["miku-stage", "venom-noir", "zhang-ruonan"]);
+    expect(library.activate("miku-stage").activeId).toBe("miku-stage");
+    expect(library.activate("default").activeId).toBe("default");
+    expect(new ThemeLibrary(root).list().activeId).toBe("default");
+  });
+
   it("keeps the active skin when importing a portable package", () => {
     const root = temporaryRoot("pix-theme-library-");
     const packageDir = join(root, "portable");
@@ -85,6 +96,13 @@ describe("ThemeLibrary", () => {
     expect(compatible.light?.tokens?.["--primary"]).toBe("#158b83");
     expect(compatible.light?.background).toContain("radial-gradient");
 
+    const legacySidebarSetting = normalizeThemeSkinConfig({
+      schemaVersion: 1,
+      name: "Legacy sidebar setting",
+      sidebarTranslucent: true,
+    });
+    expect(legacySidebarSetting).not.toHaveProperty("sidebarTranslucent");
+
     const styled = normalizeThemeSkinConfig({
       schemaVersion: 1,
       name: "Scoped CSS",
@@ -107,7 +125,7 @@ describe("ThemeLibrary", () => {
     ).toThrow("document root selectors");
   });
 
-  it("exports managed wallpaper assets and falls back to the default image theme", () => {
+  it("exports managed wallpaper assets and falls back to the unskinned default", () => {
     const root = temporaryRoot("pix-theme-library-");
     const sourceImage = join(root, "source.png");
     const exportRoot = join(root, "exports");
@@ -137,7 +155,7 @@ describe("ThemeLibrary", () => {
     });
 
     const afterRemoval = library.remove(skin.id);
-    expect(afterRemoval.activeId).toBe("miku-stage");
+    expect(afterRemoval.activeId).toBe("default");
     expect(afterRemoval.skins).toHaveLength(0);
   });
 
@@ -193,16 +211,18 @@ describe("ThemeLibrary", () => {
     expect(snapshot.skins[0]?.backgroundBuiltinId).toBe("venom-noir");
   });
 
-  it("migrates removed color-only presets to the default image theme", () => {
-    const root = temporaryRoot("pix-theme-library-");
-    const libraryRoot = join(root, "theme-library");
-    mkdirSync(libraryRoot);
-    writeFileSync(
-      join(libraryRoot, "index.json"),
-      JSON.stringify({ version: 1, activeId: "lagoon", skins: [] }),
-    );
+  it("migrates removed built-in presets to the unskinned default", () => {
+    for (const activeId of ["classic-light", "classic-dark", "lagoon"]) {
+      const root = temporaryRoot("pix-theme-library-");
+      const libraryRoot = join(root, "theme-library");
+      mkdirSync(libraryRoot);
+      writeFileSync(
+        join(libraryRoot, "index.json"),
+        JSON.stringify({ version: 1, activeId, skins: [] }),
+      );
 
-    expect(new ThemeLibrary(root).list().activeId).toBe("miku-stage");
+      expect(new ThemeLibrary(root).list().activeId).toBe("default");
+    }
   });
 
   it("rejects symbolic-link wallpaper sources", () => {

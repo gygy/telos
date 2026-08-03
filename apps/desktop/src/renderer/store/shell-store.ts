@@ -143,6 +143,7 @@ export interface ShellState {
   /** Desktop collapse to icon rail. */
   sidebarCollapsed: boolean;
   sidebarWidthPx: number;
+  /** Original shell's native frosted rail preference, used by the unskinned default mode. */
   sidebarTranslucent: boolean;
   locale: Locale;
   settingsSection: SettingsSection;
