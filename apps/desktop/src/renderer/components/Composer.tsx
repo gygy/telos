@@ -90,6 +90,7 @@ import {
   pathTokenBeforeCursor,
   slashCommandQuery,
 } from "../lib/composer-suggestions.ts";
+import { isImeCompositionEvent } from "../lib/composer-keyboard.ts";
 import type { AccessMode, AccessVisibility } from "../lib/settings-prefs.ts";
 import { visibleAccessModes } from "../lib/settings-prefs.ts";
 import { cn } from "../lib/utils.ts";
@@ -1054,6 +1055,8 @@ export function Composer(props: ComposerProps) {
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (isImeCompositionEvent(event.nativeEvent)) return;
+
     const panel = slashPanelOpen ? "slash" : resourcePanelOpen ? "resource" : undefined;
     if (panel) {
       // `/` → commands+skills; `@` → picker + project paths + packages.
