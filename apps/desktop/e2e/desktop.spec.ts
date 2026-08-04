@@ -182,6 +182,22 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect
       .poll(async () => page.getByTestId("timeline").innerText(), { timeout: 30_000 })
       .toMatch(/Waiting for abort|abort/i);
+
+    // Streaming scroll events must not dismiss typed command/resource suggestions.
+    await page.getByTestId("prompt-input").fill("/");
+    await expect(page.getByTestId("composer-slash-menu")).toBeVisible();
+    await page
+      .getByTestId("timeline")
+      .evaluate((element) => element.dispatchEvent(new Event("scroll")));
+    await expect(page.getByTestId("composer-slash-menu")).toBeVisible();
+    await page.getByTestId("prompt-input").fill("@");
+    await expect(page.getByTestId("composer-attach-menu")).toBeVisible();
+    await page
+      .getByTestId("timeline")
+      .evaluate((element) => element.dispatchEvent(new Event("scroll")));
+    await expect(page.getByTestId("composer-attach-menu")).toBeVisible();
+    await page.getByTestId("prompt-input").fill("");
+
     // Queue UI is optional (layout/feature flags); abort control is the critical path.
     const queuePrompt = page.getByTestId("queue-prompt");
     if ((await queuePrompt.count()) > 0 && (await queuePrompt.isVisible().catch(() => false))) {
@@ -342,6 +358,18 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     // Conversations list holds pure sessions (PIX_WORKSPACE is ephemeral → not a project).
     await expect(conversationSessionButtons(page)).toHaveCount(2, { timeout: 15_000 });
+
+    // Collapsing the rail and re-selecting the already-open conversation must not
+    // clear/recreate its timeline rows.
+    const currentUserRow = page.getByTestId("timeline").locator('[data-kind="user"]').last();
+    await currentUserRow.evaluate((element) => {
+      element.setAttribute("data-no-refresh-marker", "true");
+    });
+    await page.getByTestId("threads-section-toggle").click();
+    await page.getByTestId("threads-section-toggle").click();
+    await page.getByTestId("thread-item-current").click();
+    await expect(page.locator('[data-no-refresh-marker="true"]')).toHaveCount(1);
+    await expect(page.getByTestId("timeline")).toContainText("second thread hello");
 
     // Switch to the non-active conversation.
     await conversationSessionButtons(page)

@@ -1533,6 +1533,7 @@ export function Composer(props: ComposerProps) {
         minWidth={320}
         matchAnchorWidth
         elevated={false}
+        closeOnScroll={!props.running}
         offsetPx={8}
         className="!rounded-[var(--radius-panel)] !border-[var(--border)] !bg-[var(--surface-panel)] !py-0"
       >
@@ -1604,6 +1605,7 @@ export function Composer(props: ComposerProps) {
         minWidth={320}
         matchAnchorWidth
         elevated={false}
+        closeOnScroll={menu === "attach" || !props.running}
         offsetPx={8}
         className="!rounded-[var(--radius-panel)] !border-[var(--border)] !bg-[var(--surface-panel)] !py-0"
       >

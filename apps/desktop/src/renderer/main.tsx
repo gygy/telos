@@ -2565,6 +2565,24 @@ function App() {
   }
 
   async function switchThread(sessionPath: string, projectCwd?: string) {
+    const currentStore = useShellStore.getState();
+    const targetSessionKey = sessionRunKey(sessionPath);
+    const currentSessionKeys = [
+      sessionRunKey(currentStore.snapshot?.sessionFile),
+      sessionRunKey(currentStore.snapshot?.sessionId),
+    ];
+    // A project-card selection only changes rail state. Re-selecting the live session
+    // should restore its row selection without clearing and reloading the timeline.
+    if (
+      !switchingSessionRef.current &&
+      currentStore.runtimeId &&
+      targetSessionKey &&
+      currentSessionKeys.includes(targetSessionKey)
+    ) {
+      setView("thread");
+      return;
+    }
+
     // Tab-like switch: never abort. Main parks a busy host and may promote a parked one.
     switchingSessionRef.current = true;
     const fromMode = useShellStore.getState().contentMode;

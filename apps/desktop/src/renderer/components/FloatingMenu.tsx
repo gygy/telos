@@ -67,8 +67,10 @@ export function FloatingMenu(props: {
   placement?: FloatingMenuPlacement;
   /** Stacking order — flyouts should sit above the parent menu. */
   zIndex?: number;
-  /** When false, outside click / Escape still close unless nested menus handle it. Default true. */
+  /** Close on pointer events outside the menu. Default true; Escape always closes. */
   closeOnOutside?: boolean;
+  /** Close when the page or an ancestor scrolls. Defaults to closeOnOutside. */
+  closeOnScroll?: boolean;
   /** When true, menu width matches the anchor rect (e.g. composer card). */
   matchAnchorWidth?: boolean;
   /**
@@ -83,6 +85,7 @@ export function FloatingMenu(props: {
   const placement = props.placement ?? "bottom";
   const zIndex = props.zIndex ?? 10_000;
   const closeOnOutside = props.closeOnOutside !== false;
+  const closeOnScroll = props.closeOnScroll ?? closeOnOutside;
   const matchAnchorWidth = props.matchAnchorWidth === true;
   const elevated = props.elevated !== false;
   const gap = props.offsetPx ?? (placement === "top" ? 6 : 4);
@@ -123,25 +126,28 @@ export function FloatingMenu(props: {
       if (target.closest("[data-floating-menu]")) return;
       props.onClose();
     };
-    const onScrollOrResize = (ev: Event) => {
-      if (!closeOnOutside) return;
+    const onScroll = (ev: Event) => {
+      if (!closeOnScroll) return;
       const target = ev.target;
       if (target instanceof Element && target.closest("[data-floating-menu]")) return;
       // Ignore ResizeObserver-driven noise on the menu itself.
       if (target === menuRef.current) return;
       props.onClose();
     };
+    const onResize = () => {
+      if (closeOnOutside) props.onClose();
+    };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
-  }, [open, closeOnOutside, props.onClose]);
+  }, [open, closeOnOutside, closeOnScroll, props.onClose]);
 
   if (!open || !props.anchor || typeof document === "undefined") return null;
 
