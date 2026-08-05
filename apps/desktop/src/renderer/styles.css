@@ -458,9 +458,12 @@ body {
 html[data-theme-skin-active="true"] .skin-wallpaper {
   display: block;
 }
-/* Native translucent: leave the rail clear so Electron vibrancy can show. */
+/*
+ * Native translucent: clip the rail without narrowing the wallpaper canvas.
+ * Keeping viewport-sized geometry prevents percentage-based skin art from rescaling.
+ */
 html[data-theme-skin-active="true"][data-theme-skin-sidebar-translucent="true"] .skin-wallpaper {
-  left: var(--sidebar-current-width, 0px);
+  clip-path: inset(0 0 0 var(--sidebar-current-width, 0px));
 }
 html[data-theme-skin-active="true"] .app-shell {
   z-index: 1;

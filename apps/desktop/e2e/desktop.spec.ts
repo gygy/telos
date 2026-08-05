@@ -545,6 +545,32 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       )
       .toBe("0px");
     await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
+
+    const wallpaperGeometry = () =>
+      page.getByTestId("skin-wallpaper").evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          left: rect.left,
+          width: rect.width,
+          viewportWidth: window.innerWidth,
+          backgroundSize: getComputedStyle(element, "::before").backgroundSize,
+          clipPath: style.clipPath,
+        };
+      });
+    const opaqueSidebarWallpaper = await wallpaperGeometry();
+    await translucentToggle.click();
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "true");
+    await expect.poll(wallpaperGeometry).toMatchObject({
+      left: 0,
+      width: opaqueSidebarWallpaper.viewportWidth,
+      viewportWidth: opaqueSidebarWallpaper.viewportWidth,
+      backgroundSize: opaqueSidebarWallpaper.backgroundSize,
+    });
+    await expect.poll(async () => (await wallpaperGeometry()).clipPath).toContain("inset");
+    await translucentToggle.click();
+    await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "false");
+
     await expect(page.getByTestId("appearance-theme-skin-edit")).toBeVisible();
     await expect(page.getByTestId("appearance-theme-skin-delete")).toHaveCount(0);
 

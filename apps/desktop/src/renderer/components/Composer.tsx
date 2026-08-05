@@ -1432,19 +1432,27 @@ export function Composer(props: ComposerProps) {
             <button
               type="button"
               data-testid="model-select-wrap"
+              title={
+                serviceTierSupported
+                  ? `${modelLabel} ${serviceTierLabel(props.serviceTier)}`
+                  : modelLabel
+              }
               className={cn(
-                "inline-flex h-8 max-w-[10rem] items-center gap-1 rounded-full px-2",
+                "inline-flex h-8 min-w-0 max-w-[14rem] items-center gap-2 rounded-full px-2",
                 "text-[12px] text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--foreground)]",
                 !props.modelOptions.length && !props.modelValue && "opacity-50",
               )}
               disabled={props.running}
               onClick={(e) => openMenu("model", e)}
             >
-              <Sparkles className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
               <span className="min-w-0 truncate" data-testid="model-select-label">
                 {modelLabel}
               </span>
-              <ChevronDown className="size-3 shrink-0 opacity-50" strokeWidth={2} />
+              {serviceTierSupported ? (
+                <span className="shrink-0 opacity-70" data-testid="model-speed-label">
+                  {serviceTierLabel(props.serviceTier)}
+                </span>
+              ) : null}
             </button>
             {/* hidden native selects for e2e/compat */}
             <select
