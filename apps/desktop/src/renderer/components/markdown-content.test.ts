@@ -25,8 +25,13 @@ describe("MarkdownContent", () => {
     // File line numbers from the hunk (not 1..n display index)
     expect(diffHtml).toContain(">5<");
     const tableHtml = render("| A | B |\n| - | - |\n| 1 | 2 |");
+    expect(tableHtml).toContain("content-table-shell");
     expect(tableHtml).toContain("content-table-scroll");
     expect(tableHtml).toContain('data-testid="markdown-table"');
+    expect(tableHtml).toContain('data-testid="markdown-table-copy"');
+    expect(tableHtml).toContain('aria-label="Copy table"');
+    expect(tableHtml).toContain('data-testid="markdown-table-expand"');
+    expect(tableHtml).toContain('aria-label="Expand table"');
     expect(tableHtml).toContain("<thead>");
     expect(tableHtml).toContain("<tbody>");
     expect(tableHtml).not.toContain('node="[object Object]"');

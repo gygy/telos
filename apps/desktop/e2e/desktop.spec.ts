@@ -40,7 +40,25 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(timeline.locator('input[type="checkbox"]')).toHaveCount(2);
     await expect(timeline.locator('input[type="checkbox"]').first()).toBeChecked();
     await expect(timeline.locator("del")).toContainText("Removed text");
-    await expect(page.locator(".content-table-scroll")).toBeVisible();
+    const markdownTable = timeline.getByTestId("markdown-table").first();
+    await expect(markdownTable).toBeVisible();
+    expect(
+      await markdownTable.locator(".content-table-scroll").evaluate((element) => ({
+        overflowX: getComputedStyle(element).overflowX,
+        tableLayout: getComputedStyle(element.querySelector("table")!).tableLayout,
+      })),
+    ).toEqual({ overflowX: "hidden", tableLayout: "fixed" });
+    const tableCopyButton = markdownTable.getByTestId("markdown-table-copy");
+    await tableCopyButton.click();
+    await expect(tableCopyButton).toHaveAccessibleName(/Table copied|已复制表格/i);
+    expect(
+      await page.evaluate(() => (window as Window & { __copiedCode?: string }).__copiedCode),
+    ).toBe("Type\tStatus\nMarkdown\tReady");
+    await markdownTable.getByTestId("markdown-table-expand").click();
+    const expandedTable = page.getByTestId("markdown-table-expanded");
+    await expect(expandedTable).toBeVisible();
+    await page.getByRole("button", { name: /Close table|关闭表格/i }).click();
+    await expect(expandedTable).toBeHidden();
     await expect(page.locator(".katex").first()).toBeVisible();
     await expect(page.locator(".katex-display")).toBeVisible();
 
@@ -93,7 +111,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     const image = timeline.locator(".content-image-button");
     if ((await image.count()) > 0) {
       await image.click({ force: true });
-      await expect(page.locator('.content-image-preview-dialog[role="dialog"]')).toBeVisible();
+      await expect(page.getByTestId("image-preview-dialog")).toBeVisible();
       await page.keyboard.press("Escape");
     }
     const video = timeline.locator("video.content-video");
@@ -271,7 +289,11 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     );
 
     const imageCard = cards.filter({ hasText: "photo.png" });
-    await imageCard.getByRole("button").click();
+    await imageCard.getByTestId("attachment-image-preview").click();
+    await expect(page.getByTestId("image-preview-dialog")).toBeVisible();
+    await page.getByRole("button", { name: /Close image preview|关闭图片预览/i }).click();
+    await expect(page.getByTestId("image-preview-dialog")).toBeHidden();
+    await imageCard.getByRole("button", { name: /Remove attachment|移除附件/i }).click();
     await expect(cards).toHaveCount(10);
     await page.getByTestId("composer-attach").click();
     await page.getByTestId("composer-attach-files").click();
@@ -292,6 +314,12 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       await expect
         .poll(async () => sentCards.count(), { timeout: 15_000 })
         .toBeGreaterThanOrEqual(1);
+      const sentImagePreview = sentGroup.getByTestId("attachment-image-preview");
+      await expect(sentImagePreview).toBeVisible({ timeout: 15_000 });
+      await sentImagePreview.click();
+      await expect(page.getByTestId("image-preview-dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("image-preview-dialog")).toBeHidden();
     }
     const request = JSON.stringify(pix.fakeModel.requests.at(-1) ?? {});
     // Prefer path segments — Windows path separators and prompt wrapping may vary.

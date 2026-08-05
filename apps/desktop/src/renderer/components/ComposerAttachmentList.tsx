@@ -23,6 +23,7 @@ import {
   AttachmentGroup,
   AttachmentMedia,
   AttachmentTitle,
+  AttachmentTrigger,
 } from "@/components/ui/attachment";
 import {
   attachmentLabel,
@@ -31,6 +32,7 @@ import {
   type AttachmentKind,
 } from "../lib/composer-suggestions.ts";
 import { t, type Locale } from "../lib/i18n.ts";
+import { ImagePreviewDialog } from "./ContentPreviewDialog.tsx";
 
 function kindIcon(kind: AttachmentKind): ReactNode {
   const props = { className: "size-4", strokeWidth: 1.75 } as const;
@@ -90,67 +92,87 @@ export function ComposerAttachmentList(props: {
   onRemove: (path: string) => void;
 }) {
   const previews = useAttachmentPreviews(props.paths);
+  const [previewPath, setPreviewPath] = useState<string>();
   const tr = (key: Parameters<typeof t>[1]) => t(props.locale, key);
+  const previewSource = previewPath ? previews[previewPath] : undefined;
 
   return (
-    <div
-      className="composer-attachments min-w-0 max-w-full px-3 pt-2.5 pb-0.5"
-      data-testid="composer-attachments"
-    >
-      {/*
+    <>
+      <div
+        className="composer-attachments min-w-0 max-w-full px-3 pt-2.5 pb-0.5"
+        data-testid="composer-attachments"
+      >
+        {/*
         AttachmentGroup defaults: horizontal snap scroll when chips overflow.
         Do not set overflow-x-visible — that was why many attachments clipped.
       */}
-      <AttachmentGroup className="composer-attachment-group max-w-full gap-2 py-0">
-        {props.paths.map((path) => {
-          const presentation = attachmentPresentation(path);
-          const preview = previews[path];
-          const isImage = presentation.kind === "image" || Boolean(preview);
+        <AttachmentGroup className="composer-attachment-group max-w-full gap-2 py-0">
+          {props.paths.map((path) => {
+            const presentation = attachmentPresentation(path);
+            const preview = previews[path];
+            const isImage = presentation.kind === "image" || Boolean(preview);
 
-          return (
-            <Attachment
-              key={path}
-              state="done"
-              size="sm"
-              orientation={isImage && preview ? "vertical" : "horizontal"}
-              data-kind={presentation.kind}
-              data-testid="composer-attachment-card"
-              className={
-                isImage && preview
-                  ? "w-[7.5rem] max-w-[7.5rem] shrink-0"
-                  : "max-w-[min(240px,100%)] shrink-0"
-              }
-              title={path}
-            >
-              {preview ? (
-                <AttachmentMedia variant="image">
-                  <img src={preview} alt="" draggable={false} />
-                </AttachmentMedia>
-              ) : (
-                <AttachmentMedia variant="icon">{kindIcon(presentation.kind)}</AttachmentMedia>
-              )}
-              <AttachmentContent>
-                <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
-                {!preview ? (
-                  <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
+            return (
+              <Attachment
+                key={path}
+                state="done"
+                size="sm"
+                orientation={isImage && preview ? "vertical" : "horizontal"}
+                data-kind={presentation.kind}
+                data-testid="composer-attachment-card"
+                className={
+                  isImage && preview
+                    ? "w-[7.5rem] max-w-[7.5rem] shrink-0"
+                    : "max-w-[min(240px,100%)] shrink-0"
+                }
+                title={path}
+              >
+                {preview ? (
+                  <AttachmentTrigger
+                    data-testid="attachment-image-preview"
+                    onClick={() => setPreviewPath(path)}
+                    aria-label={`${tr("timeline.imagePreview")}: ${attachmentLabel(path)}`}
+                  />
                 ) : null}
-              </AttachmentContent>
-              <AttachmentActions>
-                <AttachmentAction
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={tr("composer.attach.remove")}
-                  className="text-muted-foreground opacity-70 hover:text-destructive hover:opacity-100"
-                  onClick={() => props.onRemove(path)}
-                >
-                  <X className="size-3.5" strokeWidth={2} />
-                </AttachmentAction>
-              </AttachmentActions>
-            </Attachment>
-          );
-        })}
-      </AttachmentGroup>
-    </div>
+                {preview ? (
+                  <AttachmentMedia variant="image">
+                    <img src={preview} alt="" draggable={false} />
+                  </AttachmentMedia>
+                ) : (
+                  <AttachmentMedia variant="icon">{kindIcon(presentation.kind)}</AttachmentMedia>
+                )}
+                <AttachmentContent>
+                  <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
+                  {!preview ? (
+                    <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
+                  ) : null}
+                </AttachmentContent>
+                <AttachmentActions>
+                  <AttachmentAction
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={tr("composer.attach.remove")}
+                    className="text-muted-foreground opacity-70 hover:text-destructive hover:opacity-100"
+                    onClick={() => props.onRemove(path)}
+                  >
+                    <X className="size-3.5" strokeWidth={2} />
+                  </AttachmentAction>
+                </AttachmentActions>
+              </Attachment>
+            );
+          })}
+        </AttachmentGroup>
+      </div>
+      <ImagePreviewDialog
+        open={Boolean(previewPath && previewSource)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewPath(undefined);
+        }}
+        source={previewSource ?? ""}
+        alt={previewPath ? attachmentLabel(previewPath) : undefined}
+        locale={props.locale}
+      />
+    </>
   );
 }

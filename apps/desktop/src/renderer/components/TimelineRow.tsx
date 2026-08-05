@@ -45,6 +45,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageContent, MessageFooter } from "@/components/ui/message";
 import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
+import { ImagePreviewDialog } from "./ContentPreviewDialog.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
 import {
   attachmentLabel,
@@ -202,48 +203,74 @@ function useTimelineAttachmentPreviews(paths: string[]): Record<string, string> 
   return map;
 }
 
-function AttachmentList(props: { paths: string[] }) {
+function AttachmentList(props: { paths: string[]; locale: Locale }) {
   const previews = useTimelineAttachmentPreviews(props.paths);
+  const [previewPath, setPreviewPath] = useState<string>();
+  const previewSource = previewPath ? previews[previewPath] : undefined;
+
   return (
-    <AttachmentGroup className="max-w-full items-start" data-testid="timeline-attachments">
-      {props.paths.map((path) => {
-        const presentation = attachmentPresentation(path);
-        const preview = previews[path];
-        const isImage = presentation.kind === "image";
-        return (
-          <Attachment
-            key={path}
-            state="done"
-            size={isImage ? "default" : "sm"}
-            orientation={isImage ? "vertical" : "horizontal"}
-            data-kind={presentation.kind}
-            data-preview={preview ? "true" : "false"}
-            className="cursor-pointer"
-            {...(!isImage ? { title: path } : {})}
-          >
-            <AttachmentTrigger
-              onClick={() => void window.pix?.workspace?.openFile?.(path)}
-              aria-label={attachmentLabel(path)}
-            />
-            {isImage ? (
-              <AttachmentMedia variant={preview ? "image" : "icon"}>
-                {preview ? <img src={preview} alt="" draggable={false} /> : attachmentIcon("image")}
-              </AttachmentMedia>
-            ) : (
-              <>
-                <AttachmentMedia variant="icon">
-                  {attachmentIcon(presentation.kind)}
+    <>
+      <AttachmentGroup className="max-w-full items-start" data-testid="timeline-attachments">
+        {props.paths.map((path) => {
+          const presentation = attachmentPresentation(path);
+          const preview = previews[path];
+          const isImage = presentation.kind === "image";
+          return (
+            <Attachment
+              key={path}
+              state="done"
+              size={isImage ? "default" : "sm"}
+              orientation={isImage ? "vertical" : "horizontal"}
+              data-kind={presentation.kind}
+              data-preview={preview ? "true" : "false"}
+              className="cursor-pointer"
+              {...(!isImage ? { title: path } : {})}
+            >
+              <AttachmentTrigger
+                data-testid={isImage && preview ? "attachment-image-preview" : undefined}
+                onClick={() => {
+                  if (isImage && preview) setPreviewPath(path);
+                  else void window.pix?.workspace?.openFile?.(path);
+                }}
+                aria-label={
+                  isImage && preview
+                    ? `${t(props.locale, "timeline.imagePreview")}: ${attachmentLabel(path)}`
+                    : attachmentLabel(path)
+                }
+              />
+              {isImage ? (
+                <AttachmentMedia variant={preview ? "image" : "icon"}>
+                  {preview ? (
+                    <img src={preview} alt="" draggable={false} />
+                  ) : (
+                    attachmentIcon("image")
+                  )}
                 </AttachmentMedia>
-                <AttachmentContent>
-                  <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
-                  <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
-                </AttachmentContent>
-              </>
-            )}
-          </Attachment>
-        );
-      })}
-    </AttachmentGroup>
+              ) : (
+                <>
+                  <AttachmentMedia variant="icon">
+                    {attachmentIcon(presentation.kind)}
+                  </AttachmentMedia>
+                  <AttachmentContent>
+                    <AttachmentTitle>{attachmentLabel(path)}</AttachmentTitle>
+                    <AttachmentDescription>{presentation.typeLabel}</AttachmentDescription>
+                  </AttachmentContent>
+                </>
+              )}
+            </Attachment>
+          );
+        })}
+      </AttachmentGroup>
+      <ImagePreviewDialog
+        open={Boolean(previewPath && previewSource)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewPath(undefined);
+        }}
+        source={previewSource ?? ""}
+        alt={previewPath ? attachmentLabel(previewPath) : undefined}
+        locale={props.locale}
+      />
+    </>
   );
 }
 
@@ -600,7 +627,9 @@ export const TimelineRow = memo(function TimelineRow(props: {
     return (
       <Message align="end" className="mt-1 mb-7" data-kind="user">
         <MessageContent>
-          {item.attachments?.length ? <AttachmentList paths={item.attachments} /> : null}
+          {item.attachments?.length ? (
+            <AttachmentList paths={item.attachments} locale={props.locale} />
+          ) : null}
           {item.text ? (
             <Bubble align="end" variant="secondary">
               <BubbleContent>

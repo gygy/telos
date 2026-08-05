@@ -1,6 +1,6 @@
 /** Streaming-safe rich content renderer for assistant messages. */
-import { memo, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { BookMarked, ExternalLink, FileCode2, Maximize2, X } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { BookMarked, Check, Copy, ExternalLink, FileCode2, Maximize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeSanitize from "rehype-sanitize";
@@ -8,9 +8,9 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
+import { ContentPreviewDialog, ImagePreviewDialog } from "./ContentPreviewDialog.tsx";
 import {
   contentMediaKind,
   contentSourceUrl,
@@ -421,34 +421,14 @@ function MediaContent(props: {
           <Maximize2 className="size-3.5" />
         </span>
       </button>
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="content-image-preview-dialog max-h-[min(92vh,960px)] max-w-[min(96vw,1200px)] border-none bg-transparent p-0 shadow-none ring-0"
-          aria-label={props.alt || t(props.locale, "timeline.imagePreview")}
-        >
-          <DialogTitle className="sr-only">
-            {props.alt || t(props.locale, "timeline.imagePreview")}
-          </DialogTitle>
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="content-image-preview-close absolute top-3 right-3 z-10"
-              aria-label={t(props.locale, "timeline.imagePreviewClose")}
-            >
-              <X className="size-4" />
-            </Button>
-          </DialogClose>
-          <img
-            src={source}
-            alt={props.alt ?? ""}
-            className="max-h-[min(90vh,920px)] w-full rounded-lg object-contain"
-            onError={() => void handleImageError()}
-          />
-        </DialogContent>
-      </Dialog>
+      <ImagePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        source={source}
+        alt={props.alt}
+        locale={props.locale}
+        onError={() => void handleImageError()}
+      />
     </>
   );
 }
@@ -481,6 +461,96 @@ function FootnotesSection(props: {
 function domProps<T extends Record<string, unknown>>(props: T): Omit<T, "node"> {
   const { node: _node, ...rest } = props;
   return rest;
+}
+
+function tableClipboardText(table: HTMLTableElement): string {
+  return Array.from(table.rows)
+    .map((row) =>
+      Array.from(row.cells)
+        .map((cell) => cell.innerText.replace(/\s+/g, " ").trim())
+        .join("\t"),
+    )
+    .join("\n");
+}
+
+function MarkdownTable(props: {
+  children: ReactNode;
+  locale: Locale;
+  tableProps: Record<string, unknown>;
+}) {
+  const compactTable = useRef<HTMLTableElement>(null);
+  const expandedTable = useRef<HTMLTableElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const tableProps = domProps(props.tableProps);
+  const copyLabel = t(props.locale, copied ? "timeline.tableCopied" : "timeline.tableCopy");
+
+  async function copyTable(table: HTMLTableElement | null) {
+    if (!table) return;
+    try {
+      await navigator.clipboard.writeText(tableClipboardText(table));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  const actions = (getTable: () => HTMLTableElement | null, allowExpand: boolean) => (
+    <div className="content-table-actions" role="group">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        onClick={() => void copyTable(getTable())}
+        aria-label={copyLabel}
+        title={copyLabel}
+        data-testid="markdown-table-copy"
+      >
+        {copied ? <Check /> : <Copy />}
+      </Button>
+      {allowExpand ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => setExpanded(true)}
+          aria-label={t(props.locale, "timeline.tableExpand")}
+          title={t(props.locale, "timeline.tableExpand")}
+          data-testid="markdown-table-expand"
+        >
+          <Maximize2 />
+        </Button>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div className="content-table-shell" data-testid="markdown-table">
+      <div className="content-table-header">{actions(() => compactTable.current, true)}</div>
+      <div className="content-table-scroll">
+        <table {...tableProps} ref={compactTable}>
+          {props.children}
+        </table>
+      </div>
+      <ContentPreviewDialog
+        open={expanded}
+        onOpenChange={setExpanded}
+        title={t(props.locale, "timeline.tableExpand")}
+        closeLabel={t(props.locale, "timeline.tableClose")}
+        className="pix-md"
+      >
+        <div className="content-table-expanded" data-testid="markdown-table-expanded">
+          <div className="content-table-header">{actions(() => expandedTable.current, false)}</div>
+          <div className="content-table-scroll content-table-expanded-scroll">
+            <table {...tableProps} ref={expandedTable}>
+              {props.children}
+            </table>
+          </div>
+        </div>
+      </ContentPreviewDialog>
+    </div>
+  );
 }
 
 export const MarkdownContent = memo(function MarkdownContent(props: {
@@ -564,9 +634,9 @@ export const MarkdownContent = memo(function MarkdownContent(props: {
           },
           table({ children, ...tableProps }) {
             return (
-              <div className="content-table-scroll" data-testid="markdown-table">
-                <table {...domProps(tableProps as Record<string, unknown>)}>{children}</table>
-              </div>
+              <MarkdownTable locale={locale} tableProps={tableProps as Record<string, unknown>}>
+                {children}
+              </MarkdownTable>
             );
           },
           thead({ children, ...elProps }) {
