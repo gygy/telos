@@ -15,7 +15,6 @@ import {
   FolderGit2,
   GitBranch,
   Keyboard,
-  LoaderCircle,
   Network,
   Package,
   Palette,
@@ -750,6 +749,50 @@ function sidebarUpdatePhase(status: AppUpdateStatus): SidebarUpdatePhase {
   return "github";
 }
 
+function SidebarUpdateProgress(props: { percent: number | undefined }) {
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
+  const indeterminate = props.percent === undefined;
+  const progress = props.percent ?? 0;
+
+  return (
+    <span className="relative size-5" aria-hidden="true">
+      <svg
+        viewBox="0 0 20 20"
+        className={cn(
+          "absolute inset-0 size-5 -rotate-90",
+          indeterminate && "motion-safe:animate-spin",
+        )}
+      >
+        <circle
+          cx="10"
+          cy="10"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="opacity-15"
+        />
+        <circle
+          cx="10"
+          cy="10"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeDasharray={
+            indeterminate ? `${circumference * 0.22} ${circumference * 0.78}` : circumference
+          }
+          strokeDashoffset={indeterminate ? 0 : circumference * (1 - progress / 100)}
+          className="transition-[stroke-dashoffset] duration-300 ease-out"
+        />
+      </svg>
+      <Download className="absolute inset-0 m-auto size-2.5" strokeWidth={2.1} />
+    </span>
+  );
+}
+
 /**
  * Right of 系统设置: GitHub by default; blue download when an update exists;
  * progress while downloading; restart icon when ready to install.
@@ -827,35 +870,32 @@ function SidebarUpdateButton(props: {
     phase === "error"
       ? tr("nav.update.error", { error: status.error ?? "Unknown error" })
       : phase === "available"
-        ? tr("nav.update.available", { version: status.availableVersion ?? "?" })
+        ? tr("nav.update.available")
         : phase === "downloading"
-          ? percent === undefined
-            ? tr("nav.update.downloading")
-            : tr("nav.update.downloadingPct", { percent: String(percent) })
+          ? tr("nav.update.downloading")
           : phase === "downloaded"
-            ? tr("nav.update.restartInstall", {
-                version: status.availableVersion ?? "?",
-              })
+            ? tr("nav.update.restartInstall")
             : tr("nav.update.github");
-
-  const accent = phase !== "github";
 
   return (
     <button
       type="button"
       data-testid="sidebar-update-btn"
       data-phase={phase}
-      data-percent={percent === undefined ? undefined : String(percent)}
       title={title}
       aria-label={title}
+      aria-busy={busy || phase === "downloading"}
       className={cn(
-        "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 transition-colors",
+        "relative inline-flex size-8 min-w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg transition-[color,background-color,box-shadow,transform] duration-200",
         phase === "error"
-          ? "text-red-500 hover:bg-red-500/10 hover:text-red-600"
-          : accent
-            ? "text-blue-500 hover:bg-blue-500/10 hover:text-blue-600"
-            : "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]",
-        phase === "downloading" && "cursor-default",
+          ? "bg-red-500/[0.08] text-red-500 ring-1 ring-inset ring-red-500/15 hover:bg-red-500/15 hover:text-red-600 active:scale-95"
+          : phase === "available"
+            ? "bg-blue-500/[0.08] text-blue-500 ring-1 ring-inset ring-blue-500/15 hover:bg-blue-500/15 hover:text-blue-600 active:scale-95"
+            : phase === "downloading"
+              ? "cursor-default bg-blue-500/[0.06] text-blue-500 ring-1 ring-inset ring-blue-500/10"
+              : phase === "downloaded"
+                ? "bg-blue-500 text-white shadow-sm shadow-blue-500/25 hover:bg-blue-600 hover:text-white active:scale-95"
+                : "text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)] active:scale-95",
       )}
       onClick={(event) => {
         event.preventDefault();
@@ -868,18 +908,14 @@ function SidebarUpdateButton(props: {
       ) : phase === "error" ? (
         <CircleAlert className="size-4" strokeWidth={1.85} />
       ) : phase === "available" ? (
-        <Download className="size-4" strokeWidth={1.85} />
+        <span className="relative inline-flex size-5 items-center justify-center">
+          <span className="absolute inset-0 rounded-full bg-blue-500/15 motion-safe:animate-pulse" />
+          <Download className="relative size-3.5" strokeWidth={2} />
+        </span>
       ) : phase === "downloading" ? (
-        percent !== undefined ? (
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium tabular-nums leading-none">
-            <LoaderCircle className="size-3 animate-spin" strokeWidth={2} />
-            {percent}
-          </span>
-        ) : (
-          <LoaderCircle className="size-4 animate-spin" strokeWidth={1.85} />
-        )
+        <SidebarUpdateProgress percent={percent} />
       ) : (
-        <RefreshCw className="size-4" strokeWidth={1.85} />
+        <RefreshCw className="size-3.5" strokeWidth={2} />
       )}
     </button>
   );
