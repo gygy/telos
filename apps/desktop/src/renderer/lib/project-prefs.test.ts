@@ -44,7 +44,8 @@ describe("project prefs helpers", () => {
       { id: "c", modifiedAt: "2026-02-01T00:00:00.000Z" },
     ];
     expect(sortThreadsByMode(threads, "recent", []).map((t) => t.id)).toEqual(["b", "c", "a"]);
-    expect(sortThreadsByMode(threads, "priority", ["c"]).map((t) => t.id)).toEqual(["c", "a", "b"]);
+    // Priority keeps default/add order — pin list does not reorder.
+    expect(sortThreadsByMode(threads, "priority", ["c"]).map((t) => t.id)).toEqual(["a", "b", "c"]);
     expect(sortThreadsByMode(threads, "manual", [], ["b", "a"]).map((t) => t.id)).toEqual([
       "b",
       "a",

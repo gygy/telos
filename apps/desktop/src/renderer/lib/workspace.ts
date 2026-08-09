@@ -72,18 +72,49 @@ export function normalizeWorkspaceKey(path: string): string {
  * Thread ids that already live under a **project** bucket in `threadsByCwd`.
  * Used so the 对话 section never briefly inherits project sessions when the
  * project drops out of recent/current for a frame during switches.
+ *
+ * Rows whose cwd is clearly pure-conversation are ignored even if they leaked
+ * into a project bucket (host list races during rapid project「新建会话」).
  */
 export function projectThreadIdsFromCwdMap(
-  threadsByCwd: Record<string, ReadonlyArray<{ id: string }>>,
+  threadsByCwd: Record<string, ReadonlyArray<{ id: string; cwd?: string }>>,
 ): Set<string> {
   const ids = new Set<string>();
   for (const [rawKey, list] of Object.entries(threadsByCwd)) {
     if (!rawKey?.trim() || isNonProjectWorkspacePath(rawKey)) continue;
     for (const thread of list) {
-      if (thread?.id) ids.add(thread.id);
+      if (!thread?.id) continue;
+      const cwd = (thread.cwd || "").trim();
+      // Do not let a mis-bucketed conversation row hide itself from 对话.
+      if (cwd && isNonProjectWorkspacePath(cwd)) continue;
+      ids.add(thread.id);
     }
   }
   return ids;
+}
+
+/**
+ * Keep only rows that belong in the sidebar cache bucket for `bucketCwd`.
+ * Prevents a raced host `session.list` (wrong project mid-switch) from polluting
+ * another project's map entry — which used to hide 对话 rows via projectThreadIds.
+ */
+export function threadsForWorkspaceBucket<T extends { cwd?: string }>(
+  threads: readonly T[],
+  bucketCwd: string,
+): T[] {
+  const key = normalizeWorkspaceKey(bucketCwd);
+  if (!key) return [...threads];
+  const bucketIsNonProject = isNonProjectWorkspacePath(bucketCwd);
+  return threads.filter((thread) => {
+    const cwd = (thread.cwd || "").trim();
+    // Live / not-yet-flushed rows often omit cwd — keep them only when the host
+    // was listing this same bucket (caller should already re-check host cwd).
+    if (!cwd) return true;
+    if (normalizeWorkspaceKey(cwd) === key) return true;
+    // Conversation home variants (…/conversations vs …/conversations/x).
+    if (bucketIsNonProject && isNonProjectWorkspacePath(cwd)) return true;
+    return false;
+  });
 }
 
 /**
@@ -93,16 +124,23 @@ export function projectThreadIdsFromCwdMap(
  * project is temporarily missing from 置顶/项目 (e.g. selection cleared before
  * recent is refreshed). Classification uses cwd type + optional project-bucket ids,
  * not the live projectKeys set (which can lag one frame).
+ *
+ * When `cwd` is present it is authoritative. Bucket membership only decides rows
+ * with a missing cwd (so a leaked id in a project map cannot hide a real
+ * conversation session that still carries conversation cwd).
  */
 export function belongsInConversationsSection(
   thread: { id: string; cwd?: string },
   options?: { projectThreadIds?: ReadonlySet<string> },
 ): boolean {
-  if (options?.projectThreadIds?.has(thread.id)) return false;
   const cwd = (thread.cwd || "").trim();
-  if (!cwd) return true;
-  // Real project path → session under that project only.
-  if (!isNonProjectWorkspacePath(cwd)) return false;
+  if (cwd) {
+    // Real project path → session under that project only.
+    // Pure-conversation / scratch cwd → 对话, even if id briefly leaked into a project map.
+    return isNonProjectWorkspacePath(cwd);
+  }
+  // cwd missing: fall back to project-bucket membership.
+  if (options?.projectThreadIds?.has(thread.id)) return false;
   return true;
 }
 

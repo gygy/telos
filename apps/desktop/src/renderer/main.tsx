@@ -30,6 +30,7 @@ import { ErrorDialog } from "./components/ErrorDialog.tsx";
 import { ExtensionUiChrome } from "./components/ExtensionUiChrome.tsx";
 import { ExtensionUiHost } from "./components/ExtensionUiHost.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
+import { ProjectsPage } from "./components/ProjectsPage.tsx";
 import { SessionInfoPanel, SessionTreePanel } from "./components/SessionParityPanels.tsx";
 import { RenameDialog } from "./components/RenameDialog.tsx";
 import { SettingsPage } from "./components/settings/SettingsPage.tsx";
@@ -124,6 +125,7 @@ import {
   isNonProjectWorkspacePath,
   mergeRecentWithOpenProject,
   prependRecentPath,
+  threadsForWorkspaceBucket,
   unionRecentWorkspaces,
   workspaceLabel,
 } from "./lib/workspace.ts";
@@ -659,20 +661,36 @@ function App() {
     });
   }
 
+  /**
+   * Write host/disk rows into one cwd bucket. Filters by thread.cwd and never
+   * replaces a non-empty bucket with a raced empty/mismatched list (rapid
+   * project「新建会话」used to poison maps and hide 对话 rows).
+   */
+  function cacheThreadsForCwd(cwd: string, threads: SessionThreadSummary[]) {
+    const key = normalizeCwdKey(cwd);
+    if (!key) return;
+    const matched = threadsForWorkspaceBucket(threads, cwd);
+    if (matched.length === 0) {
+      setThreadsByCwd((prev) => {
+        const existing = prev[key] ?? [];
+        if (existing.length > 0) return prev;
+        return { ...prev, [key]: existing };
+      });
+      return;
+    }
+    setThreadsByCwd((prev) => ({
+      ...prev,
+      [key]: mergeSidebarThreads(prev[key] ?? [], matched),
+    }));
+  }
+
   async function refreshThreads() {
     try {
       const listed = await window.pix.session.list();
-      setThreads(mergeSidebarThreads(useShellStore.getState().threads, listed.threads));
       const cwd = useShellStore.getState().snapshot?.cwd;
-      if (cwd) {
-        setThreadsByCwd((prev) => ({
-          ...prev,
-          [normalizeCwdKey(cwd)]: mergeSidebarThreads(
-            prev[normalizeCwdKey(cwd)] ?? [],
-            listed.threads,
-          ),
-        }));
-      }
+      const matched = cwd ? threadsForWorkspaceBucket(listed.threads, cwd) : listed.threads;
+      setThreads(mergeSidebarThreads(useShellStore.getState().threads, matched));
+      if (cwd) cacheThreadsForCwd(cwd, listed.threads);
     } catch {
       // Host may be stopped.
     }
@@ -737,13 +755,18 @@ function App() {
   }
 
   async function refreshProjectSessions(paths: string[]) {
-    const unique = [...new Set(paths.map(normalizeCwdKey).filter(Boolean))];
+    // Never treat conversation/scratch homes as project buckets.
+    const unique = [
+      ...new Set(
+        paths.map(normalizeCwdKey).filter((cwd) => cwd && !isNonProjectWorkspacePath(cwd)),
+      ),
+    ];
     if (unique.length === 0) return;
     const results = await Promise.all(
       unique.map(async (cwd) => {
         try {
           const threads = await window.pix.session.listForCwd(cwd);
-          return [cwd, threads] as const;
+          return [cwd, threadsForWorkspaceBucket(threads, cwd)] as const;
         } catch {
           return [cwd, [] as SessionThreadSummary[]] as const;
         }
@@ -752,6 +775,11 @@ function App() {
     setThreadsByCwd((prev) => {
       const next = { ...prev };
       for (const [cwd, threads] of results) {
+        // Empty raced result must not wipe a warm project cache.
+        if (threads.length === 0) {
+          if (!next[cwd]?.length) next[cwd] = next[cwd] ?? [];
+          continue;
+        }
         next[cwd] = mergeSidebarThreads(prev[cwd] ?? [], threads);
       }
       return next;
@@ -765,30 +793,9 @@ function App() {
   async function refreshConversationSessions() {
     try {
       const convCwd = await window.pix.workspace.ensureConversation();
-      const key = normalizeCwdKey(convCwd);
       const threads = await window.pix.session.listForCwd(convCwd);
-      // Only accept rows that still look like pure-conversation sessions. A raced
-      // host list (project sessions returned under conversation cwd) must not
-      // replace the 对话 cache — merge would keep them and projectThreadIds would
-      // still hide real conversation rows that share ids incorrectly.
-      const onlyConversation = threads.filter((thread) => {
-        const cwd = (thread.cwd || "").trim();
-        if (!cwd) return true;
-        return isNonProjectWorkspacePath(cwd);
-      });
-      // Never replace a non-empty conversation cache with an empty raced result.
-      if (onlyConversation.length === 0) {
-        setThreadsByCwd((prev) => {
-          const existing = prev[key] ?? [];
-          if (existing.length > 0) return prev;
-          return { ...prev, [key]: existing };
-        });
-        return;
-      }
-      setThreadsByCwd((prev) => ({
-        ...prev,
-        [key]: mergeSidebarThreads(prev[key] ?? [], onlyConversation),
-      }));
+      // Only accept pure-conversation rows; cacheThreadsForCwd also refuses empty races.
+      cacheThreadsForCwd(convCwd, threadsForWorkspaceBucket(threads, convCwd));
     } catch {
       // Host may be stopped or conversation home unavailable.
     }
@@ -974,28 +981,17 @@ function App() {
           }
           maybeNotify("crash", event.message);
         } else if (event.type === "session.list") {
-          store.setThreads(mergeSidebarThreads(store.threads, event.threads));
           const cwd = store.snapshot?.cwd;
-          if (cwd && event.threads.length > 0) {
-            const key = normalizeCwdKey(cwd);
-            setThreadsByCwd((prev) => ({
-              ...prev,
-              [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
-            }));
-          }
+          const matched = cwd ? threadsForWorkspaceBucket(event.threads, cwd) : event.threads;
+          store.setThreads(mergeSidebarThreads(store.threads, matched));
+          if (cwd && matched.length > 0) cacheThreadsForCwd(cwd, matched);
         } else if (event.type === "session.opened") {
           // switchThread / newBlankTask apply the open themselves. Intermediate
           // session.opened (e.g. from workspace.openPath) must not wipe history into
           // an empty hero flash mid-transition.
           if (switchingSessionRef.current || pendingPureConversationRef.current) {
             const cwd = event.snapshot.cwd;
-            if (cwd && event.threads.length > 0) {
-              const key = normalizeCwdKey(cwd);
-              setThreadsByCwd((prev) => ({
-                ...prev,
-                [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
-              }));
-            }
+            if (cwd && event.threads.length > 0) cacheThreadsForCwd(cwd, event.threads);
             return;
           }
           markSessionOpenForBottomScroll();
@@ -1003,13 +999,7 @@ function App() {
           requestContentReveal();
           // Keep sidebar caches in sync without clearing other projects' lists.
           const cwd = event.snapshot.cwd;
-          if (cwd && event.threads.length > 0) {
-            const key = normalizeCwdKey(cwd);
-            setThreadsByCwd((prev) => ({
-              ...prev,
-              [key]: mergeSidebarThreads(prev[key] ?? [], event.threads),
-            }));
-          }
+          if (cwd && event.threads.length > 0) cacheThreadsForCwd(cwd, event.threads);
         } else if (event.type === "packages.progress") {
           if (event.message) store.setStatus(event.message);
         } else if (event.type === "packages.changed") {
@@ -1152,19 +1142,14 @@ function App() {
               .list()
               .then((listed) => {
                 if (!listed?.threads) return;
+                const cwd = useShellStore.getState().snapshot?.cwd;
+                const matched = cwd
+                  ? threadsForWorkspaceBucket(listed.threads, cwd)
+                  : listed.threads;
                 useShellStore
                   .getState()
-                  .setThreads(
-                    mergeSidebarThreads(useShellStore.getState().threads, listed.threads),
-                  );
-                const cwd = useShellStore.getState().snapshot?.cwd;
-                if (cwd && listed.threads.length > 0) {
-                  const key = normalizeCwdKey(cwd);
-                  setThreadsByCwd((prev) => ({
-                    ...prev,
-                    [key]: mergeSidebarThreads(prev[key] ?? [], listed.threads),
-                  }));
-                }
+                  .setThreads(mergeSidebarThreads(useShellStore.getState().threads, matched));
+                if (cwd && matched.length > 0) cacheThreadsForCwd(cwd, matched);
               })
               .catch(() => undefined);
           } else if (event.event.type === "user.message") {
@@ -1173,19 +1158,14 @@ function App() {
               .list()
               .then((listed) => {
                 if (!listed?.threads) return;
+                const cwd = useShellStore.getState().snapshot?.cwd;
+                const matched = cwd
+                  ? threadsForWorkspaceBucket(listed.threads, cwd)
+                  : listed.threads;
                 useShellStore
                   .getState()
-                  .setThreads(
-                    mergeSidebarThreads(useShellStore.getState().threads, listed.threads),
-                  );
-                const cwd = useShellStore.getState().snapshot?.cwd;
-                if (cwd && listed.threads.length > 0) {
-                  const key = normalizeCwdKey(cwd);
-                  setThreadsByCwd((prev) => ({
-                    ...prev,
-                    [key]: mergeSidebarThreads(prev[key] ?? [], listed.threads),
-                  }));
-                }
+                  .setThreads(mergeSidebarThreads(useShellStore.getState().threads, matched));
+                if (cwd && matched.length > 0) cacheThreadsForCwd(cwd, matched);
               })
               .catch(() => undefined);
           } else if (event.event.type === "message.completed") {
@@ -1990,6 +1970,11 @@ function App() {
     resetAfterStop();
   }
 
+  function openProjects() {
+    setView("projects");
+    setSidebarOpen(false);
+  }
+
   async function openPackages() {
     setView("packages");
     setSidebarOpen(false);
@@ -2198,12 +2183,18 @@ function App() {
     acceptSnapshot(snap);
     setStatus("Agent Host ready");
     // Single list refresh after open — active flag comes from the live host once.
+    // Re-check host cwd: a concurrent openWorkspacePath (rapid project 新建会话)
+    // may have already switched the host; never write the *new* project's sessions
+    // under this path's bucket.
     const listed = await window.pix.session.list();
-    setThreads(mergeSidebarThreads(useShellStore.getState().threads, listed.threads));
-    setThreadsByCwd((prev) => ({
-      ...prev,
-      [normalizeCwdKey(cwd)]: mergeSidebarThreads(prev[normalizeCwdKey(cwd)] ?? [], listed.threads),
-    }));
+    const hostCwd = useShellStore.getState().snapshot?.cwd;
+    if (!hostCwd || normalizeCwdKey(hostCwd) !== normalizeCwdKey(cwd)) {
+      await refreshRecentWorkspaces();
+      return;
+    }
+    const matched = threadsForWorkspaceBucket(listed.threads, cwd);
+    setThreads(mergeSidebarThreads(useShellStore.getState().threads, matched));
+    cacheThreadsForCwd(cwd, matched);
     await refreshRecentWorkspaces();
   }
 
@@ -2470,54 +2461,86 @@ function App() {
   }
 
   const newThreadForProjectGenRef = useRef(0);
+  const newThreadForProjectInFlightRef = useRef(false);
+  const newThreadForProjectPendingPathRef = useRef<string | null>(null);
 
-  /** Open the selected project if needed, then create a new session under it. */
+  /**
+   * Open the selected project if needed, then create a new session under it.
+   * Serialized + latest-wins: concurrent openWorkspacePath used to race host
+   * listSessions into the wrong cwd bucket and hide 对话 rows.
+   */
   async function newThreadForProject(path: string) {
-    // Coalesce rapid multi-project「新建会话」clicks so a slower open cannot
-    // finish last and clobber the latest target / wipe the 对话 cache.
-    const gen = ++newThreadForProjectGenRef.current;
-    // Do not abort a generating session — main parks the busy host.
+    newThreadForProjectGenRef.current += 1;
+    newThreadForProjectPendingPathRef.current = path;
+    // Coalesce bursts: one in-flight op; later clicks only bump gen + pending path.
+    if (newThreadForProjectInFlightRef.current) return;
+
+    newThreadForProjectInFlightRef.current = true;
     try {
-      if (useShellStore.getState().contentMode === "terminal") {
-        beginSurfaceTransition();
-        setContentMode("chat", { persist: false });
-        await window.pix.terminal.suspend().catch(() => undefined);
+      while (true) {
+        const runGen = newThreadForProjectGenRef.current;
+        const target = newThreadForProjectPendingPathRef.current;
+        if (!target) break;
+        newThreadForProjectPendingPathRef.current = null;
+
+        try {
+          // Do not abort a generating session — main parks the busy host.
+          if (useShellStore.getState().contentMode === "terminal") {
+            beginSurfaceTransition();
+            setContentMode("chat", { persist: false });
+            await window.pix.terminal.suspend().catch(() => undefined);
+          }
+          if (runGen !== newThreadForProjectGenRef.current) continue;
+
+          setView("thread");
+          setSidebarOpen(false);
+          setPrompt("");
+          setReviewOpen(false);
+          setEvents([]);
+          setSentPrompts([]);
+          setLastFailure(undefined);
+          setAttachments([]);
+          useShellStore.getState().setHistory([]);
+          useShellStore.getState().clearLiveStream();
+          selectWorkspacePath(target);
+
+          const current = useShellStore.getState().snapshot?.cwd;
+          if (!current || normalizeCwdKey(current) !== normalizeCwdKey(target)) {
+            await openWorkspacePath(target, { resumeRecent: false });
+          } else {
+            await ensureHost();
+          }
+          if (runGen !== newThreadForProjectGenRef.current) continue;
+
+          setStatus("Creating thread...");
+          const opened = await window.pix.session.create();
+          if (runGen !== newThreadForProjectGenRef.current) continue;
+
+          markSessionOpenForBottomScroll();
+          applySessionOpen(opened);
+          requestContentReveal();
+          restoreSessionContentMode(opened.snapshot.sessionFile);
+          setStatus("Agent Host ready");
+          await refreshThreads();
+          // Keep 对话 rail warm while hopping between project hosts.
+          await refreshConversationSessions();
+        } catch (error) {
+          if (runGen !== newThreadForProjectGenRef.current) continue;
+          reportAppError(error, "无法在项目下新建会话");
+          setTimelineReady(true);
+          pendingScrollBottomRef.current = false;
+        }
+
+        // Another click arrived while we worked — run once more for the latest path.
+        if (runGen !== newThreadForProjectGenRef.current) continue;
+        break;
       }
-      if (gen !== newThreadForProjectGenRef.current) return;
-      setView("thread");
-      setSidebarOpen(false);
-      setPrompt("");
-      setReviewOpen(false);
-      setEvents([]);
-      setSentPrompts([]);
-      setLastFailure(undefined);
-      setAttachments([]);
-      useShellStore.getState().setHistory([]);
-      useShellStore.getState().clearLiveStream();
-      selectWorkspacePath(path);
-      const current = useShellStore.getState().snapshot?.cwd;
-      if (!current || normalizeCwdKey(current) !== normalizeCwdKey(path)) {
-        await openWorkspacePath(path, { resumeRecent: false });
-      } else {
-        await ensureHost();
+    } finally {
+      newThreadForProjectInFlightRef.current = false;
+      // Path queued after we cleared inFlight but before exit — pick it up.
+      if (newThreadForProjectPendingPathRef.current) {
+        void newThreadForProject(newThreadForProjectPendingPathRef.current);
       }
-      if (gen !== newThreadForProjectGenRef.current) return;
-      setStatus("Creating thread...");
-      const opened = await window.pix.session.create();
-      if (gen !== newThreadForProjectGenRef.current) return;
-      markSessionOpenForBottomScroll();
-      applySessionOpen(opened);
-      requestContentReveal();
-      restoreSessionContentMode(opened.snapshot.sessionFile);
-      setStatus("Agent Host ready");
-      await refreshThreads();
-      // Keep 对话 rail warm while hopping between project hosts.
-      await refreshConversationSessions();
-    } catch (error) {
-      if (gen !== newThreadForProjectGenRef.current) return;
-      reportAppError(error, "无法在项目下新建会话");
-      setTimelineReady(true);
-      pendingScrollBottomRef.current = false;
     }
   }
 
@@ -3133,6 +3156,7 @@ function App() {
         onResizeWidth={(px) => setSidebarWidthPx(px)}
         onNewThread={() => void newBlankTask()}
         onSelectProject={(path) => selectProjectPath(path)}
+        onOpenProjects={() => openProjects()}
         onOpenPackages={() => void openPackages()}
         onOpenResources={() => void openResources()}
         onOpenSettings={() => void openSettings()}
@@ -3434,6 +3458,27 @@ function App() {
               />
             </div>
           </section>
+        ) : view === "projects" ? (
+          <ProjectsPage
+            locale={locale}
+            workspacePath={workspacePath}
+            recentWorkspaces={recentWorkspaces}
+            threadsByCwd={threadsByCwd}
+            onOpenProject={(path) => {
+              void openWorkspacePath(path, { resumeRecent: true });
+              setView("thread");
+            }}
+            onCreateProject={() => void openWorkspacePicker()}
+            onNewSession={(path) => {
+              void newThreadForProject(path);
+              setView("thread");
+            }}
+            onOpenSession={(sessionPath, projectCwd) => {
+              void switchThread(sessionPath, projectCwd);
+              setView("thread");
+            }}
+            onRemoveProject={(path) => void removeRecentWorkspace(path)}
+          />
         ) : view === "packages" ? (
           <PackagesPage
             locale={locale}

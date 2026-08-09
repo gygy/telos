@@ -9,14 +9,12 @@
 import type { SessionThreadSummary } from "@pix/contracts";
 import {
   Archive,
-  Check,
   ChevronRight,
   Copy,
   ExternalLink,
   Folder,
   FolderGit2,
   FolderOpen,
-  GripVertical,
   Mail,
   MailOpen,
   MoreHorizontal,
@@ -41,6 +39,7 @@ import { anchorFromEvent, FloatingMenu, type AnchorRect } from "./FloatingMenu.t
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog.tsx";
 import { RenameDialog } from "./RenameDialog.tsx";
+import { SidebarOrganizeMenu } from "./SidebarOrganizeMenu.tsx";
 import { loadConfirmArchive, loadConfirmDelete } from "../lib/behavior-prefs.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import { useShellStore } from "../store/shell-store.ts";
@@ -91,11 +90,13 @@ import {
 import {
   loadConversationSortMode,
   loadGroupMode,
+  loadPinnedSectionOpen,
   loadProjectsSectionOpen,
   loadSortMode,
   loadThreadsSectionOpen,
   saveConversationSortMode,
   saveGroupMode,
+  savePinnedSectionOpen,
   saveProjectsSectionOpen,
   saveSortMode,
   saveThreadsSectionOpen,
@@ -167,6 +168,7 @@ export function ProjectList(props: ProjectListProps) {
     useState<ConversationSortMode>(loadConversationSortMode);
   const [projectsOpen, setProjectsOpen] = useState(loadProjectsSectionOpen);
   const [threadsOpen, setThreadsOpen] = useState(loadThreadsSectionOpen);
+  const [pinnedOpen, setPinnedOpen] = useState(loadPinnedSectionOpen);
   const [renameTarget, setRenameTarget] = useState<
     | { kind: "project"; path: string; value: string }
     | { kind: "thread"; id: string; value: string }
@@ -579,10 +581,20 @@ export function ProjectList(props: ProjectListProps) {
     setVisibleCounts(increaseVisibleThreadCount(path, visibleCounts));
   }
 
+  /** Apply layout / sort without closing — multi-section menu stays open for further tweaks. */
   function setGroup(mode: GroupMode) {
     setGroupMode(mode);
     saveGroupMode(mode);
-    closeMenus();
+    // List mode only shows 对话 — ensure that section is expanded and drop the
+    // projects organize popover (projects chrome is unmounted in this layout).
+    if (mode === "list") {
+      setThreadsOpen(true);
+      saveThreadsSectionOpen(true);
+      if (organizeKind === "projects") {
+        setOrganizeKind(null);
+        setOrganizeAnchor(null);
+      }
+    }
   }
 
   function setSort(mode: SortMode) {
@@ -594,7 +606,6 @@ export function ProjectList(props: ProjectListProps) {
     }
     setSortMode(mode);
     saveSortMode(mode);
-    closeMenus();
   }
 
   function toggleProjects() {
@@ -607,6 +618,13 @@ export function ProjectList(props: ProjectListProps) {
   function toggleThreads() {
     setThreadsOpen((v) => {
       saveThreadsSectionOpen(!v);
+      return !v;
+    });
+  }
+
+  function togglePinnedSection() {
+    setPinnedOpen((v) => {
+      savePinnedSectionOpen(!v);
       return !v;
     });
   }
@@ -644,7 +662,8 @@ export function ProjectList(props: ProjectListProps) {
     return (
       <div
         className={cn(
-          "ml-auto flex shrink-0 items-center justify-end gap-0.5 transition-opacity",
+          // Absolute right rail — CSS `.sidebar-section-actions` matches list RowActions.
+          "sidebar-section-actions transition-opacity",
           props.open
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0 group-hover/section:pointer-events-auto group-hover/section:opacity-100 group-focus-within/section:pointer-events-auto group-focus-within/section:opacity-100",
@@ -797,8 +816,11 @@ export function ProjectList(props: ProjectListProps) {
         parentFile ? tr("session.forkedFrom", { name: parentFile }) : tr("session.forked"),
       );
     }
+    // Nested project sessions always show path; flat list shows project cwd so rows are distinguishable.
     if (kind !== "conversation" && (thread.cwd || thread.path)) {
       tooltipParts.push(thread.cwd || thread.path);
+    } else if (kind === "conversation" && thread.cwd && !isNonProjectWorkspacePath(thread.cwd)) {
+      tooltipParts.push(thread.cwd);
     }
     // Prefer per-session markers. Fall back to runningSessions / active-row runState
     // so terminal hops and applySessionOpen cannot blank a busy glyph mid-flight.
@@ -873,14 +895,6 @@ export function ProjectList(props: ProjectListProps) {
               props.onSwitchThread(thread.path, thread.cwd);
             }}
           >
-            {manuallySortable ? (
-              <GripVertical
-                className="size-3.5 shrink-0 opacity-45"
-                strokeWidth={1.75}
-                data-testid={`thread-drag-handle-${thread.id}`}
-                aria-hidden
-              />
-            ) : null}
             {/* Under a project: spacer = Folder icon width so title lines up with project name. */}
             {indent ? <span className="inline-block size-4 shrink-0" aria-hidden /> : null}
             {unread ? (
@@ -1110,14 +1124,6 @@ export function ProjectList(props: ProjectListProps) {
               if (groupMode === "project") handleToggleExpand(path);
             }}
           >
-            {manuallySortable ? (
-              <GripVertical
-                className="size-3.5 shrink-0 opacity-45"
-                strokeWidth={1.75}
-                data-testid={`project-drag-handle-${normalizeWorkspaceKey(path)}`}
-                aria-hidden
-              />
-            ) : null}
             {worktree ? (
               <span
                 className="inline-flex shrink-0"
@@ -1175,12 +1181,10 @@ export function ProjectList(props: ProjectListProps) {
   }
 
   /**
-   * 对话分区：只收纯对话（conversation home / non-project cwd）。
-   * 项目会话绝不能出现在这里——即使项目卡片因 recent/selection 竞态暂时消失
-   * （否则会出现「全部涌入对话再弹回项目」的闪帧）。
-   *
-   * Do **not** rely only on `projectKeys` (current+recent+pinned): on project→对话
-   * switch that set can be empty for a frame while threadsByCwd still holds project sessions.
+   * 对话分区内容：
+   * - 按项目 (groupMode=project): 只收纯对话（conversation home / non-project cwd）。
+   *   项目会话留在项目卡片下，绝不能闪进对话。
+   * - 在一个列表中 (groupMode=list): 全部会话（项目 + 纯对话）扁平显示在对话分组。
    */
   const conversationList = useMemo(() => {
     const all: SessionThreadSummary[] = [];
@@ -1189,6 +1193,7 @@ export function ProjectList(props: ProjectListProps) {
     // Live rows come second so equal timestamps keep their current title/active metadata;
     // newer optimistic timestamps survive a slower disk refresh.
     const sources = mergeThreadRows(cached, [...cached, ...props.threads]);
+    const flatList = groupMode === "list";
     for (const t of sources) {
       if (
         !hasThreadMessages(t) ||
@@ -1197,7 +1202,7 @@ export function ProjectList(props: ProjectListProps) {
       ) {
         continue;
       }
-      if (!belongsInConversationsSection(t, { projectThreadIds })) continue;
+      if (!flatList && !belongsInConversationsSection(t, { projectThreadIds })) continue;
       all.push(t);
     }
     return sortThreadsByMode(all, conversationSortMode, pinnedThreads, manualThreadOrder);
@@ -1209,6 +1214,7 @@ export function ProjectList(props: ProjectListProps) {
     pinnedThreads,
     manualThreadOrder,
     conversationSortMode,
+    groupMode,
   ]);
 
   function setConversationSort(mode: ConversationSortMode) {
@@ -1223,7 +1229,6 @@ export function ProjectList(props: ProjectListProps) {
     }
     setConversationSortMode(mode);
     saveConversationSortMode(mode);
-    closeMenus();
   }
 
   return (
@@ -1231,91 +1236,119 @@ export function ProjectList(props: ProjectListProps) {
     <div
       className="pix-scroll flex min-h-0 min-w-0 flex-1 flex-col gap-0.5"
       data-testid="project-list"
+      data-group-mode={groupMode}
     >
-      {/* ── 置顶（独立分组，始终在项目上方） ── */}
+      {/* ── 置顶：list / project 均显示；可折叠 ── */}
       {pinnedPaths.length > 0 ? (
-        <div data-testid="pinned-projects" className="mb-1 min-w-0">
-          <div className="sidebar-section-label">{tr("section.pinned")}</div>
-          <div className="flex flex-col gap-0.5">
-            {pinnedPaths.map((path) =>
-              renderCard(path, {
-                manualSort: sortMode === "manual",
-                manualScope: "pinned",
-              }),
-            )}
+        <div data-testid="pinned-projects" className="mb-0.5 min-w-0 shrink-0">
+          <div
+            className="sidebar-section-head group/section"
+            data-expanded={pinnedOpen ? "true" : "false"}
+          >
+            <button
+              type="button"
+              className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 text-left"
+              data-testid="pinned-section-toggle"
+              aria-expanded={pinnedOpen}
+              onClick={togglePinnedSection}
+            >
+              <span className="min-w-0 truncate">{tr("section.pinned")}</span>
+              <ChevronRight
+                className={cn("sidebar-section-chevron size-4 shrink-0", pinnedOpen && "rotate-90")}
+                strokeWidth={2.25}
+                aria-hidden
+              />
+            </button>
           </div>
+          {pinnedOpen ? (
+            <div className="flex flex-col gap-0.5" data-testid="pinned-projects-list">
+              {pinnedPaths.map((path) =>
+                renderCard(path, {
+                  manualSort: sortMode === "manual",
+                  manualScope: "pinned",
+                }),
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      {/* ── 项目 ── */}
-      <div className="relative min-w-0 shrink-0">
-        <div
-          className="sidebar-section-head group/section"
-          data-expanded={projectsOpen ? "true" : "false"}
-        >
-          <button
-            type="button"
-            className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 truncate text-left"
-            data-testid="projects-section-toggle"
-            aria-expanded={projectsOpen}
-            onClick={toggleProjects}
-          >
-            <span className="min-w-0 truncate">{tr("section.projects")}</span>
-            <ChevronRight
-              className={cn("sidebar-section-chevron size-4 shrink-0", projectsOpen && "rotate-90")}
-              strokeWidth={2.25}
-              aria-hidden
-            />
-          </button>
-          <SectionActions open={organizeKind === "projects"} testIdPrefix="projects-section">
-            <button
-              type="button"
-              data-testid="projects-organize-btn"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
-              title={tr("organize.title")}
-              aria-label={tr("organize.title")}
-              onClick={(e) => openOrganizeMenu("projects", e)}
-            >
-              <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              data-testid="workspace-open"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
-              title={tr("workspace.open")}
-              aria-label={tr("workspace.open")}
-              onClick={props.onOpenWorkspace}
-            >
-              <Plus className="size-3.5" strokeWidth={1.75} />
-            </button>
-          </SectionActions>
-        </div>
-
-        {projectsOpen ? (
+      {/* ── 项目：仅「按项目」布局 ── */}
+      {groupMode === "project" ? (
+        <div className="relative min-w-0 shrink-0">
           <div
-            className="flex min-w-0 flex-col gap-0.5 overflow-x-hidden"
-            data-testid="recent-workspaces"
+            className="sidebar-section-head group/section"
+            data-expanded={projectsOpen ? "true" : "false"}
           >
-            {restPaths.length === 0 && pinnedPaths.length === 0 ? (
-              // Keep list empty when no real project — never show auto date folders or stubs.
-              props.workspacePath && !isNonProjectWorkspacePath(props.workspacePath) ? (
-                <div className="sidebar-list-row" data-testid="workspace-current">
-                  <span data-testid="workspace-name">{displayName(props.workspacePath)}</span>
-                </div>
-              ) : null
-            ) : (
-              restPaths.map((path) =>
-                renderCard(path, {
-                  manualSort: sortMode === "manual",
-                  manualScope: "projects",
-                }),
-              )
-            )}
+            <button
+              type="button"
+              className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 text-left"
+              data-testid="projects-section-toggle"
+              aria-expanded={projectsOpen}
+              onClick={toggleProjects}
+            >
+              <span className="min-w-0 truncate">{tr("section.projects")}</span>
+              <ChevronRight
+                className={cn(
+                  "sidebar-section-chevron size-4 shrink-0",
+                  projectsOpen && "rotate-90",
+                )}
+                strokeWidth={2.25}
+                aria-hidden
+              />
+            </button>
+            <SectionActions open={organizeKind === "projects"} testIdPrefix="projects-section">
+              <button
+                type="button"
+                data-testid="projects-organize-btn"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
+                title={tr("organize.title")}
+                aria-label={tr("organize.title")}
+                aria-haspopup="menu"
+                aria-expanded={organizeKind === "projects"}
+                onClick={(e) => openOrganizeMenu("projects", e)}
+              >
+                <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                data-testid="workspace-open"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
+                title={tr("workspace.open")}
+                aria-label={tr("workspace.open")}
+                onClick={props.onOpenWorkspace}
+              >
+                <Plus className="size-3.5" strokeWidth={1.75} />
+              </button>
+            </SectionActions>
           </div>
-        ) : null}
-      </div>
 
-      {/* ── 对话：可折叠；展开时列出全部会话（无「展开显示」分页） ── */}
+          {projectsOpen ? (
+            <div
+              className="flex min-w-0 flex-col gap-0.5 overflow-x-hidden"
+              data-testid="recent-workspaces"
+            >
+              {restPaths.length === 0 && pinnedPaths.length === 0 ? (
+                // Keep list empty when no real project — never show auto date folders or stubs.
+                props.workspacePath && !isNonProjectWorkspacePath(props.workspacePath) ? (
+                  <div className="sidebar-list-row" data-testid="workspace-current">
+                    <span data-testid="workspace-name">{displayName(props.workspacePath)}</span>
+                  </div>
+                ) : null
+              ) : (
+                restPaths.map((path) =>
+                  renderCard(path, {
+                    manualSort: sortMode === "manual",
+                    manualScope: "projects",
+                  }),
+                )
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* ── 对话：list 模式含全部会话；project 模式仅纯对话。list 模式无「+」。 ── */}
       <div className="mt-0.5 min-w-0 shrink-0">
         <div
           className="sidebar-section-head group/section"
@@ -1323,7 +1356,7 @@ export function ProjectList(props: ProjectListProps) {
         >
           <button
             type="button"
-            className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 truncate text-left"
+            className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 text-left"
             data-testid="threads-section-toggle"
             aria-expanded={threadsOpen}
             onClick={toggleThreads}
@@ -1335,7 +1368,6 @@ export function ProjectList(props: ProjectListProps) {
               aria-hidden
             />
           </button>
-          {/* Organize + global 新建会话 — no project binding. */}
           <SectionActions open={organizeKind === "threads"} testIdPrefix="threads-section">
             <button
               type="button"
@@ -1343,6 +1375,8 @@ export function ProjectList(props: ProjectListProps) {
               className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
               title={tr("organize.title")}
               aria-label={tr("organize.title")}
+              aria-haspopup="menu"
+              aria-expanded={organizeKind === "threads"}
               onClick={(e) => openOrganizeMenu("threads", e)}
             >
               <MoreHorizontal className="size-3.5" strokeWidth={1.75} />
@@ -1551,80 +1585,31 @@ export function ProjectList(props: ProjectListProps) {
           : null}
       </FloatingMenu>
 
-      <FloatingMenu
-        open={organizeKind === "projects" && Boolean(organizeAnchor)}
-        anchor={organizeAnchor}
-        onClose={closeMenus}
-        testId="projects-organize-menu"
-        minWidth={200}
-      >
-        <p className="px-3 pt-1 pb-1.5 text-[11px] text-[var(--text-subtle)]">
-          {tr("organize.title")}
-        </p>
-        <CheckItem
-          label={tr("organize.byProject")}
-          checked={groupMode === "project"}
-          onClick={() => setGroup("project")}
-          testId="organize-by-project"
+      {organizeKind === "projects" ? (
+        <SidebarOrganizeMenu
+          kind="projects"
+          open
+          anchor={organizeAnchor}
+          locale={props.locale}
+          groupMode={groupMode}
+          sortMode={sortMode}
+          onClose={closeMenus}
+          onGroupMode={setGroup}
+          onSort={setSort}
         />
-        <CheckItem
-          label={tr("organize.inOneList")}
-          checked={groupMode === "list"}
-          onClick={() => setGroup("list")}
-          testId="organize-in-list"
+      ) : organizeKind === "threads" ? (
+        <SidebarOrganizeMenu
+          kind="threads"
+          open
+          anchor={organizeAnchor}
+          locale={props.locale}
+          groupMode={groupMode}
+          sortMode={conversationSortMode}
+          onClose={closeMenus}
+          onGroupMode={setGroup}
+          onSort={setConversationSort}
         />
-        <p className="mt-1.5 px-3 pt-1.5 pb-1.5 text-[11px] text-[var(--text-subtle)]">
-          {tr("organize.sort")}
-        </p>
-        <CheckItem
-          label={tr("organize.sortPriority")}
-          checked={sortMode === "priority"}
-          onClick={() => setSort("priority")}
-          testId="organize-sort-priority"
-        />
-        <CheckItem
-          label={tr("organize.sortRecent")}
-          checked={sortMode === "recent"}
-          onClick={() => setSort("recent")}
-          testId="organize-sort-recent"
-        />
-        <CheckItem
-          label={tr("organize.sortManual")}
-          checked={sortMode === "manual"}
-          onClick={() => setSort("manual")}
-          testId="organize-sort-manual"
-        />
-      </FloatingMenu>
-
-      <FloatingMenu
-        open={organizeKind === "threads" && Boolean(organizeAnchor)}
-        anchor={organizeAnchor}
-        onClose={closeMenus}
-        testId="threads-organize-menu"
-        minWidth={200}
-      >
-        <p className="px-3 pt-1 pb-1.5 text-[11px] text-[var(--text-subtle)]">
-          {tr("organize.sort")}
-        </p>
-        <CheckItem
-          label={tr("organize.sortPriority")}
-          checked={conversationSortMode === "priority"}
-          onClick={() => setConversationSort("priority")}
-          testId="threads-organize-sort-priority"
-        />
-        <CheckItem
-          label={tr("organize.sortRecent")}
-          checked={conversationSortMode === "recent"}
-          onClick={() => setConversationSort("recent")}
-          testId="threads-organize-sort-recent"
-        />
-        <CheckItem
-          label={tr("organize.sortManual")}
-          checked={conversationSortMode === "manual"}
-          onClick={() => setConversationSort("manual")}
-          testId="threads-organize-sort-manual"
-        />
-      </FloatingMenu>
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(confirm)}
@@ -1705,31 +1690,6 @@ function MenuItem(props: {
       onClick={props.onClick}
     >
       <span className="opacity-70">{props.icon}</span>
-      <span className="min-w-0 flex-1 truncate">{props.label}</span>
-    </button>
-  );
-}
-
-function CheckItem(props: {
-  label: string;
-  checked: boolean;
-  onClick: () => void;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitemradio"
-      aria-checked={props.checked}
-      data-testid={props.testId}
-      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-[var(--popover-foreground)] hover:bg-[var(--hover-fill)]"
-      onClick={props.onClick}
-    >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-        {props.checked ? (
-          <Check className="size-3.5 text-[var(--foreground)]" strokeWidth={2} />
-        ) : null}
-      </span>
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
     </button>
   );

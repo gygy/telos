@@ -80,7 +80,7 @@ function scheduleMarkerClear(key: string, delayMs: number, apply: () => void): v
   );
 }
 
-export type ShellView = "thread" | "packages" | "resources" | "settings";
+export type ShellView = "thread" | "projects" | "packages" | "resources" | "settings";
 export type ColorMode = ResolvedColorMode;
 export type { ThemePreference, ResolvedColorMode };
 /** Implemented settings sections only (no stub / coming-soon nav). */

@@ -4,12 +4,17 @@ export type GroupMode = "project" | "list";
 export type SortMode = "priority" | "recent" | "manual";
 export type ConversationSortMode = SortMode;
 
+/** Canonical sort modes — keep UI option lists in sync with parsers below. */
+export const SORT_MODES: readonly SortMode[] = ["priority", "recent", "manual"] as const;
+export const GROUP_MODES: readonly GroupMode[] = ["project", "list"] as const;
+
 const GROUP_KEY = "pix.sidebar.groupMode";
 const SORT_KEY = "pix.sidebar.sortMode";
 /** Sort prefs for the 对话 (conversations) section — independent of projects. */
 const CONVERSATION_SORT_KEY = "pix.sidebar.conversationSortMode";
 const PROJECTS_OPEN_KEY = "pix.sidebar.projectsOpen";
 const THREADS_OPEN_KEY = "pix.sidebar.threadsOpen";
+const PINNED_OPEN_KEY = "pix.sidebar.pinnedOpen";
 
 function loadString(key: string, fallback: string): string {
   try {
@@ -46,19 +51,30 @@ function saveBool(key: string, value: boolean): void {
   }
 }
 
+function parseGroupMode(raw: string): GroupMode {
+  return raw === "list" ? "list" : "project";
+}
+
+function parseSortMode(raw: string): SortMode {
+  if (raw === "manual" || raw === "recent") return raw;
+  return "priority";
+}
+
 export function loadGroupMode(): GroupMode {
-  const v = loadString(GROUP_KEY, "project");
-  return v === "list" ? "list" : "project";
+  return parseGroupMode(loadString(GROUP_KEY, "project"));
 }
 
 export function saveGroupMode(mode: GroupMode): void {
   saveString(GROUP_KEY, mode);
+  try {
+    window.dispatchEvent(new Event("pix-sidebar-group-mode"));
+  } catch {
+    // ignore (non-browser)
+  }
 }
 
 export function loadSortMode(): SortMode {
-  const v = loadString(SORT_KEY, "priority");
-  if (v === "manual") return "manual";
-  return v === "recent" ? "recent" : "priority";
+  return parseSortMode(loadString(SORT_KEY, "priority"));
 }
 
 export function saveSortMode(mode: SortMode): void {
@@ -66,9 +82,7 @@ export function saveSortMode(mode: SortMode): void {
 }
 
 export function loadConversationSortMode(): ConversationSortMode {
-  const v = loadString(CONVERSATION_SORT_KEY, "priority");
-  if (v === "manual") return "manual";
-  return v === "recent" ? "recent" : "priority";
+  return parseSortMode(loadString(CONVERSATION_SORT_KEY, "priority"));
 }
 
 export function saveConversationSortMode(mode: ConversationSortMode): void {
@@ -89,4 +103,12 @@ export function loadThreadsSectionOpen(): boolean {
 
 export function saveThreadsSectionOpen(open: boolean): void {
   saveBool(THREADS_OPEN_KEY, open);
+}
+
+export function loadPinnedSectionOpen(): boolean {
+  return loadBool(PINNED_OPEN_KEY, true);
+}
+
+export function savePinnedSectionOpen(open: boolean): void {
+  saveBool(PINNED_OPEN_KEY, open);
 }

@@ -214,7 +214,7 @@ export type ProjectSortMode = "priority" | "recent" | "manual";
 
 /**
  * Order projects in the 项目 section (pinned live in 置顶 and are not passed here).
- * - priority: preserve input order (pinned projects are partitioned by the caller)
+ * - priority: keep default/add order unchanged (new projects stay where they were appended)
  * - recent: follow recentOrder (most recent first); unknowns last
  * - manual: saved paths first, then new/unknown paths in input order
  */
@@ -525,7 +525,10 @@ export function mergeThreadRows<
   return [...mergedById.values()];
 }
 
-/** Sort: pinned first (pin order), then preserve the remaining input order. */
+/**
+ * Default session order under a project card: preserve list order (priority).
+ * Pin is a badge/action only — it does not reorder under「优先级」.
+ */
 export function sortThreadsWithPins<
   T extends { id: string; modifiedAt: string; createdAt?: string },
 >(threads: T[], pinned: readonly string[]): T[] {
@@ -555,14 +558,16 @@ export function moveItemInManualOrder(
 
 /**
  * Sort sidebar threads/conversations.
- * - priority: pinned first (pin order), then preserve the remaining input order
+ * - priority: keep default/add order unchanged (new sessions stay where they landed)
  * - recent: modifiedAt desc only
  * - manual: saved ids first, then new/unknown ids in input order
+ *
+ * Pin is independent of sort mode (badge + 置顶 section for projects).
  */
 export function sortThreadsByMode<T extends { id: string; modifiedAt: string; createdAt?: string }>(
   threads: T[],
   mode: ThreadSortMode,
-  pinned: readonly string[],
+  _pinned: readonly string[] = [],
   manualOrder: readonly string[] = [],
 ): T[] {
   const compare = (left: T, right: T) => compareThreadRecency(left, right);
@@ -580,14 +585,6 @@ export function sortThreadsByMode<T extends { id: string; modifiedAt: string; cr
     });
   }
 
-  const pinIndex = new Map(pinned.map((id, i) => [id, i]));
-
-  return [...threads].sort((a, b) => {
-    const ap = pinIndex.has(a.id);
-    const bp = pinIndex.has(b.id);
-    if (ap && bp) return (pinIndex.get(a.id) ?? 0) - (pinIndex.get(b.id) ?? 0);
-    if (ap) return -1;
-    if (bp) return 1;
-    return 0;
-  });
+  // priority: stable default order — do not reorder by pin or recency.
+  return [...threads];
 }

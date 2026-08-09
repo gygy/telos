@@ -9,6 +9,7 @@ import {
   mergeRecentWithOpenProject,
   prependRecentPath,
   projectThreadIdsFromCwdMap,
+  threadsForWorkspaceBucket,
   unionRecentWorkspaces,
   workspaceLabel,
 } from "./workspace.ts";
@@ -115,12 +116,20 @@ describe("workspace helpers", () => {
 
   it("never classifies project-bound sessions into the 对话 section", () => {
     const byCwd = {
-      "/Users/me/code/pix": [{ id: "proj-1" }, { id: "proj-2" }],
-      "/Users/me/Documents/Pix/conversations": [{ id: "conv-1" }],
+      "/Users/me/code/pix": [
+        { id: "proj-1", cwd: "/Users/me/code/pix" },
+        { id: "proj-2", cwd: "/Users/me/code/pix" },
+        // Leaked conversation row under a project key must not join projectThreadIds.
+        { id: "conv-leaked", cwd: "/Users/me/Documents/Pix/conversations" },
+      ],
+      "/Users/me/Documents/Pix/conversations": [
+        { id: "conv-1", cwd: "/Users/me/Documents/Pix/conversations" },
+      ],
     };
     const projectIds = projectThreadIdsFromCwdMap(byCwd);
     expect(projectIds.has("proj-1")).toBe(true);
     expect(projectIds.has("conv-1")).toBe(false);
+    expect(projectIds.has("conv-leaked")).toBe(false);
 
     // Even if projectKeys is empty (selection/recent race), cwd type decides.
     expect(
@@ -135,9 +144,32 @@ describe("workspace helpers", () => {
         { projectThreadIds: projectIds },
       ),
     ).toBe(true);
+    // Conversation cwd wins even if the id was also written into a project map.
+    expect(
+      belongsInConversationsSection(
+        { id: "conv-leaked", cwd: "/Users/me/Documents/Pix/conversations" },
+        { projectThreadIds: new Set(["conv-leaked", "proj-1"]) },
+      ),
+    ).toBe(true);
     // Bucket membership wins when cwd is briefly missing.
     expect(
       belongsInConversationsSection({ id: "proj-2", cwd: "" }, { projectThreadIds: projectIds }),
     ).toBe(false);
+  });
+
+  it("filters host list rows into the correct workspace bucket", () => {
+    const rows = [
+      { id: "a", cwd: "/Users/me/code/pix" },
+      { id: "b", cwd: "/Users/me/code/other" },
+      { id: "c", cwd: "/Users/me/Documents/Pix/conversations" },
+      { id: "live", cwd: "" },
+    ];
+    expect(threadsForWorkspaceBucket(rows, "/Users/me/code/pix").map((r) => r.id)).toEqual([
+      "a",
+      "live",
+    ]);
+    expect(
+      threadsForWorkspaceBucket(rows, "/Users/me/Documents/Pix/conversations").map((r) => r.id),
+    ).toEqual(["c", "live"]);
   });
 });

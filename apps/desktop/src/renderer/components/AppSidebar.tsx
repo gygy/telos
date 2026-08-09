@@ -12,6 +12,7 @@ import {
   CircleAlert,
   Boxes,
   Download,
+  Folder,
   FolderGit2,
   GitBranch,
   Keyboard,
@@ -43,6 +44,7 @@ import {
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import { SHELL_SIDEBAR } from "../lib/layout.ts";
 import { clampSidebarWidth, SIDEBAR_COLLAPSED_WIDTH } from "../lib/sidebar-prefs.ts";
+import { loadGroupMode, type GroupMode } from "../lib/sidebar-organize.ts";
 import { cn } from "../lib/utils.ts";
 import type { SessionMarker } from "../lib/session-markers.ts";
 import type { SettingsSection, ShellView } from "../store/shell-store.ts";
@@ -99,6 +101,7 @@ export interface AppSidebarProps {
   onResizeWidth: (px: number) => void;
   onNewThread: () => void;
   onSelectProject: (path: string | undefined) => void;
+  onOpenProjects: () => void;
   onOpenPackages: () => void;
   onOpenResources: () => void;
   onOpenSettings: () => void;
@@ -323,6 +326,14 @@ function ProductRail(
   },
 ) {
   const { tr } = props;
+  // List layout hides 置顶/项目 rail groups — surface a full-page 项目 manager instead.
+  const [groupMode, setGroupMode] = useState<GroupMode>(loadGroupMode);
+  useEffect(() => {
+    const sync = () => setGroupMode(loadGroupMode());
+    window.addEventListener("pix-sidebar-group-mode", sync);
+    return () => window.removeEventListener("pix-sidebar-group-mode", sync);
+  }, []);
+
   return (
     <>
       {/* Brand row: title left-aligned with nav/list rows (same px-2.5 content inset). */}
@@ -363,6 +374,15 @@ function ProductRail(
           <SquarePen className="size-4 shrink-0 opacity-85" strokeWidth={1.6} />
           <span className="truncate">{tr("nav.newThread")}</span>
         </button>
+        {groupMode === "list" ? (
+          <NavBtn
+            testId="nav-projects"
+            active={props.view === "projects"}
+            icon={<Folder className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />}
+            label={tr("nav.projects")}
+            onClick={props.onOpenProjects}
+          />
+        ) : null}
         <NavBtn
           testId="nav-packages"
           active={props.view === "packages"}
