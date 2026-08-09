@@ -342,8 +342,17 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       timeout: 30_000,
     });
 
-    // The section-level action always starts a conversation and clears project selection.
-    await page.getByTestId("threads-new-btn").click({ force: true });
+    // Opening apps/desktop can surface the trust ask dialog (gated .pi resources).
+    // Dismiss so it does not trap focus / block subsequent sidebar clicks.
+    const trustDialog = page.getByTestId("project-trust-dialog");
+    if (await trustDialog.isVisible().catch(() => false)) {
+      await page.getByTestId("project-trust-dialog-later").click();
+      await expect(trustDialog).toBeHidden({ timeout: 10_000 });
+    }
+
+    // Section actions use pointer-events-none until hover; Playwright force:true still
+    // loses the hit test. Invoke the button DOM click directly.
+    await page.getByTestId("threads-new-btn").evaluate((el: HTMLButtonElement) => el.click());
     await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "conversation", {
       timeout: 30_000,
     });
@@ -354,6 +363,12 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await project.click();
     await expect(project).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project");
+
+    // Trust may reappear when re-selecting / opening the gated project.
+    if (await trustDialog.isVisible().catch(() => false)) {
+      await page.getByTestId("project-trust-dialog-later").click();
+      await expect(trustDialog).toBeHidden({ timeout: 10_000 });
+    }
 
     await page.getByTestId("start-host").click();
     await expect(page.getByTestId("runtime-snapshot").first()).toContainText(projectPath, {

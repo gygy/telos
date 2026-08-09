@@ -27,6 +27,7 @@ import { CommandPalette } from "./components/CommandPalette.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
+import { ExtensionUiHost } from "./components/ExtensionUiHost.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
 import { SessionInfoPanel, SessionTreePanel } from "./components/SessionParityPanels.tsx";
 import { RenameDialog } from "./components/RenameDialog.tsx";
@@ -72,6 +73,7 @@ import {
   resolveSkinColorMode,
 } from "./lib/theme-packs.ts";
 import { cn } from "./lib/utils.ts";
+import { isExtensionUiDialogMethod, promptExtensionUiDialog } from "./lib/extension-ui-prompt.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
   clampToAvailableServiceTier,
@@ -200,38 +202,12 @@ function maybeMarkUnreadForRuntime(runtimeId: string): void {
   });
 }
 
-function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
 async function respondToExtensionUi(event: Extract<HostEvent, { type: "extensionUi.request" }>) {
-  const args = record(event.args);
-  if (!args || !["select", "confirm", "input", "editor"].includes(event.method)) return;
-  let value: unknown;
-  let ok = true;
-  if (event.method === "confirm") {
-    value = window.confirm(`${text(args.title, "Confirm")}\n\n${text(args.message)}`);
-  } else if (event.method === "input" || event.method === "editor") {
-    value = window.prompt(
-      text(args.title, event.method === "editor" ? "Editor" : "Input"),
-      text(event.method === "editor" ? args.prefill : args.placeholder),
-    );
-    ok = value !== null;
-    if (!ok) value = undefined;
-  } else {
-    const options = Array.isArray(args.options)
-      ? args.options.filter((item) => typeof item === "string")
-      : [];
-    value = window.prompt(`${text(args.title, "Select")}\n\n${options.join("\n")}`, options[0]);
-    ok = typeof value === "string" && options.includes(value);
-    if (!ok) value = undefined;
-  }
+  if (!isExtensionUiDialogMethod(event.method)) return;
+  const { ok, value } = await promptExtensionUiDialog({
+    ...event,
+    method: event.method,
+  });
   await window.pix.extensionUi.respond({
     runtimeId: event.runtimeId,
     requestId: event.requestId,
@@ -1158,7 +1134,9 @@ function App() {
           // around host/session lifecycle without a user prompt and stuck the sidebar spinner.
           // Busy markers are only set by sendPrompt → setSessionRunning(true).
         } else if (event.type === "extensionUi.request") {
-          if (event.runtimeId !== store.runtimeId) return;
+          // Drop only when a different runtime is active. Allow through when
+          // runtimeId is not yet set (session_start can race host.ready).
+          if (store.runtimeId && event.runtimeId !== store.runtimeId) return;
           // Only show waiting if this session is already in a user-initiated turn.
           const key = sessionKeyFromSnapshot(store.snapshot);
           if (key && store.runningSessions[key]) {
@@ -3616,6 +3594,8 @@ function App() {
         confirmLabel={t(locale, "error.dialogOk")}
         onClose={clearAppError}
       />
+
+      <ExtensionUiHost locale={locale} />
     </div>
   );
 }

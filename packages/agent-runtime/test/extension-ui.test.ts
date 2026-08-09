@@ -13,6 +13,10 @@ describe("U01-U04 portable Extension UI bridge", () => {
     const request = requests.at(-1);
     expect(request).toMatchObject({ method: "select", runtimeId: "runtime-current" });
     if (!request) throw new Error("Select request was not emitted");
+    // Host/renderer must receive the options array (pix#32).
+    expect(request).toMatchObject({
+      args: { title: "Choose", options: ["alpha", "beta"] },
+    });
     expect(
       bridge.respond({
         runtimeId: "runtime-stale",
@@ -57,6 +61,8 @@ describe("U01-U04 portable Extension UI bridge", () => {
     await expect(input).resolves.toBeUndefined();
 
     const pending = bridge.uiContext.select("Pending", ["one"]);
+    const selectReq = requests.find((request) => request.method === "select");
+    expect(selectReq?.args).toEqual({ title: "Pending", options: ["one"] });
     bridge.dispose();
     await expect(pending).resolves.toBeUndefined();
     expect(requests.map((request) => request.method)).toEqual(["confirm", "input", "select"]);
