@@ -750,14 +750,24 @@ export const TimelineRow = memo(function TimelineRow(props: {
   }
 
   // Shell / errors / other system notes — default Marker card.
+  // Extension custom message/entry use the same generic serializable fallback
+  // (no TUI renderer factories); content is still sanitized Markdown.
+  const extension = item.extension === true;
+  const systemTitle = item.title
+    ? extension
+      ? t(props.locale, "extensionUi.customMessage", { type: item.title })
+      : item.title
+    : undefined;
   return (
     <Marker
       variant="default"
       className={cn(
         "content-system-card items-start gap-2",
         item.tone === "error" && "is-error text-destructive",
+        extension && "content-system-card-extension",
       )}
       data-kind="system"
+      {...(extension ? { "data-extension": "true" } : {})}
     >
       {item.tone === "error" ? (
         <MarkerIcon>
@@ -765,7 +775,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
         </MarkerIcon>
       ) : null}
       <MarkerContent className="min-w-0 flex-1">
-        {item.title ? <div className="content-system-title">{item.title}</div> : null}
+        {systemTitle ? <div className="content-system-title">{systemTitle}</div> : null}
         {item.text ? (
           <MarkdownContent
             className="content-system-body"

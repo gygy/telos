@@ -40,6 +40,7 @@ export function ExtensionUiHost(props: { locale: Locale }) {
         open
         title={title}
         options={options}
+        locale={props.locale}
         cancelLabel={cancelLabel}
         onSelect={(value) => settleExtensionUiDialog({ ok: true, value })}
         onCancel={() => settleExtensionUiDialog({ ok: false, value: undefined })}
@@ -71,6 +72,7 @@ export function ExtensionUiHost(props: { locale: Locale }) {
       title={title}
       initialValue={initial}
       multiline={request.method === "editor"}
+      locale={props.locale}
       confirmLabel={confirmLabel}
       cancelLabel={cancelLabel}
       testId={

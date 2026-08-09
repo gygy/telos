@@ -27,6 +27,7 @@ import { CommandPalette } from "./components/CommandPalette.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
+import { ExtensionUiChrome } from "./components/ExtensionUiChrome.tsx";
 import { ExtensionUiHost } from "./components/ExtensionUiHost.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
 import { SessionInfoPanel, SessionTreePanel } from "./components/SessionParityPanels.tsx";
@@ -74,6 +75,12 @@ import {
 } from "./lib/theme-packs.ts";
 import { cn } from "./lib/utils.ts";
 import { isExtensionUiDialogMethod, promptExtensionUiDialog } from "./lib/extension-ui-prompt.ts";
+import {
+  applyExtensionUiFireForget,
+  emptyExtensionUiPortableState,
+  isExtensionUiFireForgetMethod,
+  type ExtensionUiPortableState,
+} from "./lib/extension-ui-state.ts";
 import { t, type Locale } from "./lib/i18n.ts";
 import {
   clampToAvailableServiceTier,
@@ -216,6 +223,19 @@ async function respondToExtensionUi(event: Extract<HostEvent, { type: "extension
   });
 }
 
+function applyExtensionNotify(
+  notify: { message: string; type: "info" | "warning" | "error" } | undefined,
+): void {
+  if (!notify?.message) return;
+  // Surface in host status strip; escalate error/warning to OS notifications.
+  useShellStore.getState().setStatus(notify.message);
+  if (notify.type === "error") {
+    maybeNotify("error", notify.message);
+  } else if (notify.type === "warning") {
+    maybeNotify("error", notify.message);
+  }
+}
+
 function hostPillState(status: string, running: boolean): string {
   if (running) return "running";
   const lower = status.toLowerCase();
@@ -282,6 +302,12 @@ function App() {
   const setContentMode = useShellStore((s) => s.setContentMode);
   /** When false, PiTuiTerminal is unmounted (no previous-session canvas). */
   const [terminalSurfaceActive, setTerminalSurfaceActive] = useState(true);
+  /** Portable extension fire-and-forget chrome (status / widgets / title / working). */
+  const [extensionUiState, setExtensionUiState] = useState<ExtensionUiPortableState>(() =>
+    emptyExtensionUiPortableState(),
+  );
+  const extensionUiStateRef = useRef(extensionUiState);
+  extensionUiStateRef.current = extensionUiState;
   /** Session file the mounted terminal is waiting for (normed path). */
   const transitionSessionRef = useRef<string | null>(null);
   /** Match main-process session keys (macOS /private/var collapse). */
@@ -894,6 +920,16 @@ function App() {
         const store = useShellStore.getState();
         if (event.type === "host.ready" || event.type === "runtime.snapshot") {
           store.acceptSnapshot(event.snapshot);
+          // New runtime → drop previous extension chrome (status/widgets/title).
+          if (
+            event.snapshot.runtimeId &&
+            extensionUiStateRef.current.runtimeId &&
+            event.snapshot.runtimeId !== extensionUiStateRef.current.runtimeId
+          ) {
+            const cleared = emptyExtensionUiPortableState(event.snapshot.runtimeId);
+            extensionUiStateRef.current = cleared;
+            setExtensionUiState(cleared);
+          }
           // Host up → refresh pi-home status (packages / resources), project or not.
           if (event.type === "host.ready") void refreshPiStatus({ ensure: false });
         } else if (event.type === "host.restarted") {
@@ -901,6 +937,11 @@ function App() {
           // Clear busy markers bound to the previous runtime (e.g. abort-timeout recycle).
           store.settleSessionByRuntime(event.previousRuntimeId, "aborted");
           store.setStatus("Agent Host restarted");
+          {
+            const cleared = emptyExtensionUiPortableState(event.snapshot.runtimeId);
+            extensionUiStateRef.current = cleared;
+            setExtensionUiState(cleared);
+          }
           void refreshPiStatus({ ensure: false });
         } else if (event.type === "host.crashed") {
           // Background (parked) host death must not wipe the foreground session.
@@ -909,6 +950,11 @@ function App() {
             return;
           }
           store.resetAfterCrash(event.message);
+          {
+            const cleared = emptyExtensionUiPortableState();
+            extensionUiStateRef.current = cleared;
+            setExtensionUiState(cleared);
+          }
           maybeNotify("crash", event.message);
         } else if (event.type === "session.list") {
           store.setThreads(mergeSidebarThreads(store.threads, event.threads));
@@ -1137,21 +1183,37 @@ function App() {
           // Drop only when a different runtime is active. Allow through when
           // runtimeId is not yet set (session_start can race host.ready).
           if (store.runtimeId && event.runtimeId !== store.runtimeId) return;
-          // Only show waiting if this session is already in a user-initiated turn.
-          const key = sessionKeyFromSnapshot(store.snapshot);
-          if (key && store.runningSessions[key]) {
-            store.setSessionMarker(key, "waiting", {
+
+          // Fire-and-forget portable methods (notify/status/widget/title/editor/working).
+          if (isExtensionUiFireForgetMethod(event.method)) {
+            const result = applyExtensionUiFireForget(extensionUiStateRef.current, {
               runtimeId: event.runtimeId,
-              reason: event.method,
+              method: event.method,
+              args: event.args,
+            });
+            extensionUiStateRef.current = result.state;
+            setExtensionUiState(result.state);
+            if (result.editorText !== undefined) {
+              store.setPrompt(result.editorText);
+            }
+            applyExtensionNotify(result.notify);
+          } else if (isExtensionUiDialogMethod(event.method)) {
+            // Only show waiting if this session is already in a user-initiated turn.
+            const key = sessionKeyFromSnapshot(store.snapshot);
+            if (key && store.runningSessions[key]) {
+              store.setSessionMarker(key, "waiting", {
+                runtimeId: event.runtimeId,
+                reason: event.method,
+              });
+            }
+            void respondToExtensionUi(event).finally(() => {
+              const st = useShellStore.getState();
+              const k = sessionKeyFromSnapshot(st.snapshot);
+              if (k && st.runningSessions[k]) {
+                st.setSessionMarker(k, "running", { runtimeId: event.runtimeId });
+              }
             });
           }
-          void respondToExtensionUi(event).finally(() => {
-            const st = useShellStore.getState();
-            const k = sessionKeyFromSnapshot(st.snapshot);
-            if (k && st.runningSessions[k]) {
-              st.setSessionMarker(k, "running", { runtimeId: event.runtimeId });
-            }
-          });
         }
         // Events ring is diagnostics / activity only — not the text authority.
         store.setEvents((current) => appendHostEvent(current, event));
@@ -3095,6 +3157,9 @@ function App() {
                 onToggleContentMode={() => void toggleContentModeSurface()}
               />
             ) : null}
+            {contentMode === "chat" ? (
+              <ExtensionUiChrome locale={locale} state={extensionUiState} region="header" />
+            ) : null}
 
             {/*
               Env panel:
@@ -3235,6 +3300,13 @@ function App() {
                               aria-hidden
                             />
                           ) : null}
+                          <div className="pointer-events-auto w-full">
+                            <ExtensionUiChrome
+                              locale={locale}
+                              state={extensionUiState}
+                              region="aboveEditor"
+                            />
+                          </div>
                           <Composer
                             locale={locale}
                             prompt={prompt}
@@ -3305,6 +3377,13 @@ function App() {
                             queuedMessages={queuedMessages}
                             onClearQueue={() => void clearQueuedMessages()}
                           />
+                          <div className="pointer-events-auto w-full">
+                            <ExtensionUiChrome
+                              locale={locale}
+                              state={extensionUiState}
+                              region="belowEditor"
+                            />
+                          </div>
                         </div>
                       </>
                     }

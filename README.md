@@ -144,6 +144,7 @@ React Renderer → Preload → Electron Main → utilityProcess Agent Host → p
 - Electron `userData` is only for desktop chrome prefs — never a second agent config layer.
 - A fresh pi home receives no Pix packages, resources, or custom settings.
 - `utilityProcess` provides crash isolation, not a security sandbox.
+- Extension portable UI (select/confirm/status/widgets/…) and TUI-only degraded surface: see [`packages/agent-runtime/EXTENSION_UI.md`](./packages/agent-runtime/EXTENSION_UI.md).
 
 ## License
 

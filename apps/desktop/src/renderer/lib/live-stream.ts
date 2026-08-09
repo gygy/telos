@@ -350,6 +350,7 @@ export function applyRuntimeEventToLiveStream(
             text: event.content,
             tone: "info",
             timestamp: nowIso(),
+            extension: true,
           },
         ],
       });
@@ -361,6 +362,10 @@ export function applyRuntimeEventToLiveStream(
         text = event.data === undefined ? "" : JSON.stringify(event.data, null, 2);
       } catch {
         text = "[unserializable value]";
+      }
+      // Prefer fenced JSON so the shared Markdown renderer formats entry payloads.
+      if (text && !text.startsWith("```")) {
+        text = `\`\`\`json\n${text}\n\`\`\``;
       }
       return mark({
         ...state,
@@ -374,6 +379,7 @@ export function applyRuntimeEventToLiveStream(
             text,
             tone: "info",
             timestamp: nowIso(),
+            extension: true,
           },
         ],
       });
