@@ -7,7 +7,6 @@ import type {
   ThemeSkinVariant,
 } from "@pix/contracts";
 import mikuStageUrl from "../assets/theme-skins/miku-stage.jpg";
-import venomNoirUrl from "../assets/theme-skins/venom-noir.jpg";
 import zhangRuonanUrl from "../assets/theme-skins/zhang-ruonan.jpg";
 import { scopeThemeCustomCss, validateThemeCustomCss } from "../../shared/theme-css.ts";
 import type { ResolvedColorMode } from "./theme.ts";
@@ -58,22 +57,24 @@ export type ThemePreview = Pick<ThemeSkinRecord, "config" | "backgroundUrl">;
 /** Special selection that leaves the original light/dark shell completely unskinned. */
 export const DEFAULT_THEME_ID = "default" as const;
 /** Built-in skins that ship with a bundled wallpaper. */
-export type ThemeImagePresetId = "miku-stage" | "venom-noir" | "zhang-ruonan";
+export type ThemeImagePresetId = "miku-stage" | "zhang-ruonan";
 export type ThemePresetId = ThemeImagePresetId;
+/** Wallpaper fit modes for skin art (maps to CSS background-size). */
+export type ThemeWallpaperFit = "cover" | "contain" | "stretch";
 
-export const THEME_IMAGE_PRESET_IDS: readonly ThemeImagePresetId[] = [
-  "miku-stage",
-  "venom-noir",
-  "zhang-ruonan",
-];
+export const THEME_IMAGE_PRESET_IDS: readonly ThemeImagePresetId[] = ["miku-stage", "zhang-ruonan"];
 export const THEME_PRESET_IDS: readonly ThemePresetId[] = [...THEME_IMAGE_PRESET_IDS];
+export const THEME_WALLPAPER_FITS: readonly ThemeWallpaperFit[] = [
+  "cover",
+  "contain",
+  "stretch",
+] as const;
 /** Fallback only for invalid skin ids; the product default is the unskinned shell. */
 export const DEFAULT_THEME_PRESET_ID: ThemePresetId = "miku-stage";
 export const DEFAULT_THEME_SELECTION: ThemeSelection = { id: DEFAULT_THEME_ID };
 
 export const BUILTIN_THEME_BACKGROUNDS: Record<ThemeImagePresetId, string> = {
   "miku-stage": mikuStageUrl,
-  "venom-noir": venomNoirUrl,
   "zhang-ruonan": zhangRuonanUrl,
 };
 
@@ -111,7 +112,21 @@ export const ART_DEFAULTS = {
   dim: 0.1,
   safeArea: "center" as const,
   taskIntensity: 0.78,
+  wallpaperFit: "cover" as ThemeWallpaperFit,
 };
+
+/** Resolve CSS `background-size` for the wallpaper fit mode. */
+export function wallpaperFitToCssSize(
+  fit: ThemeWallpaperFit | undefined,
+  zoom = ART_DEFAULTS.zoom,
+): string {
+  if (fit === "contain") return "contain";
+  if (fit === "stretch") return "100% 100%";
+  // cover: optional zoom scales beyond cover via percentage (1 = cover-like full bleed)
+  const z = Number.isFinite(zoom) ? Math.min(2, Math.max(0.75, zoom)) : 1;
+  if (Math.abs(z - 1) < 0.01) return "cover";
+  return `${Math.round(z * 100)}%`;
+}
 
 export const MATERIAL_DEFAULTS: Required<ThemeSkinMaterials> = {
   sidebarOpacity: 0.64,
@@ -160,44 +175,6 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePack> = {
         text: "#eefffd",
         muted: "#aed0d1",
         line: "rgba(98, 223, 216, 0.28)",
-      },
-    },
-  },
-  "venom-noir": {
-    schemaVersion: 1,
-    id: "venom-noir",
-    name: "毒液 · 共生暗影",
-    appearance: "auto",
-    art: { ...ART_DEFAULTS },
-    materials: { ...MATERIAL_DEFAULTS },
-    light: {
-      background: "linear-gradient(135deg, #e7ebf2 0%, #d4dfef 100%)",
-      colors: {
-        background: "#e4e9f0",
-        panel: "#f6f8fc",
-        panelAlt: "#cbd4e2",
-        accent: "#265be3",
-        accentAlt: "#6293ff",
-        secondary: "#1d7e78",
-        highlight: "#6e4be8",
-        text: "#16202d",
-        muted: "#5e6c7e",
-        line: "rgba(38, 91, 227, 0.26)",
-      },
-    },
-    dark: {
-      background: "linear-gradient(135deg, #05070c 0%, #101426 100%)",
-      colors: {
-        background: "#080b11",
-        panel: "#121824",
-        panelAlt: "#202939",
-        accent: "#719cff",
-        accentAlt: "#b3c8ff",
-        secondary: "#69d0c8",
-        highlight: "#ad8aff",
-        text: "#f2f5fc",
-        muted: "#b9c1d0",
-        line: "rgba(113, 156, 255, 0.3)",
       },
     },
   },
@@ -446,6 +423,16 @@ function parseArt(raw: unknown): ThemeSkinConfig["art"] {
       throw new Error("Invalid art safeArea");
     }
     art.safeArea = raw.safeArea;
+  }
+  if (raw.wallpaperFit !== undefined) {
+    if (
+      raw.wallpaperFit !== "cover" &&
+      raw.wallpaperFit !== "contain" &&
+      raw.wallpaperFit !== "stretch"
+    ) {
+      throw new Error("Invalid art wallpaperFit");
+    }
+    art.wallpaperFit = raw.wallpaperFit;
   }
   return Object.keys(art).length ? art : undefined;
 }
@@ -1133,7 +1120,7 @@ function isSafeThemeAssetUrl(value: string | undefined, allowBuiltin = false): v
       }
     }
     if (
-      /theme-skins\/(?:miku-stage|venom-noir|zhang-ruonan)(?:[-.][\w]+)?\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(
+      /theme-skins\/(?:miku-stage|zhang-ruonan)(?:[-.][\w]+)?\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(
         value,
       )
     ) {
@@ -1159,7 +1146,7 @@ function isSafeThemeAssetUrl(value: string | undefined, allowBuiltin = false): v
         url.protocol === "atom:" ||
         value.startsWith("/"))
     ) {
-      return /theme-skins\/(?:miku-stage|venom-noir|zhang-ruonan)/i.test(url.pathname);
+      return /theme-skins\/(?:miku-stage|zhang-ruonan)/i.test(url.pathname);
     }
     return false;
   } catch {
@@ -1298,7 +1285,10 @@ export function applyThemeSelection(
   );
   root.style.setProperty(
     "--skin-art-size",
-    `${Math.round(numberOr(art.zoom, ART_DEFAULTS.zoom) * 100)}%`,
+    wallpaperFitToCssSize(
+      art.wallpaperFit ?? ART_DEFAULTS.wallpaperFit,
+      numberOr(art.zoom, ART_DEFAULTS.zoom),
+    ),
   );
   root.style.setProperty("--skin-wallpaper-dim", String(numberOr(art.dim, ART_DEFAULTS.dim)));
   root.style.setProperty(

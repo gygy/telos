@@ -1,10 +1,15 @@
 import type { ReactEventHandler, ReactNode } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { t, type Locale } from "../lib/i18n.ts";
 import { cn } from "../lib/utils.ts";
 
+/**
+ * Full-screen content preview (expanded table / image).
+ *
+ * Close is a viewport-fixed empty <button> (no SVG / child hit targets) at the
+ * top-right of the overlay — standard lightbox placement, clear of the card and
+ * of Electron titlebar drag when given no-drag.
+ */
 export function ContentPreviewDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,21 +29,23 @@ export function ContentPreviewDialog(props: {
         )}
         aria-label={props.title}
         data-testid={props.testId}
+        // Keep focus on the dialog shell; don't move focus into table cells on open.
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <DialogTitle className="sr-only">{props.title}</DialogTitle>
-        <DialogClose asChild>
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-lg"
-            className="content-preview-dialog-close"
-            aria-label={props.closeLabel}
-            title={props.closeLabel}
-          >
-            <X />
-          </Button>
-        </DialogClose>
-        {props.children}
+        <div className="content-preview-dialog-stage">{props.children}</div>
+        {/*
+          Sibling of the stage (not inside the card): fixed to the viewport corner.
+          Empty button — full border-box is the hit target; X via ::after only.
+        */}
+        <button
+          type="button"
+          className="content-preview-dialog-close"
+          aria-label={props.closeLabel}
+          title={props.closeLabel}
+          data-testid="content-preview-close"
+          onClick={() => props.onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );

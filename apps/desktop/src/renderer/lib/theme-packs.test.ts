@@ -4,6 +4,7 @@ import {
   activeThemePack,
   applyThemeSelection,
   ART_DEFAULTS,
+  wallpaperFitToCssSize,
   BUILTIN_THEME_BACKGROUNDS,
   createThemeSkinDraft,
   DEFAULT_THEME_SELECTION,
@@ -144,6 +145,13 @@ describe("theme-packs", () => {
       safeArea: "center",
       taskIntensity: 0.78,
     });
+  });
+
+  it("maps wallpaper fit modes to CSS background-size", () => {
+    expect(wallpaperFitToCssSize("cover", 1)).toBe("cover");
+    expect(wallpaperFitToCssSize("cover", 1.25)).toBe("125%");
+    expect(wallpaperFitToCssSize("contain")).toBe("contain");
+    expect(wallpaperFitToCssSize("stretch")).toBe("100% 100%");
   });
 
   it("ships image presets with adaptive palettes", () => {
@@ -379,13 +387,13 @@ describe("theme-packs", () => {
       id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-      backgroundBuiltinId: "venom-noir",
-      config: { schemaVersion: 1, name: "毒液 · 我的暗影" },
+      backgroundBuiltinId: "miku-stage",
+      config: { schemaVersion: 1, name: "初音未来 · 我的舞台" },
     };
 
     expect(activeThemePack({ id: copied.id }, [copied])).toEqual({
       config: copied.config,
-      backgroundUrl: BUILTIN_THEME_BACKGROUNDS["venom-noir"],
+      backgroundUrl: BUILTIN_THEME_BACKGROUNDS["miku-stage"],
     });
   });
 

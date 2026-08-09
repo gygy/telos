@@ -20,7 +20,7 @@ import type {
 } from "@pix/contracts";
 import { validateThemeCustomCss } from "../shared/theme-css.ts";
 
-export const BUILTIN_THEME_SKIN_IDS = ["miku-stage", "venom-noir", "zhang-ruonan"] as const;
+export const BUILTIN_THEME_SKIN_IDS = ["miku-stage", "zhang-ruonan"] as const;
 /** Selects the original shell without loading a skin configuration. */
 export const DEFAULT_THEME_SELECTION_ID = "default";
 
@@ -287,6 +287,11 @@ export function normalizeThemeSkinConfig(raw: unknown): ThemeSkinConfig {
         artSource.safeArea === "center" ||
         artSource.safeArea === "right"
           ? { safeArea: artSource.safeArea }
+          : {}),
+        ...(artSource.wallpaperFit === "cover" ||
+        artSource.wallpaperFit === "contain" ||
+        artSource.wallpaperFit === "stretch"
+          ? { wallpaperFit: artSource.wallpaperFit }
           : {}),
         ...numberField(artSource, "taskIntensity", 0, 1),
       }

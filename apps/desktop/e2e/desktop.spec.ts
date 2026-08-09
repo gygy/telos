@@ -54,11 +54,37 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     expect(
       await page.evaluate(() => (window as Window & { __copiedCode?: string }).__copiedCode),
     ).toBe("Type\tStatus\nMarkdown\tReady");
+    // Expand control lives in the hover-only aside; hover the wrap first.
+    await markdownTable.hover();
     await markdownTable.getByTestId("markdown-table-expand").click();
     const expandedTable = page.getByTestId("markdown-table-expanded");
     await expect(expandedTable).toBeVisible();
-    await page.getByRole("button", { name: /Close table|关闭表格/i }).click();
-    await expect(expandedTable).toBeHidden();
+    const tableClose = page.getByTestId("content-preview-close");
+    await expect(tableClose).toBeVisible();
+    await expect(tableClose).toHaveAccessibleName(/Close table|关闭表格/i);
+    // Empty button: every point in the 40×40 hit box must close (including X diagonals).
+    const closeHits = [
+      { x: 0.5, y: 0.5, label: "center" },
+      { x: 0.32, y: 0.32, label: "diag-tl" },
+      { x: 0.68, y: 0.68, label: "diag-br" },
+      { x: 0.32, y: 0.68, label: "diag-bl" },
+      { x: 0.68, y: 0.32, label: "diag-tr" },
+      { x: 0.12, y: 0.5, label: "mid-left" },
+      { x: 0.88, y: 0.5, label: "mid-right" },
+    ] as const;
+    for (const hit of closeHits) {
+      if ((await expandedTable.count()) === 0) {
+        await markdownTable.hover();
+        await markdownTable.getByTestId("markdown-table-expand").click();
+        await expect(expandedTable).toBeVisible();
+      }
+      const box = await tableClose.boundingBox();
+      expect(box, `close button box missing for ${hit.label}`).toBeTruthy();
+      await page.mouse.click(box!.x + box!.width * hit.x, box!.y + box!.height * hit.y);
+      await expect(expandedTable, `close hit ${hit.label} should dismiss table`).toBeHidden({
+        timeout: 5_000,
+      });
+    }
     await expect(page.locator(".katex").first()).toBeVisible();
     await expect(page.locator(".katex-display")).toBeVisible();
 

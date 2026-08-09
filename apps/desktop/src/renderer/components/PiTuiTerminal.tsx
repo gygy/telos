@@ -5,6 +5,9 @@
  * - Canvas stays visibility:hidden until ready.
  * - open() resumes/promotes warm PTYs when possible (do not dispose before open).
  * - Hidden IME textarea is pinned to the VT cursor so composition tracks the prompt.
+ * - Content uses equal L/R host padding; Ghostty's built-in canvas scrollbar is
+ *   suppressed. A floating thumb (zero layout width) sticks to the app right edge
+ *   so the gutter never skews terminal margins (same model as chat overlay scroll).
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,6 +23,12 @@ import { cn } from "../lib/utils.ts";
 type GhosttyModule = typeof import("ghostty-web");
 type GhosttyTerminal = InstanceType<GhosttyModule["Terminal"]>;
 type GhosttyFitAddon = InstanceType<GhosttyModule["FitAddon"]>;
+
+/** Equal content inset; scrollbar is a floating overlay and does not consume this. */
+const TERMINAL_CONTENT_INSET_PX = 8;
+const TERMINAL_THUMB_HITBOX_PX = 12;
+const TERMINAL_THUMB_MIN_PX = 28;
+const TERMINAL_THUMB_HIDE_MS = 900;
 
 // Keep the expensive module/WASM initialization shared across terminal mounts.
 // This also lets the app warm Ghostty while the host/session is restoring.
@@ -45,6 +54,137 @@ export function preloadPiTuiTerminal(): void {
 }
 
 type GhosttyMetrics = { width: number; height: number };
+
+/**
+ * ghostty-web FitAddon hard-codes a ~15px scrollbar gutter (gA) when computing
+ * cols, which steals width from one side only. We fit against the full content
+ * box (padding already encodes equal L/R margins); the floating overlay thumb
+ * takes zero layout width — matching chat MessageScroller.
+ */
+function installFitWithoutScrollbarGutter(
+  fit: GhosttyFitAddon,
+  getTerminal: () => GhosttyTerminal | null,
+): void {
+  fit.proposeDimensions = () => {
+    const terminal = getTerminal();
+    const element = terminal?.element;
+    if (!terminal || !element) return undefined;
+    const renderer = (terminal as unknown as { renderer?: { getMetrics?: () => GhosttyMetrics } })
+      .renderer;
+    const metrics = renderer?.getMetrics?.();
+    if (!metrics || metrics.width <= 0 || metrics.height <= 0) return undefined;
+    if (typeof element.clientWidth === "undefined") return undefined;
+    const style = window.getComputedStyle(element);
+    const padT = Number.parseInt(style.paddingTop, 10) || 0;
+    const padB = Number.parseInt(style.paddingBottom, 10) || 0;
+    const padL = Number.parseInt(style.paddingLeft, 10) || 0;
+    const padR = Number.parseInt(style.paddingRight, 10) || 0;
+    const width = element.clientWidth;
+    const height = element.clientHeight;
+    if (width <= 0 || height <= 0) return undefined;
+    const cols = Math.max(2, Math.floor((width - padL - padR) / metrics.width));
+    const rows = Math.max(1, Math.floor((height - padT - padB) / metrics.height));
+    return { cols, rows };
+  };
+}
+
+/** Stop Ghostty from painting its in-canvas scrollbar (we use a floating thumb). */
+function suppressGhosttyCanvasScrollbar(term: GhosttyTerminal): void {
+  const renderer = (
+    term as unknown as {
+      renderer?: { renderScrollbar?: (...args: unknown[]) => void };
+    }
+  ).renderer;
+  if (renderer) {
+    renderer.renderScrollbar = () => {
+      /* no-op — floating overlay owns the chrome */
+    };
+  }
+  const t = term as unknown as {
+    showScrollbar?: () => void;
+    hideScrollbar?: () => void;
+    fadeInScrollbar?: () => void;
+    fadeOutScrollbar?: () => void;
+    scrollbarOpacity?: number;
+    scrollbarVisible?: boolean;
+  };
+  t.showScrollbar = () => {
+    t.scrollbarOpacity = 0;
+    t.scrollbarVisible = false;
+  };
+  t.hideScrollbar = () => {
+    t.scrollbarOpacity = 0;
+    t.scrollbarVisible = false;
+  };
+  t.fadeInScrollbar = () => {
+    t.scrollbarOpacity = 0;
+  };
+  t.fadeOutScrollbar = () => {
+    t.scrollbarOpacity = 0;
+    t.scrollbarVisible = false;
+  };
+  t.scrollbarOpacity = 0;
+  t.scrollbarVisible = false;
+}
+
+/** Right edge for the floating thumb — flush with shell-main when the TUI fills it. */
+function terminalThumbRightEdge(shell: HTMLElement, shellRect: DOMRect): number {
+  const main = document.querySelector<HTMLElement>('[data-testid="shell-main"]');
+  if (main?.isConnected) {
+    const mainRect = main.getBoundingClientRect();
+    if (mainRect.width > 0 && Math.abs(shellRect.right - mainRect.right) <= 2) {
+      return mainRect.right;
+    }
+  }
+  return shellRect.right;
+}
+
+/**
+ * Position the floating terminal scrollbar thumb.
+ * Ghostty: viewportY=0 is the bottom (live output); viewportY=scrollback is the top.
+ */
+function updateTerminalOverlayThumb(input: {
+  shell: HTMLElement;
+  thumb: HTMLDivElement;
+  term: GhosttyTerminal;
+  visible: boolean;
+}): void {
+  const { shell, thumb, term, visible } = input;
+  if (!shell.isConnected) {
+    thumb.dataset.visible = "false";
+    return;
+  }
+  let scrollback = 0;
+  try {
+    scrollback = term.getScrollbackLength();
+  } catch {
+    thumb.dataset.visible = "false";
+    return;
+  }
+  const rows = Math.max(1, term.rows || 1);
+  if (scrollback < 1) {
+    thumb.dataset.visible = "false";
+    return;
+  }
+  const rect = shell.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) {
+    thumb.dataset.visible = "false";
+    return;
+  }
+  const track = Math.max(0, rect.height);
+  const total = scrollback + rows;
+  const thumbH = Math.max(TERMINAL_THUMB_MIN_PX, Math.min(track, (rows / total) * track));
+  const maxTop = Math.max(0, track - thumbH);
+  const viewportY = Math.max(0, Math.min(scrollback, term.viewportY || 0));
+  // viewportY=0 → bottom; viewportY=scrollback → top
+  const visualTop = maxTop * (1 - viewportY / scrollback);
+  const right = terminalThumbRightEdge(shell, rect);
+  thumb.style.height = `${thumbH}px`;
+  thumb.style.top = `${rect.top + visualTop}px`;
+  thumb.style.left = `${right - TERMINAL_THUMB_HITBOX_PX}px`;
+  const pinned = thumb.dataset.hovered === "true" || thumb.dataset.dragging === "true";
+  thumb.dataset.visible = visible || pinned ? "true" : "false";
+}
 
 /**
  * Pi paints its editor caret with reverse-video SGR while also positioning a
@@ -109,11 +249,23 @@ function syncTerminalInputCaret(term: GhosttyTerminal): void {
       textarea.dataset.caretCell === cellKey &&
       Number.isFinite(cachedLeft) &&
       Number.isFinite(cachedTop);
-    const style = hasCachedPosition ? null : window.getComputedStyle(host);
-    const padL = style ? Number.parseFloat(style.paddingLeft) || 0 : 0;
-    const padT = style ? Number.parseFloat(style.paddingTop) || 0 : 0;
-    const left = hasCachedPosition ? cachedLeft : Math.round(padL + cursorX * metrics.width);
-    const top = hasCachedPosition ? cachedTop : Math.round(padT + cursorY * metrics.height);
+    // Canvas sits inside equal host padding (and may be auto-centered for residual
+    // cell width). Anchor IME to the canvas origin.
+    let originLeft = 0;
+    let originTop = 0;
+    if (!hasCachedPosition) {
+      const canvas = host.querySelector("canvas");
+      if (canvas instanceof HTMLCanvasElement) {
+        originLeft = canvas.offsetLeft;
+        originTop = canvas.offsetTop;
+      } else {
+        const style = window.getComputedStyle(host);
+        originLeft = Number.parseFloat(style.paddingLeft) || 0;
+        originTop = Number.parseFloat(style.paddingTop) || 0;
+      }
+    }
+    const left = hasCachedPosition ? cachedLeft : Math.round(originLeft + cursorX * metrics.width);
+    const top = hasCachedPosition ? cachedTop : Math.round(originTop + cursorY * metrics.height);
     const cssLeft = `${left}px`;
     const cssTop = `${top}px`;
     const cssWidth = `${w}px`;
@@ -224,6 +376,7 @@ export function PiTuiTerminal(props: {
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
   const onExitRef = useRef(props.onProcessExit);
   const onReadyRef = useRef(props.onReady);
   const onOpenErrorRef = useRef(props.onOpenError);
@@ -247,6 +400,7 @@ export function PiTuiTerminal(props: {
   useEffect(() => {
     const host = hostRef.current;
     const shell = shellRef.current;
+    const thumb = thumbRef.current;
     const sessionFile = props.sessionFile.trim();
     const cwd = props.cwd.trim();
     const expectedKey = normSession(sessionFile);
@@ -260,7 +414,19 @@ export function PiTuiTerminal(props: {
     let onDataDisp: { dispose(): void } | undefined;
     let onResizeDisp: { dispose(): void } | undefined;
     let onSelDisp: { dispose(): void } | undefined;
+    let onScrollDisp: { dispose(): void } | undefined;
     let onHostFocus: (() => void) | undefined;
+    let detachThumbChrome: (() => void) | undefined;
+    let thumbHideTimer: number | null = null;
+    let thumbDrag:
+      | {
+          pointerId: number;
+          startY: number;
+          startViewportY: number;
+          thumbHeight: number;
+          scrollback: number;
+        }
+      | undefined;
     let fitId = 0;
     let caretFrameId = 0;
     let settleTimer: number | null = null;
@@ -305,6 +471,7 @@ export function PiTuiTerminal(props: {
       }
       // ghostty-web has no lineHeight option — scale cell height after font metrics settle.
       applyTerminalLineHeight(target, opts.lineHeight);
+      suppressGhosttyCanvasScrollbar(target);
       try {
         fit?.fit();
         // FitAddon may change cols/rows; re-apply so canvas matches the new grid.
@@ -314,6 +481,27 @@ export function PiTuiTerminal(props: {
         // ignore
       }
       syncTerminalInputCaret(target);
+      syncOverlayThumb(true);
+    }
+
+    function syncOverlayThumb(show: boolean) {
+      if (!shell || !thumb || !term) return;
+      updateTerminalOverlayThumb({ shell, thumb, term, visible: show });
+    }
+
+    function scheduleThumbHide() {
+      if (!thumb) return;
+      if (thumbHideTimer != null) window.clearTimeout(thumbHideTimer);
+      thumbHideTimer = window.setTimeout(() => {
+        thumbHideTimer = null;
+        if (thumb.dataset.hovered === "true" || thumb.dataset.dragging === "true") return;
+        syncOverlayThumb(false);
+      }, TERMINAL_THUMB_HIDE_MS);
+    }
+
+    function showOverlayThumb() {
+      syncOverlayThumb(true);
+      if (thumb?.dataset.dragging !== "true") scheduleThumbHide();
     }
 
     function readCanvasMetrics(target: GhosttyTerminal): { w: number; h: number } {
@@ -472,6 +660,9 @@ export function PiTuiTerminal(props: {
       }
       term = next;
       fit = nextFit;
+      // Replace FitAddon's gA gutter (equal L/R padding owns margins; floating thumb is free).
+      installFitWithoutScrollbarGutter(nextFit, () => (cancelled ? null : term));
+      suppressGhosttyCanvasScrollbar(next);
 
       function writeTerminalOutput(data: string) {
         if (data) ptyBytes += data.length;
@@ -518,6 +709,8 @@ export function PiTuiTerminal(props: {
       onResizeDisp = next.onResize(({ cols, rows }) => {
         void window.pix.terminal.resize(cols, rows).catch(() => undefined);
         syncTerminalInputCaret(next);
+        suppressGhosttyCanvasScrollbar(next);
+        showOverlayThumb();
       });
       onSelDisp = next.onSelectionChange(() => {
         if (!prefsRef.current.copyOnSelect) return;
@@ -528,6 +721,92 @@ export function PiTuiTerminal(props: {
           // ignore
         }
       });
+      onScrollDisp = next.onScroll(() => {
+        if (cancelled) return;
+        showOverlayThumb();
+      });
+      // Wheel over the host also moves viewportY — keep the floating thumb in sync.
+      const onHostWheel = () => {
+        if (cancelled) return;
+        window.requestAnimationFrame(() => {
+          if (!cancelled) showOverlayThumb();
+        });
+      };
+      host.addEventListener("wheel", onHostWheel, { passive: true });
+      // Floating thumb drag → Ghostty scrollToLine (viewportY 0 = bottom).
+      const onThumbPointerDown = (event: PointerEvent) => {
+        if (!term || !thumb || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        let scrollback = 0;
+        try {
+          scrollback = term.getScrollbackLength();
+        } catch {
+          return;
+        }
+        if (scrollback < 1) return;
+        const thumbHeight = thumb.getBoundingClientRect().height || TERMINAL_THUMB_MIN_PX;
+        thumbDrag = {
+          pointerId: event.pointerId,
+          startY: event.clientY,
+          startViewportY: term.viewportY || 0,
+          thumbHeight,
+          scrollback,
+        };
+        thumb.dataset.dragging = "true";
+        thumb.dataset.visible = "true";
+        try {
+          thumb.setPointerCapture(event.pointerId);
+        } catch {
+          // ignore
+        }
+      };
+      const onThumbPointerMove = (event: PointerEvent) => {
+        if (!term || !thumbDrag || event.pointerId !== thumbDrag.pointerId || !shell) return;
+        const track = Math.max(1, shell.getBoundingClientRect().height - thumbDrag.thumbHeight);
+        // Dragging down increases visualTop → decreases viewportY (toward bottom).
+        const deltaY = event.clientY - thumbDrag.startY;
+        const nextY = Math.round(
+          thumbDrag.startViewportY - (deltaY / track) * thumbDrag.scrollback,
+        );
+        try {
+          term.scrollToLine(Math.max(0, Math.min(thumbDrag.scrollback, nextY)));
+        } catch {
+          // ignore
+        }
+        syncOverlayThumb(true);
+      };
+      const onThumbPointerUp = (event: PointerEvent) => {
+        if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
+        thumbDrag = undefined;
+        if (thumb) {
+          thumb.dataset.dragging = "false";
+          try {
+            thumb.releasePointerCapture(event.pointerId);
+          } catch {
+            // ignore
+          }
+        }
+        scheduleThumbHide();
+      };
+      const onThumbEnter = () => {
+        if (!thumb) return;
+        thumb.dataset.hovered = "true";
+        syncOverlayThumb(true);
+      };
+      const onThumbLeave = () => {
+        if (!thumb) return;
+        thumb.dataset.hovered = "false";
+        if (thumb.dataset.dragging !== "true") scheduleThumbHide();
+      };
+      if (thumb) {
+        thumb.addEventListener("pointerdown", onThumbPointerDown);
+        thumb.addEventListener("pointermove", onThumbPointerMove);
+        thumb.addEventListener("pointerup", onThumbPointerUp);
+        thumb.addEventListener("pointercancel", onThumbPointerUp);
+        thumb.addEventListener("pointerenter", onThumbEnter);
+        thumb.addEventListener("pointerleave", onThumbLeave);
+      }
       // ghostty-web 0.4 does not emit onRender from its frame loop and only
       // reports vertical cursor moves. Track both axes after each VT render.
       const trackInputCaret = () => {
@@ -553,6 +832,22 @@ export function PiTuiTerminal(props: {
       } catch {
         // ignore
       }
+      suppressGhosttyCanvasScrollbar(next);
+      syncOverlayThumb(false);
+
+      detachThumbChrome = () => {
+        host.removeEventListener("wheel", onHostWheel);
+        if (!thumb) return;
+        thumb.removeEventListener("pointerdown", onThumbPointerDown);
+        thumb.removeEventListener("pointermove", onThumbPointerMove);
+        thumb.removeEventListener("pointerup", onThumbPointerUp);
+        thumb.removeEventListener("pointercancel", onThumbPointerUp);
+        thumb.removeEventListener("pointerenter", onThumbEnter);
+        thumb.removeEventListener("pointerleave", onThumbLeave);
+        thumb.dataset.visible = "false";
+        thumb.dataset.hovered = "false";
+        thumb.dataset.dragging = "false";
+      };
 
       // Do NOT dispose first — open() resumes same session or promotes a parked one.
       let opened: { sessionFile?: string; resumed?: boolean };
@@ -640,11 +935,14 @@ export function PiTuiTerminal(props: {
       window.cancelAnimationFrame(fitId);
       if (settleTimer != null) window.clearTimeout(settleTimer);
       if (maxTimer != null) window.clearTimeout(maxTimer);
+      if (thumbHideTimer != null) window.clearTimeout(thumbHideTimer);
       unsubData?.();
       unsubExit?.();
       onDataDisp?.dispose();
       onResizeDisp?.dispose();
       onSelDisp?.dispose();
+      onScrollDisp?.dispose();
+      detachThumbChrome?.();
       window.cancelAnimationFrame(caretFrameId);
       if (onHostFocus) host.removeEventListener("focusin", onHostFocus);
       try {
@@ -691,7 +989,24 @@ export function PiTuiTerminal(props: {
       <div
         ref={hostRef}
         className="pi-tui-terminal-host min-h-0 min-w-0 flex-1"
-        style={{ background: initialBg }}
+        style={{
+          background: initialBg,
+          // Equal content margins; floating thumb does not consume this width.
+          paddingLeft: TERMINAL_CONTENT_INSET_PX,
+          paddingRight: TERMINAL_CONTENT_INSET_PX,
+        }}
+      />
+      {/*
+        Floating overlay scrollbar — fixed to the app right edge, zero layout width.
+        Ghostty's in-canvas scrollbar is suppressed so L/R content margins stay equal.
+      */}
+      <div
+        ref={thumbRef}
+        className="pi-tui-scroll-thumb"
+        data-visible="false"
+        data-hovered="false"
+        data-dragging="false"
+        aria-hidden="true"
       />
     </div>
   );

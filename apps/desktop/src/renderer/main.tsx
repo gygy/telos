@@ -3245,7 +3245,8 @@ function App() {
                       sessionFile={snapshot.sessionFile}
                       cwd={(snapshot.cwd?.trim() || workspacePath || "").trim()}
                       colorMode={activeSkinMode}
-                      className="min-h-0 flex-1 p-2"
+                      // Equal content insets + floating right-edge scrollbar (see PiTuiTerminal).
+                      className="min-h-0 flex-1"
                       onReady={(info) => {
                         endSurfaceTransition(info.sessionFile);
                       }}

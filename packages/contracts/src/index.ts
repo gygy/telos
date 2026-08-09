@@ -1460,6 +1460,9 @@ export type ThemeSkinVariant = {
   tokens?: Record<string, string>;
 };
 
+/** How the wallpaper image is fitted into the shell canvas. */
+export type ThemeWallpaperFit = "cover" | "contain" | "stretch";
+
 /** Wallpaper framing and the stronger task-page readability treatment. */
 export type ThemeSkinArt = Partial<{
   focusX: number;
@@ -1468,6 +1471,13 @@ export type ThemeSkinArt = Partial<{
   dim: number;
   safeArea: "left" | "center" | "right";
   taskIntensity: number;
+  /**
+   * Wallpaper fit:
+   * - cover: fill the canvas, crop overflow (default)
+   * - contain: show the full image, letterbox as needed
+   * - stretch: distort to fill width and height
+   */
+  wallpaperFit: ThemeWallpaperFit;
 }>;
 
 /** Glass/material controls shared by Pix chrome. */

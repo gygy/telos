@@ -40,7 +40,7 @@ describe("ThemeLibrary", () => {
     const library = new ThemeLibrary(root);
 
     expect(library.list()).toMatchObject({ activeId: "default", skins: [] });
-    expect(BUILTIN_THEME_SKIN_IDS).toEqual(["miku-stage", "venom-noir", "zhang-ruonan"]);
+    expect(BUILTIN_THEME_SKIN_IDS).toEqual(["miku-stage", "zhang-ruonan"]);
     expect(library.activate("miku-stage").activeId).toBe("miku-stage");
     expect(library.activate("default").activeId).toBe("default");
     expect(new ThemeLibrary(root).list().activeId).toBe("default");
@@ -60,10 +60,10 @@ describe("ThemeLibrary", () => {
     );
 
     const library = new ThemeLibrary(root);
-    library.activate("venom-noir");
+    library.activate("zhang-ruonan");
     const snapshot = library.importDirectory(packageDir);
 
-    expect(snapshot.activeId).toBe("venom-noir");
+    expect(snapshot.activeId).toBe("zhang-ruonan");
     expect(snapshot.skins).toHaveLength(1);
     expect(snapshot.skins[0]?.config.name).toBe("Imported tide");
   });
@@ -205,10 +205,10 @@ describe("ThemeLibrary", () => {
     const library = new ThemeLibrary(root);
     const snapshot = library.save({
       config: { schemaVersion: 1, name: "Custom glass" },
-      backgroundBuiltinId: "venom-noir",
+      backgroundBuiltinId: "zhang-ruonan",
     });
     expect(snapshot.skins[0]?.id).toMatch(/^skin-/);
-    expect(snapshot.skins[0]?.backgroundBuiltinId).toBe("venom-noir");
+    expect(snapshot.skins[0]?.backgroundBuiltinId).toBe("zhang-ruonan");
   });
 
   it("migrates removed built-in presets to the unskinned default", () => {

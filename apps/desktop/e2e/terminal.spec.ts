@@ -159,7 +159,121 @@ async function switchConversationByPath(page: Page, sessionFile: string): Promis
   await buttons.nth(index).click();
 }
 
+/** Layout contract: equal L/R content margins + floating right-edge scrollbar. */
+async function inspectTerminalLayout(page: Page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-testid="pi-tui-terminal"]') as HTMLElement | null;
+    const host = document.querySelector(".pi-tui-terminal-host") as HTMLElement | null;
+    const canvas = host?.querySelector("canvas") as HTMLCanvasElement | null;
+    const thumb = document.querySelector(".pi-tui-scroll-thumb") as HTMLElement | null;
+    const shellMain = document.querySelector('[data-testid="shell-main"]') as HTMLElement | null;
+    if (!root || !host || !canvas) {
+      return { ok: false as const, reason: "missing-nodes" };
+    }
+    const hostStyle = getComputedStyle(host);
+    const thumbStyle = thumb ? getComputedStyle(thumb) : null;
+    const padL = Number.parseFloat(hostStyle.paddingLeft) || 0;
+    const padR = Number.parseFloat(hostStyle.paddingRight) || 0;
+    const hostRect = host.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const shellRect = shellMain?.getBoundingClientRect();
+    const thumbRect = thumb?.getBoundingClientRect();
+    const leftGap = canvasRect.left - hostRect.left;
+    const rightGap = hostRect.right - canvasRect.right;
+    return {
+      ok: true as const,
+      padL,
+      padR,
+      leftGap: Math.round(leftGap * 10) / 10,
+      rightGap: Math.round(rightGap * 10) / 10,
+      gapDelta: Math.round(Math.abs(leftGap - rightGap) * 10) / 10,
+      hostW: Math.round(hostRect.width),
+      hostRight: Math.round(hostRect.right),
+      shellRight: shellRect ? Math.round(shellRect.right) : null,
+      canvasW: Math.round(canvasRect.width),
+      canvasLeft: Math.round(canvasRect.left),
+      canvasRight: Math.round(canvasRect.right),
+      thumbExists: Boolean(thumb),
+      thumbPosition: thumbStyle?.position ?? null,
+      thumbVisible: thumb?.dataset.visible === "true",
+      thumbRight: thumbRect ? Math.round(thumbRect.right) : null,
+      thumbLeft: thumbRect ? Math.round(thumbRect.left) : null,
+      // Floating thumb must not reserve layout width inside the host.
+      thumbInHostFlow: Boolean(host.querySelector(".pi-tui-scroll-thumb")),
+    };
+  });
+}
+
 test.describe("Embedded pi TUI", () => {
+  test("keeps equal content margins and a floating right-edge scrollbar", async ({ page }) => {
+    await startHost(page);
+    await sendPrompt(page, "terminal layout margins");
+    const session = await page.evaluate(() => window.pix.host.snapshot());
+    expect(session.sessionFile).toBeTruthy();
+
+    await page.getByTestId("thread-content-mode-toggle").click();
+    await expectTerminalPainted(page, session.sessionFile!);
+
+    await expect
+      .poll(async () => inspectTerminalLayout(page), {
+        timeout: 15_000,
+        intervals: [100, 200, 400],
+      })
+      .toMatchObject({
+        ok: true,
+        thumbExists: true,
+        thumbPosition: "fixed",
+        thumbInHostFlow: false,
+      });
+
+    const layout = await inspectTerminalLayout(page);
+    expect(layout.ok).toBe(true);
+    if (!layout.ok) return;
+
+    // Equal host padding (TERMINAL_CONTENT_INSET_PX = 8).
+    expect(layout.padL, `padL: ${JSON.stringify(layout)}`).toBe(8);
+    expect(layout.padR, `padR: ${JSON.stringify(layout)}`).toBe(8);
+    // Canvas residual is centered: left gap ≈ right gap (allow one cell of slack).
+    expect(layout.gapDelta, `asymmetric gaps: ${JSON.stringify(layout)}`).toBeLessThanOrEqual(12);
+    // Content stays inside the padded host (not full-bleed under one side only).
+    expect(layout.leftGap, `leftGap: ${JSON.stringify(layout)}`).toBeGreaterThanOrEqual(7);
+    expect(layout.rightGap, `rightGap: ${JSON.stringify(layout)}`).toBeGreaterThanOrEqual(7);
+    // No Ghostty gA-style ~15px one-sided steal: both sides share residual.
+    expect(Math.abs(layout.leftGap - layout.padL), JSON.stringify(layout)).toBeLessThanOrEqual(12);
+    expect(Math.abs(layout.rightGap - layout.padR), JSON.stringify(layout)).toBeLessThanOrEqual(12);
+
+    // Try to reveal scrollback chrome (wheel up). Fresh sessions may have no
+    // scrollback — structural chrome is always required; flush is asserted when visible.
+    const terminal = page.getByTestId("pi-tui-terminal");
+    await terminal.hover();
+    for (let i = 0; i < 30; i++) {
+      await page.mouse.wheel(0, -160);
+    }
+
+    const afterScroll = await inspectTerminalLayout(page);
+    expect(afterScroll.ok).toBe(true);
+    if (!afterScroll.ok) return;
+    // Margins must not shift when the overlay thumb is shown or hidden.
+    expect(afterScroll.padL).toBe(8);
+    expect(afterScroll.padR).toBe(8);
+    expect(
+      afterScroll.gapDelta,
+      `margins skewed after scroll: ${JSON.stringify(afterScroll)}`,
+    ).toBeLessThanOrEqual(12);
+    expect(afterScroll.thumbExists).toBe(true);
+    expect(afterScroll.thumbPosition).toBe("fixed");
+    expect(afterScroll.thumbInHostFlow).toBe(false);
+
+    if (afterScroll.thumbVisible && afterScroll.thumbRight != null) {
+      // Thumb sits on the shell-main right edge (or the terminal pane right if they match).
+      const edge = afterScroll.shellRight ?? afterScroll.hostRight;
+      expect(
+        Math.abs(afterScroll.thumbRight - edge),
+        `thumb not flush to app right: ${JSON.stringify(afterScroll)}`,
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
   test("paints correctly across terminal/chat and multi-session hops", async ({ page }) => {
     await startHost(page);
     await sendPrompt(page, "terminal session A");

@@ -10,14 +10,6 @@ The JPEG files in this directory are bundled with Pix and do not require a netwo
 - Resolution: 1920x1080
 - Changes: scaled from the 2048x1152 Wallhaven JPEG to a 1920x1080 JPEG
 
-## venom-noir.jpg
-
-- Subject: Venom
-- Source: https://wallhaven.cc/w/2edo6g
-- Wallhaven purity: SFW
-- Resolution: 1920x1080
-- Changes: downloaded as a 1920x1080 JPEG without added overlays
-
 ## zhang-ruonan.jpg
 
 - Subject: Zhang Ruonan

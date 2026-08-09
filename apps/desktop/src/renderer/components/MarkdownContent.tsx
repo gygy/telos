@@ -526,12 +526,17 @@ function MarkdownTable(props: {
   );
 
   return (
-    <div className="content-table-shell" data-testid="markdown-table">
-      <div className="content-table-header">{actions(() => compactTable.current, true)}</div>
-      <div className="content-table-scroll">
-        <table {...tableProps} ref={compactTable}>
-          {props.children}
-        </table>
+    <div className="content-table-wrap" data-testid="markdown-table">
+      <div className="content-table-shell">
+        <div className="content-table-scroll">
+          <table {...tableProps} ref={compactTable}>
+            {props.children}
+          </table>
+        </div>
+      </div>
+      {/* Outside the table border, right of the header — vertical stack, hover-only. */}
+      <div className="content-table-aside" aria-hidden={false}>
+        {actions(() => compactTable.current, true)}
       </div>
       <ContentPreviewDialog
         open={expanded}
@@ -541,7 +546,7 @@ function MarkdownTable(props: {
         className="pix-md"
       >
         <div className="content-table-expanded" data-testid="markdown-table-expanded">
-          <div className="content-table-header">{actions(() => expandedTable.current, false)}</div>
+          {/* No copy in expanded view — close only. */}
           <div className="content-table-scroll content-table-expanded-scroll">
             <table {...tableProps} ref={expandedTable}>
               {props.children}
