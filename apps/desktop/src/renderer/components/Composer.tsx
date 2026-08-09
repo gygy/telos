@@ -1433,8 +1433,8 @@ export function Composer(props: ComposerProps) {
               type="button"
               data-testid="model-select-wrap"
               title={
-                serviceTierSupported
-                  ? `${modelLabel} ${serviceTierLabel(props.serviceTier)}`
+                thinkingSupported
+                  ? `${modelLabel} ${thinkingLevelLabel(props.locale, props.thinkingLevel)}`
                   : modelLabel
               }
               className={cn(
@@ -1448,9 +1448,9 @@ export function Composer(props: ComposerProps) {
               <span className="min-w-0 truncate" data-testid="model-select-label">
                 {modelLabel}
               </span>
-              {serviceTierSupported ? (
-                <span className="shrink-0 opacity-70" data-testid="model-speed-label">
-                  {serviceTierLabel(props.serviceTier)}
+              {thinkingSupported ? (
+                <span className="shrink-0 opacity-70" data-testid="model-thinking-label">
+                  {thinkingLevelLabel(props.locale, props.thinkingLevel)}
                 </span>
               ) : null}
             </button>
