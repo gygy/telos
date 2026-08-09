@@ -39,6 +39,10 @@ import {
   togglePinnedThread,
 } from "../lib/project-prefs.ts";
 import { cn } from "../lib/utils.ts";
+import {
+  extensionStatusListForTitlebar,
+  type ExtensionUiPortableState,
+} from "../lib/extension-ui-state.ts";
 import { useShellStore } from "../store/shell-store.ts";
 import { anchorFromEvent, FloatingMenu, type AnchorRect } from "./FloatingMenu.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -61,6 +65,11 @@ export function ThreadHeader(props: {
   onToggleContentMode?: (() => void) | undefined;
   /** A running turn must keep its current surface until it settles. */
   contentModeSwitchLocked?: boolean;
+  /**
+   * Portable extension chrome (status / working / title).
+   * Shown compactly in the titlebar — never as a content-column row.
+   */
+  extensionUi?: ExtensionUiPortableState;
 }) {
   const tr = (key: Parameters<typeof t>[1], vars?: Record<string, string>) =>
     t(props.locale, key, vars);
@@ -167,6 +176,19 @@ export function ThreadHeader(props: {
   }
 
   const canAct = Boolean(threadId);
+  const extensionStatuses = props.extensionUi
+    ? extensionStatusListForTitlebar(props.extensionUi)
+    : [];
+  const extensionTitle = props.extensionUi?.title?.trim() || undefined;
+  const extensionWorking = props.extensionUi?.workingMessage?.trim() || undefined;
+  const extensionNotify = props.extensionUi?.lastNotify;
+  const extensionUnsupported = props.extensionUi?.unsupported ?? [];
+  const hasExtensionChrome =
+    Boolean(extensionTitle) ||
+    extensionStatuses.length > 0 ||
+    Boolean(extensionWorking) ||
+    Boolean(extensionNotify) ||
+    extensionUnsupported.length > 0;
 
   return (
     <>
@@ -196,9 +218,9 @@ export function ThreadHeader(props: {
             />
           </>
         ) : null}
-        <div className="no-drag flex min-w-0 max-w-[calc(100%-2.5rem)] items-center gap-0.5">
+        <div className="no-drag flex min-w-0 max-w-[min(42%,18rem)] items-center gap-0.5">
           <h2
-            className="m-0 min-w-0 shrink-0 text-[13px] font-medium tracking-tight"
+            className="m-0 min-w-0 shrink truncate text-[13px] font-medium tracking-tight"
             title={titleTooltip}
           >
             {displayTitle}
@@ -220,7 +242,70 @@ export function ThreadHeader(props: {
             <MoreHorizontal className="size-4" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="min-w-0 flex-1" aria-hidden />
+        {/* Extension status (e.g. MCP: 0/2) — compact titlebar strip, not content chrome. */}
+        {hasExtensionChrome ? (
+          <div
+            className="no-drag flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden px-2"
+            data-testid="extension-ui-chrome-header"
+          >
+            {extensionTitle ? (
+              <span
+                className="max-w-[30%] truncate text-[11px] text-[var(--muted-foreground)]"
+                data-testid="extension-ui-title"
+                title={extensionTitle}
+              >
+                {extensionTitle}
+              </span>
+            ) : null}
+            {extensionStatuses.map((item) => (
+              <span
+                key={item.key}
+                className="max-w-[min(220px,36vw)] truncate rounded-full bg-[var(--hover-fill)] px-2 py-0.5 text-[11px] text-[var(--muted-foreground)]"
+                data-testid={`extension-ui-status-${item.key}`}
+                title={item.text}
+              >
+                {item.text}
+              </span>
+            ))}
+            {extensionWorking ? (
+              <span
+                className="max-w-[min(180px,28vw)] truncate text-[11px] text-[var(--primary)]"
+                data-testid="extension-ui-working"
+                title={extensionWorking}
+              >
+                {extensionWorking}
+              </span>
+            ) : null}
+            {extensionNotify ? (
+              <span
+                className={cn(
+                  "max-w-[min(200px,32vw)] truncate text-[11px]",
+                  extensionNotify.type === "error"
+                    ? "text-destructive"
+                    : extensionNotify.type === "warning"
+                      ? "text-amber-600 dark:text-amber-300"
+                      : "text-[var(--muted-foreground)]",
+                )}
+                data-testid="extension-ui-notify"
+                title={extensionNotify.message}
+              >
+                {extensionNotify.message}
+              </span>
+            ) : null}
+            {extensionUnsupported.map((method) => (
+              <span
+                key={method}
+                className="max-w-[min(200px,32vw)] truncate text-[11px] text-[var(--text-subtle)]"
+                data-testid={`extension-ui-unsupported-${method}`}
+                title={tr("extensionUi.unsupportedHint", { method })}
+              >
+                {tr("extensionUi.unsupported", { method })}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1" aria-hidden />
+        )}
         <button
           type="button"
           data-testid="thread-content-mode-toggle"

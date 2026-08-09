@@ -79,6 +79,7 @@ import {
   applyExtensionUiFireForget,
   emptyExtensionUiPortableState,
   isExtensionUiFireForgetMethod,
+  mcpStatusFromExtensionUi,
   type ExtensionUiPortableState,
 } from "./lib/extension-ui-state.ts";
 import { t, type Locale } from "./lib/i18n.ts";
@@ -764,13 +765,29 @@ function App() {
   async function refreshConversationSessions() {
     try {
       const convCwd = await window.pix.workspace.ensureConversation();
+      const key = normalizeCwdKey(convCwd);
       const threads = await window.pix.session.listForCwd(convCwd);
+      // Only accept rows that still look like pure-conversation sessions. A raced
+      // host list (project sessions returned under conversation cwd) must not
+      // replace the 对话 cache — merge would keep them and projectThreadIds would
+      // still hide real conversation rows that share ids incorrectly.
+      const onlyConversation = threads.filter((thread) => {
+        const cwd = (thread.cwd || "").trim();
+        if (!cwd) return true;
+        return isNonProjectWorkspacePath(cwd);
+      });
+      // Never replace a non-empty conversation cache with an empty raced result.
+      if (onlyConversation.length === 0) {
+        setThreadsByCwd((prev) => {
+          const existing = prev[key] ?? [];
+          if (existing.length > 0) return prev;
+          return { ...prev, [key]: existing };
+        });
+        return;
+      }
       setThreadsByCwd((prev) => ({
         ...prev,
-        [normalizeCwdKey(convCwd)]: mergeSidebarThreads(
-          prev[normalizeCwdKey(convCwd)] ?? [],
-          threads,
-        ),
+        [key]: mergeSidebarThreads(prev[key] ?? [], onlyConversation),
       }));
     } catch {
       // Host may be stopped or conversation home unavailable.
@@ -2416,7 +2433,9 @@ function App() {
       applySessionOpen(opened);
       requestContentReveal();
       restoreSessionContentMode(opened.snapshot.sessionFile);
+      // Pure conversation: protrusion must show「选择项目」, never a leftover project.
       selectWorkspacePath(undefined);
+      selectProjectPath(undefined);
       pendingPureConversationRef.current = false;
       setPendingPureConversation(false);
       setStatus("Agent Host ready");
@@ -2450,8 +2469,13 @@ function App() {
     }
   }
 
+  const newThreadForProjectGenRef = useRef(0);
+
   /** Open the selected project if needed, then create a new session under it. */
   async function newThreadForProject(path: string) {
+    // Coalesce rapid multi-project「新建会话」clicks so a slower open cannot
+    // finish last and clobber the latest target / wipe the 对话 cache.
+    const gen = ++newThreadForProjectGenRef.current;
     // Do not abort a generating session — main parks the busy host.
     try {
       if (useShellStore.getState().contentMode === "terminal") {
@@ -2459,6 +2483,7 @@ function App() {
         setContentMode("chat", { persist: false });
         await window.pix.terminal.suspend().catch(() => undefined);
       }
+      if (gen !== newThreadForProjectGenRef.current) return;
       setView("thread");
       setSidebarOpen(false);
       setPrompt("");
@@ -2476,15 +2501,20 @@ function App() {
       } else {
         await ensureHost();
       }
+      if (gen !== newThreadForProjectGenRef.current) return;
       setStatus("Creating thread...");
       const opened = await window.pix.session.create();
+      if (gen !== newThreadForProjectGenRef.current) return;
       markSessionOpenForBottomScroll();
       applySessionOpen(opened);
       requestContentReveal();
       restoreSessionContentMode(opened.snapshot.sessionFile);
       setStatus("Agent Host ready");
       await refreshThreads();
+      // Keep 对话 rail warm while hopping between project hosts.
+      await refreshConversationSessions();
     } catch (error) {
+      if (gen !== newThreadForProjectGenRef.current) return;
       reportAppError(error, "无法在项目下新建会话");
       setTimelineReady(true);
       pendingScrollBottomRef.current = false;
@@ -3025,6 +3055,7 @@ function App() {
   }, [snapshot, colorMode]);
 
   const railWidth = sidebarRailWidth(sidebarCollapsed, sidebarWidthPx);
+  const mcpNavBadge = mcpStatusFromExtensionUi(extensionUiState);
 
   return (
     <div
@@ -3083,6 +3114,7 @@ function App() {
             : (snapshot?.configuredPackages.global ?? 0) +
               (snapshot?.configuredPackages.project ?? 0)
         }
+        {...(mcpNavBadge ? { mcpBadge: mcpNavBadge.badge, mcpDetail: mcpNavBadge.detail } : {})}
         resourceCount={
           resources.length > 0
             ? resources.length
@@ -3155,10 +3187,8 @@ function App() {
                 collapsed={sidebarCollapsed}
                 contentModeSwitchLocked={running}
                 onToggleContentMode={() => void toggleContentModeSurface()}
+                extensionUi={extensionUiState}
               />
-            ) : null}
-            {contentMode === "chat" ? (
-              <ExtensionUiChrome locale={locale} state={extensionUiState} region="header" />
             ) : null}
 
             {/*

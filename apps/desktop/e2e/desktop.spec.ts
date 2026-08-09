@@ -329,52 +329,35 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     }
   });
 
-  test("top New session targets the selected project", async ({ page }) => {
+  test("top and conversations New session start pure conversation with project pick", async ({
+    page,
+  }) => {
     await startHost(page);
 
-    // Use the checked-out desktop package as a durable project; e2e temp paths are
-    // intentionally classified as conversations and cannot appear in the project rail.
+    // Top「新建会话」is always pure conversation (not bound to selected project).
+    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "conversation");
+    await page.getByTestId("start-host").click({ force: true });
+    await expect(page.getByTestId("composer-project-picker")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("workspace-name-chip")).toContainText(/Select project|选择项目/i);
+
+    // 对话 section「新建会话」same pure-conversation protrusion.
+    await page.getByTestId("threads-new-btn").evaluate((el: HTMLButtonElement) => el.click());
+    await expect(page.getByTestId("composer-project-picker")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("workspace-name-chip")).toContainText(/Select project|选择项目/i);
+
+    // Project-bound new session remains on each project row action.
     const projectPath = resolve(import.meta.dirname, "..");
     await page.evaluate(async (path) => {
       await window.pix.workspace.openPath(path, { resumeRecent: false });
     }, projectPath);
-    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project", {
-      timeout: 30_000,
-    });
-
-    // Opening apps/desktop can surface the trust ask dialog (gated .pi resources).
-    // Dismiss so it does not trap focus / block subsequent sidebar clicks.
     const trustDialog = page.getByTestId("project-trust-dialog");
     if (await trustDialog.isVisible().catch(() => false)) {
       await page.getByTestId("project-trust-dialog-later").click();
       await expect(trustDialog).toBeHidden({ timeout: 10_000 });
     }
-
-    // Section actions use pointer-events-none until hover; Playwright force:true still
-    // loses the hit test. Invoke the button DOM click directly.
-    await page.getByTestId("threads-new-btn").evaluate((el: HTMLButtonElement) => el.click());
-    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "conversation", {
-      timeout: 30_000,
-    });
-
-    const project = page.locator(
-      `[data-testid="recent-workspace-item"][data-path="${projectPath}"]`,
-    );
-    await project.click();
-    await expect(project).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project");
-
-    // Trust may reappear when re-selecting / opening the gated project.
-    if (await trustDialog.isVisible().catch(() => false)) {
-      await page.getByTestId("project-trust-dialog-later").click();
-      await expect(trustDialog).toBeHidden({ timeout: 10_000 });
-    }
-
-    await page.getByTestId("start-host").click();
     await expect(page.getByTestId("runtime-snapshot").first()).toContainText(projectPath, {
       timeout: 45_000,
     });
-    await expect(page.getByTestId("start-host")).toHaveAttribute("data-target", "project");
   });
 
   test("sessions: create a second conversation and switch back", async ({ page }) => {
@@ -402,8 +385,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     // Conversations list holds pure sessions (PIX_WORKSPACE is ephemeral → not a project).
     await expect(conversationSessionButtons(page)).toHaveCount(2, { timeout: 15_000 });
 
-    // Collapsing the rail and re-selecting the already-open conversation must not
-    // clear/recreate its timeline rows.
+    // Collapse + expand conversations, then re-select current — timeline must stay.
     const currentUserRow = page.getByTestId("timeline").locator('[data-kind="user"]').last();
     await currentUserRow.evaluate((element) => {
       element.setAttribute("data-no-refresh-marker", "true");

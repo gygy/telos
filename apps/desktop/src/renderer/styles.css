@@ -147,9 +147,10 @@
   --text: var(--foreground);
   --text-muted: var(--muted-foreground);
   --text-subtle: var(--muted-foreground);
-  --bg-composer: var(--surface-panel);
-  --composer-border: color-mix(in srgb, #ffffff 11%, var(--surface-panel));
-  --composer-protrusion: #212121;
+  /* Composer input card + project protrusion (dark). */
+  --bg-composer: #2b2b2b;
+  --composer-border: color-mix(in srgb, #ffffff 11%, #2b2b2b);
+  --composer-protrusion: #1f1f1f;
   --success: #3ecf8e;
   --warning: #f0a500;
   --danger: #e05555;
@@ -185,14 +186,18 @@
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
-  /* Unified group / section label type (sidebar, settings, menus, palette). */
-  --group-label-size: 12px;
-  --group-label-weight: 500;
-  --group-label-line-height: 1.35;
-  --group-label-color: var(--text-subtle);
   /* Appearance prefs (overridden by applyAppearancePrefs). */
   --ui-font-size: 14px;
   --code-font-size: 12px;
+  /*
+   * Unified group / section label type (sidebar, settings, menus, palette).
+   * Same size as body/UI text — hierarchy uses color/weight, not a smaller type.
+   */
+  --group-label-size: var(--ui-font-size, 14px);
+  --group-label-weight: 500;
+  --group-label-line-height: 1.35;
+  /* Dark theme group names */
+  --group-label-color: #747474;
 }
 
 [data-theme="light"] {
@@ -247,7 +252,8 @@
   --text: var(--foreground);
   --text-muted: var(--muted-foreground);
   --text-subtle: var(--muted-foreground);
-  --bg-composer: var(--surface-panel);
+  /* Composer input card + project protrusion (light). */
+  --bg-composer: #ffffff;
   --composer-border: color-mix(in srgb, #9aa0ab 36%, #ffffff);
   --composer-protrusion: #f5f5f5;
   --bg-app: var(--canvas);
@@ -268,11 +274,15 @@
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
-  /* Unified group / section label type (sidebar, settings, menus, palette). */
-  --group-label-size: 12px;
+  /*
+   * Unified group / section label type (sidebar, settings, menus, palette).
+   * Same size as body/UI text — hierarchy uses color/weight, not a smaller type.
+   */
+  --group-label-size: var(--ui-font-size, 14px);
   --group-label-weight: 500;
   --group-label-line-height: 1.35;
-  --group-label-color: var(--text-subtle);
+  /* Light theme group names */
+  --group-label-color: #a7a9a9;
 }
 
 html,
@@ -285,7 +295,7 @@ body,
 
 /*
  * Single type scale for all “group name” labels across the app.
- * Use this class or the listed selectors — do not invent ad-hoc 11px/12px group titles.
+ * Size matches regular UI text (--ui-font-size); do not invent smaller group titles.
  */
 .group-label,
 .settings-section-label,
@@ -847,9 +857,10 @@ html[data-custom-window-controls="true"] .page-header {
 }
 
 .nav-item {
-  @apply flex h-8 w-full items-center gap-2.5 px-2.5 text-left text-[13px] font-normal;
+  @apply flex h-8 w-full items-center gap-2.5 px-2.5 text-left font-normal;
   border-radius: var(--radius-control);
   color: var(--sidebar-foreground);
+  font-size: var(--ui-font-size, 14px);
 }
 
 .nav-item:hover {
@@ -864,9 +875,10 @@ html[data-custom-window-controls="true"] .page-header {
 
 /* Unified rail list row — compact h-8, same fill for hover + active selection. */
 .sidebar-list-row {
-  @apply relative flex h-8 w-full min-w-0 items-center px-2.5 text-[13px] font-normal transition-colors;
+  @apply relative flex h-8 w-full min-w-0 items-center px-2.5 font-normal transition-colors;
   border-radius: var(--radius-control);
   color: var(--sidebar-foreground);
+  font-size: var(--ui-font-size, 14px);
 }
 
 .sidebar-list-row:hover,
@@ -892,6 +904,32 @@ html[data-custom-window-controls="true"] .page-header {
   align-items: center;
   padding: 0 0.625rem;
   /* type from .group-label */
+}
+
+/* 项目 / 对话 section toggles — same type as group labels (not ad-hoc 13px). */
+.sidebar-section-toggle {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/*
+ * Expand/collapse chevron:
+ * - collapsed section → always visible (so users see they can expand)
+ * - expanded section → hover/focus only (same as section action buttons)
+ */
+.sidebar-section-chevron {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.sidebar-section-head[data-expanded="false"] .sidebar-section-chevron,
+.sidebar-section-head:hover .sidebar-section-chevron,
+.sidebar-section-head:focus-within .sidebar-section-chevron {
+  opacity: 0.7;
+  pointer-events: auto;
 }
 
 .nav-item-primary {
@@ -3923,13 +3961,13 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .settings-section-label {
   margin: 0;
   padding: 0 0.125rem;
-  /* type from .group-label */
+  /* type size/weight/color from unified group-label rule above */
 }
 /* Provider id labels only (anthropic / openai / …) — monospaced codes. */
 .settings-section-label-code {
+  margin: 0;
+  padding: 0 0.125rem;
   font-family: var(--font-mono);
-  /* type from .group-label */
-  text-transform: none;
 }
 .settings-section-hint {
   @apply m-0;
@@ -5031,7 +5069,8 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 }
 .settings-row-title {
   @apply leading-snug font-normal text-[var(--foreground)];
-  font-size: calc(var(--ui-font-size, 14px) * 0.96);
+  /* Same size as group labels / regular UI text (override FieldLabel text-sm). */
+  font-size: var(--ui-font-size, 14px);
 }
 .settings-row-desc {
   @apply mt-1 leading-relaxed font-normal text-[var(--muted-foreground)];
@@ -5509,13 +5548,15 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
   background: var(--hover-fill);
 }
 .settings-rail-group-label {
+  margin: 0;
   padding: 0.75rem 0.625rem 0.25rem;
-  /* type from .group-label */
+  /* type from .group-label — same size as rail items / regular UI text */
 }
 .settings-rail-item {
-  @apply flex h-[32px] w-full min-w-0 items-center gap-2.5 px-2.5 text-left text-[13px] font-normal transition-colors;
+  @apply flex h-[32px] w-full min-w-0 items-center gap-2.5 px-2.5 text-left font-normal transition-colors;
   border-radius: var(--radius-control);
   color: var(--sidebar-foreground);
+  font-size: var(--ui-font-size, 14px);
 }
 .settings-rail-item:hover {
   background: var(--hover-fill);

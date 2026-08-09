@@ -94,8 +94,6 @@ import {
   TERMINAL_FONT_SIZE_MAX,
   TERMINAL_FONT_SIZE_MIN,
   TERMINAL_LINE_HEIGHT_OPTIONS,
-  TERMINAL_SCROLLBACK_MAX,
-  TERMINAL_SCROLLBACK_MIN,
   type TerminalColorScheme,
   type TerminalCursorStyle,
   type TerminalPrefs,
@@ -1974,10 +1972,7 @@ function TerminalSection(
         />
         <SettingsRow
           title={tr("terminal.fontSize")}
-          description={tr("terminal.fontSizeHint", {
-            min: String(TERMINAL_FONT_SIZE_MIN),
-            max: String(TERMINAL_FONT_SIZE_MAX),
-          })}
+          description={tr("terminal.fontSizeHint")}
           control={
             <SettingsSelect
               value={String(prefs.fontSize)}
@@ -2049,10 +2044,7 @@ function TerminalSection(
       <SettingsSectionBlock label={tr("terminal.group.scroll")} testId="settings-terminal-scroll">
         <SettingsRow
           title={tr("terminal.scrollback")}
-          description={tr("terminal.scrollbackHint", {
-            min: String(TERMINAL_SCROLLBACK_MIN),
-            max: String(TERMINAL_SCROLLBACK_MAX),
-          })}
+          description={tr("terminal.scrollbackHint")}
           control={
             <SettingsSelect
               value={String(prefs.scrollback)}
@@ -2670,10 +2662,7 @@ function AppearanceSection(
       <SettingsSectionBlock label={tr("appearance.appScaleSection")}>
         <SettingsRow
           title={tr("appearance.appScale")}
-          description={tr("appearance.appScaleHint", {
-            min: String(APP_SCALE_MIN),
-            max: String(APP_SCALE_MAX),
-          })}
+          description={tr("appearance.appScaleHint")}
           control={
             <SettingsSelect
               value={String(appScale)}
@@ -2727,10 +2716,7 @@ function AppearanceSection(
         />
         <SettingsRow
           title={tr("appearance.uiFontSize")}
-          description={tr("appearance.uiFontSizeHint", {
-            min: String(UI_FONT_SIZE_MIN),
-            max: String(UI_FONT_SIZE_MAX),
-          })}
+          description={tr("appearance.uiFontSizeHint")}
           control={
             <SettingsSelect
               value={String(prefs.uiFontSize)}
@@ -2774,10 +2760,7 @@ function AppearanceSection(
         />
         <SettingsRow
           title={tr("appearance.codeFontSize")}
-          description={tr("appearance.codeFontSizeHint", {
-            min: String(CODE_FONT_SIZE_MIN),
-            max: String(CODE_FONT_SIZE_MAX),
-          })}
+          description={tr("appearance.codeFontSizeHint")}
           control={
             <SettingsSelect
               value={String(prefs.codeFontSize)}

@@ -85,6 +85,13 @@ export interface AppSidebarProps {
   threadTitle: string;
   packageCount: number;
   resourceCount: number;
+  /**
+   * MCP ready/total badge for 插件 (e.g. `0/2` from extension setStatus).
+   * When set, replaces packageCount on the packages nav.
+   */
+  mcpBadge?: string;
+  /** Full MCP status for the packages nav tooltip. */
+  mcpDetail?: string;
   canFork: boolean;
   onOpenPalette: () => void;
   onToggleTheme: () => void;
@@ -316,7 +323,6 @@ function ProductRail(
   },
 ) {
   const { tr } = props;
-  const newThreadProjectPath = props.selectedProjectPath ?? props.workspacePath;
   return (
     <>
       {/* Brand row: title left-aligned with nav/list rows (same px-2.5 content inset). */}
@@ -343,21 +349,16 @@ function ProductRail(
         </span>
       </div>
 
-      {/* Primary action — Codex "新建任务" style; tight stack so 新建/插件/资源 read as one group */}
+      {/* Primary action — pure conversation (protrusion shows 选择项目). Project-bound new
+          sessions only come from each project row action. */}
       <nav className="mb-2 flex flex-col gap-0" aria-label="Primary">
         <button
           type="button"
           data-testid="start-host"
           title={tr("nav.newThread")}
           className="nav-item nav-item-primary"
-          data-target={newThreadProjectPath ? "project" : "conversation"}
-          onClick={() => {
-            if (newThreadProjectPath) {
-              props.onNewThreadForProject(newThreadProjectPath);
-              return;
-            }
-            props.onNewThread();
-          }}
+          data-target="conversation"
+          onClick={() => props.onNewThread()}
         >
           <SquarePen className="size-4 shrink-0 opacity-85" strokeWidth={1.6} />
           <span className="truncate">{tr("nav.newThread")}</span>
@@ -367,7 +368,10 @@ function ProductRail(
           active={props.view === "packages"}
           icon={<Package className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />}
           label={tr("nav.packages")}
-          badge={String(props.packageCount)}
+          badge={props.mcpBadge ?? String(props.packageCount)}
+          title={
+            props.mcpDetail ? `${tr("nav.packages")} · ${props.mcpDetail}` : tr("nav.packages")
+          }
           onClick={props.onOpenPackages}
         />
         <NavBtn
@@ -690,7 +694,7 @@ function SettingsRail(props: {
       {/* Grouped nav */}
       <div className="pix-scroll min-h-0 min-w-0 flex-1 px-0.5 pb-3">
         {filtered.length === 0 ? (
-          <p className="px-2.5 py-2 text-[12px] text-[var(--text-subtle)]">
+          <p className="px-2.5 py-2 text-[length:var(--ui-font-size,14px)] text-[var(--text-subtle)]">
             {tr("settings.noMatch")}
           </p>
         ) : (
@@ -948,6 +952,8 @@ function NavBtn(props: {
   active?: boolean;
   primary?: boolean;
   badge?: string;
+  /** Tooltip; defaults to label. */
+  title?: string;
   onClick: () => void;
 }) {
   return (
@@ -955,14 +961,17 @@ function NavBtn(props: {
       type="button"
       data-testid={props.testId}
       data-active={props.active ? "true" : "false"}
-      title={props.label}
+      title={props.title ?? props.label}
       className={cn("nav-item", props.primary && "nav-item-primary")}
       onClick={props.onClick}
     >
       {props.icon}
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
       {props.badge !== undefined ? (
-        <span className="ml-auto shrink-0 text-[11px] text-[var(--text-subtle)]">
+        <span
+          className="ml-auto shrink-0 text-[11px] text-[var(--text-subtle)]"
+          data-testid={props.testId === "nav-packages" ? "nav-packages-badge" : undefined}
+        >
           {props.badge}
         </span>
       ) : null}

@@ -10,13 +10,13 @@ TUI-only capabilities are **Degraded** with deduped `unsupported` diagnostics �
 | `select`                                  | Searchable Command dialog; structured options; preview blocks use sanitized Markdown |
 | `confirm`                                 | ConfirmDialog                                                                        |
 | `input` / `editor`                        | Text Dialog (empty submit allowed) / multiline editor                                |
-| `notify`                                  | Status strip + OS notify on warning/error                                            |
-| `setStatus`                               | Header status chips (`key` → text; clear with `undefined`)                           |
+| `notify`                                  | Thread titlebar + OS notify on warning/error                                         |
+| `setStatus`                               | Titlebar chips; **MCP** (`MCP: n/m servers`) → packages nav badge `n/m`              |
 | `setWidget(key, string[])`                | Composer-adjacent string cards (`placement` above/below editor)                      |
-| `setTitle`                                | Extension title badge (does not replace app identity)                                |
+| `setTitle`                                | Extension title badge in thread titlebar                                             |
 | `setEditorText` / `pasteToEditor`         | Composer draft                                                                       |
 | `getEditorText`                           | Portable buffer in host                                                              |
-| `setWorkingMessage` / `setWorkingVisible` | Working chip in header                                                               |
+| `setWorkingMessage` / `setWorkingVisible` | Working text in thread titlebar                                                      |
 | `theme` / `getTheme`                      | Plain-text portable theme (no ANSI)                                                  |
 
 ## Semantic no-op (accepted, no chrome)

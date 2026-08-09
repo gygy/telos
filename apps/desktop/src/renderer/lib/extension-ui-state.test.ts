@@ -3,8 +3,10 @@ import {
   applyExtensionUiFireForget,
   emptyExtensionUiPortableState,
   extensionStatusList,
+  extensionStatusListForTitlebar,
   extensionWidgetsForPlacement,
   isExtensionUiFireForgetMethod,
+  mcpStatusFromExtensionUi,
 } from "./extension-ui-state.ts";
 
 describe("applyExtensionUiFireForget", () => {
@@ -100,5 +102,28 @@ describe("applyExtensionUiFireForget", () => {
   it("classifies fire-and-forget methods", () => {
     expect(isExtensionUiFireForgetMethod("setStatus")).toBe(true);
     expect(isExtensionUiFireForgetMethod("select")).toBe(false);
+  });
+
+  it("parses MCP status for the packages nav badge and hides it from titlebar list", () => {
+    let state = emptyExtensionUiPortableState("rt-1");
+    state = applyExtensionUiFireForget(state, {
+      runtimeId: "rt-1",
+      method: "setStatus",
+      args: { key: "mcp", text: "MCP: 0/2 servers" },
+    }).state;
+    state = applyExtensionUiFireForget(state, {
+      runtimeId: "rt-1",
+      method: "setStatus",
+      args: { key: "other", text: "Ready" },
+    }).state;
+
+    expect(mcpStatusFromExtensionUi(state)).toEqual({
+      ready: 0,
+      total: 2,
+      badge: "0/2",
+      detail: "MCP: 0/2 servers",
+    });
+    expect(extensionStatusList(state).map((s) => s.key)).toEqual(["mcp", "other"]);
+    expect(extensionStatusListForTitlebar(state).map((s) => s.key)).toEqual(["other"]);
   });
 });

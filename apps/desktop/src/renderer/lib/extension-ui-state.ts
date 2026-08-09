@@ -208,6 +208,59 @@ export function extensionStatusList(state: ExtensionUiPortableState): Array<{
     .map(([key, text]) => ({ key, text }));
 }
 
+/**
+ * Statuses for titlebar chips — MCP is shown on the packages nav badge instead.
+ */
+export function extensionStatusListForTitlebar(state: ExtensionUiPortableState): Array<{
+  key: string;
+  text: string;
+}> {
+  return extensionStatusList(state).filter((item) => !isMcpStatusKey(item.key));
+}
+
+function isMcpStatusKey(key: string): boolean {
+  return key.toLowerCase() === "mcp" || key.toLowerCase().startsWith("mcp.");
+}
+
+/** `MCP: 0/2 servers` → `{ ready: 0, total: 2, badge: "0/2", detail: "…" }` */
+export type McpStatusBadge = {
+  ready: number;
+  total: number;
+  /** Short badge for the packages nav (e.g. `0/2`). */
+  badge: string;
+  /** Full status string for tooltips. */
+  detail: string;
+};
+
+/**
+ * Parse MCP adapter status lines from extension portable state.
+ * Recognizes key `mcp` and text like `MCP: 1/2 servers`.
+ */
+export function mcpStatusFromExtensionUi(
+  state: ExtensionUiPortableState,
+): McpStatusBadge | undefined {
+  const entries = Object.entries(state.statuses);
+  for (const [key, text] of entries) {
+    const trimmed = text.trim();
+    if (!trimmed) continue;
+    const fromKey = isMcpStatusKey(key);
+    const fromText = /^mcp\b/i.test(trimmed) || /\bservers?\b/i.test(trimmed);
+    if (!fromKey && !fromText) continue;
+    const match = /(\d+)\s*\/\s*(\d+)/.exec(trimmed);
+    if (!match) continue;
+    const ready = Number.parseInt(match[1]!, 10);
+    const total = Number.parseInt(match[2]!, 10);
+    if (!Number.isFinite(ready) || !Number.isFinite(total) || total < 0) continue;
+    return {
+      ready,
+      total,
+      badge: `${ready}/${total}`,
+      detail: trimmed,
+    };
+  }
+  return undefined;
+}
+
 export function extensionWidgetsForPlacement(
   state: ExtensionUiPortableState,
   placement: "aboveEditor" | "belowEditor",

@@ -5292,18 +5292,27 @@ void app
     ipcMain.handle("pix:session:list", () => supervisor?.listSessions());
     ipcMain.handle("pix:session:list-for-cwd", async (_event, cwd: string) => {
       if (typeof cwd !== "string" || !cwd.trim()) return [];
+      const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const requested = norm(cwd);
       // When this cwd is the live host workspace, prefer host listSessions — it merges
       // the in-memory session that pi has not flushed to disk yet (no assistant msg).
       // Disk-only list would drop brand-new conversations from the sidebar.
+      //
+      // Re-check cwd after await: rapid project「新建会话」can switch the host mid-list
+      // and would otherwise return the *new* project's sessions under the requested cwd
+      // (wiping the 对话 rail when those rows are filtered by project cwd).
       try {
         const current = supervisor?.getWorkspaceCwd();
-        if (
-          current &&
-          current.replace(/\\/g, "/").replace(/\/+$/, "") ===
-            cwd.replace(/\\/g, "/").replace(/\/+$/, "")
-        ) {
+        if (current && norm(current) === requested) {
           const listed = await supervisor?.listSessions();
-          if (listed) return listed.threads;
+          const still = supervisor?.getWorkspaceCwd();
+          if (listed && still && norm(still) === requested) {
+            return listed.threads.filter((thread) => {
+              const threadCwd = (thread.cwd || "").trim();
+              if (!threadCwd) return true;
+              return norm(threadCwd) === requested;
+            });
+          }
         }
       } catch {
         // host may be stopped — fall through to disk scan

@@ -45,7 +45,6 @@ import { loadConfirmArchive, loadConfirmDelete } from "../lib/behavior-prefs.ts"
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
 import { useShellStore } from "../store/shell-store.ts";
 import {
-  PROJECT_THREADS_PAGE,
   archiveProject,
   archiveThread,
   deleteThreadLocal,
@@ -168,7 +167,6 @@ export function ProjectList(props: ProjectListProps) {
     useState<ConversationSortMode>(loadConversationSortMode);
   const [projectsOpen, setProjectsOpen] = useState(loadProjectsSectionOpen);
   const [threadsOpen, setThreadsOpen] = useState(loadThreadsSectionOpen);
-  const [listVisible, setListVisible] = useState(PROJECT_THREADS_PAGE);
   const [renameTarget, setRenameTarget] = useState<
     | { kind: "project"; path: string; value: string }
     | { kind: "thread"; id: string; value: string }
@@ -1025,7 +1023,7 @@ export function ProjectList(props: ProjectListProps) {
         {hasMore ? (
           <button
             type="button"
-            className="sidebar-list-row gap-2 text-[12px] !text-[var(--group-label-color)]"
+            className="sidebar-list-row gap-2 !text-[var(--group-label-color)]"
             data-testid="session-show-more"
             onClick={() => handleShowMoreProject(path)}
           >
@@ -1228,9 +1226,6 @@ export function ProjectList(props: ProjectListProps) {
     closeMenus();
   }
 
-  const conversationVisible = conversationList.slice(0, listVisible);
-  const conversationHasMore = conversationList.length > listVisible;
-
   return (
     // Single scroll for 置顶/项目/对话 — avoid flex-squeezing 对话 to zero height.
     <div
@@ -1254,20 +1249,20 @@ export function ProjectList(props: ProjectListProps) {
 
       {/* ── 项目 ── */}
       <div className="relative min-w-0 shrink-0">
-        <div className="sidebar-section-head group/section">
+        <div
+          className="sidebar-section-head group/section"
+          data-expanded={projectsOpen ? "true" : "false"}
+        >
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-[13px] font-normal text-[var(--text-subtle)]"
+            className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 truncate text-left"
             data-testid="projects-section-toggle"
             aria-expanded={projectsOpen}
             onClick={toggleProjects}
           >
             <span className="min-w-0 truncate">{tr("section.projects")}</span>
             <ChevronRight
-              className={cn(
-                "size-4 shrink-0 opacity-70 transition-transform duration-150",
-                projectsOpen && "rotate-90",
-              )}
+              className={cn("sidebar-section-chevron size-4 shrink-0", projectsOpen && "rotate-90")}
               strokeWidth={2.25}
               aria-hidden
             />
@@ -1320,22 +1315,22 @@ export function ProjectList(props: ProjectListProps) {
         ) : null}
       </div>
 
-      {/* ── 对话 ── */}
+      {/* ── 对话：可折叠；展开时列出全部会话（无「展开显示」分页） ── */}
       <div className="mt-0.5 min-w-0 shrink-0">
-        <div className="sidebar-section-head group/section">
+        <div
+          className="sidebar-section-head group/section"
+          data-expanded={threadsOpen ? "true" : "false"}
+        >
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-[13px] font-normal text-[var(--text-subtle)]"
+            className="sidebar-section-toggle group-label flex min-w-0 flex-1 items-center gap-1 truncate text-left"
             data-testid="threads-section-toggle"
             aria-expanded={threadsOpen}
             onClick={toggleThreads}
           >
             <span className="min-w-0 truncate">{tr("section.threads")}</span>
             <ChevronRight
-              className={cn(
-                "size-4 shrink-0 opacity-70 transition-transform duration-150",
-                threadsOpen && "rotate-90",
-              )}
+              className={cn("sidebar-section-chevron size-4 shrink-0", threadsOpen && "rotate-90")}
               strokeWidth={2.25}
               aria-hidden
             />
@@ -1373,23 +1368,13 @@ export function ProjectList(props: ProjectListProps) {
           >
             {conversationList.length === 0
               ? null
-              : conversationVisible.map((t) =>
+              : conversationList.map((t) =>
                   renderThreadButton(t, {
                     indent: false,
                     kind: "conversation",
                     manualSort: conversationSortMode === "manual",
                   }),
                 )}
-            {conversationHasMore ? (
-              <button
-                type="button"
-                className="sidebar-list-row text-[12px] !text-[var(--group-label-color)]"
-                data-testid="threads-show-more"
-                onClick={() => setListVisible((n) => n + PROJECT_THREADS_PAGE)}
-              >
-                {tr("thread.showMore")}
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
