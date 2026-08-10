@@ -13,6 +13,7 @@ import type {
   ModelsJsonProviderView,
   UpsertCustomProviderInput,
 } from "@pix/contracts";
+import { normalizeProviderBaseUrl } from "./provider-base-url.ts";
 
 const MODELS_FILE = "models.json";
 
@@ -227,12 +228,45 @@ function removeModelFromProvidersMap(
  * Does not write apiKey into models.json — use AuthStorage / setProviderApiKey.
  * When previousProvider/previousModelId are set, renames/moves remove the old entry.
  */
+/**
+ * Rewrite provider baseUrl values in models.json so OpenAI / Anthropic / …
+ * SDKs join paths correctly whether the user typed a trailing `/v1` or not.
+ * Returns true when the file was modified.
+ */
+export async function normalizeModelsJsonBaseUrls(agentDir: string): Promise<boolean> {
+  const path = modelsJsonPath(agentDir);
+  if (!(await fileExists(path))) return false;
+  let root: Record<string, unknown>;
+  try {
+    root = await loadRoot(path);
+  } catch {
+    return false;
+  }
+  const providers = asProvidersMap(root);
+  let changed = false;
+  for (const [providerId, raw] of Object.entries(providers)) {
+    if (!isRecord(raw)) continue;
+    const baseUrl = typeof raw.baseUrl === "string" ? raw.baseUrl : "";
+    const api = typeof raw.api === "string" ? raw.api : "";
+    if (!baseUrl.trim() || !api.trim()) continue;
+    const next = normalizeProviderBaseUrl(baseUrl, api);
+    if (next !== baseUrl) {
+      providers[providerId] = { ...raw, baseUrl: next };
+      changed = true;
+    }
+  }
+  if (!changed) return false;
+  root.providers = providers;
+  await writeFile(path, `${JSON.stringify(root, null, 2)}\n`, "utf8");
+  return true;
+}
+
 export async function upsertCustomProviderInModelsJson(
   agentDir: string,
   input: UpsertCustomProviderInput,
 ): Promise<ModelsJsonConfigView> {
   const providerId = input.provider.trim();
-  const baseUrl = input.baseUrl.trim();
+  const baseUrl = normalizeProviderBaseUrl(input.baseUrl, input.api);
   const modelId = input.modelId.trim();
   if (!providerId) throw new Error("Provider id is required");
   if (!baseUrl) throw new Error("Base URL is required");

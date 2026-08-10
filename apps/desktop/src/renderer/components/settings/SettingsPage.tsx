@@ -3445,6 +3445,8 @@ const CUSTOM_MODEL_API_OPTIONS: Array<{ value: CustomModelApi; label: string }> 
 
 const CUSTOM_MODEL_API_VALUES = new Set<string>(CUSTOM_MODEL_API_OPTIONS.map((opt) => opt.value));
 const MANUAL_MODEL_CATALOG_VALUE = "__pix_manual_model__";
+/** Same rule as agent-runtime upsertCustomProviderInModelsJson. */
+const CUSTOM_PROVIDER_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
 type PiCatalogModel = ModelSummary & {
   api: CustomModelApi;
@@ -3607,11 +3609,32 @@ function ModelsSectionContent(
 
   const showAppError = useShellStore((s) => s.showAppError);
 
+  function localizeCustomModelError(message: string): string {
+    // Backend models-json throws English; map known validation strings for locale UI.
+    if (
+      message.includes("Provider id must start with a letter or digit") ||
+      message.includes("use only letters, digits")
+    ) {
+      return tr("models.customProviderInvalid");
+    }
+    if (
+      message === "Provider id is required" ||
+      message === "Base URL is required" ||
+      message === "Model id is required"
+    ) {
+      return tr("models.customRequired");
+    }
+    if (message.startsWith("Unsupported API type:")) {
+      return message;
+    }
+    return message;
+  }
+
   function showError(err: unknown, fallback: string) {
     const raw = err instanceof Error ? err.message : fallback;
-    const message =
+    const stripped =
       raw.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/i, "").trim() || fallback;
-    showAppError(message);
+    showAppError(localizeCustomModelError(stripped));
   }
 
   function parseOptionalNumber(raw: string): number | undefined {
@@ -3876,15 +3899,20 @@ function ModelsSectionContent(
 
   async function saveCustomProvider(event: FormEvent) {
     event.preventDefault();
-    if (!providerId.trim() || !baseUrl.trim() || !modelId.trim()) {
+    const nextProviderId = providerId.trim();
+    if (!nextProviderId || !baseUrl.trim() || !modelId.trim()) {
       showAppError(tr("models.customRequired"));
+      return;
+    }
+    if (!CUSTOM_PROVIDER_ID_RE.test(nextProviderId)) {
+      showAppError(tr("models.customProviderInvalid"));
       return;
     }
     setDialogBusy(true);
     try {
       await props.onEnsureHost();
       const payload: Parameters<typeof window.pix.models.upsertCustomProvider>[0] = {
-        provider: providerId.trim(),
+        provider: nextProviderId,
         baseUrl: baseUrl.trim(),
         api,
         modelId: modelId.trim(),
@@ -3917,7 +3945,7 @@ function ModelsSectionContent(
       setDialogOpen(false);
       await Promise.all([refresh(), props.auth.refresh()]);
     } catch (err) {
-      showError(err, "Failed to save custom model");
+      showError(err, tr("models.customSaveFailed"));
     } finally {
       setDialogBusy(false);
     }
@@ -3932,7 +3960,7 @@ function ModelsSectionContent(
       await window.pix.models.removeCustomModel(model.provider, model.id);
       await Promise.all([refresh(), props.auth.refresh()]);
     } catch (err) {
-      showError(err, "Failed to delete custom model");
+      showError(err, tr("models.customDeleteFailed"));
     } finally {
       setLoading(false);
     }
@@ -4319,6 +4347,9 @@ function ModelsSectionContent(
                           autoComplete="off"
                           autoFocus
                         />
+                        <p className="m-0 text-[11px] leading-snug text-[var(--text-subtle)]">
+                          {tr("models.customProviderHint")}
+                        </p>
                       </label>
                       <label className="models-custom-field">
                         <span>{tr("models.customApi")}</span>
@@ -4344,6 +4375,9 @@ function ModelsSectionContent(
                           disabled={dialogBusy}
                           autoComplete="off"
                         />
+                        <p className="m-0 text-[11px] leading-snug text-[var(--text-subtle)]">
+                          {tr("models.customBaseUrlHint")}
+                        </p>
                       </label>
                       <label className="models-custom-field models-custom-field-span">
                         <span>{tr("models.customApiKey")}</span>
