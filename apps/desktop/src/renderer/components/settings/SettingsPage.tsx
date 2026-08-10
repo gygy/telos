@@ -2474,11 +2474,6 @@ function GeneralSection(
               aria-label={tr("settings.suggestions")}
             />
           }
-        />
-        <SettingsRow
-          title={tr("settings.importAgent")}
-          description={tr("settings.importAgentHint")}
-          control={<SettingsPillButton label={tr("settings.importAgain")} disabled />}
           last
         />
       </SettingsSectionBlock>
