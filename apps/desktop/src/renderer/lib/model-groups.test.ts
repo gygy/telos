@@ -10,6 +10,10 @@ describe("model-groups", () => {
     expect(formatProviderGroupLabel("deepseek")).toBe("DeepSeek");
     expect(formatProviderGroupLabel("qwen-token-plan")).toBe("Qwen Token Plan");
     expect(formatProviderGroupLabel("qwen-token-plan-cn")).toBe("Qwen Token Plan Cn");
+    expect(formatProviderGroupLabel("qwen-token-plan-individual")).toBe(
+      "Qwen Token Plan Individual",
+    );
+    expect(formatProviderGroupLabel("baseten")).toBe("Baseten");
   });
 
   it("title-cases unknown hyphenated ids and preserves mixed-case custom ids", () => {
