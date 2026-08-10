@@ -2,6 +2,8 @@
 
 const PINNED_KEY = "pix.projects.pinned";
 const PROJECT_MANUAL_ORDER_KEY = "pix.projects.manualOrder";
+/** First-seen / import order for「优先级」— append-only; never reordered by open/use. */
+const PROJECT_PRIORITY_ORDER_KEY = "pix.projects.priorityOrder";
 const ARCHIVED_KEY = "pix.projects.archived";
 const ALIASES_KEY = "pix.projects.aliases";
 const EXPANDED_KEY = "pix.projects.expanded";
@@ -60,6 +62,62 @@ export function saveProjectManualOrder(paths: readonly string[]): string[] {
   ];
   writeJson(PROJECT_MANUAL_ORDER_KEY, next);
   return next;
+}
+
+export function loadProjectPriorityOrder(): string[] {
+  const list = readJson<string[]>(PROJECT_PRIORITY_ORDER_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return [
+    ...new Set(list.filter((path) => typeof path === "string" && path.trim()).map(normalizePath)),
+  ];
+}
+
+export function saveProjectPriorityOrder(paths: readonly string[]): string[] {
+  const next = [
+    ...new Set(paths.filter((path) => typeof path === "string" && path.trim()).map(normalizePath)),
+  ];
+  writeJson(PROJECT_PRIORITY_ORDER_KEY, next);
+  return next;
+}
+
+/**
+ * Pure merge for「优先级」order: keep existing positions, append first-seen only.
+ * Opening / using a project must not move it — only new imports land at the end.
+ */
+export function mergeProjectPriorityOrder(
+  current: readonly string[],
+  knownPaths: readonly string[],
+): string[] {
+  const known = new Map<string, string>();
+  for (const raw of knownPaths) {
+    if (!raw?.trim()) continue;
+    const key = normalizePath(raw);
+    if (!known.has(key)) known.set(key, raw);
+  }
+
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const path of current) {
+    const key = normalizePath(path);
+    const raw = known.get(key);
+    if (!raw || seen.has(key)) continue;
+    seen.add(key);
+    next.push(raw);
+  }
+  for (const [, raw] of known) {
+    const key = normalizePath(raw);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(raw);
+  }
+  return next;
+}
+
+/** Persist priority order after merge (append-only for newcomers). */
+export function syncProjectPriorityOrder(knownPaths: readonly string[]): string[] {
+  return saveProjectPriorityOrder(
+    mergeProjectPriorityOrder(loadProjectPriorityOrder(), knownPaths),
+  );
 }
 
 export function togglePinnedProject(path: string): string[] {
@@ -214,7 +272,7 @@ export type ProjectSortMode = "priority" | "recent" | "manual";
 
 /**
  * Order projects in the 项目 section (pinned live in 置顶 and are not passed here).
- * - priority: keep default/add order unchanged (new projects stay where they were appended)
+ * - priority: first-seen / import order (priorityOrder); open/use never moves rows
  * - recent: follow recentOrder (most recent first); unknowns last
  * - manual: saved paths first, then new/unknown paths in input order
  */
@@ -224,6 +282,7 @@ export function sortProjectPaths(
   options?: {
     recentOrder?: readonly string[];
     manualOrder?: readonly string[];
+    priorityOrder?: readonly string[];
   },
 ): string[] {
   const list = [...paths];
@@ -243,13 +302,15 @@ export function sortProjectPaths(
     });
   }
 
-  if (mode === "manual") {
-    const manualIndex = new Map(
-      (options?.manualOrder ?? []).map((path, i) => [normalizePath(path), i]),
-    );
+  // priority + manual: both use an explicit order list; only how that list is
+  // maintained differs (append-on-import vs drag). Open/use must not rewrite it.
+  if (mode === "priority" || mode === "manual") {
+    const order =
+      mode === "priority" ? (options?.priorityOrder ?? []) : (options?.manualOrder ?? []);
+    const orderIndex = new Map(order.map((path, i) => [normalizePath(path), i]));
     return list.sort((a, b) => {
-      const ai = manualIndex.get(normalizePath(a));
-      const bi = manualIndex.get(normalizePath(b));
+      const ai = orderIndex.get(normalizePath(a));
+      const bi = orderIndex.get(normalizePath(b));
       if (ai !== undefined && bi !== undefined) return ai - bi;
       if (ai !== undefined) return -1;
       if (bi !== undefined) return 1;
@@ -510,19 +571,39 @@ export function hasThreadMessages(thread: { messageCount: number; title?: string
   return thread.messageCount > 0 && thread.title?.trim().toLowerCase() !== "(no messages)";
 }
 
-/** Merge refreshes monotonically so a visible live row cannot disappear or become empty. */
+/**
+ * Merge refreshes monotonically so a visible live row cannot disappear or become empty.
+ * Existing rows keep their positions; brand-new session ids are prepended (top of list).
+ * Project order is unrelated — only session order within a list is affected.
+ */
 export function mergeThreadRows<
   T extends { id: string; modifiedAt: string; createdAt?: string; messageCount?: number },
 >(current: readonly T[], incoming: readonly T[]): T[] {
-  const mergedById = new Map(current.map((row) => [row.id, row]));
+  const previousById = new Map(current.map((row) => [row.id, row]));
+  const updatedById = new Map<string, T>();
+  const brandNewById = new Map<string, T>();
+
   for (const row of incoming) {
-    const previous = mergedById.get(row.id);
-    const wouldLoseMessages = (previous?.messageCount ?? 0) > 0 && (row.messageCount ?? 0) === 0;
-    const freshest =
-      previous && (wouldLoseMessages || compareThreadRecency(row, previous) >= 0) ? previous : row;
-    mergedById.set(row.id, freshest);
+    const previous = previousById.get(row.id);
+    if (!previous) {
+      const pending = brandNewById.get(row.id);
+      if (!pending) {
+        brandNewById.set(row.id, row);
+        continue;
+      }
+      // Same new id twice in one refresh — keep the fresher row.
+      brandNewById.set(row.id, compareThreadRecency(row, pending) >= 0 ? pending : row);
+      continue;
+    }
+    const wouldLoseMessages = (previous.messageCount ?? 0) > 0 && (row.messageCount ?? 0) === 0;
+    const freshest = wouldLoseMessages || compareThreadRecency(row, previous) >= 0 ? previous : row;
+    updatedById.set(row.id, freshest);
   }
-  return [...mergedById.values()];
+
+  // Keep established order for rows that were already visible.
+  const kept = current.map((row) => updatedById.get(row.id) ?? row);
+  // Brand-new sessions land at the top of this session list only.
+  return [...brandNewById.values(), ...kept];
 }
 
 /**
@@ -558,11 +639,12 @@ export function moveItemInManualOrder(
 
 /**
  * Sort sidebar threads/conversations.
- * - priority: keep default/add order unchanged (new sessions stay where they landed)
+ * - priority: stable positions for existing rows; new sessions are prepended at the top
  * - recent: modifiedAt desc only
  * - manual: saved ids first, then new/unknown ids in input order
  *
  * Pin is independent of sort mode (badge + 置顶 section for projects).
+ * Never reorders the parent project list — only sessions within a list.
  */
 export function sortThreadsByMode<T extends { id: string; modifiedAt: string; createdAt?: string }>(
   threads: T[],

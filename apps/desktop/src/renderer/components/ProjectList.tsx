@@ -64,6 +64,7 @@ import {
   loadPinnedThreads,
   loadProjectAliases,
   loadProjectManualOrder,
+  loadProjectPriorityOrder,
   loadThreadAliases,
   loadThreadManualOrder,
   loadUnreadThreads,
@@ -80,7 +81,7 @@ import {
   setThreadAlias,
   sortProjectPaths,
   sortThreadsByMode,
-  sortThreadsWithPins,
+  syncProjectPriorityOrder,
   threadDisplayTitle,
   toggleExpandedProject,
   togglePinnedProject,
@@ -146,6 +147,7 @@ export function ProjectList(props: ProjectListProps) {
   const tr = (key: MessageKey, vars?: Record<string, string>) => t(props.locale, key, vars);
   const [pinned, setPinned] = useState(loadPinnedProjects);
   const [manualProjectOrder, setManualProjectOrder] = useState(loadProjectManualOrder);
+  const [priorityProjectOrder, setPriorityProjectOrder] = useState(loadProjectPriorityOrder);
   const [archived, setArchived] = useState(loadArchivedProjects);
   const [aliases, setAliases] = useState(loadProjectAliases);
   const [threadAliases, setThreadAliases] = useState(loadThreadAliases);
@@ -221,6 +223,7 @@ export function ProjectList(props: ProjectListProps) {
     const syncRail = () => {
       setPinned(loadPinnedProjects());
       setManualProjectOrder(loadProjectManualOrder());
+      setPriorityProjectOrder(loadProjectPriorityOrder());
       setArchived(loadArchivedProjects());
     };
     window.addEventListener("pix-project-rail-changed", syncRail);
@@ -230,15 +233,17 @@ export function ProjectList(props: ProjectListProps) {
   const allPaths = useMemo(() => {
     // Include pinned paths even if they drop out of "recent" so 置顶 group stays populated.
     // Never promote conversation/scratch dirs as real projects.
+    // Do NOT put the active workspace first — that rewrote「优先级」order on every open.
+    // New projects only append via syncProjectPriorityOrder when first seen.
     const list: string[] = [];
+    for (const p of props.recentWorkspaces) {
+      if (!isNonProjectWorkspacePath(p)) list.push(p);
+    }
     if (props.workspacePath && !isNonProjectWorkspacePath(props.workspacePath)) {
       list.push(props.workspacePath);
     }
     if (props.selectedProjectPath && !isNonProjectWorkspacePath(props.selectedProjectPath)) {
       list.push(props.selectedProjectPath);
-    }
-    for (const p of props.recentWorkspaces) {
-      if (!isNonProjectWorkspacePath(p)) list.push(p);
     }
     for (const p of pinned) {
       if (!isNonProjectWorkspacePath(p)) list.push(p);
@@ -289,14 +294,20 @@ export function ProjectList(props: ProjectListProps) {
     [allPaths, pinned, archived],
   );
 
+  // Append first-seen projects to priority order; never move existing rows on open/use.
+  useEffect(() => {
+    setPriorityProjectOrder(syncProjectPriorityOrder(restPathsRaw));
+  }, [restPathsRaw]);
+
   // Apply project sort mode (pinned stay in 置顶; only 项目 rest is reordered).
   const restPaths = useMemo(
     () =>
       sortProjectPaths(restPathsRaw, sortMode, {
         recentOrder: props.recentWorkspaces,
         manualOrder: manualProjectOrder,
+        priorityOrder: priorityProjectOrder,
       }),
-    [restPathsRaw, sortMode, props.recentWorkspaces, manualProjectOrder],
+    [restPathsRaw, sortMode, props.recentWorkspaces, manualProjectOrder, priorityProjectOrder],
   );
 
   const closeMenus = useCallback(() => {
@@ -989,10 +1000,9 @@ export function ProjectList(props: ProjectListProps) {
             title: live.title || t.title,
           };
         });
-        // Append any live threads missing from cache (new session just created).
-        for (const live of liveForProject) {
-          if (!list.some((t) => t.id === live.id)) list.push(live);
-        }
+        // Prepend brand-new live threads (new session lands at top of this project only).
+        const missing = liveForProject.filter((live) => !list.some((t) => t.id === live.id));
+        if (missing.length > 0) list = [...missing, ...list];
       }
     } else if (liveForProject.length > 0) {
       list = liveForProject;
@@ -1005,7 +1015,8 @@ export function ProjectList(props: ProjectListProps) {
         !isArchivedThread(t.id, archivedThreads) &&
         !isDeletedThread(t.id, deletedThreads),
     );
-    return sortThreadsWithPins(visible, pinnedThreads);
+    // Same session sort modes as 对话: priority stays put; recent/manual may reorder.
+    return sortThreadsByMode(visible, conversationSortMode, pinnedThreads, manualThreadOrder);
   }
 
   function renderNestedThreads(path: string, active: boolean) {

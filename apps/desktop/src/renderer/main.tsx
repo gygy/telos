@@ -697,10 +697,13 @@ function App() {
   }
 
   /**
-   * Optimistically put the open session at the top of the sidebar with a title
-   * from the just-sent user text. Needed because pi defers flushing session JSONL
-   * until the first assistant message — without this, a brand-new conversation
-   * stays invisible (or keeps "(no messages)") for the whole first turn.
+   * Optimistically update the open session title/messageCount after the user sends.
+   * Needed because pi defers flushing session JSONL until the first assistant message
+   * — without this, a brand-new conversation stays invisible (or keeps "(no messages)")
+   * for the whole first turn.
+   *
+   * Preserve list position:「优先级」is import/add order and must not jump on activity.
+   * 「最近更新」reorders at render time via sortThreadsByMode, not here.
    */
   function touchActiveThreadInSidebar(userText: string) {
     const store = useShellStore.getState();
@@ -716,7 +719,8 @@ function App() {
       const match = (row: SessionThreadSummary) =>
         (sessionId && row.id === sessionId) ||
         (sessionPath && row.path.replace(/\\/g, "/") === sessionPath.replace(/\\/g, "/"));
-      const existing = list.find(match);
+      const existingIndex = list.findIndex(match);
+      const existing = existingIndex >= 0 ? list[existingIndex] : undefined;
       const base = (existing?.titleBase ?? existing?.title ?? "").trim();
       const looksDefault =
         !base || base === "(no messages)" || /^Thread\s/i.test(base) || base === newLabel;
@@ -741,8 +745,14 @@ function App() {
             messageCount: 1,
             active: true,
           };
-      const rest = list.filter((row) => !match(row)).map((row) => ({ ...row, active: false }));
-      return [nextRow, ...rest].sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+      if (existingIndex >= 0) {
+        // Existing session: update in place — do not jump to top on activity.
+        return list.map((row, index) =>
+          index === existingIndex ? nextRow : { ...row, active: false },
+        );
+      }
+      // Brand-new session: land at the top of this project's (or 对话) session list only.
+      return [nextRow, ...list.map((row) => ({ ...row, active: false }))];
     };
     setThreads(patch(store.threads));
     if (cwd) {

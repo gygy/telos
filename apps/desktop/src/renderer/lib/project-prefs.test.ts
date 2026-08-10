@@ -8,6 +8,7 @@ import {
   isUnreadThread,
   loadUnreadThreads,
   markThreadUnread,
+  mergeProjectPriorityOrder,
   mergeThreadRows,
   moveItemInManualOrder,
   markUnreadOnAgentSettle,
@@ -60,7 +61,10 @@ describe("project prefs helpers", () => {
 
   it("sorts project paths by priority / recent / manual", () => {
     const paths = ["/z/zebra", "/a/alpha", "/m/mid"];
-    expect(sortProjectPaths(paths, "priority")).toEqual(paths);
+    // priority uses first-seen order — open/use must not reshuffle input list alone
+    expect(
+      sortProjectPaths(paths, "priority", { priorityOrder: ["/a/alpha", "/z/zebra", "/m/mid"] }),
+    ).toEqual(["/a/alpha", "/z/zebra", "/m/mid"]);
     expect(
       sortProjectPaths(paths, "recent", { recentOrder: ["/m/mid", "/z/zebra", "/a/alpha"] }),
     ).toEqual(["/m/mid", "/z/zebra", "/a/alpha"]);
@@ -69,6 +73,22 @@ describe("project prefs helpers", () => {
       "/m/mid",
       "/a/alpha",
     ]);
+  });
+
+  it("keeps priority project order stable when open order changes", () => {
+    // First import order: alpha, mid, zebra
+    const seeded = mergeProjectPriorityOrder([], ["/a/alpha", "/m/mid", "/z/zebra"]);
+    expect(seeded).toEqual(["/a/alpha", "/m/mid", "/z/zebra"]);
+    // Opening zebra first in knownPaths must not move it to the top
+    expect(mergeProjectPriorityOrder(seeded, ["/z/zebra", "/a/alpha", "/m/mid"])).toEqual([
+      "/a/alpha",
+      "/m/mid",
+      "/z/zebra",
+    ]);
+    // New project only appends
+    expect(mergeProjectPriorityOrder(seeded, ["/z/zebra", "/a/alpha", "/m/mid", "/n/new"])).toEqual(
+      ["/a/alpha", "/m/mid", "/z/zebra", "/n/new"],
+    );
   });
 
   it("keeps equal-time rows deterministic and ignores stale refreshes", () => {
@@ -88,6 +108,39 @@ describe("project prefs helpers", () => {
         [],
       ).map((thread) => thread.id),
     ).toEqual(["a", "b"]);
+  });
+
+  it("prepends brand-new sessions without reordering existing ones", () => {
+    const older = {
+      id: "old",
+      modifiedAt: "2026-01-01T00:00:00.000Z",
+      messageCount: 1,
+    };
+    const mid = {
+      id: "mid",
+      modifiedAt: "2026-02-01T00:00:00.000Z",
+      messageCount: 1,
+    };
+    const created = {
+      id: "new",
+      modifiedAt: "2026-03-01T00:00:00.000Z",
+      messageCount: 1,
+    };
+    // New session lands at top; mid/old keep relative order.
+    expect(mergeThreadRows([older, mid], [mid, older, created]).map((t) => t.id)).toEqual([
+      "new",
+      "old",
+      "mid",
+    ]);
+    // Touching an existing row updates metadata in place (no jump to top).
+    const touched = { ...mid, modifiedAt: "2026-04-01T00:00:00.000Z" };
+    expect(mergeThreadRows([older, mid], [touched, older]).map((t) => t.id)).toEqual([
+      "old",
+      "mid",
+    ]);
+    expect(mergeThreadRows([older, mid], [touched, older])[1]?.modifiedAt).toBe(
+      "2026-04-01T00:00:00.000Z",
+    );
   });
 
   it("keeps an established session through incomplete and empty refreshes", () => {
