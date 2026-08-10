@@ -184,6 +184,33 @@ async function download(url, destFile) {
 }
 
 /**
+ * Windows `tar` treats `C:` / `C:/` as a remote host ("Cannot connect to C:").
+ * Convert to MSYS/Git-Bash form `/c/...` which stays local.
+ * @param {string} p
+ */
+export function tarLocalPath(p) {
+  const abs = resolve(p).replace(/\\/g, "/");
+  if (process.platform !== "win32") return abs;
+  const m = abs.match(/^([A-Za-z]):\/(.*)$/);
+  if (m) return `/${m[1].toLowerCase()}/${m[2]}`;
+  return abs;
+}
+
+/**
+ * @param {string[]} args tar argv after the binary name
+ * @param {{ stdio?: "inherit" | "ignore" }} [opts]
+ */
+export function runTar(args, opts = {}) {
+  const stdio = opts.stdio ?? "inherit";
+  const normalized = args.map((a) => {
+    if (typeof a !== "string" || a.startsWith("-")) return a;
+    if (/^[A-Za-z]:[\\/]/.test(a) || a.includes("\\")) return tarLocalPath(a);
+    return a;
+  });
+  execFileSync("tar", normalized, { stdio });
+}
+
+/**
  * @param {string} archive
  * @param {string} destDir
  * @param {"tar.gz" | "zip"} kind
@@ -193,16 +220,18 @@ function extractArchive(archive, destDir, kind) {
   mkdirSync(destDir, { recursive: true });
   if (kind === "tar.gz") {
     // System tar is available on macOS, Linux, and modern Windows.
-    execFileSync("tar", ["-xzf", archive, "-C", destDir], { stdio: "inherit" });
+    runTar(["-xzf", archive, "-C", destDir], { stdio: "inherit" });
     return;
   }
   if (process.platform === "win32") {
+    const litArchive = archive.replace(/'/g, "''");
+    const litDest = destDir.replace(/'/g, "''");
     execFileSync(
       "powershell.exe",
       [
         "-NoProfile",
         "-Command",
-        `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${destDir}' -Force`,
+        `Expand-Archive -LiteralPath '${litArchive}' -DestinationPath '${litDest}' -Force`,
       ],
       { stdio: "inherit" },
     );
@@ -675,13 +704,11 @@ export function packShippingArchives(platformDir) {
   const nodeArchive = join(archives, "node.tar.gz");
   const pythonArchive = join(archives, "python.tar.gz");
   if (existsSync(join(platformDir, "node"))) {
-    execFileSync("tar", ["-czf", nodeArchive, "-C", platformDir, "node"], { stdio: "ignore" });
+    runTar(["-czf", nodeArchive, "-C", platformDir, "node"], { stdio: "ignore" });
     console.log(`[fetch-runtimes] packed ${nodeArchive} (${formatMb(statSync(nodeArchive).size)})`);
   }
   if (existsSync(join(platformDir, "python"))) {
-    execFileSync("tar", ["-czf", pythonArchive, "-C", platformDir, "python"], {
-      stdio: "ignore",
-    });
+    runTar(["-czf", pythonArchive, "-C", platformDir, "python"], { stdio: "ignore" });
     console.log(
       `[fetch-runtimes] packed ${pythonArchive} (${formatMb(statSync(pythonArchive).size)})`,
     );

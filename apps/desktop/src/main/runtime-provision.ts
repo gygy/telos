@@ -9,7 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type BundledRuntimeManifest,
@@ -174,6 +174,30 @@ export function readProvisionStamp(userDataPath: string): ProvisionStamp | undef
 }
 
 /**
+ * Windows `tar` treats `C:` / `C:/` as a remote host ("Cannot connect to C:").
+ * Convert to MSYS/Git-Bash form `/c/...` which stays local.
+ */
+export function tarLocalPath(p: string): string {
+  const abs = resolve(p).replace(/\\/g, "/");
+  if (process.platform !== "win32") return abs;
+  const m = abs.match(/^([A-Za-z]):\/(.*)$/);
+  if (!m) return abs;
+  const drive = m[1];
+  const rest = m[2];
+  if (!drive || rest === undefined) return abs;
+  return `/${drive.toLowerCase()}/${rest}`;
+}
+
+function runTar(args: string[]): void {
+  const normalized = args.map((a) => {
+    if (a.startsWith("-")) return a;
+    if (/^[A-Za-z]:[\\/]/.test(a) || a.includes("\\")) return tarLocalPath(a);
+    return a;
+  });
+  execFileSync("tar", normalized, { stdio: "ignore" });
+}
+
+/**
  * Extract tar.gz archives into destRoot (creates destRoot/node, destRoot/python).
  * Uses system `tar` (macOS/Linux/modern Windows).
  */
@@ -185,12 +209,12 @@ export function extractRuntimeArchives(
   if (archives.node) {
     const nodeDest = join(destRoot, "node");
     rmSync(nodeDest, { recursive: true, force: true });
-    execFileSync("tar", ["-xzf", archives.node, "-C", destRoot], { stdio: "ignore" });
+    runTar(["-xzf", archives.node, "-C", destRoot]);
   }
   if (archives.python) {
     const pyDest = join(destRoot, "python");
     rmSync(pyDest, { recursive: true, force: true });
-    execFileSync("tar", ["-xzf", archives.python, "-C", destRoot], { stdio: "ignore" });
+    runTar(["-xzf", archives.python, "-C", destRoot]);
   }
 }
 

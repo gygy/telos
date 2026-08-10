@@ -29,7 +29,8 @@ jobs:
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/../.cache/electron-builder
       ELECTRON_CACHE: ${{ github.workspace }}/../.cache/electron
     strategy:
-      fail-fast: false
+      # One platform failure should stop the matrix (no orphan half-releases).
+      fail-fast: true
       matrix:
         include:
           - os: ubuntu-latest

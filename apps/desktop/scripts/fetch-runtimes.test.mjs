@@ -14,6 +14,7 @@ import {
   prunePythonRuntime,
   pythonDistMeta,
   resolveTarget,
+  tarLocalPath,
 } from "./fetch-runtimes.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -184,6 +185,20 @@ function assertEqual(actual, expected, message) {
   }
   assert(threw, "incomplete versions.json throws");
   rmSync(dirname(bad), { recursive: true, force: true });
+}
+
+// ── tarLocalPath: Windows drive letters must not look like remote hosts ─────
+{
+  if (process.platform === "win32") {
+    const p = tarLocalPath("C:\\Users\\runner\\file.tar.gz");
+    assert(!p.includes("\\"), `no backslashes: ${p}`);
+    // Must be /c/... not C:/... (colon still breaks tar)
+    assert(p.startsWith("/c/") || p.startsWith("/C/"), `msys form: ${p}`);
+    assert(!/^[A-Za-z]:/.test(p), `no drive colon: ${p}`);
+  } else {
+    const p = tarLocalPath("/tmp/foo/bar.tar.gz");
+    assert(p.includes("/tmp/foo/bar.tar.gz") || p.endsWith("bar.tar.gz"), p);
+  }
 }
 
 // ── packShippingArchives produces node/python tar.gz ────────────────────────
