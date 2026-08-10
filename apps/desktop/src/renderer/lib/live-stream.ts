@@ -227,6 +227,15 @@ export function applyRuntimeEventToLiveStream(
     }
     case "message.failed": {
       const { id, seq } = nextId(state, "system");
+      const title =
+        event.reason === "aborted"
+          ? "Response stopped"
+          : event.reason === "pending"
+            ? "Response pending"
+            : event.reason === "deferred"
+              ? "Response deferred"
+              : "Response failed";
+      const tone = event.reason === "pending" || event.reason === "deferred" ? "info" : "error";
       return mark({
         ...state,
         seq,
@@ -236,8 +245,8 @@ export function applyRuntimeEventToLiveStream(
             id,
             kind: "system",
             text: event.message,
-            title: event.reason === "aborted" ? "Response stopped" : "Response failed",
-            tone: "error",
+            title,
+            tone,
             timestamp: nowIso(),
           },
         ],

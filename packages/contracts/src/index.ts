@@ -305,7 +305,15 @@ export type RuntimeEvent =
   | { type: "message.delta"; delta: string }
   | { type: "thinking.delta"; delta: string }
   | { type: "message.completed"; reason: "stop" | "length" | "toolUse" }
-  | { type: "message.failed"; reason: "aborted" | "error"; message: string }
+  /**
+   * Non-success assistant stop reasons from pi (`StopReason` minus completed ones).
+   * Preserve the upstream reason — do not collapse pending/deferred into "error".
+   */
+  | {
+      type: "message.failed";
+      reason: "aborted" | "error" | "pending" | "deferred";
+      message: string;
+    }
   | { type: "tool.started"; toolCallId: string; toolName: string; args: unknown }
   | {
       type: "tool.completed";
@@ -2457,7 +2465,10 @@ function isRuntimeEvent(value: unknown): value is RuntimeEvent {
       return value.reason === "stop" || value.reason === "length" || value.reason === "toolUse";
     case "message.failed":
       return (
-        (value.reason === "aborted" || value.reason === "error") &&
+        (value.reason === "aborted" ||
+          value.reason === "error" ||
+          value.reason === "pending" ||
+          value.reason === "deferred") &&
         typeof value.message === "string"
       );
     case "tool.started":

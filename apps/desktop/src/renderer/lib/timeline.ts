@@ -287,8 +287,18 @@ export function projectEventsToTimeline(
           id: `system-fail-${items.length}`,
           kind: "system",
           text: runtimeEvent.message,
-          title: runtimeEvent.reason === "aborted" ? "Response stopped" : "Response failed",
-          tone: "error",
+          title:
+            runtimeEvent.reason === "aborted"
+              ? "Response stopped"
+              : runtimeEvent.reason === "pending"
+                ? "Response pending"
+                : runtimeEvent.reason === "deferred"
+                  ? "Response deferred"
+                  : "Response failed",
+          tone:
+            runtimeEvent.reason === "pending" || runtimeEvent.reason === "deferred"
+              ? "info"
+              : "error",
           timestamp: now(),
         });
       } else if (runtimeEvent.type === "retry.started") {
