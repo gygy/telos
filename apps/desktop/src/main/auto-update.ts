@@ -119,6 +119,11 @@ export function createAutoUpdateController(options: {
     return status;
   }
 
+  /** Fresh read — avoids TS control-flow narrowing after async / setStatus. */
+  function currentState(): AppUpdateState {
+    return status.state;
+  }
+
   function missingUpdateConfigError(): string | null {
     // electron-updater reads process.resourcesPath/app-update.yml for downloads.
     // setFeedURL alone is not enough — getOrCreateDownloadHelper still loads the file.
@@ -290,6 +295,15 @@ export function createAutoUpdateController(options: {
         error: "Updates are only available in packaged builds",
       });
     }
+    // Already busy — ignore re-entrant clicks from the UI.
+    if (
+      currentState() === "downloading" ||
+      currentState() === "installing" ||
+      currentState() === "downloaded"
+    ) {
+      return status;
+    }
+
     const configError = missingUpdateConfigError();
     if (configError) {
       return setStatus({ state: "error", error: configError });
@@ -302,17 +316,20 @@ export function createAutoUpdateController(options: {
       });
     }
     attachListeners(instance);
-    if (
-      status.state !== "available" &&
-      status.state !== "error" &&
-      status.state !== "downloading"
-    ) {
-      // Allow retry from error; otherwise require an available update.
-      if (status.state !== "downloaded") {
-        await checkForUpdates();
-      }
+    // Allow retry from error; otherwise require an available update.
+    if (currentState() !== "available" && currentState() !== "error") {
+      await checkForUpdates();
     }
-    if (status.state === "downloaded") return status;
+    if (
+      currentState() === "downloaded" ||
+      currentState() === "downloading" ||
+      currentState() === "installing"
+    ) {
+      return status;
+    }
+    if (currentState() !== "available" && currentState() !== "error") {
+      return status;
+    }
     try {
       setStatus({
         state: "downloading",
@@ -322,7 +339,7 @@ export function createAutoUpdateController(options: {
       await instance.downloadUpdate();
       // On darwin autoInstallOnAppQuit=false so download resolves after zip is on disk
       // (no Squirrel.Mac). Mark downloaded if events did not already.
-      if (status.state === "downloading") {
+      if (currentState() === "downloading") {
         return setStatus({
           state: "downloaded",
           percent: 100,
@@ -378,12 +395,26 @@ export function createAutoUpdateController(options: {
 
   function quitAndInstall(): void {
     if (!isPackaged) return;
+    // Ignore double-clicks while install / relaunch is already underway.
+    if (currentState() === "installing" || macInstallInFlight) return;
+    setStatus({
+      state: "installing",
+      percent: 100,
+      ...(status.availableVersion ? { availableVersion: status.availableVersion } : {}),
+    });
     if (isDarwin) {
       void installMacAndRelaunch();
       return;
     }
     const instance = load();
-    if (!instance) return;
+    if (!instance) {
+      setStatus({
+        state: "error",
+        error: "Auto-updater is unavailable",
+        ...(status.availableVersion ? { availableVersion: status.availableVersion } : {}),
+      });
+      return;
+    }
     // isSilent=false, isForceRunAfter=true
     instance.quitAndInstall(false, true);
   }

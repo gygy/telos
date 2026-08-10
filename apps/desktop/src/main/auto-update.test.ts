@@ -127,7 +127,11 @@ describe("createAutoUpdateController", () => {
     expect(downloaded.state).toBe("downloaded");
 
     controller.quitAndInstall();
+    expect(controller.getStatus().state).toBe("installing");
     expect(quitAndInstall).toHaveBeenCalledWith(false, true);
+    // Second click while installing is a no-op.
+    controller.quitAndInstall();
+    expect(quitAndInstall).toHaveBeenCalledTimes(1);
     controller.dispose();
   });
 
@@ -187,6 +191,7 @@ describe("createAutoUpdateController", () => {
       expect(downloaded.availableVersion).toBe("0.5.2");
 
       controller.quitAndInstall();
+      expect(controller.getStatus().state).toBe("installing");
       // Async install path — wait until relaunch is scheduled.
       for (let i = 0; i < 20 && relaunchApp.mock.calls.length === 0; i += 1) {
         await Promise.resolve();
@@ -194,6 +199,9 @@ describe("createAutoUpdateController", () => {
       expect(installMacUpdate).toHaveBeenCalledWith(zipPath);
       expect(quitAndInstall).not.toHaveBeenCalled();
       expect(relaunchApp).toHaveBeenCalled();
+      // Re-entrant install while in flight is ignored.
+      controller.quitAndInstall();
+      expect(installMacUpdate).toHaveBeenCalledTimes(1);
       controller.dispose();
     } finally {
       rmSync(dir, { recursive: true, force: true });

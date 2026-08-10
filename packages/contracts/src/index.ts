@@ -1427,6 +1427,8 @@ export type AppUpdateState =
   | "not-available"
   | "downloading"
   | "downloaded"
+  /** Archive is on disk; quit-and-install / mac replace is in progress. */
+  | "installing"
   | "error";
 
 export type AppUpdateStatus = {
