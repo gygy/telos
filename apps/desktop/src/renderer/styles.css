@@ -1552,6 +1552,86 @@ html[data-custom-window-controls="true"] .page-header {
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
+/*
+ * Highlighted composer prompt: transparent caret-bearing textarea over a
+ * mirror layer that paints skills / links / @paths / slash / shell tokens.
+ */
+.composer-prompt-field {
+  position: relative;
+  min-width: 0;
+}
+.composer-prompt-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  padding: 0.75rem 0.875rem 0.25rem;
+  font-size: var(--ui-font-size, 14px);
+  line-height: 1.5;
+  color: var(--foreground);
+  tab-size: 4;
+}
+.composer-card textarea.composer-prompt-input {
+  position: relative;
+  z-index: 1;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--foreground);
+  /* Keep placeholder readable while typed text is transparent. */
+  &::placeholder {
+    color: var(--muted-foreground);
+    -webkit-text-fill-color: var(--muted-foreground);
+    opacity: 1;
+  }
+  &::selection {
+    color: var(--foreground);
+    -webkit-text-fill-color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+}
+.composer-hl-text {
+  color: var(--foreground);
+}
+.composer-hl-url {
+  color: var(--link, #379cfc);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--link, #379cfc) 45%, transparent);
+  text-underline-offset: 2px;
+}
+.composer-hl-mention {
+  color: #34c759;
+  font-weight: 500;
+}
+.composer-hl-slash {
+  color: #bf5af2;
+  font-weight: 500;
+}
+.composer-hl-skill {
+  color: #ff9f0a;
+  font-weight: 600;
+}
+.composer-hl-shell {
+  color: #ff453a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.95em;
+}
+[data-theme="dark"] .composer-hl-mention {
+  color: #30d158;
+}
+[data-theme="dark"] .composer-hl-slash {
+  color: #da8fff;
+}
+[data-theme="dark"] .composer-hl-skill {
+  color: #ffd60a;
+}
+[data-theme="dark"] .composer-hl-shell {
+  color: #ff6961;
+}
+
 /* Scroll body + bottom fade (fade only when the list actually overflows). */
 .composer-suggest-body {
   position: relative;

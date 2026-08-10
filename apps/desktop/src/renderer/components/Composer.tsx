@@ -90,6 +90,7 @@ import {
   pathTokenBeforeCursor,
   slashCommandQuery,
 } from "../lib/composer-suggestions.ts";
+import { composerHighlightClass, tokenizeComposerHighlight } from "../lib/composer-highlight.ts";
 import { isImeCompositionEvent } from "../lib/composer-keyboard.ts";
 import type { AccessMode, AccessVisibility } from "../lib/settings-prefs.ts";
 import { visibleAccessModes } from "../lib/settings-prefs.ts";
@@ -675,6 +676,8 @@ export function Composer(props: ComposerProps) {
   /** Create-worktree dialog (same as project ⋯ menu). */
   const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
   const showAppError = useShellStore((s) => s.showAppError);
+  /** Mirror layer under the transparent textarea for skill / link / @path highlights. */
+  const promptHighlightRef = useRef<HTMLDivElement | null>(null);
   /** Which model-submenu flyout is open: thinking | speed */
   const [modelFlyout, setModelFlyout] = useState<"thinking" | "speed" | null>(null);
   const modelFlyoutCloseTimer = useRef<number | null>(null);
@@ -820,6 +823,17 @@ export function Composer(props: ComposerProps) {
 
   const slashQuery = slashCommandQuery(props.prompt);
   const resourceQuery = addResourceQuery(props.prompt);
+  const promptHighlightSpans = useMemo(
+    () => tokenizeComposerHighlight(props.prompt),
+    [props.prompt],
+  );
+
+  function syncPromptHighlightScroll(el: HTMLTextAreaElement | null) {
+    const mirror = promptHighlightRef.current;
+    if (!el || !mirror) return;
+    mirror.scrollTop = el.scrollTop;
+    mirror.scrollLeft = el.scrollLeft;
+  }
   const slashSuggestions = useMemo(
     () => filterSlashCommands(props.slashCommands, slashQuery ?? ""),
     [props.slashCommands, slashQuery],
@@ -955,9 +969,10 @@ export function Composer(props: ComposerProps) {
     requestAnimationFrame(() => fitComposerPromptHeight(props.composerRef.current));
   }
 
-  // Keep height in sync for external prompt updates (slash insert, clear, etc.).
+  // Keep height + highlight scroll in sync for external prompt updates (slash insert, clear, etc.).
   useLayoutEffect(() => {
     fitComposerPromptHeight(props.composerRef.current);
+    syncPromptHighlightScroll(props.composerRef.current);
   }, [props.prompt, props.composerRef, props.attachments.length]);
 
   function clearAtTokenFromPrompt() {
@@ -1349,34 +1364,57 @@ export function Composer(props: ComposerProps) {
           />
         ) : null}
 
-        <Textarea
-          ref={props.composerRef}
-          aria-label="Prompt"
-          data-testid="prompt-input"
-          value={props.prompt}
-          onChange={(event) => handlePromptChange(event.target.value)}
-          onKeyDown={handleComposerKeyDown}
-          onPaste={(event) => {
-            void handleComposerPaste(event);
-            requestAnimationFrame(() => fitComposerPromptHeight(props.composerRef.current));
-          }}
-          onDrop={handleComposerDrop}
-          onDragOver={(event) => {
-            if (event.dataTransfer?.types?.includes("Files")) {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "copy";
-            }
-          }}
-          onInput={() => fitComposerPromptHeight(props.composerRef.current)}
-          placeholder={tr("composer.placeholder")}
-          rows={COMPOSER_PROMPT_MIN_LINES}
-          className={cn(
-            "composer-prompt-scroll resize-none rounded-none border-0 bg-transparent px-3.5 pt-3 pb-1",
-            "leading-[1.5] shadow-none",
-            "focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-            "dark:bg-transparent",
-          )}
-        />
+        <div className="composer-prompt-field">
+          <div
+            ref={promptHighlightRef}
+            className="composer-prompt-highlight composer-prompt-scroll"
+            aria-hidden="true"
+            data-testid="prompt-highlight"
+          >
+            {promptHighlightSpans.map((span, index) => (
+              <span key={index} className={composerHighlightClass(span.kind)}>
+                {span.text}
+              </span>
+            ))}
+            {/* Trailing newline keeps last empty line height in sync with the textarea. */}
+            {"\n"}
+          </div>
+          <Textarea
+            ref={props.composerRef}
+            aria-label="Prompt"
+            data-testid="prompt-input"
+            value={props.prompt}
+            onChange={(event) => handlePromptChange(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            onScroll={(event) => syncPromptHighlightScroll(event.currentTarget)}
+            onPaste={(event) => {
+              void handleComposerPaste(event);
+              requestAnimationFrame(() => {
+                fitComposerPromptHeight(props.composerRef.current);
+                syncPromptHighlightScroll(props.composerRef.current);
+              });
+            }}
+            onDrop={handleComposerDrop}
+            onDragOver={(event) => {
+              if (event.dataTransfer?.types?.includes("Files")) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+              }
+            }}
+            onInput={() => {
+              fitComposerPromptHeight(props.composerRef.current);
+              syncPromptHighlightScroll(props.composerRef.current);
+            }}
+            placeholder={tr("composer.placeholder")}
+            rows={COMPOSER_PROMPT_MIN_LINES}
+            className={cn(
+              "composer-prompt-scroll composer-prompt-input resize-none rounded-none border-0 bg-transparent px-3.5 pt-3 pb-1",
+              "leading-[1.5] shadow-none",
+              "focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+              "dark:bg-transparent",
+            )}
+          />
+        </div>
 
         <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
           {/* Left: attach + access */}
