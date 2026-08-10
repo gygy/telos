@@ -335,8 +335,6 @@ function ThemeAppPreview(props: {
   locale: Locale;
   sidebarTranslucent: boolean;
   backgroundUrl?: string;
-  /** When set, show wallpaper-fit control at the preview bottom-right. */
-  onWallpaperFitChange?: (fit: ThemeWallpaperFit) => void;
 }) {
   const tr = (key: MessageKey) => t(props.locale, key);
   const hasWallpaper = Boolean(props.backgroundUrl);
@@ -405,8 +403,6 @@ function ThemeAppPreview(props: {
     "--skin-wallpaper-dim": String(art.dim),
     "--skin-background-rgb": preview.backgroundRgb,
   } as CSSProperties;
-
-  const showFitControl = Boolean(props.onWallpaperFitChange) && hasWallpaper;
 
   return (
     <div
@@ -522,45 +518,6 @@ function ThemeAppPreview(props: {
           </div>
         </aside>
       </div>
-
-      {/* Wallpaper fit — overlaid on the preview canvas, bottom-right. */}
-      {showFitControl ? (
-        <div className="theme-skin-preview-fit-control">
-          <Select
-            value={wallpaperFit}
-            onValueChange={(value) => {
-              if (value === "cover" || value === "contain" || value === "stretch") {
-                props.onWallpaperFitChange?.(value);
-              }
-            }}
-          >
-            <SelectTrigger
-              data-testid="appearance-theme-skin-wallpaper-fit"
-              className="theme-skin-preview-fit-trigger"
-              aria-label={tr("appearance.themeSkinWallpaperFit")}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end" side="top">
-              {THEME_WALLPAPER_FITS.map((fit) => (
-                <SelectItem
-                  key={fit}
-                  value={fit}
-                  data-testid={`appearance-theme-skin-wallpaper-fit-${fit}`}
-                >
-                  {tr(
-                    fit === "cover"
-                      ? "appearance.themeSkinWallpaperFitCover"
-                      : fit === "contain"
-                        ? "appearance.themeSkinWallpaperFitContain"
-                        : "appearance.themeSkinWallpaperFitStretch",
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -903,14 +860,12 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
     if (busy || defaultSelected) return;
     if (!activeRecord) {
       downloadBuiltin(activePack.config);
-      setMessage(tr("appearance.themeSkinExported"));
       return;
     }
     setBusy(true);
     setMessage(undefined);
     try {
-      const result = await window.pix.themes.exportPick(activeRecord.id);
-      if (result.outputPath) setMessage(tr("appearance.themeSkinExported"));
+      await window.pix.themes.exportPick(activeRecord.id);
     } catch {
       setMessage(tr("appearance.themeSkinError"));
     } finally {
@@ -1258,41 +1213,82 @@ export function ThemeSkinStudio(props: ThemeSkinStudioProps) {
                         locale={props.locale}
                         sidebarTranslucent={props.sidebarTranslucent}
                         {...(editorBackgroundUrl ? { backgroundUrl: editorBackgroundUrl } : {})}
-                        onWallpaperFitChange={(fit) =>
-                          changeDraft(updateWallpaperFit(editable, fit))
-                        }
                       />
 
                       <div className="theme-skin-dialog-asset-actions">
-                        <input
-                          ref={imageInput}
-                          className="sr-only"
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          data-testid="appearance-theme-skin-background-file"
-                          onChange={(event) => void chooseBackground(event)}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          data-testid="appearance-theme-skin-background"
-                          disabled={busy}
-                          onClick={() => imageInput.current?.click()}
-                        >
-                          <ImagePlus className="size-3.5" strokeWidth={1.75} />
-                          {tr("appearance.themeSkinChooseBackground")}
-                        </Button>
-                        {editorBackgroundUrl ? (
+                        <div className="theme-skin-dialog-asset-actions-left">
+                          <input
+                            ref={imageInput}
+                            className="sr-only"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            data-testid="appearance-theme-skin-background-file"
+                            onChange={(event) => void chooseBackground(event)}
+                          />
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
+                            data-testid="appearance-theme-skin-background"
                             disabled={busy}
-                            onClick={removeWallpaper}
+                            onClick={() => imageInput.current?.click()}
                           >
-                            {tr("appearance.themeSkinRemoveBackground")}
+                            <ImagePlus className="size-3.5" strokeWidth={1.75} />
+                            {tr("appearance.themeSkinChooseBackground")}
                           </Button>
+                          {editorBackgroundUrl ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={removeWallpaper}
+                            >
+                              {tr("appearance.themeSkinRemoveBackground")}
+                            </Button>
+                          ) : null}
+                        </div>
+                        {editorBackgroundUrl ? (
+                          <div className="theme-skin-dialog-asset-fit">
+                            <Select
+                              value={editable.art?.wallpaperFit ?? ART_DEFAULTS.wallpaperFit}
+                              onValueChange={(value) => {
+                                if (
+                                  value === "cover" ||
+                                  value === "contain" ||
+                                  value === "stretch"
+                                ) {
+                                  changeDraft(updateWallpaperFit(editable, value));
+                                }
+                              }}
+                            >
+                              <SelectTrigger
+                                data-testid="appearance-theme-skin-wallpaper-fit"
+                                size="sm"
+                                className="theme-skin-dialog-asset-fit-trigger"
+                                aria-label={tr("appearance.themeSkinWallpaperFit")}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent align="end" side="top">
+                                {THEME_WALLPAPER_FITS.map((fit) => (
+                                  <SelectItem
+                                    key={fit}
+                                    value={fit}
+                                    data-testid={`appearance-theme-skin-wallpaper-fit-${fit}`}
+                                  >
+                                    {tr(
+                                      fit === "cover"
+                                        ? "appearance.themeSkinWallpaperFitCover"
+                                        : fit === "contain"
+                                          ? "appearance.themeSkinWallpaperFitContain"
+                                          : "appearance.themeSkinWallpaperFitStretch",
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         ) : null}
                       </div>
                     </div>

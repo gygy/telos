@@ -4656,7 +4656,26 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 .theme-skin-dialog-asset-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
+}
+.theme-skin-dialog-asset-actions-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+/* Wallpaper fit — right side of the choose-wallpaper action row. */
+.theme-skin-dialog-asset-fit {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.theme-skin-dialog-asset-fit-trigger {
+  min-width: 8.5rem;
+  height: 2rem;
+  font-size: 12px;
 }
 .theme-skin-dialog-footer {
   flex: 0 0 auto;
@@ -4745,38 +4764,6 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 /* Native translucent rail: clip wallpaper off the rail (same idea as live clip-path). */
 .theme-skin-studio-preview[data-preview-sidebar-translucent="true"] .theme-skin-studio-wallpaper {
   clip-path: inset(0 0 0 var(--preview-rail-width, 28%));
-}
-/* Wallpaper fit control — bottom-right of the preview canvas. */
-.theme-skin-preview-fit-control {
-  position: absolute;
-  right: 0.55rem;
-  bottom: 0.55rem;
-  z-index: 6;
-  max-width: min(calc(100% - 1.1rem), 11.5rem);
-  pointer-events: auto;
-}
-.theme-skin-preview-fit-trigger {
-  height: 1.85rem;
-  min-width: 8.5rem;
-  border: 1px solid color-mix(in srgb, var(--preview-text, var(--foreground)) 16%, transparent);
-  border-radius: 999px;
-  background: color-mix(
-    in srgb,
-    var(--theme-dialog-background, var(--background)) 92%,
-    transparent
-  );
-  color: var(--theme-dialog-text, var(--foreground));
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.22);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  backdrop-filter: blur(10px) saturate(120%);
-  font-size: 11px;
-}
-.theme-skin-preview-fit-trigger:hover {
-  background: color-mix(
-    in srgb,
-    var(--theme-dialog-background, var(--background)) 98%,
-    transparent
-  );
 }
 .theme-skin-preview-toolbar {
   display: flex;
