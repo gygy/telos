@@ -117,17 +117,20 @@ describe("P04 local package transport", () => {
     ]);
 
     const resolved = await manager.resolve();
+    // Only package-origin resources — pi may auto-discover ~/.agents skills etc.
+    const fromPackage = (item: { metadata: { scope: string; origin?: string } }, scope: string) =>
+      item.metadata.scope === scope && item.metadata.origin === "package";
     const globalResolved: ResolvedPaths = {
-      extensions: resolved.extensions.filter((item) => item.metadata.scope === "user"),
-      skills: resolved.skills.filter((item) => item.metadata.scope === "user"),
-      prompts: resolved.prompts.filter((item) => item.metadata.scope === "user"),
-      themes: resolved.themes.filter((item) => item.metadata.scope === "user"),
+      extensions: resolved.extensions.filter((item) => fromPackage(item, "user")),
+      skills: resolved.skills.filter((item) => fromPackage(item, "user")),
+      prompts: resolved.prompts.filter((item) => fromPackage(item, "user")),
+      themes: resolved.themes.filter((item) => fromPackage(item, "user")),
     };
     const projectResolved: ResolvedPaths = {
-      extensions: resolved.extensions.filter((item) => item.metadata.scope === "project"),
-      skills: resolved.skills.filter((item) => item.metadata.scope === "project"),
-      prompts: resolved.prompts.filter((item) => item.metadata.scope === "project"),
-      themes: resolved.themes.filter((item) => item.metadata.scope === "project"),
+      extensions: resolved.extensions.filter((item) => fromPackage(item, "project")),
+      skills: resolved.skills.filter((item) => fromPackage(item, "project")),
+      prompts: resolved.prompts.filter((item) => fromPackage(item, "project")),
+      themes: resolved.themes.filter((item) => fromPackage(item, "project")),
     };
     assertScope(globalResolved, "user", globalSource);
     assertScope(projectResolved, "project", projectSource);

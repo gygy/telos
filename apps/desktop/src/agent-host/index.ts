@@ -265,9 +265,18 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
       if (stopReason === "stop" || stopReason === "length" || stopReason === "toolUse") {
         return { type: "message.completed", reason: stopReason };
       }
+      // pi 0.83+ may emit "pending" (partial stream) or other terminal reasons;
+      // only "aborted" | "error" are first-class on RuntimeEvent — map the rest to error.
+      if (stopReason === "aborted" || stopReason === "error") {
+        return {
+          type: "message.failed",
+          reason: stopReason,
+          message: event.message.errorMessage ?? `Model response ${stopReason}`,
+        };
+      }
       return {
         type: "message.failed",
-        reason: stopReason,
+        reason: "error",
         message: event.message.errorMessage ?? `Model response ${stopReason}`,
       };
     }
