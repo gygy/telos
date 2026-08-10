@@ -104,7 +104,16 @@ import {
   type ProxyPrefs,
 } from "./proxy-prefs.ts";
 import { discoverLocalProxies } from "./proxy-discover.ts";
-import { applyProcessPathAugmentation, augmentEnvPath } from "./shell-path.ts";
+import {
+  applyManagedRuntimeToProcessEnv,
+  captureManagedPathBase,
+  configureBundledRuntimes,
+  getActiveBundledRuntimeStatus,
+  normalizeBundledRuntimePrefs,
+  type BundledRuntimePrefs,
+} from "./bundled-runtimes.ts";
+import { ensureProvisionedRuntimes } from "./runtime-provision.ts";
+import { augmentEnvPath } from "./shell-path.ts";
 import { ThemeLibrary } from "./theme-library.ts";
 
 protocol.registerSchemesAsPrivileged([
@@ -114,9 +123,70 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Packaged Dock/Finder launches get a minimal PATH. Augment before any snapshot of
-// process.env (LAUNCH_ENV) or child spawn so pi/node/npm resolve like in dev shells.
-applyProcessPathAugmentation();
+/**
+ * WorkBuddy-style managed runtimes:
+ * archives in Resources → extract to userData → PATH + npm prefix + python venv.
+ * Default ON. Safe before app.ready (userData/resourcesPath available in Electron main).
+ */
+function bootstrapBundledRuntimesAndPath(): void {
+  // Snapshot host PATH before any managed prepend so toggles can rebuild cleanly.
+  captureManagedPathBase(process.env);
+
+  let prefs = normalizeBundledRuntimePrefs(undefined);
+  try {
+    prefs = normalizeBundledRuntimePrefs(loadDesktopPrefs().bundledRuntimes);
+  } catch {
+    // Prefs may be unavailable in unit-test hosts; keep defaults.
+  }
+
+  let userDataPath: string | undefined;
+  try {
+    userDataPath = app.getPath("userData");
+  } catch {
+    userDataPath = undefined;
+  }
+
+  const provisionOpts: {
+    userDataPath: string;
+    resourcesPath?: string;
+    mainModuleUrl?: string;
+  } = {
+    userDataPath: userDataPath || join(homedir(), ".pix-runtimes-fallback"),
+    mainModuleUrl: import.meta.url,
+  };
+  if (typeof process.resourcesPath === "string" && process.resourcesPath) {
+    provisionOpts.resourcesPath = process.resourcesPath;
+  }
+
+  let roots;
+  let isolation: { npmPrefix?: string; pythonVenv?: string; source?: string } | undefined;
+
+  try {
+    const provisioned = ensureProvisionedRuntimes(provisionOpts);
+    if (provisioned) {
+      roots = provisioned.roots;
+      isolation = {
+        npmPrefix: provisioned.npmPrefix,
+        pythonVenv: provisioned.pythonVenv,
+        source: provisioned.source,
+      };
+    }
+  } catch (error) {
+    console.warn("[pix] runtime provision failed:", error);
+  }
+
+  configureBundledRuntimes({
+    roots,
+    prefs,
+    ...(isolation ? { isolation } : {}),
+  });
+  // PATH + NODE_BINARY + isolation env, gated by prefs (OFF → clean host).
+  applyManagedRuntimeToProcessEnv(process.env);
+}
+
+// Prefs helpers below are function declarations (hoisted). Configure bundled
+// runtimes + PATH before LAUNCH_ENV snapshots / child spawns.
+bootstrapBundledRuntimesAndPath();
 
 /** Embedded pi TUI (terminal mode) — exclusive with host chat prompts. */
 const piTuiGuard = new PiTuiExclusiveGuard();
@@ -1725,6 +1795,10 @@ interface DesktopPrefs {
    * builtin = packaged dependency; global = npm -g / PATH pi.
    */
   piSdk?: PiSdkPrefs;
+  /**
+   * Bundled Node/Python under Resources/runtimes. Default ON when unset.
+   */
+  bundledRuntimes?: Partial<BundledRuntimePrefs>;
 }
 
 const WINDOW_MIN_WIDTH = 760;
@@ -4743,6 +4817,22 @@ void app
       return result;
     };
     ipcMain.handle("pix:pi:ensure", () => runDetectPiCli());
+    ipcMain.handle("pix:runtimes:get-status", () => getActiveBundledRuntimeStatus());
+    ipcMain.handle("pix:runtimes:set-prefs", (_event, raw: unknown) => {
+      const next = normalizeBundledRuntimePrefs(raw);
+      const prefs = loadDesktopPrefs();
+      saveDesktopPrefs({
+        ...prefs,
+        bundledRuntimes: {
+          useBundledNode: next.useBundledNode,
+          useBundledPython: next.useBundledPython,
+        },
+      });
+      configureBundledRuntimes({ prefs: next });
+      // Rebuild PATH from pre-managed base + clear/set isolation env for new prefs.
+      applyManagedRuntimeToProcessEnv(process.env);
+      return getActiveBundledRuntimeStatus();
+    });
     ipcMain.handle("pix:pi-sdk:get-status", () => collectPiSdkStatus());
     ipcMain.handle(
       "pix:pi-sdk:set-source",

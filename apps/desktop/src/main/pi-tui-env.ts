@@ -4,6 +4,11 @@
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  getActiveBundledBinDirs,
+  getActiveBundledNodeExecutable,
+  getActiveRuntimeIsolationEnv,
+} from "./bundled-runtimes.ts";
 import { augmentEnvPath, commonUserBinDirs, mergePathDirs } from "./shell-path.ts";
 
 /** pi `ENV_AGENT_DIR` — tools live at `<agentDir>/bin`. */
@@ -35,7 +40,8 @@ function expandTilde(path: string, env: NodeJS.ProcessEnv): string {
  * - GUI-minimal PATH is augmented like the rest of packaged Pix
  */
 export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
-  const augmented = augmentEnvPath(baseEnv);
+  // Bundled Node/Python bins first so TUI tools resolve without a system install.
+  const augmented = augmentEnvPath(baseEnv, getActiveBundledBinDirs());
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(augmented)) {
     if (typeof value === "string") env[key] = value;
@@ -48,10 +54,9 @@ export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<
   if (!env.USERPROFILE && process.platform === "win32") env.USERPROFILE = home;
   if (!env.HOME) env.HOME = home;
 
-  // Always put managed bin first (even if not created yet) so pi installs fd/rg there
-  // and subsequent launches find them without re-downloading.
+  // Managed bin first for fd/rg; then bundled runtimes; then user bins.
   const managedBin = join(agentDir, "bin");
-  const extras = [managedBin, ...commonUserBinDirs(home)];
+  const extras = [managedBin, ...getActiveBundledBinDirs(), ...commonUserBinDirs(home)];
   const pathValue = mergePathDirs(env.PATH || env.Path || "", extras);
 
   env.PATH = pathValue;
@@ -62,6 +67,15 @@ export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<
   // visible input caret. Pi's reverse-video editor caret is stripped before
   // the bytes reach the canvas.
   env.PI_HARDWARE_CURSOR = "1";
+
+  // Explicit NODE_BINARY so resolvePiPtyLaunch prefers bundled node over PATH races.
+  const bundledNode = getActiveBundledNodeExecutable();
+  if (bundledNode) env.NODE_BINARY = bundledNode;
+
+  // npm prefix + python venv isolation (managed installs stay under userData).
+  for (const [key, value] of Object.entries(getActiveRuntimeIsolationEnv())) {
+    env[key] = value;
+  }
 
   return env;
 }

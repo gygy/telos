@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { getActiveBundledNodeExecutable } from "./bundled-runtimes.ts";
 import { normalizeSessionKey, type PiTuiLaunchPlan } from "./pi-tui-session.ts";
 import { buildPiTuiEnv } from "./pi-tui-env.ts";
 import { candidateCommandPaths } from "./shell-path.ts";
@@ -492,6 +493,11 @@ export type PiPtyLaunch = {
 /**
  * Build argv for node-pty. `pi` is usually a `#!/usr/bin/env node` script; spawning
  * the script path directly can fail when env lookup is flaky. Prefer `node <script> …`.
+ *
+ * Packaged builtin CLI is asar-unpacked onto a real filesystem path so **system Node**
+ * can run it. Spawning `process.execPath` + `ELECTRON_RUN_AS_NODE` also works for asar,
+ * but on macOS Launch Services treats that as a second Pix launch (Dock bounce); force-
+ * quitting the bounced icon kills the PTY and drops terminal mode. Prefer system Node.
  */
 export function resolvePiPtyLaunch(
   piPath: string,
@@ -503,29 +509,78 @@ export function resolvePiPtyLaunch(
 
   let resolved = file;
   try {
+    // realpathSync on asar paths is fine inside Electron; skip when missing so we
+    // still keep the virtual asar path for ELECTRON_RUN_AS_NODE fallback.
     if (existsSync(file)) resolved = realpathSync(file);
   } catch {
     resolved = file;
   }
+  // Prefer app.asar.unpacked real files when present (packaged TUI path).
+  resolved = toSpawnableFilesystemPath(resolved);
 
-  const nodePath = resolveNodeExecutable(env);
-  if (nodePath && shouldSpawnViaNode(resolved)) {
-    const nextEnv = { ...env };
-    const nodeDir = dirname(nodePath);
-    const pathKey = process.platform === "win32" && nextEnv.Path && !nextEnv.PATH ? "Path" : "PATH";
-    const current = nextEnv[pathKey] || nextEnv.PATH || nextEnv.Path || "";
-    if (!current.toLowerCase().includes(nodeDir.toLowerCase())) {
-      const sep = process.platform === "win32" ? ";" : ":";
-      nextEnv.PATH = `${nodeDir}${sep}${current}`;
-      if (process.platform === "win32") nextEnv.Path = nextEnv.PATH;
-    }
-    return { file: nodePath, args: [resolved, ...args], env: nextEnv };
+  if (!shouldSpawnViaNode(resolved)) {
+    return { file: resolved, args: [...args], env };
   }
 
-  return { file: resolved, args: [...args], env };
+  const insideAsar = isInsideAsarArchive(resolved);
+  // System Node cannot load modules from asar — only use it for real paths.
+  const systemNode = insideAsar ? undefined : resolveSystemNodeExecutable(env);
+  const electronNode = resolveElectronNodeExecutable();
+  const nodePath = systemNode || electronNode;
+  if (!nodePath) {
+    // No interpreter — last resort is the script path (shebang / Windows assoc).
+    return { file: resolved, args: [...args], env };
+  }
+
+  const nextEnv = { ...env };
+  const usingElectronNode = Boolean(electronNode && nodePath === electronNode);
+  if (usingElectronNode) {
+    // Fallback only: asar-only CLI or no system Node on PATH (GUI-minimal env).
+    nextEnv.ELECTRON_RUN_AS_NODE = "1";
+  } else {
+    // Drop a stale flag if a previous launch left it in the inherited env.
+    delete nextEnv.ELECTRON_RUN_AS_NODE;
+  }
+
+  const nodeDir = dirname(nodePath);
+  const pathKey = process.platform === "win32" && nextEnv.Path && !nextEnv.PATH ? "Path" : "PATH";
+  const current = nextEnv[pathKey] || nextEnv.PATH || nextEnv.Path || "";
+  if (!current.toLowerCase().includes(nodeDir.toLowerCase())) {
+    const sep = process.platform === "win32" ? ";" : ":";
+    nextEnv.PATH = `${nodeDir}${sep}${current}`;
+    if (process.platform === "win32") nextEnv.Path = nextEnv.PATH;
+  }
+  return { file: nodePath, args: [resolved, ...args], env: nextEnv };
+}
+
+/**
+ * True when `filePath` is inside an Electron asar archive (not asar.unpacked).
+ * System Node cannot load modules from asar; Electron-as-Node can.
+ */
+export function isInsideAsarArchive(filePath: string): boolean {
+  const p = filePath.replace(/\\/g, "/");
+  // Match …/app.asar/… or …/app.asar, but not …/app.asar.unpacked/…
+  return /\/app\.asar(?:\/|$)/i.test(p);
+}
+
+/**
+ * Map virtual `app.asar/…` paths to `app.asar.unpacked/…` when the file was
+ * unpacked for spawning (system Node / no Dock bounce). Otherwise return as-is.
+ */
+export function toSpawnableFilesystemPath(filePath: string): string {
+  const raw = filePath.trim();
+  if (!raw || !isInsideAsarArchive(raw)) return raw;
+  const asPosix = raw.replace(/\\/g, "/");
+  const unpackedPosix = asPosix.replace(/\/app\.asar\//gi, "/app.asar.unpacked/");
+  if (unpackedPosix === asPosix) return raw;
+  if (!existsSync(unpackedPosix)) return raw;
+  return process.platform === "win32" ? unpackedPosix.replace(/\//g, "\\") : unpackedPosix;
 }
 
 function shouldSpawnViaNode(resolvedPath: string): boolean {
+  // Paths inside asar are almost always JS entrypoints (and openSync may fail
+  // outside Electron). Treat them as node scripts without reading the file.
+  if (isInsideAsarArchive(resolvedPath)) return true;
   if (/\.(c?js|mjs)$/i.test(resolvedPath)) return true;
   let fd: number | undefined;
   try {
@@ -547,20 +602,49 @@ function shouldSpawnViaNode(resolvedPath: string): boolean {
   }
 }
 
-function resolveNodeExecutable(env: Record<string, string>): string | undefined {
+/**
+ * Real Node binary for PTY spawn — never Electron's process.execPath.
+ * Order: NODE_BINARY env → bundled Node (default on) → PATH / common bins.
+ */
+function resolveSystemNodeExecutable(env: Record<string, string>): string | undefined {
   const fromEnv = env.NODE_BINARY?.trim() || env.npm_node_execpath?.trim();
-  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  if (fromEnv && existsSync(fromEnv) && !isElectronBinaryPath(fromEnv)) return fromEnv;
+
+  // Bundled runtime (Resources/runtimes/node) — preferred over host PATH so clean
+  // machines and GUI launches never fall through to Electron-as-Node Dock bounce.
+  const bundled = getActiveBundledNodeExecutable();
+  if (bundled && existsSync(bundled)) return bundled;
 
   for (const candidate of candidateCommandPaths("node", env)) {
     if (!existsSync(candidate)) continue;
     // Prefer real node over vite-plus shims when both appear.
     const norm = candidate.replace(/\\/g, "/").toLowerCase();
     if (norm.includes("/.vite-plus/bin/")) continue;
+    if (isElectronBinaryPath(candidate)) continue;
     return candidate;
   }
-  // Last resort: shim still better than nothing.
+  // Last resort: shim still better than nothing (but not Electron).
   const fallback = candidateCommandPaths("node", env)[0];
-  return fallback && existsSync(fallback) ? fallback : undefined;
+  if (fallback && existsSync(fallback) && !isElectronBinaryPath(fallback)) return fallback;
+  return undefined;
+}
+
+function isElectronBinaryPath(filePath: string): boolean {
+  const base = filePath.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  // Packaged app binary (Pix / Pix.exe) or electron dev binary — not usable as
+  // system node without ELECTRON_RUN_AS_NODE.
+  return base === "electron" || base === "electron.exe" || base === "pix" || base === "pix.exe";
+}
+
+/**
+ * Electron main binary used as Node via ELECTRON_RUN_AS_NODE.
+ * Only when running inside Electron (packaged or `electron .` dev).
+ */
+function resolveElectronNodeExecutable(): string | undefined {
+  if (!process.versions.electron) return undefined;
+  const exec = process.execPath?.trim();
+  if (!exec || !existsSync(exec)) return undefined;
+  return exec;
 }
 
 /** Real node-pty spawn used by the Electron main process. */

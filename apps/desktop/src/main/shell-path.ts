@@ -103,11 +103,18 @@ export function mergePathDirs(existing: string | undefined, extraDirs: string[])
   return out.join(sep);
 }
 
-/** Return a copy of env with PATH (and Windows Path) augmented. */
-export function augmentEnvPath(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+/**
+ * Return a copy of env with PATH (and Windows Path) augmented.
+ * `extraBinDirs` are prepended first (e.g. bundled Node/Python).
+ */
+export function augmentEnvPath(
+  env: NodeJS.ProcessEnv = process.env,
+  extraBinDirs: string[] = [],
+): NodeJS.ProcessEnv {
   const home = env.HOME || env.USERPROFILE || homedir();
   const existing = env.PATH || env.Path || "";
-  const merged = mergePathDirs(existing, commonUserBinDirs(home));
+  // Bundled runtimes first, then well-known user bins, then existing PATH.
+  const merged = mergePathDirs(existing, [...extraBinDirs, ...commonUserBinDirs(home)]);
   const next: NodeJS.ProcessEnv = { ...env, PATH: merged };
   if (process.platform === "win32") next.Path = merged;
   if (!next.HOME && home) next.HOME = home;
@@ -118,9 +125,10 @@ export function augmentEnvPath(env: NodeJS.ProcessEnv = process.env): NodeJS.Pro
 /**
  * Mutate process.env.PATH so main, utilityProcess, and child spawns see user tools.
  * Safe to call multiple times (idempotent merge).
+ * @param extraBinDirs optional dirs prepended (bundled Node/Python bins)
  */
-export function applyProcessPathAugmentation(): void {
-  const next = augmentEnvPath(process.env);
+export function applyProcessPathAugmentation(extraBinDirs: string[] = []): void {
+  const next = augmentEnvPath(process.env, extraBinDirs);
   if (next.PATH) process.env.PATH = next.PATH;
   if (process.platform === "win32" && next.Path) process.env.Path = next.Path;
   if (next.HOME && !process.env.HOME) process.env.HOME = next.HOME;

@@ -30,6 +30,7 @@ import {
   SquarePen,
   Terminal,
   BarChart3,
+  Cpu,
 } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -540,6 +541,7 @@ function SettingsRail(props: {
      *  Pi — SDK runtime + agent settings.json behavior
      *  模型 — providers, catalog, usage
      *  工作区 — Git → environment → terminal → worktree
+     *  安全 — bundled runtimes (Node/Python trust boundary)
      *  网络 — connectivity (proxy; lower priority, advanced)
      *  数据 — archives
      */
@@ -643,6 +645,18 @@ function SettingsRail(props: {
           testId: "settings-nav-worktree",
           labelKey: "section.worktree",
           icon: <FolderGit2 className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
+        },
+      ],
+    },
+    {
+      id: "security",
+      labelKey: "settings.group.security",
+      items: [
+        {
+          section: "runtimes",
+          testId: "settings-nav-runtimes",
+          labelKey: "section.runtimes",
+          icon: <Cpu className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} />,
         },
       ],
     },

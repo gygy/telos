@@ -16,6 +16,11 @@ test-results/
 playwright-report/
 blob-report/
 
+# Bundled Node/Python trees (fetched by apps/desktop/scripts/fetch-runtimes.mjs)
+apps/desktop/runtimes/**
+!apps/desktop/runtimes/versions.json
+!apps/desktop/runtimes/README.md
+
 # pi session exports / accidental test cwd dumps (exportToJsonl default path)
 session-*.jsonl
 

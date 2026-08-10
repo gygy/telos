@@ -1,12 +1,15 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { planPiTuiLaunch } from "./pi-tui-session.ts";
+import { configureBundledRuntimes, resolveBundledRuntimeRoots } from "./bundled-runtimes.ts";
 import {
+  isInsideAsarArchive,
   MAX_PARKED_PTYS,
   PiTuiPtyController,
   resolvePiPtyLaunch,
+  toSpawnableFilesystemPath,
   type PtyHandle,
   type PtySpawnFn,
 } from "./pi-tui-pty.ts";
@@ -253,6 +256,7 @@ describe("resolvePiPtyLaunch", () => {
     expect(launch.file.toLowerCase()).toMatch(/node(\.exe)?$/);
     expect(launch.args[0]?.endsWith("cli.js")).toBe(true);
     expect(launch.args.slice(1)).toEqual(["--session", "/s.jsonl"]);
+    expect(launch.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
   });
 
   it("honors NODE_BINARY override", () => {
@@ -271,5 +275,132 @@ describe("resolvePiPtyLaunch", () => {
     });
     expect(launch.file).toBe(nodePath);
     expect(launch.args[0]?.endsWith("cli.js")).toBe(true);
+    expect(launch.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
+  });
+
+  it("runs asar-packaged CLI via Electron-as-Node, not system node", () => {
+    const asarCli =
+      "/Applications/Pix.app/Contents/Resources/app.asar/node_modules/@earendil-works/pi-coding-agent/dist/cli.js";
+    const systemNode = join(tmpdir(), "fake-system-node");
+    writeFileSync(systemNode, "#!/bin/sh\n", { mode: 0o755 });
+
+    const prevElectron = process.versions.electron;
+    const prevExec = process.execPath;
+    // Vitest is plain Node — simulate packaged Electron main.
+    Object.defineProperty(process.versions, "electron", {
+      value: "39.0.0",
+      configurable: true,
+    });
+    // process.execPath is read-only on some runtimes; spy via defineProperty when possible.
+    const electronBin = join(tmpdir(), "Pix");
+    writeFileSync(electronBin, "#!/bin/sh\n", { mode: 0o755 });
+    try {
+      Object.defineProperty(process, "execPath", {
+        value: electronBin,
+        configurable: true,
+      });
+    } catch {
+      // If execPath cannot be redefined, skip the electron path assertion body.
+    }
+
+    try {
+      const launch = resolvePiPtyLaunch(asarCli, ["--session", "/s.jsonl"], {
+        PATH: dirname(systemNode),
+        HOME: tmpdir(),
+        NODE_BINARY: systemNode,
+      });
+      // Must not hand an asar path to system node (Cannot find module).
+      expect(launch.file).not.toBe(systemNode);
+      if (process.execPath === electronBin) {
+        expect(launch.file).toBe(electronBin);
+        expect(launch.env.ELECTRON_RUN_AS_NODE).toBe("1");
+      }
+      expect(launch.args[0]).toBe(asarCli);
+      expect(launch.args.slice(1)).toEqual(["--session", "/s.jsonl"]);
+    } finally {
+      if (prevElectron === undefined) {
+        delete (process.versions as { electron?: string }).electron;
+      } else {
+        Object.defineProperty(process.versions, "electron", {
+          value: prevElectron,
+          configurable: true,
+        });
+      }
+      try {
+        Object.defineProperty(process, "execPath", {
+          value: prevExec,
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  it("does not treat app.asar.unpacked paths as asar archives", () => {
+    expect(
+      isInsideAsarArchive(
+        "/App/Contents/Resources/app.asar/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+      ),
+    ).toBe(true);
+    expect(
+      isInsideAsarArchive(
+        "/App/Contents/Resources/app.asar.unpacked/node_modules/node-pty/lib/index.js",
+      ),
+    ).toBe(false);
+  });
+
+  it("prefers configured bundled node over PATH without ELECTRON_RUN_AS_NODE", () => {
+    const root = mkdtempSync(join(tmpdir(), "pix-pty-bundled-"));
+    const nodeBinDir = join(root, "node", "bin");
+    mkdirSync(nodeBinDir, { recursive: true });
+    const bundledNode = join(nodeBinDir, "node");
+    writeFileSync(bundledNode, "#!/bin/sh\n", { mode: 0o755 });
+    writeFileSync(join(root, "manifest.json"), JSON.stringify({ node: "22.19.0" }));
+    const script = join(root, "cli.js");
+    writeFileSync(script, "export {}\n", { mode: 0o644 });
+
+    const roots = resolveBundledRuntimeRoots({ explicitRoot: root });
+    configureBundledRuntimes({
+      roots,
+      prefs: { useBundledNode: true, useBundledPython: false },
+    });
+    try {
+      const launch = resolvePiPtyLaunch(script, ["--version"], {
+        PATH: "/usr/bin",
+        HOME: root,
+      });
+      expect(launch.file).toBe(bundledNode);
+      expect(launch.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    } finally {
+      configureBundledRuntimes({
+        roots: undefined,
+        prefs: { useBundledNode: true, useBundledPython: true },
+      });
+    }
+  });
+
+  it("rewrites asar paths to asar.unpacked when the real file exists", () => {
+    const root = mkdtempSync(join(tmpdir(), "pix-pty-unpacked-"));
+    const asarCli = join(root, "app.asar", "node_modules", "pkg", "cli.js");
+    const unpackedCli = join(root, "app.asar.unpacked", "node_modules", "pkg", "cli.js");
+    mkdirSync(dirname(unpackedCli), { recursive: true });
+    mkdirSync(dirname(asarCli), { recursive: true });
+    writeFileSync(unpackedCli, "export {}\n", { mode: 0o644 });
+    // Virtual asar path may not exist on disk outside Electron — only unpacked does.
+    expect(toSpawnableFilesystemPath(asarCli)).toBe(unpackedCli);
+    expect(toSpawnableFilesystemPath(unpackedCli)).toBe(unpackedCli);
+
+    // Prefer system node on the unpacked real path (no ELECTRON_RUN_AS_NODE / Dock bounce).
+    const systemNode = join(root, "node");
+    writeFileSync(systemNode, "#!/bin/sh\n", { mode: 0o755 });
+    const launch = resolvePiPtyLaunch(asarCli, ["--session", "/s.jsonl"], {
+      PATH: root,
+      HOME: root,
+      NODE_BINARY: systemNode,
+    });
+    expect(launch.file).toBe(systemNode);
+    expect(launch.args[0]).toBe(unpackedCli);
+    expect(launch.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
   });
 });

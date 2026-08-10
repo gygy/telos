@@ -140,6 +140,7 @@ import { cn } from "../../lib/utils.ts";
 import { isConversationWorkspacePath, workspaceLabel } from "../../lib/workspace.ts";
 import { useShellStore, type SettingsSection } from "../../store/shell-store.ts";
 import { PiSdkSection } from "./PiSdkSection.tsx";
+import { RuntimesSection } from "./RuntimesSection.tsx";
 import { ThemeSkinStudio } from "./ThemeSkinStudio.tsx";
 import {
   Command,
@@ -229,6 +230,8 @@ export function SettingsPage(props: SettingsPageProps) {
           <AppearanceSection {...props} tr={tr} />
         ) : props.section === "terminal" ? (
           <TerminalSection {...props} tr={tr} />
+        ) : props.section === "runtimes" ? (
+          <RuntimesSection locale={props.locale} />
         ) : props.section === "behavior" ? (
           <BehaviorSection {...props} tr={tr} />
         ) : props.section === "environment" ? (

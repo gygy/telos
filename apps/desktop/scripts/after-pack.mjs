@@ -116,15 +116,76 @@ export default async function afterPack(context) {
   }
 
   let fixed = 0;
+  let runtimeFixed = 0;
   for (const root of roots) {
     if (!existsSync(root)) continue;
     fixed += chmodSpawnHelpers(root);
+    runtimeFixed += chmodRuntimeBins(join(root, "runtimes"));
   }
   if (fixed > 0) {
     console.log(`[pix afterPack] chmod +x on ${fixed} spawn-helper file(s)`);
   }
+  if (runtimeFixed > 0) {
+    console.log(`[pix afterPack] chmod +x on ${runtimeFixed} bundled runtime bin(s)`);
+  }
+
+  // Clear quarantine on mac so Gatekeeper does not block first terminal spawn.
+  if (context.electronPlatformName === "darwin") {
+    for (const root of roots) {
+      const runtimes = join(root, "runtimes");
+      if (!existsSync(runtimes)) continue;
+      try {
+        const { execFileSync } = await import("node:child_process");
+        execFileSync("xattr", ["-cr", runtimes], { stdio: "ignore" });
+        console.log(`[pix afterPack] xattr -cr ${runtimes}`);
+      } catch {
+        // xattr may be missing in some CI images; non-fatal.
+      }
+    }
+  }
 
   writeAppUpdateYml(context);
+}
+
+/**
+ * Ensure bundled Node/Python binaries are executable after pack.
+ * @param {string} runtimesDir
+ * @returns {number}
+ */
+function chmodRuntimeBins(runtimesDir) {
+  if (!existsSync(runtimesDir)) return 0;
+  let fixed = 0;
+  /** @type {string[]} */
+  const stack = [runtimesDir];
+  const binNames = new Set(["node", "npm", "npx", "python", "python3", "node.exe", "python.exe"]);
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current) continue;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!binNames.has(entry.name) && !entry.name.startsWith("python3.")) continue;
+      try {
+        const mode = statSync(full).mode;
+        if ((mode & 0o111) === 0) {
+          chmodSync(full, mode | 0o755);
+          fixed += 1;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return fixed;
 }
 
 /**

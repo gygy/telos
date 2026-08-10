@@ -57,6 +57,10 @@ const api: PixDesktopApi = {
     installGlobal: () => ipcRenderer.invoke("pix:pi-sdk:install-global"),
     checkLatest: () => ipcRenderer.invoke("pix:pi-sdk:check-latest"),
   },
+  runtimes: {
+    getStatus: () => ipcRenderer.invoke("pix:runtimes:get-status"),
+    setPrefs: (prefs) => ipcRenderer.invoke("pix:runtimes:set-prefs", prefs),
+  },
   terminal: {
     open: (options) => ipcRenderer.invoke("pix:terminal:open", options),
     write: (data) => ipcRenderer.invoke("pix:terminal:write", data),

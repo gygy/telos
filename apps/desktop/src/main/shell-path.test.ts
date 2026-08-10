@@ -28,6 +28,22 @@ describe("shell-path", () => {
     expect(env.PATH).toContain("/bin");
   });
 
+  it("augmentEnvPath prepends extraBinDirs (bundled runtimes) before user bins", () => {
+    const sep = process.platform === "win32" ? ";" : ":";
+    const bundled = join(tmpdir(), "pix-bundled-bin-xyz");
+    mkdirSync(bundled, { recursive: true });
+    const env = augmentEnvPath(
+      {
+        HOME: process.env.HOME || process.env.USERPROFILE || tmpdir(),
+        PATH: `/usr/bin${sep}/bin`,
+      },
+      [bundled],
+    );
+    const parts = (env.PATH || "").split(sep);
+    expect(parts[0]).toBe(bundled);
+    expect(env.PATH).toContain("/usr/bin");
+  });
+
   it("candidateCommandPaths finds binaries under a home bin dir", () => {
     const root = mkdtempSync(join(tmpdir(), "pix-shell-path-"));
     const bin = join(root, ".local", "bin");

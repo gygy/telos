@@ -6104,8 +6104,10 @@ textarea.models-scoped-patterns-input[data-slot="textarea"] {
 
 /* Settings rail (left) — Codex hierarchy */
 .settings-rail-back {
-  @apply flex h-8 w-full items-center gap-1.5 px-2 text-left text-[13px] font-normal text-[var(--sidebar-foreground)] transition-colors;
+  @apply flex h-8 w-full min-w-0 items-center gap-2.5 px-2.5 text-left font-normal text-[var(--sidebar-foreground)] transition-colors;
   border-radius: var(--radius-control);
+  /* Same type scale as .settings-rail-item (not a hard-coded 13px). */
+  font-size: var(--ui-font-size, 14px);
 }
 .settings-rail-back:hover {
   background: var(--hover-fill);

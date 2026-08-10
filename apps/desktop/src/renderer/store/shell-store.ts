@@ -88,6 +88,7 @@ export type SettingsSection =
   | "general"
   | "appearance"
   | "terminal"
+  | "runtimes"
   | "environment"
   | "worktree"
   | "behavior"

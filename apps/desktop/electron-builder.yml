@@ -19,6 +19,13 @@ extraResources:
     to: icon.png
   - from: build/icon.icns
     to: icon.icns
+  # Managed runtimes (WorkBuddy-style): ship compressed archives only.
+  # First launch extracts into userData/runtimes + npm-prefix + python-venv.
+  # Built by scripts/fetch-runtimes.mjs → runtimes/current/archives/*.tar.gz
+  - from: runtimes/current/archives
+    to: runtimes/archives
+  - from: runtimes/current/manifest.json
+    to: runtimes/manifest.json
 directories:
   output: release/app
   buildResources: build
@@ -82,12 +89,16 @@ linux:
   category: Development
   synopsis: Desktop shell for the pi coding agent
   description: Pix is a desktop shell for the pi coding agent.
-# node-pty's spawn-helper must live outside asar and remain executable.
-# Missing +x → terminal mode: "posix_spawnp failed".
+# Unpack native helpers and the JS dependency tree used by embedded pi TUI.
+# node-pty spawn-helper must be a real executable (missing +x → posix_spawnp failed).
+# pi CLI is spawned as a PTY child with *system* Node; system Node cannot read asar.
+# Spawning process.execPath + ELECTRON_RUN_AS_NODE works for asar but macOS treats
+# that as a second app launch (Dock bounce); force-quitting it kills terminal mode.
 asarUnpack:
   - "**/*.node"
   - "**/node-pty/prebuilds/**"
   - "**/node-pty/build/**"
   - "**/spawn-helper"
   - "**/@silvia-odwyer/photon-node/**"
+  - "**/node_modules/**"
 afterPack: scripts/after-pack.mjs
