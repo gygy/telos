@@ -69,6 +69,14 @@ export type ExtensionUiFireForgetResult = {
 };
 
 /**
+ * MCP adapter chrome belongs on the packages nav badge only — never titlebar chips
+ * or sticky lastNotify. Matches messages like `MCP: 1/2 servers` / `MCP: …`.
+ */
+export function isMcpChromeText(text: string): boolean {
+  return /^mcp\b/i.test(text.trim());
+}
+
+/**
  * Apply a non-dialog extensionUi.request. Returns next state (+ optional side effects).
  * Unknown methods are ignored (dialog methods are not handled here).
  */
@@ -91,6 +99,8 @@ export function applyExtensionUiFireForget(
       const type: ExtensionNotifyTone =
         args.type === "warning" || args.type === "error" ? args.type : "info";
       if (!message) return { state };
+      // Drop MCP lifecycle/status chatter — badge is derived from setStatus("mcp").
+      if (isMcpChromeText(message)) return { state };
       return {
         state: {
           ...state,
@@ -209,13 +219,15 @@ export function extensionStatusList(state: ExtensionUiPortableState): Array<{
 }
 
 /**
- * Statuses for titlebar chips — MCP is shown on the packages nav badge instead.
+ * Statuses for titlebar chips — MCP is packages-nav badge only (never titlebar).
  */
 export function extensionStatusListForTitlebar(state: ExtensionUiPortableState): Array<{
   key: string;
   text: string;
 }> {
-  return extensionStatusList(state).filter((item) => !isMcpStatusKey(item.key));
+  return extensionStatusList(state).filter(
+    (item) => !isMcpStatusKey(item.key) && !isMcpChromeText(item.text),
+  );
 }
 
 function isMcpStatusKey(key: string): boolean {
@@ -244,7 +256,7 @@ export function mcpStatusFromExtensionUi(
     const trimmed = text.trim();
     if (!trimmed) continue;
     const fromKey = isMcpStatusKey(key);
-    const fromText = /^mcp\b/i.test(trimmed) || /\bservers?\b/i.test(trimmed);
+    const fromText = isMcpChromeText(trimmed) || /\bservers?\b/i.test(trimmed);
     if (!fromKey && !fromText) continue;
     const match = /(\d+)\s*\/\s*(\d+)/.exec(trimmed);
     if (!match) continue;

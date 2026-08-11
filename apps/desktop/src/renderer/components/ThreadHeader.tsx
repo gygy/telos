@@ -41,6 +41,7 @@ import {
 import { cn } from "../lib/utils.ts";
 import {
   extensionStatusListForTitlebar,
+  isMcpChromeText,
   type ExtensionUiPortableState,
 } from "../lib/extension-ui-state.ts";
 import { useShellStore } from "../store/shell-store.ts";
@@ -181,7 +182,11 @@ export function ThreadHeader(props: {
     : [];
   const extensionTitle = props.extensionUi?.title?.trim() || undefined;
   const extensionWorking = props.extensionUi?.workingMessage?.trim() || undefined;
-  const extensionNotify = props.extensionUi?.lastNotify;
+  // MCP chrome is packages-nav badge only — never sticky titlebar notify.
+  const extensionNotify =
+    props.extensionUi?.lastNotify && !isMcpChromeText(props.extensionUi.lastNotify.message)
+      ? props.extensionUi.lastNotify
+      : undefined;
   const extensionUnsupported = props.extensionUi?.unsupported ?? [];
   const hasExtensionChrome =
     Boolean(extensionTitle) ||
@@ -242,7 +247,7 @@ export function ThreadHeader(props: {
             <MoreHorizontal className="size-4" strokeWidth={1.75} />
           </button>
         </div>
-        {/* Extension status (e.g. MCP: 0/2) — compact titlebar strip, not content chrome. */}
+        {/* Non-MCP extension chrome (title / status / working / notify). MCP → packages nav badge. */}
         {hasExtensionChrome ? (
           <div
             className="no-drag flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden px-2"

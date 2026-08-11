@@ -6,6 +6,7 @@ import {
   extensionStatusListForTitlebar,
   extensionWidgetsForPlacement,
   isExtensionUiFireForgetMethod,
+  isMcpChromeText,
   mcpStatusFromExtensionUi,
 } from "./extension-ui-state.ts";
 
@@ -84,6 +85,24 @@ describe("applyExtensionUiFireForget", () => {
     expect(notify.state.lastNotify?.message).toBe("Saved");
   });
 
+  it("suppresses all MCP notifies (titlebar / status strip); badge uses setStatus only", () => {
+    const state = emptyExtensionUiPortableState("rt-1");
+    for (const message of [
+      "MCP: direct tools refreshed (+1, ~0, -0)",
+      "MCP: 1/2 servers",
+      "MCP: connecting…",
+    ]) {
+      const result = applyExtensionUiFireForget(state, {
+        runtimeId: "rt-1",
+        method: "notify",
+        args: { message, type: "info" },
+      });
+      expect(result.notify).toBeUndefined();
+      expect(result.state.lastNotify).toBeUndefined();
+      expect(isMcpChromeText(message)).toBe(true);
+    }
+  });
+
   it("dedupes unsupported methods per runtime", () => {
     let state = emptyExtensionUiPortableState("rt-1");
     state = applyExtensionUiFireForget(state, {
@@ -116,6 +135,12 @@ describe("applyExtensionUiFireForget", () => {
       method: "setStatus",
       args: { key: "other", text: "Ready" },
     }).state;
+    // Text-only MCP chrome (non-mcp key) also stays out of the titlebar.
+    state = applyExtensionUiFireForget(state, {
+      runtimeId: "rt-1",
+      method: "setStatus",
+      args: { key: "misc", text: "MCP: reconnecting" },
+    }).state;
 
     expect(mcpStatusFromExtensionUi(state)).toEqual({
       ready: 0,
@@ -123,7 +148,7 @@ describe("applyExtensionUiFireForget", () => {
       badge: "0/2",
       detail: "MCP: 0/2 servers",
     });
-    expect(extensionStatusList(state).map((s) => s.key)).toEqual(["mcp", "other"]);
+    expect(extensionStatusList(state).map((s) => s.key)).toEqual(["mcp", "other", "misc"]);
     expect(extensionStatusListForTitlebar(state).map((s) => s.key)).toEqual(["other"]);
   });
 });
