@@ -118,6 +118,7 @@ import { sessionMarkerFromThread } from "../lib/session-markers.ts";
 import { sessionRunKey } from "../store/shell-store.ts";
 import type { ThreadRunState } from "../lib/timeline.ts";
 import { markerLabel, ThreadRunMarker } from "./ThreadRunMarker.tsx";
+import { ThreadHoverCard } from "./ThreadHoverCard.tsx";
 
 export interface ProjectListProps {
   locale: Locale;
@@ -821,18 +822,12 @@ export function ProjectList(props: ProjectListProps) {
     const testPrefix = kind === "session" ? "session" : "thread";
     const manuallySortable = opts?.manualSort === true;
     const isDropTarget = manuallySortable && threadDrag?.targetId === thread.id;
-    const tooltipParts = [title];
-    if (isFork) {
-      tooltipParts.push(
-        parentFile ? tr("session.forkedFrom", { name: parentFile }) : tr("session.forked"),
-      );
-    }
-    // Nested project sessions always show path; flat list shows project cwd so rows are distinguishable.
-    if (kind !== "conversation" && (thread.cwd || thread.path)) {
-      tooltipParts.push(thread.cwd || thread.path);
-    } else if (kind === "conversation" && thread.cwd && !isNonProjectWorkspacePath(thread.cwd)) {
-      tooltipParts.push(thread.cwd);
-    }
+    const projectLabel = thread.cwd ? workspaceLabel(thread.cwd).name : null;
+    const forkLabel = isFork
+      ? parentFile
+        ? tr("session.forkedFrom", { name: parentFile })
+        : tr("session.forked")
+      : null;
     // Prefer per-session markers. Fall back to runningSessions / active-row runState
     // so terminal hops and applySessionOpen cannot blank a busy glyph mid-flight.
     // Never use global runState for non-active rows (that stuck spinners on every
@@ -845,7 +840,6 @@ export function ProjectList(props: ProjectListProps) {
         : {}),
     });
     const stateLabel = markerLabel(runMarker?.state, tr, runMarker?.reason);
-    if (stateLabel) tooltipParts.push(stateLabel);
 
     return (
       <div
@@ -872,92 +866,100 @@ export function ProjectList(props: ProjectListProps) {
             aria-hidden
           />
         ) : null}
-        <div
-          className={cn("sidebar-list-row group/item", showMenu && "bg-[var(--hover-fill)]")}
-          data-active={selected ? "true" : "false"}
-          onContextMenu={(e) => openThreadContextMenu(thread, e, kind)}
+        <ThreadHoverCard
+          locale={props.locale}
+          title={title}
+          {...(thread.modifiedAt ? { modifiedAt: thread.modifiedAt } : {})}
+          {...(projectLabel ? { projectName: projectLabel } : {})}
+          {...(thread.cwd ? { cwd: thread.cwd } : {})}
+          {...(stateLabel ? { status: stateLabel } : {})}
+          {...(forkLabel ? { forkFrom: forkLabel } : {})}
         >
-          <button
-            type="button"
-            className={cn(
-              // gap-2 matches project row (folder icon + name) so indented session titles align.
-              "flex h-full min-w-0 flex-1 items-center gap-2 text-left transition-[padding]",
-              // Default: full width (fade to row end). Hover leaves room for actions.
-              "pr-0 group-hover/item:pr-14",
-            )}
+          <div
+            className={cn("sidebar-list-row group/item", showMenu && "bg-[var(--hover-fill)]")}
             data-active={selected ? "true" : "false"}
-            data-kind={kind}
-            data-session-path={thread.path}
-            data-fork={isFork ? "true" : "false"}
-            data-state={runMarker?.state ?? "idle"}
-            data-testid={
-              thread.active && kind === "conversation"
-                ? "thread-item-current"
-                : thread.active && kind === "session"
-                  ? "thread-item-current"
-                  : `${testPrefix}-item-${thread.id}`
-            }
-            title={tooltipParts.join("\n")}
-            onClick={() => {
-              if (unread) setUnreadThreads(markThreadUnread(thread, false));
-              // Selecting a session clears the explicit project-row selection.
-              props.onSelectProject(undefined);
-              // Always switch — re-open is needed after failed loads / cross-workspace hops.
-              props.onSwitchThread(thread.path, thread.cwd);
-            }}
+            data-thread-hover-anchor={`${kind}:${thread.id}`}
+            onContextMenu={(e) => openThreadContextMenu(thread, e, kind)}
           >
-            {/* Under a project: spacer = Folder icon width so title lines up with project name. */}
-            {indent ? <span className="inline-block size-4 shrink-0" aria-hidden /> : null}
-            {unread ? (
-              <span className="size-1.5 shrink-0 rounded-full bg-[#0a84ff]" aria-hidden />
-            ) : null}
-            {pinnedHere ? (
-              <Pin className="size-3 shrink-0 opacity-50" strokeWidth={1.75} aria-hidden />
-            ) : null}
-            <span
+            <button
+              type="button"
               className={cn(
-                "sidebar-title-fade min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-4 text-left",
-                unread && "font-medium text-[var(--foreground)]",
+                // gap-2 matches project row (folder icon + name) so indented session titles align.
+                "flex h-full min-w-0 flex-1 items-center gap-2 text-left transition-[padding]",
+                // Default: full width (fade to row end). Hover leaves room for actions.
+                "pr-0 group-hover/item:pr-14",
               )}
-            >
-              {title}
-            </span>
-            <ThreadRunMarker marker={runMarker} {...(stateLabel ? { label: stateLabel } : {})} />
-          </button>
-          {/* Hover: pin + archive only. Full menu via right-click. */}
-          <RowActions hoverOnly testIdPrefix={`${testPrefix}-${thread.id}`}>
-            <button
-              type="button"
-              data-testid={`${testPrefix}-pin-btn-${thread.id}`}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
-              title={pinnedHere ? unpinLabel : pinLabel}
-              aria-label={pinnedHere ? unpinLabel : pinLabel}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTogglePinThread(thread.id);
+              data-active={selected ? "true" : "false"}
+              data-kind={kind}
+              data-session-path={thread.path}
+              data-fork={isFork ? "true" : "false"}
+              data-state={runMarker?.state ?? "idle"}
+              data-testid={
+                thread.active && kind === "conversation"
+                  ? "thread-item-current"
+                  : thread.active && kind === "session"
+                    ? "thread-item-current"
+                    : `${testPrefix}-item-${thread.id}`
+              }
+              onClick={() => {
+                if (unread) setUnreadThreads(markThreadUnread(thread, false));
+                // Selecting a session clears the explicit project-row selection.
+                props.onSelectProject(undefined);
+                // Always switch — re-open is needed after failed loads / cross-workspace hops.
+                props.onSwitchThread(thread.path, thread.cwd);
               }}
             >
+              {/* Under a project: spacer = Folder icon width so title lines up with project name. */}
+              {indent ? <span className="inline-block size-4 shrink-0" aria-hidden /> : null}
+              {unread ? (
+                <span className="size-1.5 shrink-0 rounded-full bg-[#0a84ff]" aria-hidden />
+              ) : null}
               {pinnedHere ? (
-                <PinOff className="size-3.5" strokeWidth={1.75} />
-              ) : (
-                <Pin className="size-3.5" strokeWidth={1.75} />
-              )}
+                <Pin className="size-3 shrink-0 opacity-50" strokeWidth={1.75} aria-hidden />
+              ) : null}
+              <span
+                className={cn(
+                  "sidebar-title-fade min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-4 text-left",
+                  unread && "font-medium text-[var(--foreground)]",
+                )}
+              >
+                {title}
+              </span>
+              <ThreadRunMarker marker={runMarker} {...(stateLabel ? { label: stateLabel } : {})} />
             </button>
-            <button
-              type="button"
-              data-testid={`${testPrefix}-archive-btn-${thread.id}`}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
-              title={archiveLabel}
-              aria-label={archiveLabel}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleArchiveThread(thread.id);
-              }}
-            >
-              <Archive className="size-3.5" strokeWidth={1.75} />
-            </button>
-          </RowActions>
-        </div>
+            {/* Hover: pin + archive only. Full menu via right-click. */}
+            <RowActions hoverOnly testIdPrefix={`${testPrefix}-${thread.id}`}>
+              <button
+                type="button"
+                data-testid={`${testPrefix}-pin-btn-${thread.id}`}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
+                aria-label={pinnedHere ? unpinLabel : pinLabel}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTogglePinThread(thread.id);
+                }}
+              >
+                {pinnedHere ? (
+                  <PinOff className="size-3.5" strokeWidth={1.75} />
+                ) : (
+                  <Pin className="size-3.5" strokeWidth={1.75} />
+                )}
+              </button>
+              <button
+                type="button"
+                data-testid={`${testPrefix}-archive-btn-${thread.id}`}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--hover-fill)] hover:text-[var(--sidebar-foreground)]"
+                aria-label={archiveLabel}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleArchiveThread(thread.id);
+                }}
+              >
+                <Archive className="size-3.5" strokeWidth={1.75} />
+              </button>
+            </RowActions>
+          </div>
+        </ThreadHoverCard>
       </div>
     );
   }

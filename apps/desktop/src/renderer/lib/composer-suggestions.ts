@@ -1,13 +1,140 @@
 import type { SlashCommandSummary } from "@pix/contracts";
 
-export function slashCommandQuery(value: string): string | undefined {
-  const match = /^\/([^\s]*)$/.exec(value);
-  return match?.[1];
+export type ComposerTriggerKind = "slash" | "mention";
+
+export interface ComposerTrigger {
+  kind: ComposerTriggerKind;
+  query: string;
+  rangeStart: number;
+  rangeEnd: number;
 }
 
-export function addResourceQuery(value: string): string | undefined {
-  const match = /^@([^\s]*)$/.exec(value);
-  return match?.[1];
+function clampCursor(text: string, cursor: number): number {
+  if (!Number.isFinite(cursor)) return text.length;
+  return Math.max(0, Math.min(text.length, Math.floor(cursor)));
+}
+
+function isTriggerBoundary(text: string, index: number): boolean {
+  if (index <= 0) return true;
+  return /[\s([{"'`]/u.test(text.charAt(index - 1));
+}
+
+/**
+ * Active `/` or `@` token at the caret — mid-line after chips/text, same as Synara.
+ * Query is the unfinished token (`/rev`, `@src`); a space after it closes the trigger.
+ */
+export function detectComposerTrigger(
+  text: string,
+  cursorInput = text.length,
+): ComposerTrigger | null {
+  const cursor = clampCursor(text, cursorInput);
+  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
+
+  let slashStart = -1;
+  for (let index = lineStart; index < cursor; index += 1) {
+    if (text.charAt(index) === "/" && isTriggerBoundary(text, index)) {
+      slashStart = index;
+    }
+  }
+  if (slashStart !== -1) {
+    const region = text.slice(slashStart, cursor);
+    const match = /^\/([^\s]*)$/.exec(region);
+    const query = match?.[1];
+    if (query !== undefined && !query.includes("/")) {
+      return { kind: "slash", query, rangeStart: slashStart, rangeEnd: cursor };
+    }
+  }
+
+  let tokenStart = cursor;
+  while (tokenStart > lineStart && !/\s/u.test(text.charAt(tokenStart - 1))) {
+    tokenStart -= 1;
+  }
+  const token = text.slice(tokenStart, cursor);
+  if (token.startsWith("@")) {
+    const lastAt = token.lastIndexOf("@");
+    const mentionStart = tokenStart + lastAt;
+    const mentionToken = token.slice(lastAt);
+    if (/^@[^\s@]*$/.test(mentionToken)) {
+      return {
+        kind: "mention",
+        query: mentionToken.slice(1),
+        rangeStart: mentionStart,
+        rangeEnd: cursor,
+      };
+    }
+  }
+
+  return null;
+}
+
+export function replaceTextRange(
+  text: string,
+  rangeStart: number,
+  rangeEnd: number,
+  replacement: string,
+): { text: string; cursor: number } {
+  const safeStart = Math.max(0, Math.min(text.length, rangeStart));
+  const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
+  const next = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
+  return { text: next, cursor: safeStart + replacement.length };
+}
+
+export function slashCommandQuery(value: string, cursor = value.length): string | undefined {
+  const trigger = detectComposerTrigger(value, cursor);
+  return trigger?.kind === "slash" ? trigger.query : undefined;
+}
+
+export function addResourceQuery(value: string, cursor = value.length): string | undefined {
+  const trigger = detectComposerTrigger(value, cursor);
+  return trigger?.kind === "mention" ? trigger.query : undefined;
+}
+
+/** `/` menu: 命令 (builtins/prompts/extensions) + 技能 (skills). */
+export type SlashGroupId = "command" | "skill";
+
+const SLASH_GROUP_ORDER: SlashGroupId[] = ["command", "skill"];
+
+export function slashGroupId(command: SlashCommandSummary): SlashGroupId {
+  if (command.source === "skill" || command.name.startsWith("skill:")) return "skill";
+  return "command";
+}
+
+export function groupSlashCommands(commands: SlashCommandSummary[]): Array<{
+  id: SlashGroupId;
+  items: Array<{ command: SlashCommandSummary; flatIndex: number }>;
+}> {
+  const buckets: Record<SlashGroupId, SlashCommandSummary[]> = {
+    command: [],
+    skill: [],
+  };
+  for (const command of commands) {
+    buckets[slashGroupId(command)].push(command);
+  }
+  let flatIndex = 0;
+  const groups: Array<{
+    id: SlashGroupId;
+    items: Array<{ command: SlashCommandSummary; flatIndex: number }>;
+  }> = [];
+  for (const id of SLASH_GROUP_ORDER) {
+    const list = buckets[id];
+    if (list.length === 0) continue;
+    groups.push({
+      id,
+      items: list.map((command) => {
+        const row = { command, flatIndex };
+        flatIndex += 1;
+        return row;
+      }),
+    });
+  }
+  return groups;
+}
+
+/** Display order used by keyboard highlight and Enter/Tab commit — must stay in sync. */
+export function slashMenuItemsFromGroups(
+  groups: ReturnType<typeof groupSlashCommands>,
+): SlashCommandSummary[] {
+  return groups.flatMap((group) => group.items.map((item) => item.command));
 }
 
 export function filterSlashCommands(

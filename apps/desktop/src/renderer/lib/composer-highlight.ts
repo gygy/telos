@@ -25,6 +25,23 @@ export interface ComposerHighlightSpan {
   label?: string;
 }
 
+/**
+ * Codex-style chips (icon + name, not raw `/skill:` text):
+ *   /  → skill, prompt, extension
+ *   @  → package (plugin), file, folder
+ * Files/folders still attach via <attached-paths>; they are not re-inlined.
+ */
+export type ComposerRefKind = "skill" | "prompt" | "extension" | "package" | "file" | "folder";
+
+export interface ComposerRefToken {
+  kind: ComposerRefKind;
+  /** Sent to the agent (`/skill:name` or `@source`). */
+  raw: string;
+  label: string;
+  /** Absolute path when the chip is a file/folder attachment. */
+  path?: string;
+}
+
 export interface ComposerHighlightOptions {
   /** Installed package sources — `@source` becomes a plugin chip. */
   packageSources?: readonly string[];
@@ -159,17 +176,251 @@ export function composerTokenLabel(
   if (span.kind === "shell") {
     return span.text.replace(/^!!?/, "").trim() || span.text;
   }
+  if (span.kind === "url") return urlChipLabel(span.text);
   return span.text;
 }
 
+function titleCaseRef(value: string): string {
+  return value
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** 1em spacer in the textarea so the overlay can paint a chip icon without caret drift. */
+export const COMPOSER_CHIP_ICON_SLOT = "\u2003";
+
+/** Inserted chip: icon slot, space, display name, trailing space (Synara icon/label gap). */
+export function composerChipInsertText(label: string): string {
+  return `${COMPOSER_CHIP_ICON_SLOT} ${label} `;
+}
+
+/** Human chip title: `skill:open-kimi-ppt` → `Open Kimi Ppt`. */
+export function composerRefDisplayLabel(raw: string): string {
+  let name = raw
+    .replace(/^[@/]/, "")
+    .replace(/^skill:/i, "")
+    .trim();
+  if (!name) return raw;
+  if (/[/:]/.test(name)) {
+    name = name.split(/[/:]/).filter(Boolean).at(-1) || name;
+  }
+  return titleCaseRef(name) || raw;
+}
+
+export function isComposerRefCommand(command: { source?: string; name: string }): boolean {
+  return (
+    command.source === "skill" ||
+    command.source === "prompt" ||
+    command.source === "extension" ||
+    command.name.startsWith("skill:")
+  );
+}
+
+export function addComposerRef(
+  current: ComposerRefToken[],
+  next: ComposerRefToken,
+): ComposerRefToken[] {
+  if (current.some((item) => item.raw === next.raw)) return current;
+  return [...current, next];
+}
+
+export function composerRefHighlightKind(
+  kind: ComposerRefKind,
+): Exclude<ComposerHighlightKind, "text"> {
+  if (kind === "file" || kind === "folder") return "mention";
+  return kind;
+}
+
+export interface ComposerChipRange {
+  start: number;
+  end: number;
+  token: ComposerRefToken;
+}
+
+/** Visible chip spans in the composer (icon slot + display name). */
+export function findComposerChipRanges(
+  input: string,
+  refs: readonly ComposerRefToken[],
+): ComposerChipRange[] {
+  if (!refs.length || !input) return [];
+  const marks: ComposerChipRange[] = [];
+  const used = Array.from({ length: input.length }, () => false);
+  const sorted = [...refs].sort((a, b) => b.label.length - a.label.length);
+
+  for (const token of sorted) {
+    let from = 0;
+    while (from <= input.length) {
+      const start = findBoundedLabel(input, token.label, from);
+      if (start < 0) break;
+      const end = start + token.label.length;
+      let free = true;
+      for (let i = start; i < end; i++) {
+        if (used[i]) {
+          free = false;
+          break;
+        }
+      }
+      if (free) {
+        let spanStart = start;
+        if (
+          start > 1 &&
+          input.charAt(start - 1) === " " &&
+          input.charAt(start - 2) === COMPOSER_CHIP_ICON_SLOT &&
+          !used[start - 1] &&
+          !used[start - 2]
+        ) {
+          spanStart = start - 2;
+          used[start - 1] = true;
+          used[start - 2] = true;
+        } else if (
+          start > 0 &&
+          input.charAt(start - 1) === COMPOSER_CHIP_ICON_SLOT &&
+          !used[start - 1]
+        ) {
+          spanStart = start - 1;
+          used[spanStart] = true;
+        }
+        marks.push({ start: spanStart, end, token });
+        for (let i = start; i < end; i++) used[i] = true;
+        break;
+      }
+      from = start + 1;
+    }
+  }
+
+  marks.sort((a, b) => a.start - b.start);
+  return marks;
+}
+
+export function chipRangeAtCaret(
+  ranges: readonly ComposerChipRange[],
+  caret: number,
+): ComposerChipRange | null {
+  for (const range of ranges) {
+    if (caret > range.start && caret < range.end) return range;
+  }
+  return null;
+}
+
+export function chipRangeEndingAt(
+  ranges: readonly ComposerChipRange[],
+  caret: number,
+): ComposerChipRange | null {
+  return ranges.find((range) => range.end === caret) ?? null;
+}
+
+export function chipRangeStartingAt(
+  ranges: readonly ComposerChipRange[],
+  caret: number,
+): ComposerChipRange | null {
+  return ranges.find((range) => range.start === caret) ?? null;
+}
+
 /**
- * Use a compact chip face over a hidden sizer when the label is shorter
- * than the raw token. Keeps textarea caret alignment.
+ * Synara: the chip's underlying token is still `/skill:name` / `@source`.
+ * Caret sitting on the chip (after deleting the trailing space) is an active trigger.
  */
-export function shouldUseChipFace(span: ComposerHighlightSpan): boolean {
-  if (span.kind === "text" || span.kind === "url" || span.kind === "shell") return false;
-  const label = composerTokenLabel(span);
-  return label.length > 0 && label.length + 3 < span.text.length;
+export function detectChipTrigger(
+  text: string,
+  caret: number,
+  refs: readonly ComposerRefToken[],
+): { kind: "slash" | "mention"; query: string; rangeStart: number; rangeEnd: number } | null {
+  const ranges = findComposerChipRanges(text, refs);
+  const chip = chipRangeEndingAt(ranges, caret) ?? chipRangeAtCaret(ranges, caret);
+  if (!chip) return null;
+  const raw = chip.token.raw;
+  if (chip.token.kind === "package" || chip.token.kind === "file" || chip.token.kind === "folder") {
+    return {
+      kind: "mention",
+      query: raw.replace(/^@/, ""),
+      rangeStart: chip.start,
+      rangeEnd: chip.end,
+    };
+  }
+  return {
+    kind: "slash",
+    query: raw.replace(/^\//, ""),
+    rangeStart: chip.start,
+    rangeEnd: chip.end,
+  };
+}
+
+export function removeComposerChip(
+  prompt: string,
+  range: ComposerChipRange,
+): { text: string; cursor: number } {
+  return {
+    text: `${prompt.slice(0, range.start)}${prompt.slice(range.end)}`,
+    cursor: range.start,
+  };
+}
+
+/** Label must sit on a whitespace/edge boundary so partial edits drop the ref. */
+export function findBoundedLabel(input: string, label: string, from = 0): number {
+  if (!label) return -1;
+  let start = input.indexOf(label, from);
+  while (start !== -1) {
+    const end = start + label.length;
+    const left = start === 0 || /\s/u.test(input.charAt(start - 1));
+    const right = end === input.length || /\s/u.test(input.charAt(end));
+    if (left && right) return start;
+    start = input.indexOf(label, start + 1);
+  }
+  return -1;
+}
+
+export function pruneComposerRefs(tokens: ComposerRefToken[], prompt: string): ComposerRefToken[] {
+  const next = tokens.filter((token) => findBoundedLabel(prompt, token.label) >= 0);
+  return next.length === tokens.length ? tokens : next;
+}
+
+/**
+ * Skills/prompts lead so pi can expand them; plugins trail.
+ * Display names are stripped from the sentence and replaced by raw commands,
+ * space-separated like the visible composer line.
+ */
+export function serializeComposerRefs(tokens: ComposerRefToken[], prompt: string): string {
+  let body = prompt;
+  for (const token of tokens) {
+    const start = findBoundedLabel(body, token.label);
+    if (start >= 0) {
+      body = `${body.slice(0, start)} ${body.slice(start + token.label.length)}`;
+    }
+  }
+  body = body.replace(/\s+/gu, " ").trim();
+  const leading = tokens.filter(
+    (item) => item.kind === "skill" || item.kind === "prompt" || item.kind === "extension",
+  );
+  const trailing = tokens.filter((item) => item.kind === "package");
+  return [
+    leading.map((item) => item.raw).join(" "),
+    body,
+    trailing.map((item) => item.raw).join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** Sent bubble: collapse expanded `<skill>` then tokenize in document order. */
+export function userMessageHighlightSpans(
+  text: string,
+  options?: ComposerHighlightOptions,
+): ComposerHighlightSpan[] {
+  return tokenizeComposerHighlight(compactUserMessageText(text), options);
+}
+
+/** Short host + path for URL chips in user messages (composer overlay paints the raw URL). */
+export function urlChipLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    const hostPath = `${parsed.hostname}${path}`;
+    return hostPath.length > 36 ? `${hostPath.slice(0, 35)}…` : hostPath;
+  } catch {
+    return url.length > 36 ? `${url.slice(0, 35)}…` : url;
+  }
 }
 
 /**
@@ -292,4 +543,39 @@ export function tokenizeComposerHighlight(
 export function composerHighlightClass(kind: ComposerHighlightKind): string {
   if (kind === "text") return "composer-hl-text";
   return `composer-hl-${kind}`;
+}
+
+/**
+ * Overlay tokenizer: paint picked ref display names (they have no `/` `@` prefix)
+ * then fall through to the regular special-token scan.
+ */
+export function highlightComposerPrompt(
+  input: string,
+  options?: ComposerHighlightOptions,
+  refs?: readonly ComposerRefToken[],
+): ComposerHighlightSpan[] {
+  if (!refs?.length) return tokenizeComposerHighlight(input, options);
+
+  const marks = findComposerChipRanges(input, refs);
+  const spans: ComposerHighlightSpan[] = [];
+  let cursor = 0;
+  for (const mark of marks) {
+    if (mark.start > cursor) {
+      for (const span of tokenizeComposerHighlight(input.slice(cursor, mark.start), options)) {
+        pushSpan(spans, span);
+      }
+    }
+    pushSpan(spans, {
+      kind: composerRefHighlightKind(mark.token.kind),
+      text: input.slice(mark.start, mark.end),
+      label: mark.token.label,
+    });
+    cursor = mark.end;
+  }
+  if (cursor < input.length) {
+    for (const span of tokenizeComposerHighlight(input.slice(cursor), options)) {
+      pushSpan(spans, span);
+    }
+  }
+  return spans.length > 0 ? spans : [{ kind: "text", text: "" }];
 }

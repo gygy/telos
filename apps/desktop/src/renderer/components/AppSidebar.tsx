@@ -198,6 +198,7 @@ export function AppSidebar(props: AppSidebarProps) {
         )}
         style={{ width: railWidth }}
         data-testid="sidebar"
+        data-slot="sidebar-container"
         data-collapsed={props.collapsed ? "true" : "false"}
         data-sidebar-translucent={props.translucent ? "true" : "false"}
         data-sidebar-glass={props.glass ? "true" : "false"}

@@ -19,7 +19,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type {
   GitBranchInfo,
   GitContextInfo,
@@ -29,6 +29,7 @@ import type {
 } from "@pix/contracts";
 import {
   ArrowUp,
+  Box,
   Check,
   ChevronDown,
   ChevronRight,
@@ -65,7 +66,6 @@ import {
   Square,
   Tag,
   Upload,
-  Wand2,
 } from "lucide-react";
 import {
   anchorFromElement,
@@ -86,11 +86,31 @@ import { groupModelsByProvider } from "../lib/model-groups.ts";
 import {
   addResourceQuery,
   applyPathTokenCompletion,
+  detectComposerTrigger,
   filterSlashCommands,
+  groupSlashCommands,
   pathTokenBeforeCursor,
+  replaceTextRange,
   slashCommandQuery,
+  slashMenuItemsFromGroups,
+  type ComposerTrigger,
 } from "../lib/composer-suggestions.ts";
-import { tokenizeComposerHighlight } from "../lib/composer-highlight.ts";
+import {
+  addComposerRef,
+  chipRangeAtCaret,
+  chipRangeEndingAt,
+  chipRangeStartingAt,
+  composerChipInsertText,
+  composerRefDisplayLabel,
+  detectChipTrigger,
+  findComposerChipRanges,
+  highlightComposerPrompt,
+  isComposerRefCommand,
+  pruneComposerRefs,
+  removeComposerChip,
+  serializeComposerRefs,
+  type ComposerRefToken,
+} from "../lib/composer-highlight.ts";
 import { renderHighlightSpans } from "./PromptTokenChip.tsx";
 import { isImeCompositionEvent } from "../lib/composer-keyboard.ts";
 import type { AccessMode, AccessVisibility } from "../lib/settings-prefs.ts";
@@ -492,12 +512,12 @@ function ContextUsageIndicator(props: {
   );
 }
 
-const ICON_SM = { className: "size-4 shrink-0", strokeWidth: 1.75 } as const;
+const ICON_SM = { className: "size-3.5 shrink-0", strokeWidth: 1.75 } as const;
 
 /** Icons for `/` catalog — source groups + well-known builtin command names. */
 function commandSourceIcon(command: SlashCommandSummary) {
   if (command.source === "skill" || command.name.startsWith("skill:")) {
-    return <Wand2 {...ICON_SM} />;
+    return <Box {...ICON_SM} />;
   }
   if (command.source === "prompt") {
     return <MessageSquareText {...ICON_SM} />;
@@ -542,48 +562,6 @@ function commandSourceIcon(command: SlashCommandSummary) {
     default:
       return <Slash {...ICON_SM} />;
   }
-}
-
-/** `/` menu: 命令 (builtins/prompts/extensions) + 技能 (skills). */
-type SlashGroupId = "command" | "skill";
-
-const SLASH_GROUP_ORDER: SlashGroupId[] = ["command", "skill"];
-
-function slashGroupId(command: SlashCommandSummary): SlashGroupId {
-  if (command.source === "skill" || command.name.startsWith("skill:")) return "skill";
-  return "command";
-}
-
-function groupSlashCommands(commands: SlashCommandSummary[]): Array<{
-  id: SlashGroupId;
-  items: Array<{ command: SlashCommandSummary; flatIndex: number }>;
-}> {
-  const buckets: Record<SlashGroupId, SlashCommandSummary[]> = {
-    command: [],
-    skill: [],
-  };
-  for (const command of commands) {
-    buckets[slashGroupId(command)].push(command);
-  }
-  let flatIndex = 0;
-  // Only show groups that still have matches after filtering.
-  const groups: Array<{
-    id: SlashGroupId;
-    items: Array<{ command: SlashCommandSummary; flatIndex: number }>;
-  }> = [];
-  for (const id of SLASH_GROUP_ORDER) {
-    const list = buckets[id];
-    if (list.length === 0) continue;
-    groups.push({
-      id,
-      items: list.map((command) => {
-        const row = { command, flatIndex };
-        flatIndex += 1;
-        return row;
-      }),
-    });
-  }
-  return groups;
 }
 
 function filterPackages(packages: PackageSummary[], query: string, limit = 24): PackageSummary[] {
@@ -679,6 +657,11 @@ export function Composer(props: ComposerProps) {
   const showAppError = useShellStore((s) => s.showAppError);
   /** Mirror layer under the transparent textarea for skill / link / @path highlights. */
   const promptHighlightRef = useRef<HTMLDivElement | null>(null);
+  /** After `/` or `@` insert, park the caret past the token once the value commits. */
+  const pendingCaretRef = useRef<number | null>(null);
+  const openTriggerRef = useRef<ComposerTrigger | null>(null);
+  const [caret, setCaret] = useState(0);
+  const [refTokens, setRefTokens] = useState<ComposerRefToken[]>([]);
   /** Which model-submenu flyout is open: thinking | speed */
   const [modelFlyout, setModelFlyout] = useState<"thinking" | "speed" | null>(null);
   const modelFlyoutCloseTimer = useRef<number | null>(null);
@@ -822,8 +805,10 @@ export function Composer(props: ComposerProps) {
     return tr("composer.speed.default");
   }
 
-  const slashQuery = slashCommandQuery(props.prompt);
-  const resourceQuery = addResourceQuery(props.prompt);
+  const composerTrigger =
+    detectComposerTrigger(props.prompt, caret) ?? detectChipTrigger(props.prompt, caret, refTokens);
+  const slashQuery = composerTrigger?.kind === "slash" ? composerTrigger.query : undefined;
+  const resourceQuery = composerTrigger?.kind === "mention" ? composerTrigger.query : undefined;
   const promptHighlightSpans = useMemo(() => {
     const promptNames: string[] = [];
     const extensionNames: string[] = [];
@@ -831,12 +816,18 @@ export function Composer(props: ComposerProps) {
       if (command.source === "prompt") promptNames.push(command.name);
       else if (command.source === "extension") extensionNames.push(command.name);
     }
-    return tokenizeComposerHighlight(props.prompt, {
-      packageSources: (props.packages ?? []).map((pkg) => pkg.source),
-      promptNames,
-      extensionNames,
-    });
-  }, [props.prompt, props.packages, props.slashCommands]);
+    return highlightComposerPrompt(
+      props.prompt,
+      {
+        packageSources: (props.packages ?? []).map((pkg) => pkg.source),
+        promptNames,
+        extensionNames,
+      },
+      refTokens,
+    );
+  }, [props.prompt, props.packages, props.slashCommands, refTokens]);
+
+  const visibleAttachments = props.attachments;
 
   function syncPromptHighlightScroll(el: HTMLTextAreaElement | null) {
     const mirror = promptHighlightRef.current;
@@ -849,6 +840,7 @@ export function Composer(props: ComposerProps) {
     [props.slashCommands, slashQuery],
   );
   const slashGroups = useMemo(() => groupSlashCommands(slashSuggestions), [slashSuggestions]);
+  const slashMenuItems = useMemo(() => slashMenuItemsFromGroups(slashGroups), [slashGroups]);
   const packageSuggestions = useMemo(
     () => filterPackages(props.packages ?? [], resourceQuery ?? ""),
     [props.packages, resourceQuery],
@@ -920,6 +912,30 @@ export function Composer(props: ComposerProps) {
     setSuggestionIndex(-1);
   }, [slashQuery, resourceQuery, menu]);
 
+  useLayoutEffect(() => {
+    if (suggestionIndex < 0) return;
+    const scroller = slashPanelOpen
+      ? slashOverflow.scrollRef.current
+      : resourcePanelOpen
+        ? resourceOverflow.scrollRef.current
+        : null;
+    const item = scroller?.querySelector<HTMLElement>(`[data-suggest-index="${suggestionIndex}"]`);
+    item?.scrollIntoView({ block: "nearest" });
+  }, [
+    suggestionIndex,
+    slashPanelOpen,
+    resourcePanelOpen,
+    slashQuery,
+    resourceQuery,
+    pathSuggestions.length,
+    slashOverflow.scrollRef,
+    resourceOverflow.scrollRef,
+  ]);
+
+  useEffect(() => {
+    if (composerTrigger) openTriggerRef.current = composerTrigger;
+  }, [composerTrigger]);
+
   function closeMenu() {
     clearModelFlyoutCloseTimer();
     setMenu(null);
@@ -950,15 +966,80 @@ export function Composer(props: ComposerProps) {
     else setSuggestionsDismissed(true);
   }
 
+  function commitPromptWithCaret(value: string, nextCaret = value.length) {
+    pendingCaretRef.current = nextCaret;
+    setCaret(nextCaret);
+    props.onPromptChange(value);
+  }
+
+  function replaceActiveTrigger(replacement: string, kind: "slash" | "mention") {
+    const ranges = findComposerChipRanges(props.prompt, refTokens);
+    const chip =
+      chipRangeEndingAt(ranges, caret) ??
+      chipRangeAtCaret(ranges, caret) ??
+      chipRangeEndingAt(ranges, props.prompt.trimEnd().length);
+    const chipAs = chip
+      ? chip.token.kind === "package" || chip.token.kind === "file" || chip.token.kind === "folder"
+        ? "mention"
+        : "slash"
+      : null;
+    if (chip && chipAs === kind) {
+      setRefTokens((current) => current.filter((item) => item.raw !== chip.token.raw));
+      const next = replaceTextRange(props.prompt, chip.start, chip.end, replacement);
+      openTriggerRef.current = null;
+      commitPromptWithCaret(next.text, next.cursor);
+      return;
+    }
+
+    const remembered = openTriggerRef.current;
+    const rememberedHit =
+      remembered?.kind === kind
+        ? detectComposerTrigger(props.prompt, Math.min(props.prompt.length, remembered.rangeEnd))
+        : null;
+    const atCaret = detectComposerTrigger(props.prompt, caret);
+    const atEnd = detectComposerTrigger(props.prompt, props.prompt.length);
+    const trigger =
+      rememberedHit?.kind === kind
+        ? rememberedHit
+        : atCaret?.kind === kind
+          ? atCaret
+          : atEnd?.kind === kind
+            ? atEnd
+            : composerTrigger;
+    const rangeStart = trigger?.kind === kind ? trigger.rangeStart : props.prompt.length;
+    const rangeEnd = trigger?.kind === kind ? trigger.rangeEnd : props.prompt.length;
+    const next = replaceTextRange(props.prompt, rangeStart, rangeEnd, replacement);
+    openTriggerRef.current = null;
+    commitPromptWithCaret(next.text, next.cursor);
+  }
+
   function selectCommand(command: SlashCommandSummary) {
-    props.onPromptChange(`/${command.name} `);
+    if (isComposerRefCommand(command)) {
+      const label = composerRefDisplayLabel(command.name);
+      setRefTokens((current) =>
+        addComposerRef(current, {
+          kind:
+            command.source === "prompt"
+              ? "prompt"
+              : command.source === "extension"
+                ? "extension"
+                : "skill",
+          raw: `/${command.name}`,
+          label,
+        }),
+      );
+      replaceActiveTrigger(composerChipInsertText(label), "slash");
+    } else {
+      replaceActiveTrigger(`/${command.name} `, "slash");
+    }
     setSuggestionsDismissed(true);
     closeMenu();
-    requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
   async function selectAttachments(mode: "files" | "folders" = "files") {
-    if (resourceQuery !== undefined) props.onPromptChange("");
+    if (composerTrigger?.kind === "mention") {
+      replaceActiveTrigger("", "mention");
+    }
     setSuggestionsDismissed(true);
     closeMenu();
     // Open native dialog after the menu unmounts so Windows doesn't steal focus oddly.
@@ -969,9 +1050,18 @@ export function Composer(props: ComposerProps) {
     requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
-  function handlePromptChange(value: string) {
+  function syncComposerCaret(el: HTMLTextAreaElement | null) {
+    if (!el) return;
+    setCaret(el.selectionStart ?? el.value.length);
+  }
+
+  function handlePromptChange(value: string, nextCaret = value.length) {
     setSuggestionsDismissed(false);
-    if (slashCommandQuery(value) !== undefined || addResourceQuery(value) !== undefined) {
+    setCaret(nextCaret);
+    if (
+      slashCommandQuery(value, nextCaret) !== undefined ||
+      addResourceQuery(value, nextCaret) !== undefined
+    ) {
       closeMenu();
     }
     props.onPromptChange(value);
@@ -981,30 +1071,48 @@ export function Composer(props: ComposerProps) {
 
   // Keep height + highlight scroll in sync for external prompt updates (slash insert, clear, etc.).
   useLayoutEffect(() => {
-    fitComposerPromptHeight(props.composerRef.current);
-    syncPromptHighlightScroll(props.composerRef.current);
+    const el = props.composerRef.current;
+    fitComposerPromptHeight(el);
+    syncPromptHighlightScroll(el);
+    const caret = pendingCaretRef.current;
+    if (caret == null || !el) return;
+    pendingCaretRef.current = null;
+    const pos = Math.max(0, Math.min(caret, el.value.length));
+    el.focus();
+    el.setSelectionRange(pos, pos);
+    setCaret(pos);
   }, [props.prompt, props.composerRef, props.attachments.length]);
 
+  useEffect(() => {
+    setRefTokens((current) => pruneComposerRefs(current, props.prompt));
+  }, [props.prompt]);
+
   function clearAtTokenFromPrompt() {
-    // Drop a trailing `@query` token after picking a resource.
-    const next = props.prompt.replace(/@[^\s]*$/, "").trimEnd();
-    props.onPromptChange(next ? `${next} ` : "");
+    replaceActiveTrigger("", "mention");
   }
 
   function selectPackage(pkg: PackageSummary) {
-    // Insert package source as an @ mention and close the menu.
-    props.onPromptChange(`@${pkg.source} `);
+    const label = composerRefDisplayLabel(pkg.source);
+    setRefTokens((current) =>
+      addComposerRef(current, {
+        kind: "package",
+        raw: `@${pkg.source}`,
+        label,
+      }),
+    );
+    replaceActiveTrigger(composerChipInsertText(label), "mention");
     setSuggestionsDismissed(true);
     closeMenu();
-    requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
-  function selectProjectPath(absPath: string) {
+  function selectProjectPath(
+    absPath: string,
+    _meta?: { relative?: string; kind?: "file" | "folder" },
+  ) {
     clearAtTokenFromPrompt();
     props.onAddAttachments?.([absPath]);
     setSuggestionsDismissed(true);
     closeMenu();
-    requestAnimationFrame(() => props.composerRef.current?.focus());
   }
 
   function commitResourceIndex(index: number) {
@@ -1019,7 +1127,7 @@ export function Composer(props: ComposerProps) {
     const pathIndex = index - 2;
     if (pathIndex < pathSuggestions.length) {
       const hit = pathSuggestions[pathIndex];
-      if (hit) selectProjectPath(hit.path);
+      if (hit) selectProjectPath(hit.path, { relative: hit.relative, kind: hit.kind });
       return;
     }
     const pkg = packageSuggestions[pathIndex - pathSuggestions.length];
@@ -1041,7 +1149,7 @@ export function Composer(props: ComposerProps) {
       const hit = pathSuggestions[index - pathStart];
       if (hit) {
         if (token.atMention) {
-          selectProjectPath(hit.path);
+          selectProjectPath(hit.path, { relative: hit.relative, kind: hit.kind });
         } else {
           const applied = applyPathTokenCompletion(props.prompt, cursor, hit.relative);
           if (applied) {
@@ -1063,7 +1171,7 @@ export function Composer(props: ComposerProps) {
       const hit = rows[0];
       if (!hit) return false;
       if (token.atMention) {
-        selectProjectPath(hit.path);
+        selectProjectPath(hit.path, { relative: hit.relative, kind: hit.kind });
         return true;
       }
       const applied = applyPathTokenCompletion(props.prompt, cursor, hit.relative);
@@ -1079,13 +1187,75 @@ export function Composer(props: ComposerProps) {
     }
   }
 
+  function deleteComposerChipRange(range: ReturnType<typeof findComposerChipRanges>[number]) {
+    const next = removeComposerChip(props.prompt, range);
+    setRefTokens((current) => current.filter((item) => item.raw !== range.token.raw));
+    setSuggestionsDismissed(true);
+    commitPromptWithCaret(next.text, next.cursor);
+  }
+
+  function snapCaretOutOfChip(el: HTMLTextAreaElement) {
+    const caretPos = el.selectionStart ?? 0;
+    if (caretPos !== (el.selectionEnd ?? caretPos)) return;
+    const range = chipRangeAtCaret(findComposerChipRanges(props.prompt, refTokens), caretPos);
+    if (!range) return;
+    const pos = caretPos < (range.start + range.end) / 2 ? range.start : range.end;
+    el.setSelectionRange(pos, pos);
+    setCaret(pos);
+  }
+
+  function handleChipKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    if (refTokens.length === 0) return false;
+    const el = event.currentTarget;
+    const caretPos = el.selectionStart ?? 0;
+    if (caretPos !== (el.selectionEnd ?? caretPos)) return false;
+    const ranges = findComposerChipRanges(props.prompt, refTokens);
+    if (ranges.length === 0) return false;
+
+    if (event.key === "ArrowLeft") {
+      const range = chipRangeAtCaret(ranges, caretPos) ?? chipRangeEndingAt(ranges, caretPos);
+      if (range && caretPos !== range.start) {
+        event.preventDefault();
+        el.setSelectionRange(range.start, range.start);
+        setCaret(range.start);
+        return true;
+      }
+    }
+    if (event.key === "ArrowRight") {
+      const range = chipRangeAtCaret(ranges, caretPos) ?? chipRangeStartingAt(ranges, caretPos);
+      if (range && caretPos !== range.end) {
+        event.preventDefault();
+        el.setSelectionRange(range.end, range.end);
+        setCaret(range.end);
+        return true;
+      }
+    }
+    if (event.key === "Backspace") {
+      const range = chipRangeAtCaret(ranges, caretPos) ?? chipRangeEndingAt(ranges, caretPos);
+      if (range) {
+        event.preventDefault();
+        deleteComposerChipRange(range);
+        return true;
+      }
+    }
+    if (event.key === "Delete") {
+      const range = chipRangeAtCaret(ranges, caretPos) ?? chipRangeStartingAt(ranges, caretPos);
+      if (range) {
+        event.preventDefault();
+        deleteComposerChipRange(range);
+        return true;
+      }
+    }
+    return false;
+  }
+
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (isImeCompositionEvent(event.nativeEvent)) return;
 
     const panel = slashPanelOpen ? "slash" : resourcePanelOpen ? "resource" : undefined;
     if (panel) {
       // `/` → commands+skills; `@` → picker + project paths + packages.
-      const itemCount = panel === "slash" ? slashSuggestions.length : resourceItemCount;
+      const itemCount = panel === "slash" ? slashMenuItems.length : resourceItemCount;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         if (itemCount > 0) {
@@ -1113,8 +1283,8 @@ export function Composer(props: ComposerProps) {
           else void selectAttachments("files");
           return;
         }
-        if (panel === "slash" && slashSuggestions.length > 0) {
-          const command = slashSuggestions[suggestionIndex >= 0 ? suggestionIndex : 0];
+        if (panel === "slash" && slashMenuItems.length > 0) {
+          const command = slashMenuItems[suggestionIndex >= 0 ? suggestionIndex : 0];
           if (command) selectCommand(command);
           return;
         }
@@ -1124,12 +1294,14 @@ export function Composer(props: ComposerProps) {
         event.preventDefault();
         if (panel === "resource") commitResourceIndex(suggestionIndex);
         else {
-          const command = slashSuggestions[suggestionIndex];
+          const command = slashMenuItems[suggestionIndex];
           if (command) selectCommand(command);
         }
         return;
       }
-    } else if (event.key === "Tab" && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+    }
+    if (handleChipKeyDown(event)) return;
+    if (!panel && event.key === "Tab" && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       // Bare path Tab completion when no slash/@ panel is open.
       const token = pathTokenBeforeCursor(
         props.prompt,
@@ -1364,11 +1536,18 @@ export function Composer(props: ComposerProps) {
       <form
         ref={composerCardRef}
         className={cn("composer-card", showProjectBar && "composer-card-with-protrusion")}
-        onSubmit={(event) => props.onSubmit(event)}
+        onSubmit={(event) => {
+          if (refTokens.length > 0) {
+            const text = serializeComposerRefs(refTokens, props.prompt);
+            setRefTokens([]);
+            flushSync(() => props.onPromptChange(text));
+          }
+          props.onSubmit(event);
+        }}
       >
-        {props.attachments.length > 0 ? (
+        {visibleAttachments.length > 0 ? (
           <ComposerAttachmentList
-            paths={props.attachments}
+            paths={visibleAttachments}
             locale={props.locale}
             onRemove={props.onRemoveAttachment}
           />
@@ -1377,7 +1556,7 @@ export function Composer(props: ComposerProps) {
         <div className="composer-prompt-field">
           <div
             ref={promptHighlightRef}
-            className="composer-prompt-highlight composer-prompt-scroll"
+            className="composer-prompt-highlight composer-prompt-scroll composer-prompt-type"
             aria-hidden="true"
             data-testid="prompt-highlight"
           >
@@ -1390,8 +1569,22 @@ export function Composer(props: ComposerProps) {
             aria-label="Prompt"
             data-testid="prompt-input"
             value={props.prompt}
-            onChange={(event) => handlePromptChange(event.target.value)}
+            onChange={(event) =>
+              handlePromptChange(
+                event.target.value,
+                event.target.selectionStart ?? event.target.value.length,
+              )
+            }
             onKeyDown={handleComposerKeyDown}
+            onKeyUp={(event) => syncComposerCaret(event.currentTarget)}
+            onClick={(event) => {
+              snapCaretOutOfChip(event.currentTarget);
+              syncComposerCaret(event.currentTarget);
+            }}
+            onSelect={(event) => {
+              snapCaretOutOfChip(event.currentTarget);
+              syncComposerCaret(event.currentTarget);
+            }}
             onScroll={(event) => syncPromptHighlightScroll(event.currentTarget)}
             onPaste={(event) => {
               void handleComposerPaste(event);
@@ -1414,14 +1607,13 @@ export function Composer(props: ComposerProps) {
             placeholder={tr("composer.placeholder")}
             rows={COMPOSER_PROMPT_MIN_LINES}
             className={cn(
-              "composer-prompt-scroll composer-prompt-input resize-none rounded-none border-0 bg-transparent px-3.5 pt-3 pb-1",
-              "leading-[1.5] shadow-none",
+              "composer-prompt-scroll composer-prompt-input composer-prompt-type resize-none rounded-none border-0 bg-transparent",
+              "shadow-none",
               "focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "dark:bg-transparent",
             )}
           />
         </div>
-
         <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
           {/* Left: attach + access */}
           <div className="flex min-w-0 items-center gap-0.5">
@@ -1565,7 +1757,9 @@ export function Composer(props: ComposerProps) {
                 type="submit"
                 size="icon"
                 data-testid="send-prompt"
-                disabled={!props.prompt.trim() && props.attachments.length === 0}
+                disabled={
+                  !props.prompt.trim() && props.attachments.length === 0 && refTokens.length === 0
+                }
                 aria-label={tr("composer.start")}
                 className="h-7 w-7 rounded-full border-0 bg-foreground text-background shadow-none hover:bg-foreground/90 disabled:opacity-30"
               >
@@ -1618,26 +1812,31 @@ export function Composer(props: ComposerProps) {
                       type="button"
                       role="menuitem"
                       data-testid="composer-slash-item"
+                      data-suggest-index={flatIndex}
                       data-active={
                         suggestionIndex >= 0 && flatIndex === suggestionIndex ? "true" : "false"
                       }
                       className="composer-suggest-item"
-                      onMouseEnter={() => setSuggestionIndex(flatIndex)}
-                      onMouseLeave={() => setSuggestionIndex(-1)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseMove={() => {
+                        if (suggestionIndex !== flatIndex) setSuggestionIndex(flatIndex);
+                      }}
                       onClick={() => selectCommand(command)}
                     >
-                      <span className="inline-flex size-4 shrink-0 text-[var(--muted-foreground)]">
+                      <span className="composer-suggest-item-icon">
                         {commandSourceIcon(command)}
                       </span>
-                      <span className="composer-suggest-item-main">
-                        /{command.name}
-                        {command.argumentHint ? (
-                          <span className="ml-1 font-normal text-[var(--text-subtle)]">
-                            {command.argumentHint}
-                          </span>
+                      <span className="composer-suggest-item-copy">
+                        <span className="composer-suggest-item-main">
+                          {composerRefDisplayLabel(command.name)}
+                        </span>
+                        {command.description ? (
+                          <span className="composer-suggest-item-desc">{command.description}</span>
+                        ) : command.argumentHint ? (
+                          <span className="composer-suggest-item-desc">{command.argumentHint}</span>
                         ) : null}
                       </span>
-                      <span className="composer-suggest-item-desc">{command.description}</span>
+                      <span className="composer-suggest-item-meta">/{command.name}</span>
                     </button>
                   ))}
                 </div>
@@ -1676,33 +1875,45 @@ export function Composer(props: ComposerProps) {
                 type="button"
                 role="menuitem"
                 data-testid="composer-attach-files"
+                data-suggest-index={0}
                 data-active={suggestionIndex === 0 ? "true" : "false"}
                 className="composer-suggest-item"
-                onMouseEnter={() => setSuggestionIndex(0)}
-                onMouseLeave={() => setSuggestionIndex(-1)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseMove={() => {
+                  if (suggestionIndex !== 0) setSuggestionIndex(0);
+                }}
                 onClick={() => void selectAttachments("files")}
               >
-                <File
-                  className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                  strokeWidth={1.75}
-                />
-                <span className="composer-suggest-item-main">{tr("composer.attach.files")}</span>
+                <span className="composer-suggest-item-icon">
+                  <File className="size-3.5" strokeWidth={1.75} />
+                </span>
+                <span className="composer-suggest-item-copy">
+                  <span className="composer-suggest-item-main">{tr("composer.attach.files")}</span>
+                </span>
+                <span className="composer-suggest-item-meta">{tr("composer.meta.local")}</span>
               </button>
               <button
                 type="button"
                 role="menuitem"
                 data-testid="composer-attach-folders"
+                data-suggest-index={1}
                 data-active={suggestionIndex === 1 ? "true" : "false"}
                 className="composer-suggest-item"
-                onMouseEnter={() => setSuggestionIndex(1)}
-                onMouseLeave={() => setSuggestionIndex(-1)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseMove={() => {
+                  if (suggestionIndex !== 1) setSuggestionIndex(1);
+                }}
                 onClick={() => void selectAttachments("folders")}
               >
-                <FolderOpen
-                  className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                  strokeWidth={1.75}
-                />
-                <span className="composer-suggest-item-main">{tr("composer.attach.folders")}</span>
+                <span className="composer-suggest-item-icon">
+                  <FolderOpen className="size-3.5" strokeWidth={1.75} />
+                </span>
+                <span className="composer-suggest-item-copy">
+                  <span className="composer-suggest-item-main">
+                    {tr("composer.attach.folders")}
+                  </span>
+                </span>
+                <span className="composer-suggest-item-meta">{tr("composer.meta.local")}</span>
               </button>
               {pathSuggestions.map((item, index) => {
                 const flatIndex = index + 2;
@@ -1712,25 +1923,35 @@ export function Composer(props: ComposerProps) {
                     type="button"
                     role="menuitem"
                     data-testid="composer-attach-path"
+                    data-suggest-index={flatIndex}
                     data-active={suggestionIndex === flatIndex ? "true" : "false"}
                     className="composer-suggest-item"
-                    onMouseEnter={() => setSuggestionIndex(flatIndex)}
-                    onMouseLeave={() => setSuggestionIndex(-1)}
-                    onClick={() => selectProjectPath(item.path)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseMove={() => {
+                      if (suggestionIndex !== flatIndex) setSuggestionIndex(flatIndex);
+                    }}
+                    onClick={() =>
+                      selectProjectPath(item.path, { relative: item.relative, kind: item.kind })
+                    }
                     title={item.path}
                   >
-                    {item.kind === "folder" ? (
-                      <Folder
-                        className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                        strokeWidth={1.75}
-                      />
-                    ) : (
-                      <File
-                        className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                        strokeWidth={1.75}
-                      />
-                    )}
-                    <span className="composer-suggest-item-main">{item.relative}</span>
+                    <span className="composer-suggest-item-icon">
+                      {item.kind === "folder" ? (
+                        <Folder className="size-3.5" strokeWidth={1.75} />
+                      ) : (
+                        <File className="size-3.5" strokeWidth={1.75} />
+                      )}
+                    </span>
+                    <span className="composer-suggest-item-copy">
+                      <span className="composer-suggest-item-main">
+                        {item.relative.split(/[/\\]/).filter(Boolean).at(-1) || item.relative}
+                      </span>
+                    </span>
+                    {item.relative.includes("/") || item.relative.includes("\\") ? (
+                      <span className="composer-suggest-item-meta">
+                        {item.relative.replace(/[/\\][^/\\]+$/, "")}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -1746,23 +1967,40 @@ export function Composer(props: ComposerProps) {
                       type="button"
                       role="menuitem"
                       data-testid={`composer-attach-package-${pkg.source}`}
+                      data-suggest-index={flatIndex}
                       data-active={suggestionIndex === flatIndex ? "true" : "false"}
                       className="composer-suggest-item"
-                      onMouseEnter={() => setSuggestionIndex(flatIndex)}
-                      onMouseLeave={() => setSuggestionIndex(-1)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseMove={() => {
+                        if (suggestionIndex !== flatIndex) setSuggestionIndex(flatIndex);
+                      }}
                       onClick={() => selectPackage(pkg)}
                     >
-                      <Package
-                        className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                        strokeWidth={1.75}
-                      />
-                      <span className="composer-suggest-item-main">{pkg.source}</span>
-                      <span className="composer-suggest-item-desc">{pkg.scope}</span>
+                      <span className="composer-suggest-item-icon">
+                        <Package className="size-3.5" strokeWidth={1.75} />
+                      </span>
+                      <span className="composer-suggest-item-copy">
+                        <span className="composer-suggest-item-main">
+                          {composerRefDisplayLabel(pkg.source)}
+                        </span>
+                        {pkg.source !== composerRefDisplayLabel(pkg.source) ? (
+                          <span className="composer-suggest-item-desc">{pkg.source}</span>
+                        ) : null}
+                      </span>
+                      <span className="composer-suggest-item-meta">
+                        {pkg.scope || tr("composer.token.package")}
+                      </span>
                     </button>
                   );
                 })}
               </div>
             ) : null}
+            <div className="composer-suggest-hint">
+              <div className="composer-suggest-group-label">
+                {tr("composer.attach.filesAndFolders")}
+              </div>
+              <p className="composer-suggest-hint-copy">{tr("composer.add.searchFiles")}</p>
+            </div>
           </div>
           <div className="composer-suggest-fade" aria-hidden />
         </div>

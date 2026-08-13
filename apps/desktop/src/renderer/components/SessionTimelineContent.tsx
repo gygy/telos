@@ -15,6 +15,8 @@ import {
   type TimelineItem,
 } from "@/lib/timeline";
 import { TimelineLiveStatus, TimelineProcessBlock, TimelineRow } from "./TimelineRow.tsx";
+import { MessageTrail } from "./MessageTrail.tsx";
+import { deriveMessageTrailItems } from "@/lib/message-trail";
 import type { Locale } from "@/lib/i18n";
 
 type UserTimelineItem = Extract<TimelineItem, { kind: "user" }>;
@@ -61,13 +63,28 @@ export function SessionTimelineScroller(props: SessionTimelineScrollerProps) {
     ...contentProps
   } = props;
 
+  const trailItems = useMemo(
+    () => deriveMessageTrailItems(contentProps.items),
+    [contentProps.items],
+  );
+
+  function scrollToTrailMessage(messageId: string) {
+    const root = document.querySelector(`[data-timeline-msg="${CSS.escape(messageId)}"]`);
+    root?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
   return (
     <MessageScrollerProvider
       autoScroll={autoScroll}
       defaultScrollPosition="end"
       scrollEdgeThreshold={SESSION_SCROLL_BOTTOM_GAP_PX}
     >
-      <MessageScroller className="size-full min-h-0">
+      <MessageScroller className="relative size-full min-h-0">
+        <MessageTrail
+          items={trailItems}
+          locale={contentProps.locale}
+          onSelect={scrollToTrailMessage}
+        />
         <MessageScrollerViewport
           ref={viewportRef}
           className={cn(
@@ -128,6 +145,7 @@ export function SessionTimelineContent(props: SessionTimelineContentProps) {
                 messageId={messageId}
                 scrollAnchor={false}
                 className="w-full"
+                data-timeline-msg={messageId}
               >
                 {block.type === "process" ? (
                   <TimelineProcessBlock

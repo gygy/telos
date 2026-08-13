@@ -4,22 +4,50 @@ import {
   applyPathTokenCompletion,
   attachmentLabel,
   attachmentPresentation,
+  detectComposerTrigger,
   filterResourceCommands,
   filterSlashCommands,
+  groupSlashCommands,
+  slashMenuItemsFromGroups,
   isPreviewableImagePath,
   isPromptImagePath,
   pathTokenBeforeCursor,
   promptWithAttachedPaths,
+  replaceTextRange,
   slashCommandQuery,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from "./composer-suggestions.ts";
 
 describe("composer suggestions", () => {
-  it("only opens command panels for a single active trigger token", () => {
-    expect(slashCommandQuery("/rev")).toBe("rev");
+  it("opens / and @ from the caret token, including mid-sentence after chips", () => {
+    expect(detectComposerTrigger("/rev", 4)).toEqual({
+      kind: "slash",
+      query: "rev",
+      rangeStart: 0,
+      rangeEnd: 4,
+    });
     expect(slashCommandQuery("/review now")).toBeUndefined();
+    expect(detectComposerTrigger("对比插件 /rev", "对比插件 /rev".length)).toEqual({
+      kind: "slash",
+      query: "rev",
+      rangeStart: "对比插件 ".length,
+      rangeEnd: "对比插件 /rev".length,
+    });
     expect(addResourceQuery("@skill")).toBe("skill");
-    expect(addResourceQuery("please @skill")).toBeUndefined();
+    expect(detectComposerTrigger("please @src", "please @src".length)).toEqual({
+      kind: "mention",
+      query: "src",
+      rangeStart: "please ".length,
+      rangeEnd: "please @src".length,
+    });
+    expect(detectComposerTrigger("please @src more", "please @src more".length)).toBeNull();
+  });
+
+  it("replaces only the trigger range so surrounding text stays", () => {
+    expect(replaceTextRange("hello /rev", 6, 10, "Open Kimi Ppt ")).toEqual({
+      text: "hello Open Kimi Ppt ",
+      cursor: "hello Open Kimi Ppt ".length,
+    });
   });
 
   it("filters names and descriptions with prefix matches first", () => {
@@ -31,6 +59,16 @@ describe("composer suggestions", () => {
       "release",
       "skill:review",
     ]);
+  });
+
+  it("commits keyboard highlight against the grouped menu order, not the filter order", () => {
+    const filtered = [
+      { name: "skill:review", description: "Inspect", source: "skill" as const },
+      { name: "model", description: "Pick model", source: "builtin" as const },
+    ];
+    const items = slashMenuItemsFromGroups(groupSlashCommands(filtered));
+    expect(items.map((command) => command.name)).toEqual(["model", "skill:review"]);
+    expect(items[0]?.name).not.toBe(filtered[0]?.name);
   });
 
   it("keeps skills on slash and never exposes pi commands under @", () => {

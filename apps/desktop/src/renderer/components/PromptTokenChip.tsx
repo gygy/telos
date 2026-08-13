@@ -1,40 +1,42 @@
 /**
- * Compact special-content chips (skills, plugins, slash, files, …).
- * Overlay mode keeps a hidden sizer so the composer caret stays aligned.
+ * Synara inline tokens: cube/file/plugin icon + title-case name, in the sentence.
+ * Composer overlay uses the same face; a leading em-space holds the icon (caret-safe).
  */
 import type { ReactNode } from "react";
-import { File, Link2, MessageSquareText, Puzzle, Slash, Terminal, Wand2 } from "lucide-react";
-import { cn } from "../lib/utils.ts";
+import { Box, File, Link2, MessageSquareText, Puzzle, Slash, Terminal } from "lucide-react";
 import {
-  composerHighlightClass,
+  COMPOSER_CHIP_ICON_SLOT,
+  composerRefDisplayLabel,
   composerTokenLabel,
-  parseSkillBlock,
-  shouldUseChipFace,
-  tokenizeComposerHighlight,
+  userMessageHighlightSpans,
   type ComposerHighlightKind,
   type ComposerHighlightSpan,
 } from "../lib/composer-highlight.ts";
 import { t, type Locale } from "../lib/i18n.ts";
 
 const ICON = { className: "prompt-token-chip-icon", strokeWidth: 2 } as const;
+const OVERLAY_ICON = { className: "composer-hl-token-icon", strokeWidth: 2 } as const;
 
-function tokenIcon(kind: Exclude<ComposerHighlightKind, "text">): ReactNode {
+function tokenIcon(
+  kind: Exclude<ComposerHighlightKind, "text">,
+  icon: { className: string; strokeWidth: number } = ICON,
+): ReactNode {
   switch (kind) {
     case "skill":
-      return <Wand2 {...ICON} />;
+      return <Box {...icon} />;
     case "prompt":
-      return <MessageSquareText {...ICON} />;
-    case "extension":
+      return <MessageSquareText {...icon} />;
     case "package":
-      return <Puzzle {...ICON} />;
+    case "extension":
+      return <Puzzle {...icon} />;
     case "mention":
-      return <File {...ICON} />;
+      return <File {...icon} />;
     case "slash":
-      return <Slash {...ICON} />;
+      return <Slash {...icon} />;
     case "url":
-      return <Link2 {...ICON} />;
+      return <Link2 {...icon} />;
     case "shell":
-      return <Terminal {...ICON} />;
+      return <Terminal {...icon} />;
     default:
       return null;
   }
@@ -68,7 +70,7 @@ export function PromptTokenChip(props: {
   label?: string;
   title?: string;
   locale?: Locale;
-  /** Hidden sizer + compact face so overlay width matches the textarea. */
+  /** Composer mirror: paint raw glyphs only (no icon / short label). */
   overlay?: boolean;
 }) {
   const token = {
@@ -76,35 +78,32 @@ export function PromptTokenChip(props: {
     text: props.text,
     ...(props.label ? { label: props.label } : {}),
   };
-  const label = composerTokenLabel(token);
+  const label =
+    props.kind === "mention" || props.kind === "url"
+      ? composerTokenLabel(token)
+      : composerRefDisplayLabel(props.label || props.text);
   const locale = props.locale ?? "zh";
   const aria = `${t(locale, tokenAriaKey(props.kind))}: ${label}`;
-  const kindClass = composerHighlightClass(props.kind);
-  const useFace = props.overlay === true && shouldUseChipFace(token);
 
-  if (props.overlay && useFace) {
-    return (
-      <span className={cn("composer-hl-chip", kindClass)} data-kind={props.kind}>
-        <span className="composer-hl-chip-sizer">{props.text}</span>
-        <span className="composer-hl-chip-face" title={props.title ?? props.text} aria-hidden>
-          {tokenIcon(props.kind)}
-          <span className="prompt-token-chip-label">{label}</span>
-        </span>
-      </span>
-    );
-  }
-
+  // Overlay: same structure as the sent chip. Em-space in the textarea = 1em icon.
   if (props.overlay) {
+    const slotted = props.text.startsWith(COMPOSER_CHIP_ICON_SLOT);
+    const face = slotted ? props.text.slice(COMPOSER_CHIP_ICON_SLOT.length) : props.text;
     return (
-      <span className={kindClass} data-kind={props.kind} title={props.title ?? props.text}>
-        {props.text}
+      <span
+        className={slotted ? "prompt-token-chip prompt-token-chip-overlay" : "composer-hl-token"}
+        data-kind={props.kind}
+        data-overlay="true"
+      >
+        {slotted ? tokenIcon(props.kind, OVERLAY_ICON) : null}
+        {slotted ? <span className="prompt-token-chip-label">{face}</span> : face}
       </span>
     );
   }
 
   return (
     <span
-      className={cn("prompt-token-chip", kindClass)}
+      className="prompt-token-chip"
       data-kind={props.kind}
       data-slot="prompt-token"
       title={props.title ?? props.text}
@@ -141,25 +140,11 @@ export function renderHighlightSpans(
   });
 }
 
-/** User-bubble body: collapse expanded `<skill>` blocks and chip remaining tokens. */
+/** User-bubble body: collapse expanded `<skill>` and keep tokens in the sentence. */
 export function UserMessageText(props: { text: string; locale: Locale }) {
-  const skill = parseSkillBlock(props.text);
-  const remainder = skill ? (skill.userMessage ?? "") : props.text;
-  const spans = tokenizeComposerHighlight(remainder);
-
   return (
     <div className="user-message-text" data-testid="user-message-text">
-      {skill ? (
-        <PromptTokenChip
-          kind="skill"
-          text={`/skill:${skill.name}`}
-          label={skill.name}
-          title={skill.location}
-          locale={props.locale}
-        />
-      ) : null}
-      {skill && remainder ? " " : null}
-      {renderHighlightSpans(spans, { locale: props.locale })}
+      {renderHighlightSpans(userMessageHighlightSpans(props.text), { locale: props.locale })}
     </div>
   );
 }
