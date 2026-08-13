@@ -134,6 +134,7 @@ import { deriveRunState, historyToTimeline, type TimelineItem } from "./lib/time
 import {
   classifyRuntimeEventDelivery,
   sessionKeyFromSnapshot,
+  shouldReuseForegroundThread,
   sessionRunKey,
   useShellStore,
 } from "./store/shell-store.ts";
@@ -920,6 +921,10 @@ function App() {
         setBoot(t(loc(), "boot.config"));
         await refreshConversationSessions();
         if (cancelled) return;
+        // Auto-resume starts the host before this window subscribes to events,
+        // so session.opened (and its history) is often missed. Project it now.
+        await hydrateResumedSession();
+        if (cancelled) return;
 
         setBoot(t(loc(), "boot.ready"));
         // Brief beat so "ready" is readable before the shell appears.
@@ -934,6 +939,7 @@ function App() {
             await refreshRecentWorkspaces();
             await refreshPiStatus({ ensure: true });
             await refreshConversationSessions();
+            await hydrateResumedSession();
           } catch {
             // ignore secondary failures
           }
@@ -1347,6 +1353,26 @@ function App() {
     ro.observe(dock);
     return () => ro.disconnect();
   }, [hasActivity, showContextUsage, accessVisibility, timelineReady]);
+
+  /**
+   * After cold start the host may already be bound to lastWorkspace's recent
+   * session, but the renderer never received session.opened. Pull that
+   * projection so the last thread is actually open, not just highlighted.
+   */
+  async function hydrateResumedSession(): Promise<void> {
+    const store = useShellStore.getState();
+    const file = store.snapshot?.sessionFile?.trim();
+    if (!file || !store.runtimeId) return;
+    if (store.history.length > 0 || store.liveStream.items.length > 0) return;
+    try {
+      const opened = await window.pix.session.switch(file);
+      applySessionOpen(opened);
+      requestContentReveal();
+      restoreSessionContentMode(opened.snapshot.sessionFile?.trim() || file);
+    } catch {
+      // Click-to-open still works if projection fails.
+    }
+  }
 
   async function ensureHost(): Promise<HostSnapshot> {
     const store = useShellStore.getState();
@@ -2674,8 +2700,23 @@ function App() {
       sessionRunKey(currentStore.snapshot?.sessionFile),
       sessionRunKey(currentStore.snapshot?.sessionId),
     ];
-    // A project-card selection only changes rail state. Re-selecting the live session
-    // should restore its row selection without clearing and reloading the timeline.
+    // Re-selecting the live session usually just restores the thread view.
+    // After quit/reopen, auto-resume binds sessionFile before history arrives —
+    // that click must still project the session (otherwise only a hop-away works).
+    if (
+      shouldReuseForegroundThread({
+        switching: switchingSessionRef.current,
+        runtimeId: currentStore.runtimeId,
+        targetKey: targetSessionKey,
+        currentKeys: currentSessionKeys,
+        historyCount: currentStore.history.length,
+        liveCount: currentStore.liveStream.items.length,
+      })
+    ) {
+      setView("thread");
+      return;
+    }
+
     if (
       !switchingSessionRef.current &&
       currentStore.runtimeId &&
@@ -2683,6 +2724,14 @@ function App() {
       currentSessionKeys.includes(targetSessionKey)
     ) {
       setView("thread");
+      try {
+        const opened = await window.pix.session.switch(sessionPath);
+        applySessionOpen(opened);
+        requestContentReveal();
+        restoreSessionContentMode(opened.snapshot.sessionFile?.trim() || sessionPath);
+      } catch (error) {
+        reportAppError(error, "无法打开会话");
+      }
       return;
     }
 
