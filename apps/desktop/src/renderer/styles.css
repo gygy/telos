@@ -1596,6 +1596,49 @@ html[data-custom-window-controls="true"] .page-header {
 .composer-hl-text {
   color: var(--foreground);
 }
+
+/*
+ * Special tokens: Codex-like chips. Overlay chips keep the raw token width
+ * (hidden sizer) so the transparent textarea caret stays aligned.
+ */
+.composer-hl-chip {
+  position: relative;
+  display: inline;
+}
+.composer-hl-chip-sizer {
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.composer-hl-chip-face {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0 0.35em;
+  border-radius: 5px;
+  white-space: nowrap;
+  font-weight: 550;
+  line-height: inherit;
+  pointer-events: none;
+}
+.composer-hl-url,
+.composer-hl-mention,
+.composer-hl-package,
+.composer-hl-slash,
+.composer-hl-skill,
+.composer-hl-prompt,
+.composer-hl-extension,
+.composer-hl-shell {
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 550;
+}
 .composer-hl-url {
   color: var(--link, #379cfc);
   text-decoration: underline;
@@ -1603,33 +1646,89 @@ html[data-custom-window-controls="true"] .page-header {
   text-underline-offset: 2px;
 }
 .composer-hl-mention {
-  color: #34c759;
-  font-weight: 500;
+  color: #248a3d;
+  background: color-mix(in srgb, #34c759 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #34c759 32%, transparent);
+}
+.composer-hl-package,
+.composer-hl-extension {
+  color: #0b6bcb;
+  background: color-mix(in srgb, #379cfc 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #379cfc 34%, transparent);
 }
 .composer-hl-slash {
-  color: #bf5af2;
-  font-weight: 500;
+  color: #8944ab;
+  background: color-mix(in srgb, #bf5af2 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #bf5af2 34%, transparent);
+}
+.composer-hl-prompt {
+  color: #5b4db1;
+  background: color-mix(in srgb, #7d7aff 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #7d7aff 34%, transparent);
 }
 .composer-hl-skill {
-  color: #ff9f0a;
-  font-weight: 600;
+  color: #9a6700;
+  background: color-mix(in srgb, #ff9f0a 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ff9f0a 38%, transparent);
 }
 .composer-hl-shell {
-  color: #ff453a;
+  color: #d70015;
+  background: color-mix(in srgb, #ff453a 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ff453a 28%, transparent);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.95em;
 }
 [data-theme="dark"] .composer-hl-mention {
   color: #30d158;
 }
+[data-theme="dark"] .composer-hl-package,
+[data-theme="dark"] .composer-hl-extension {
+  color: #64d2ff;
+}
 [data-theme="dark"] .composer-hl-slash {
   color: #da8fff;
+}
+[data-theme="dark"] .composer-hl-prompt {
+  color: #b4b0ff;
 }
 [data-theme="dark"] .composer-hl-skill {
   color: #ffd60a;
 }
 [data-theme="dark"] .composer-hl-shell {
   color: #ff6961;
+}
+
+.prompt-token-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25em;
+  margin: 0 0.05em;
+  padding: 0.05em 0.45em 0.05em 0.28em;
+  vertical-align: baseline;
+  overflow: hidden;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.prompt-token-chip-icon {
+  width: 0.85em;
+  height: 0.85em;
+  flex-shrink: 0;
+}
+.prompt-token-chip-label,
+.composer-hl-chip-face .prompt-token-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-message-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Scroll body + bottom fade (fade only when the list actually overflows). */

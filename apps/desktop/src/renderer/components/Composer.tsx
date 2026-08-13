@@ -90,7 +90,8 @@ import {
   pathTokenBeforeCursor,
   slashCommandQuery,
 } from "../lib/composer-suggestions.ts";
-import { composerHighlightClass, tokenizeComposerHighlight } from "../lib/composer-highlight.ts";
+import { tokenizeComposerHighlight } from "../lib/composer-highlight.ts";
+import { renderHighlightSpans } from "./PromptTokenChip.tsx";
 import { isImeCompositionEvent } from "../lib/composer-keyboard.ts";
 import type { AccessMode, AccessVisibility } from "../lib/settings-prefs.ts";
 import { visibleAccessModes } from "../lib/settings-prefs.ts";
@@ -823,10 +824,19 @@ export function Composer(props: ComposerProps) {
 
   const slashQuery = slashCommandQuery(props.prompt);
   const resourceQuery = addResourceQuery(props.prompt);
-  const promptHighlightSpans = useMemo(
-    () => tokenizeComposerHighlight(props.prompt),
-    [props.prompt],
-  );
+  const promptHighlightSpans = useMemo(() => {
+    const promptNames: string[] = [];
+    const extensionNames: string[] = [];
+    for (const command of props.slashCommands) {
+      if (command.source === "prompt") promptNames.push(command.name);
+      else if (command.source === "extension") extensionNames.push(command.name);
+    }
+    return tokenizeComposerHighlight(props.prompt, {
+      packageSources: (props.packages ?? []).map((pkg) => pkg.source),
+      promptNames,
+      extensionNames,
+    });
+  }, [props.prompt, props.packages, props.slashCommands]);
 
   function syncPromptHighlightScroll(el: HTMLTextAreaElement | null) {
     const mirror = promptHighlightRef.current;
@@ -1371,11 +1381,7 @@ export function Composer(props: ComposerProps) {
             aria-hidden="true"
             data-testid="prompt-highlight"
           >
-            {promptHighlightSpans.map((span, index) => (
-              <span key={index} className={composerHighlightClass(span.kind)}>
-                {span.text}
-              </span>
-            ))}
+            {renderHighlightSpans(promptHighlightSpans, { overlay: true, locale: props.locale })}
             {/* Trailing newline keeps last empty line height in sync with the textarea. */}
             {"\n"}
           </div>

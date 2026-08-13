@@ -8,6 +8,7 @@ import {
   scenarioLiveQueue,
   scenarioPausedQueue,
   scenarioUserAttachments,
+  scenarioUserSpecialTokens,
 } from "./session-content-demo-fixtures.ts";
 
 describe("session content demo attachment coverage", () => {
@@ -30,6 +31,16 @@ describe("session content demo attachment coverage", () => {
     expect(userItem?.kind).toBe("user");
     if (userItem?.kind !== "user") throw new Error("User attachment fixture is missing");
     expect(userItem.attachments).toEqual(DEMO_USER_ATTACHMENT_PATHS);
+  });
+});
+
+describe("session content demo special tokens", () => {
+  it("includes an expanded skill user message for chip rendering", () => {
+    const userItem = scenarioUserSpecialTokens().items.find((item) => item.kind === "user");
+    expect(userItem?.kind).toBe("user");
+    if (userItem?.kind !== "user") throw new Error("Skill fixture is missing");
+    expect(userItem.text).toContain('<skill name="review"');
+    expect(userItem.text).toContain("请对照 @src/app.ts");
   });
 });
 

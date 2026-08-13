@@ -1,3 +1,5 @@
+import { compactUserMessageText } from "./composer-highlight.ts";
+
 /** Short label for a workspace path (directory name + optional parent). */
 export function workspaceLabel(path: string | undefined): { name: string; detail?: string } {
   if (!path) return { name: "" };
@@ -9,11 +11,12 @@ export function workspaceLabel(path: string | undefined): { name: string; detail
 }
 
 export function firstLine(text: string, max = 72): string {
+  const compact = compactUserMessageText(text);
   const line =
-    text
+    compact
       .split(/\r?\n/)
       .find((part) => part.trim())
-      ?.trim() ?? text.trim();
+      ?.trim() ?? compact.trim();
   if (line.length <= max) return line;
   return `${line.slice(0, max - 1)}…`;
 }

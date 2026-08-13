@@ -1,13 +1,45 @@
 /**
- * Tokenize composer prompt text for lightweight syntax highlighting
- * (links, @paths, slash commands / skills, shell injections).
+ * Tokenize composer / user-message text for special-content chips
+ * (skills, plugins, slash commands, @paths, links, shell injections).
+ *
+ * After send, pi expands `/skill:name` into a `<skill …>` block. Display
+ * surfaces collapse that back to a compact reference instead of the body.
  */
 
-export type ComposerHighlightKind = "text" | "url" | "mention" | "slash" | "skill" | "shell";
+export type ComposerHighlightKind =
+  | "text"
+  | "url"
+  | "mention"
+  | "package"
+  | "slash"
+  | "skill"
+  | "prompt"
+  | "extension"
+  | "shell";
 
 export interface ComposerHighlightSpan {
   kind: ComposerHighlightKind;
+  /** Raw source text (must stay in the composer overlay for caret alignment). */
   text: string;
+  /** Compact chip label when different from `text`. */
+  label?: string;
+}
+
+export interface ComposerHighlightOptions {
+  /** Installed package sources — `@source` becomes a plugin chip. */
+  packageSources?: readonly string[];
+  /** Prompt-template command names (without leading `/`). */
+  promptNames?: readonly string[];
+  /** Extension command names (without leading `/`). */
+  extensionNames?: readonly string[];
+}
+
+/** Parsed skill block from a persisted / host-echoed user message. */
+export interface ParsedSkillBlock {
+  name: string;
+  location: string;
+  content: string;
+  userMessage?: string;
 }
 
 const URL_TRAIL_PUNCT = new Set(".,;:!?)]}>'\"");
@@ -39,14 +71,18 @@ function canStartSpecial(input: string, index: number): boolean {
   return false;
 }
 
-function pushSpan(spans: ComposerHighlightSpan[], kind: ComposerHighlightKind, text: string): void {
-  if (!text) return;
+function pushSpan(spans: ComposerHighlightSpan[], span: ComposerHighlightSpan): void {
+  if (!span.text) return;
   const last = spans[spans.length - 1];
-  if (last && last.kind === kind) {
-    last.text += text;
+  if (last && last.kind === span.kind && last.kind === "text") {
+    last.text += span.text;
     return;
   }
-  spans.push({ kind, text });
+  if (last && last.kind === span.kind && last.label === span.label) {
+    last.text += span.text;
+    return;
+  }
+  spans.push(span);
 }
 
 function takeUrl(input: string, start: number): { end: number; url: string; trail: string } {
@@ -67,11 +103,108 @@ function takeUrl(input: string, start: number): { end: number; url: string; trai
   return { end, url, trail };
 }
 
+function basenameLabel(value: string): string {
+  const trimmed = value.replace(/[\\/]+$/, "");
+  const parts = trimmed.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) || value;
+}
+
+function packageLabel(value: string): string {
+  const stripped = value.replace(
+    /^(npm:|npx:|jsr:|pkg:|git\+|github:|gitlab:|bitbucket:|local:|file:)/i,
+    "",
+  );
+  if (stripped.startsWith("@") && stripped.includes("/")) return stripped;
+  return basenameLabel(stripped) || value;
+}
+
+/** npm:/git:/github: (and similar) package sources, not workspace paths. */
+export function looksLikePackageSource(value: string): boolean {
+  return /^(npm:|npx:|jsr:|pkg:|git\+|github:|gitlab:|bitbucket:|local:|file:)/i.test(value);
+}
+
+function slashKind(
+  name: string,
+  options: ComposerHighlightOptions | undefined,
+): Extract<ComposerHighlightKind, "slash" | "prompt" | "extension"> {
+  if (options?.promptNames?.includes(name)) return "prompt";
+  if (options?.extensionNames?.includes(name)) return "extension";
+  return "slash";
+}
+
+function mentionKind(
+  body: string,
+  options: ComposerHighlightOptions | undefined,
+): Extract<ComposerHighlightKind, "mention" | "package"> {
+  if (options?.packageSources?.includes(body) || looksLikePackageSource(body)) return "package";
+  return "mention";
+}
+
+export function composerTokenLabel(
+  span: Pick<ComposerHighlightSpan, "kind" | "text" | "label">,
+): string {
+  if (span.label) return span.label;
+  if (span.kind === "skill" && span.text.startsWith("/skill:")) {
+    return span.text.slice("/skill:".length) || span.text;
+  }
+  if (span.kind === "slash" || span.kind === "prompt" || span.kind === "extension") {
+    return span.text.replace(/^\//, "") || span.text;
+  }
+  if (span.kind === "package") {
+    return packageLabel(span.text.replace(/^@/, "")) || span.text;
+  }
+  if (span.kind === "mention") {
+    return basenameLabel(span.text.replace(/^@/, "")) || span.text;
+  }
+  if (span.kind === "shell") {
+    return span.text.replace(/^!!?/, "").trim() || span.text;
+  }
+  return span.text;
+}
+
+/**
+ * Use a compact chip face over a hidden sizer when the label is shorter
+ * than the raw token. Keeps textarea caret alignment.
+ */
+export function shouldUseChipFace(span: ComposerHighlightSpan): boolean {
+  if (span.kind === "text" || span.kind === "url" || span.kind === "shell") return false;
+  const label = composerTokenLabel(span);
+  return label.length > 0 && label.length + 3 < span.text.length;
+}
+
+/**
+ * Parse a pi-expanded skill block from message text.
+ * Matches AgentSession._expandSkillCommand / parseSkillBlock.
+ */
+export function parseSkillBlock(text: string): ParsedSkillBlock | null {
+  const match = text.match(
+    /^<skill name="([^"]+)" location="([^"]+)">\r?\n([\s\S]*?)\r?\n<\/skill>(?:\r?\n\r?\n([\s\S]+))?$/,
+  );
+  if (!match) return null;
+  const userMessage = match[4]?.trim();
+  return {
+    name: match[1] ?? "",
+    location: match[2] ?? "",
+    content: match[3] ?? "",
+    ...(userMessage ? { userMessage } : {}),
+  };
+}
+
+/** Restore the user-facing `/skill:name …` form (copy, edit, titles, queue). */
+export function compactUserMessageText(text: string): string {
+  const skill = parseSkillBlock(text);
+  if (!skill) return text;
+  return skill.userMessage ? `/skill:${skill.name} ${skill.userMessage}` : `/skill:${skill.name}`;
+}
+
 /**
  * Split prompt into highlight spans. Adjacent same-kind spans are merged.
  * Empty input yields a single empty text span (stable for render).
  */
-export function tokenizeComposerHighlight(input: string): ComposerHighlightSpan[] {
+export function tokenizeComposerHighlight(
+  input: string,
+  options?: ComposerHighlightOptions,
+): ComposerHighlightSpan[] {
   if (!input) return [{ kind: "text", text: "" }];
 
   const spans: ComposerHighlightSpan[] = [];
@@ -84,7 +217,12 @@ export function tokenizeComposerHighlight(input: string): ComposerHighlightSpan[
       if (input.startsWith("!!", i) || input.charAt(i + 1) !== "=") {
         let end = i;
         while (end < n && input.charAt(end) !== "\n") end += 1;
-        pushSpan(spans, "shell", input.slice(i, end));
+        const text = input.slice(i, end);
+        pushSpan(spans, {
+          kind: "shell",
+          text,
+          label: composerTokenLabel({ kind: "shell", text }),
+        });
         i = end;
         continue;
       }
@@ -93,29 +231,37 @@ export function tokenizeComposerHighlight(input: string): ComposerHighlightSpan[
     // http(s) URL
     if (input.startsWith("http://", i) || input.startsWith("https://", i)) {
       const { end, url, trail } = takeUrl(input, i);
-      if (url) pushSpan(spans, "url", url);
-      if (trail) pushSpan(spans, "text", trail);
+      if (url) pushSpan(spans, { kind: "url", text: url });
+      if (trail) pushSpan(spans, { kind: "text", text: trail });
       i = end;
       continue;
     }
 
-    // @path / @file mention
+    // @path / @package mention
     if (input.charAt(i) === "@" && isBoundaryBefore(input, i)) {
       let end = i + 1;
       while (end < n && !/\s/u.test(input.charAt(end))) end += 1;
       if (end > i + 1) {
-        pushSpan(spans, "mention", input.slice(i, end));
+        const text = input.slice(i, end);
+        const body = text.slice(1);
+        const kind = mentionKind(body, options);
+        pushSpan(spans, { kind, text, label: composerTokenLabel({ kind, text }) });
         i = end;
         continue;
       }
     }
 
-    // /slash or /skill:name
+    // /slash, /skill:name, prompt, extension
     if (input.charAt(i) === "/" && isBoundaryBefore(input, i)) {
       if (input.startsWith("/skill:", i)) {
         let end = i + "/skill:".length;
         while (end < n && !/\s/u.test(input.charAt(end))) end += 1;
-        pushSpan(spans, "skill", input.slice(i, end));
+        const text = input.slice(i, end);
+        pushSpan(spans, {
+          kind: "skill",
+          text,
+          label: composerTokenLabel({ kind: "skill", text }),
+        });
         i = end;
         continue;
       }
@@ -123,7 +269,10 @@ export function tokenizeComposerHighlight(input: string): ComposerHighlightSpan[
       if (next && /[A-Za-z0-9]/u.test(next)) {
         let end = i + 1;
         while (end < n && /[A-Za-z0-9:_./-]/u.test(input.charAt(end))) end += 1;
-        pushSpan(spans, "slash", input.slice(i, end));
+        const text = input.slice(i, end);
+        const name = text.slice(1);
+        const kind = slashKind(name, options);
+        pushSpan(spans, { kind, text, label: composerTokenLabel({ kind, text }) });
         i = end;
         continue;
       }
@@ -132,7 +281,7 @@ export function tokenizeComposerHighlight(input: string): ComposerHighlightSpan[
     // Plain text until the next special token.
     let end = i + 1;
     while (end < n && !canStartSpecial(input, end)) end += 1;
-    pushSpan(spans, "text", input.slice(i, end));
+    pushSpan(spans, { kind: "text", text: input.slice(i, end) });
     i = end;
   }
 

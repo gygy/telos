@@ -8,6 +8,7 @@
  */
 import type { QueuedMessages } from "@pix/contracts";
 import { ListTodo } from "lucide-react";
+import { compactUserMessageText } from "../lib/composer-highlight.ts";
 import { t, type Locale } from "../lib/i18n.ts";
 import { cn } from "../lib/utils.ts";
 
@@ -19,7 +20,8 @@ export type ComposerQueueItem = {
 };
 
 function queuedMessagePreview(message: string): string {
-  return message.split("\n\n<attached-paths>", 1)[0]?.trim() || message.trim();
+  const withoutAttach = message.split("\n\n<attached-paths>", 1)[0] ?? message;
+  return compactUserMessageText(withoutAttach).trim() || message.trim();
 }
 
 export function flattenQueuedMessages(queued: QueuedMessages): ComposerQueueItem[] {

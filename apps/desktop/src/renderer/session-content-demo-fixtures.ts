@@ -546,10 +546,49 @@ export function scenarioPausedQueue(): DemoScenario {
   };
 }
 
+/** User message with an expanded skill block + other special tokens. */
+export function scenarioUserSpecialTokens(): DemoScenario {
+  const skillBody = [
+    '<skill name="review" location="/work/pix-demo-project/.agents/skills/review/SKILL.md">',
+    "References are relative to /work/pix-demo-project/.agents/skills/review.",
+    "",
+    "# Review",
+    "",
+    "Read every changed file and report regressions.",
+    "</skill>",
+    "",
+    "请对照 @src/app.ts 和 https://example.com/docs 检查 /reload 之后的行为",
+  ].join("\n");
+
+  return {
+    id: "user-special-tokens",
+    title: "用户消息 · 技能 / 引用",
+    description:
+      "发送 /skill:review 后历史里是展开的 <skill> 正文；时间线应显示技能 chip + 用户补充，而不是完整 SKILL.md。",
+    items: [
+      {
+        id: "u-skill",
+        kind: "user",
+        text: skillBody,
+        timestamp: iso(90),
+        entryId: "e-u-skill",
+      },
+      {
+        id: "asst-skill",
+        kind: "assistant",
+        text: "已按 review 技能检查 app.ts。",
+        timestamp: iso(91),
+        entryId: "e-asst-skill",
+      },
+    ],
+  };
+}
+
 export function allDemoScenarios(): DemoScenario[] {
   return [
     scenarioCompletedTurn(),
     scenarioUserAttachments(),
+    scenarioUserSpecialTokens(),
     scenarioLiveExecuting(),
     scenarioLiveResponding(),
     scenarioLiveQueue(),

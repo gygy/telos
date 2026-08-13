@@ -30,6 +30,31 @@ describe("TimelineRow user message", () => {
     expect(bubble).toBeLessThan(footer);
   });
 
+  it("renders expanded skill blocks as a compact chip plus the user remainder", () => {
+    const html = renderUser({
+      id: "user-skill",
+      kind: "user",
+      text: [
+        '<skill name="review" location="/tmp/skills/review/SKILL.md">',
+        "References are relative to /tmp/skills/review.",
+        "",
+        "# Review",
+        "Read the entire SKILL.md body.",
+        "</skill>",
+        "",
+        "please inspect @src/app.ts",
+      ].join("\n"),
+    });
+
+    expect(html).toContain('data-slot="prompt-token"');
+    expect(html).toContain('data-kind="skill"');
+    expect(html).toContain("review");
+    expect(html).toContain("please inspect");
+    expect(html).toContain("app.ts");
+    expect(html).not.toContain("Read the entire SKILL.md body.");
+    expect(html).not.toContain("&lt;skill");
+  });
+
   it("keeps image attachment names accessible without rendering a visible title", () => {
     const html = renderUser({
       id: "user-image",

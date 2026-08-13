@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   belongsInConversationsSection,
   filterRecentWorkspaces,
+  firstLine,
   isAutoDefaultWorkspacePath,
   isConversationWorkspacePath,
   isEphemeralWorkspacePath,
@@ -18,6 +19,14 @@ describe("workspace helpers", () => {
   it("labels paths for the sidebar chip", () => {
     expect(workspaceLabel("/Users/me/code/pix")).toEqual({ name: "pix", detail: "code" });
     expect(workspaceLabel(undefined).name).toBe("");
+  });
+
+  it("compacts expanded skill blocks when taking the first line", () => {
+    expect(
+      firstLine(
+        '<skill name="review" location="/tmp/SKILL.md">\n# long body\n</skill>\n\nplease inspect',
+      ),
+    ).toBe("/skill:review please inspect");
   });
 
   it("prepends and dedupes recent workspace paths", () => {

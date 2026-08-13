@@ -53,8 +53,10 @@ import {
   isPreviewableImagePath,
   type AttachmentKind,
 } from "../lib/composer-suggestions.ts";
+import { compactUserMessageText } from "../lib/composer-highlight.ts";
 import { formatWorkspaceRelativePath } from "../lib/content-rendering.ts";
 import { t, type Locale, type MessageKey } from "../lib/i18n.ts";
+import { UserMessageText } from "./PromptTokenChip.tsx";
 import {
   classifyToolName,
   extractCommandFromArgs,
@@ -496,13 +498,13 @@ export const TimelineRow = memo(function TimelineRow(props: {
 }) {
   const { item } = props;
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.kind === "user" ? item.text : "");
+  const [draft, setDraft] = useState(item.kind === "user" ? compactUserMessageText(item.text) : "");
   const [copied, setCopied] = useState(false);
   const editRootRef = useRef<HTMLDivElement | null>(null);
   const editActionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (item.kind === "user") setDraft(item.text);
+    if (item.kind === "user") setDraft(compactUserMessageText(item.text));
   }, [item]);
 
   /**
@@ -598,7 +600,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
                 className="timeline-user-edit-cancel"
                 disabled={props.editingLocked}
                 onClick={() => {
-                  setDraft(item.text);
+                  setDraft(compactUserMessageText(item.text));
                   setEditing(false);
                 }}
               >
@@ -633,7 +635,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
           {item.text ? (
             <Bubble align="end" variant="secondary">
               <BubbleContent>
-                <p className="m-0 whitespace-pre-wrap">{item.text}</p>
+                <UserMessageText text={item.text} locale={props.locale} />
               </BubbleContent>
             </Bubble>
           ) : null}
@@ -643,7 +645,9 @@ export const TimelineRow = memo(function TimelineRow(props: {
               locale={props.locale}
               order={["time", "copy", "edit"]}
               {...(item.timestamp ? { time: item.timestamp } : {})}
-              {...(item.text ? { onCopy: () => void handleCopy(item.text) } : {})}
+              {...(item.text
+                ? { onCopy: () => void handleCopy(compactUserMessageText(item.text)) }
+                : {})}
               {...(props.onEditUser ? { onEdit: () => setEditing(true) } : {})}
               copied={copied}
             />
