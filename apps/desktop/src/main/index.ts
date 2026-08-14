@@ -75,7 +75,13 @@ import {
   pickParkedEvictionKey,
   shouldParkForeground,
 } from "./host-park-policy.ts";
+import {
+  formatHostExitError,
+  resolveAgentHostEntry,
+  sanitizeUtilityProcessEnv,
+} from "./host-spawn.ts";
 import { createAutoUpdateController, type AutoUpdateController } from "./auto-update.ts";
+import { ensureExtractedPiCli, piCliExtractDir } from "./pi-cli-extract.ts";
 import { ensurePiCli, type PiCliProgressEvent } from "./pi-cli-ensure.ts";
 import {
   buildPiSdkActivity,
@@ -196,6 +202,15 @@ let piTuiControllerInit: Promise<PiTuiPtyController> | undefined;
 let appliedPiSdkSource: "builtin" | "global" = "builtin";
 let cachedBuiltinSdk: ResolvedPiSdk | undefined;
 let cachedGlobalSdk: ResolvedPiSdk | undefined;
+let piCliExtractInFlight: Promise<void> | undefined;
+
+function desktopUserDataPath(): string {
+  try {
+    return app.getPath("userData");
+  } catch {
+    return join(homedir(), ".pix-runtimes-fallback");
+  }
+}
 
 function resolveBuiltinSdkCached(): ResolvedPiSdk {
   if (cachedBuiltinSdk) return cachedBuiltinSdk;
@@ -203,6 +218,7 @@ function resolveBuiltinSdkCached(): ResolvedPiSdk {
     mainModuleUrl?: string;
     appPath?: string;
     resourcesPath?: string;
+    extractedRoot?: string;
   } = { mainModuleUrl: import.meta.url };
   try {
     if (app.isReady()) opts.appPath = app.getAppPath();
@@ -212,8 +228,37 @@ function resolveBuiltinSdkCached(): ResolvedPiSdk {
   if (typeof process.resourcesPath === "string" && process.resourcesPath) {
     opts.resourcesPath = process.resourcesPath;
   }
+  const extracted = piCliExtractDir(desktopUserDataPath());
+  if (existsSync(extracted)) opts.extractedRoot = extracted;
   cachedBuiltinSdk = resolveBuiltinSdk(opts);
   return cachedBuiltinSdk;
+}
+
+function ensurePiCliExtracted(): Promise<void> {
+  if (!app.isPackaged) return Promise.resolve();
+  if (piCliExtractInFlight) return piCliExtractInFlight;
+  piCliExtractInFlight = Promise.resolve()
+    .then(() => {
+      const resources =
+        typeof process.resourcesPath === "string" && process.resourcesPath
+          ? process.resourcesPath
+          : "";
+      if (!resources) return;
+      const result = ensureExtractedPiCli({
+        userDataPath: desktopUserDataPath(),
+        asarPath: join(resources, "app.asar"),
+      });
+      if (result?.extractedNow) {
+        cachedBuiltinSdk = undefined;
+        console.log(
+          `[pix] extracted builtin pi CLI ${result.version ?? ""} → ${result.root}`.trim(),
+        );
+      }
+    })
+    .catch((error) => {
+      console.warn("[pix] builtin pi CLI extract failed:", error);
+    });
+  return piCliExtractInFlight;
 }
 
 async function resolveGlobalSdkCached(force = false): Promise<ResolvedPiSdk> {
@@ -283,6 +328,7 @@ async function getPiTuiController(): Promise<PiTuiPtyController> {
   if (piTuiController) return piTuiController;
   if (!piTuiControllerInit) {
     piTuiControllerInit = (async () => {
+      await ensurePiCliExtracted();
       const spawn = await createNodePtySpawn();
       const controller = new PiTuiPtyController(spawn, async () => {
         const preference = getPiSdkPrefs();
@@ -2158,6 +2204,7 @@ interface ActiveHost {
   exit: Deferred<number>;
   ignoreMessages: boolean;
   stopping: boolean;
+  stderr: string;
 }
 
 type PendingWaiter = {
@@ -3958,9 +4005,9 @@ class HostSupervisor {
   }
 
   #spawnWithEnv(env: Record<string, string>): ActiveHost {
-    const hostEntry = join(currentDirectory, "..", "agent-host", "agent-host.mjs");
+    const hostEntry = resolveAgentHostEntry(currentDirectory);
     const child = utilityProcess.fork(hostEntry, [], {
-      env,
+      env: sanitizeUtilityProcessEnv(env),
       serviceName: "Pix Agent Host",
       stdio: "pipe",
     });
@@ -3971,17 +4018,20 @@ class HostSupervisor {
       exit: deferred<number>(),
       ignoreMessages: false,
       stopping: false,
+      stderr: "",
     };
     this.#host = host;
 
-    // Surface host stdout/stderr so "exited with code 0" failures are diagnosable.
+    // Surface host stdout/stderr so "exited with code 1" failures are diagnosable.
     child.stdout?.on("data", (chunk: Buffer | string) => {
       const text = String(chunk).trim();
       if (text) console.log(`[agent-host:${host.hostId.slice(0, 8)}] ${text}`);
     });
     child.stderr?.on("data", (chunk: Buffer | string) => {
-      const text = String(chunk).trim();
-      if (text) console.warn(`[agent-host:${host.hostId.slice(0, 8)}] ${text}`);
+      const text = String(chunk);
+      host.stderr = `${host.stderr}${text}`.slice(-8000);
+      const trimmed = text.trim();
+      if (trimmed) console.warn(`[agent-host:${host.hostId.slice(0, 8)}] ${trimmed}`);
     });
 
     child.on("message", (message) => {
@@ -4086,65 +4136,70 @@ class HostSupervisor {
     child.on("exit", (code) => {
       const exitCode = code ?? -1;
       host.exit.resolve(exitCode);
-      const parked = this.#findParkedByHost(host);
-      if (parked) {
-        this.#parked.delete(parked.sessionKey);
-        for (const [key, value] of this.#parked) {
-          if (value === parked) this.#parked.delete(key);
-        }
-        const error = host.stopping
-          ? new Error("Agent Host was replaced or stopped")
-          : new Error(`Agent Host exited with code ${exitCode}`);
-        host.hello.reject(error);
-        for (const waiter of parked.pending.values()) {
-          clearPendingTimeout(waiter);
-          waiter.reject(error);
-        }
-        parked.pending.clear();
-        if (!host.stopping) {
-          const crashed: HostEvent = {
-            protocolVersion: IPC_PROTOCOL_VERSION,
-            type: "host.crashed",
-            hostId: host.hostId,
-            exitCode,
-            message: `Background Agent Host exited unexpectedly with code ${exitCode}`,
-          };
-          if (parked.snapshot.runtimeId) crashed.runtimeId = parked.snapshot.runtimeId;
-          this.#emit(crashed);
-        }
-        return;
-      }
-      if (this.#host !== host) return;
-      this.#host = undefined;
-      const runtimeId = this.#snapshot?.runtimeId;
-      // Crash recovery may continue the same session file. Intentional stop / workspace
-      // switch must not re-pin the previous session onto the next start.
-      if (!host.stopping && this.#snapshot?.sessionFile) {
-        this.#sessionFile = this.#snapshot.sessionFile;
-      }
-      this.#snapshot = undefined;
-      this.#lastSequence = 0;
-      // Intentional stop/replace: pending callers should fail softly; Windows kill often is code 0.
-      const error = host.stopping
-        ? new Error("Agent Host was replaced or stopped")
-        : new Error(`Agent Host exited with code ${exitCode}`);
-      host.hello.reject(error);
-      this.#rejectPending(error);
+      const finalize = () => this.#onHostProcessExit(host, exitCode);
+      // Unexpected exits often flush stderr after the exit event — wait a tick.
+      if (host.stopping) finalize();
+      else setTimeout(finalize, 50);
+    });
+    return host;
+  }
 
+  #onHostProcessExit(host: ActiveHost, exitCode: number): void {
+    const parked = this.#findParkedByHost(host);
+    const error = host.stopping
+      ? new Error("Agent Host was replaced or stopped")
+      : formatHostExitError(exitCode, host.stderr);
+    if (parked) {
+      this.#parked.delete(parked.sessionKey);
+      for (const [key, value] of this.#parked) {
+        if (value === parked) this.#parked.delete(key);
+      }
+      host.hello.reject(error);
+      for (const waiter of parked.pending.values()) {
+        clearPendingTimeout(waiter);
+        waiter.reject(error);
+      }
+      parked.pending.clear();
       if (!host.stopping) {
-        if (runtimeId) this.#previousRuntimeId = runtimeId;
         const crashed: HostEvent = {
           protocolVersion: IPC_PROTOCOL_VERSION,
           type: "host.crashed",
           hostId: host.hostId,
           exitCode,
-          message: `Agent Host exited unexpectedly with code ${exitCode}`,
+          message: `Background Agent Host exited unexpectedly with code ${exitCode}`,
         };
-        if (runtimeId) crashed.runtimeId = runtimeId;
+        if (host.stderr.trim()) crashed.message = error.message;
+        if (parked.snapshot.runtimeId) crashed.runtimeId = parked.snapshot.runtimeId;
         this.#emit(crashed);
       }
-    });
-    return host;
+      return;
+    }
+    if (this.#host !== host) return;
+    this.#host = undefined;
+    const runtimeId = this.#snapshot?.runtimeId;
+    // Crash recovery may continue the same session file. Intentional stop / workspace
+    // switch must not re-pin the previous session onto the next start.
+    if (!host.stopping && this.#snapshot?.sessionFile) {
+      this.#sessionFile = this.#snapshot.sessionFile;
+    }
+    this.#snapshot = undefined;
+    this.#lastSequence = 0;
+    // Intentional stop/replace: pending callers should fail softly; Windows kill often is code 0.
+    host.hello.reject(error);
+    this.#rejectPending(error);
+
+    if (!host.stopping) {
+      if (runtimeId) this.#previousRuntimeId = runtimeId;
+      const crashed: HostEvent = {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "host.crashed",
+        hostId: host.hostId,
+        exitCode,
+        message: error.message,
+      };
+      if (runtimeId) crashed.runtimeId = runtimeId;
+      this.#emit(crashed);
+    }
   }
 
   #acceptSnapshot(snapshot: HostSnapshot): void {
@@ -4641,6 +4696,7 @@ void app
   .then(async () => {
     // Name + About/Dock icon (must be after ready for About panel iconPath on some builds).
     applyAppBranding();
+    void ensurePiCliExtracted();
     themeLibrary = new ThemeLibrary(app.getPath("userData"));
     protocol.handle("pix-theme", async (request) => {
       try {

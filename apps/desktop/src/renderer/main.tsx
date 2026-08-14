@@ -27,6 +27,7 @@ import { CommandPalette } from "./components/CommandPalette.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ErrorDialog } from "./components/ErrorDialog.tsx";
+import { unwrapRemoteIpcError } from "../shared/ipc-error.ts";
 import { ExtensionUiChrome } from "./components/ExtensionUiChrome.tsx";
 import { ExtensionUiHost } from "./components/ExtensionUiHost.tsx";
 import { ProjectTrustDialog } from "./components/ProjectTrustDialog.tsx";
@@ -153,7 +154,8 @@ applyAppearancePrefs();
 
 /** Surface app-level errors as a modal (agent timeline errors stay in-chat). */
 function reportAppError(error: unknown, fallback: string): string {
-  const message = error instanceof Error && error.message.trim() ? error.message : fallback;
+  const raw = error instanceof Error && error.message.trim() ? error.message : fallback;
+  const message = unwrapRemoteIpcError(raw);
   useShellStore.getState().showAppError(message);
   return message;
 }
