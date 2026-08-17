@@ -1029,8 +1029,15 @@ function App() {
             .catch(() => undefined);
         } else if (event.type === "runtime.event") {
           const delivery = classifyRuntimeEventDelivery(store, event);
-          // Background (parked) hosts only surface terminal events for sidebar markers.
+          // Background (parked) hosts stay first-class: fold into that session's
+          // live stream and keep sidebar markers current. Do not touch foreground.
           if (delivery === "stale-runtime") {
+            const parkedKey = store.sessionKeyForRuntime(event.runtimeId);
+            if (parkedKey) {
+              store.applySessionLiveStreamEvent(parkedKey, event.event, store.sentPrompts, {
+                sequence: event.sequence,
+              });
+            }
             if (event.event.type === "agent.settled") {
               // Background / parked host — always mark unread if not the open thread.
               maybeMarkUnreadForRuntime(event.runtimeId);
@@ -1074,6 +1081,19 @@ function App() {
                 if (key) {
                   store.setSessionMarker(key, "running", { runtimeId: event.runtimeId });
                 }
+              }
+            } else if (event.event.type === "tool.started") {
+              const key = parkedKey ?? store.sessionKeyForRuntime(event.runtimeId);
+              if (key) {
+                store.setSessionMarker(key, "running", {
+                  runtimeId: event.runtimeId,
+                  reason: event.event.toolName,
+                });
+              }
+            } else if (event.event.type === "compaction.started") {
+              const key = parkedKey ?? store.sessionKeyForRuntime(event.runtimeId);
+              if (key) {
+                store.setSessionMarker(key, "running", { runtimeId: event.runtimeId });
               }
             }
             // Ignore background agent.started — re-binding can re-light finished rows.
@@ -2198,6 +2218,7 @@ function App() {
     setStatus(options?.resumeRecent ? `Resuming ${cwd}…` : `Opening workspace ${cwd}…`);
     setEvents([]);
     setSentPrompts([]);
+    useShellStore.getState().stashForegroundLiveStream();
     useShellStore.getState().setHistory([]);
     useShellStore.getState().clearLiveStream();
     // Promote the project we are leaving into recent *before* clearing selection,
@@ -2431,6 +2452,7 @@ function App() {
     setSentPrompts([]);
     setLastFailure(undefined);
     setAttachments([]);
+    useShellStore.getState().stashForegroundLiveStream();
     useShellStore.getState().setHistory([]);
     useShellStore.getState().clearLiveStream();
 
@@ -2538,6 +2560,7 @@ function App() {
           setSentPrompts([]);
           setLastFailure(undefined);
           setAttachments([]);
+          useShellStore.getState().stashForegroundLiveStream();
           useShellStore.getState().setHistory([]);
           useShellStore.getState().clearLiveStream();
           selectWorkspacePath(target);
@@ -2622,6 +2645,7 @@ function App() {
         setThreads([]);
         setEvents([]);
         setSentPrompts([]);
+        useShellStore.getState().stashForegroundLiveStream();
         useShellStore.getState().setHistory([]);
         useShellStore.getState().clearLiveStream();
         setModelOptions([]);
@@ -2777,6 +2801,7 @@ function App() {
     setEvents([]);
     setSentPrompts([]);
     // Drop prior history so empty chrome cannot paint even if ready flips early.
+    useShellStore.getState().stashForegroundLiveStream();
     useShellStore.getState().setHistory([]);
     useShellStore.getState().clearLiveStream();
     try {
