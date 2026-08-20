@@ -2280,7 +2280,7 @@ export function Composer(props: ComposerProps) {
         minWidth={220}
         className="flex w-[min(15rem,calc(100vw-2rem))] flex-col !overflow-hidden !py-0"
       >
-        <div className="pix-scroll min-h-0 flex-1 overscroll-contain max-h-[min(320px,calc(100vh-14rem))] py-1">
+        <div className="pix-scroll min-h-0 flex-1 overscroll-contain max-h-[min(320px,calc(100vh-14rem))]">
           {modelGroups.length === 0 ? (
             <p className="px-2.5 py-1.5 text-left text-[13px] text-[var(--text-subtle)]">
               {tr("composer.model.none")}

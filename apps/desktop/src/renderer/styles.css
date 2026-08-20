@@ -1851,14 +1851,30 @@ html[data-custom-window-controls="true"] .page-header {
 .composer-model-group {
   padding-bottom: 0.15rem;
 }
+.composer-model-group:last-child {
+  padding-bottom: 0.35rem;
+}
 .composer-model-group-label {
   position: sticky;
   top: 0;
-  z-index: 1;
-  padding: 0.4rem 0.625rem 0.2rem;
+  z-index: 2;
+  /* Top padding keeps title text below the 12px panel radius when stuck. */
+  padding: 0.6rem 0.625rem 0.25rem;
   /* type from .group-label */
   background: var(--surface-panel);
   text-align: left;
+}
+/*
+ * Cover the rounded clip / leftover row that otherwise peeks above a stuck
+ * heading (Windows overlay scroll + overflow:hidden radius).
+ */
+.composer-model-group-label::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: -0.75rem;
+  height: 0.75rem;
+  background: var(--surface-panel);
 }
 
 /* Shared panel surface (env panel, dialogs, menus). */
