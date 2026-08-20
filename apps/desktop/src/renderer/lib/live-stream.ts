@@ -238,9 +238,11 @@ export function applyRuntimeEventToLiveStream(
           items[i] = {
             ...row,
             status: event.isError ? "error" : "completed",
-            output: event.output || (event.isError ? "Tool failed" : "Done"),
+            output:
+              event.output || (event.isError ? "Tool failed" : event.images?.length ? "" : "Done"),
             toolName: event.toolName || row.toolName,
             ...(event.details !== undefined ? { details: event.details } : {}),
+            ...(event.images?.length ? { images: event.images } : {}),
           };
           found = true;
           break;
@@ -254,8 +256,10 @@ export function applyRuntimeEventToLiveStream(
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         status: event.isError ? "error" : "completed",
-        output: event.output || (event.isError ? "Tool failed" : "Done"),
+        output:
+          event.output || (event.isError ? "Tool failed" : event.images?.length ? "" : "Done"),
         ...(event.details !== undefined ? { details: event.details } : {}),
+        ...(event.images?.length ? { images: event.images } : {}),
         timestamp: nowIso(),
       });
       return mark({ ...state, items, seq });

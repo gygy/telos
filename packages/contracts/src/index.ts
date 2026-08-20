@@ -323,6 +323,8 @@ export type RuntimeEvent =
       isError: boolean;
       /** Tool-specific payload (e.g. edit `details.diff` with file line numbers). */
       details?: unknown;
+      /** Structured image blocks or local image artifacts produced by the tool. */
+      images?: SessionImage[];
     }
   | {
       type: "shell.completed";
@@ -415,6 +417,19 @@ export interface SessionThreadSummary {
   parentSessionPath?: string;
 }
 
+/** Image media projected from message content or a local tool artifact. */
+export type SessionImage =
+  | {
+      mimeType: string;
+      dataUrl: string;
+      path?: never;
+    }
+  | {
+      mimeType?: string;
+      path: string;
+      dataUrl?: never;
+    };
+
 /** History used to rebuild the timeline after open/switch/new/fork. */
 export interface SessionHistoryMessage {
   role: "user" | "assistant" | "thinking" | "tool" | "system" | "shell";
@@ -422,6 +437,8 @@ export interface SessionHistoryMessage {
   toolName?: string;
   isError?: boolean;
   command?: string;
+  /** Structured image content or a local image artifact associated with this row. */
+  images?: SessionImage[];
   /** Tool call args when persisted on the session message (for process-row previews). */
   args?: unknown;
   /**
@@ -1751,10 +1768,14 @@ export interface PixDesktopApi {
      */
     saveClipboardImage(options?: { bytes?: number[]; ext?: string }): Promise<string | undefined>;
     /**
-     * Thumbnail data URL for local image attachments (composer / timeline preview).
-     * Returns undefined for non-images or unreadable paths.
+     * Data URL for a local image.
+     * Default maxEdge is a thumbnail (composer / attachment chips).
+     * Pass a larger maxEdge for in-timeline markdown / content display.
      */
-    readAttachmentPreview(path: string): Promise<string | undefined>;
+    readAttachmentPreview(
+      path: string,
+      options?: { maxEdge?: number },
+    ): Promise<string | undefined>;
     /**
      * Ensure a default project folder under Documents/Pix/YYYY-MM-DD
      * (reuse today's folder if it already exists). Returns absolute path.
@@ -2098,6 +2119,29 @@ function hasEnvelope(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isSessionImage(value: unknown): value is SessionImage {
+  if (!isRecord(value)) return false;
+  if (typeof value.dataUrl === "string") {
+    return (
+      typeof value.mimeType === "string" &&
+      Boolean(value.mimeType.trim()) &&
+      value.dataUrl.startsWith("data:image/") &&
+      value.path === undefined
+    );
+  }
+  return (
+    typeof value.path === "string" &&
+    Boolean(value.path.trim()) &&
+    value.dataUrl === undefined &&
+    (value.mimeType === undefined ||
+      (typeof value.mimeType === "string" && Boolean(value.mimeType.trim())))
+  );
+}
+
+function isSessionImageArray(value: unknown): value is SessionImage[] {
+  return Array.isArray(value) && value.every(isSessionImage);
 }
 
 function isModelSelector(value: unknown): boolean {
@@ -2510,7 +2554,8 @@ function isRuntimeEvent(value: unknown): value is RuntimeEvent {
         typeof value.toolCallId === "string" &&
         typeof value.toolName === "string" &&
         typeof value.output === "string" &&
-        typeof value.isError === "boolean"
+        typeof value.isError === "boolean" &&
+        (value.images === undefined || isSessionImageArray(value.images))
         // details is optional free-form tool payload
       );
     case "shell.completed":
@@ -2746,6 +2791,7 @@ function isSessionHistoryMessage(value: unknown): value is SessionHistoryMessage
   if (value.title !== undefined && typeof value.title !== "string") return false;
   if (value.entryId !== undefined && typeof value.entryId !== "string") return false;
   if (value.timestamp !== undefined && typeof value.timestamp !== "string") return false;
+  if (value.images !== undefined && !isSessionImageArray(value.images)) return false;
   return true;
 }
 

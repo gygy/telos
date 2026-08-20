@@ -76,6 +76,47 @@ describe("host contract validation", () => {
         event: { type: "queue.updated", steering: ["guide"], followUp: ["later"] },
       }),
     ).toBe(true);
+    expect(
+      isHostEvent({
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "runtime.event",
+        runtimeId: "runtime-1",
+        sequence: 6,
+        event: {
+          type: "tool.completed",
+          toolCallId: "call-img",
+          toolName: "read",
+          output: "",
+          isError: false,
+          images: [
+            {
+              mimeType: "image/png",
+              dataUrl: "data:image/png;base64,aaaa",
+            },
+            {
+              mimeType: "image/gif",
+              path: "output/animation.gif",
+            },
+          ],
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isHostEvent({
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        type: "runtime.event",
+        runtimeId: "runtime-1",
+        sequence: 7,
+        event: {
+          type: "tool.completed",
+          toolCallId: "call-img",
+          toolName: "read",
+          output: "",
+          isError: false,
+          images: [{ mimeType: "image/png", dataUrl: "https://evil.example/x.png" }],
+        },
+      }),
+    ).toBe(false);
   });
 
   it("accepts persistent starts and crash lifecycle diagnostics", () => {

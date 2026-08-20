@@ -207,6 +207,79 @@ describe("session history projection", () => {
     ]);
   });
 
+  it("projects image content parts onto user, assistant, and tool history", () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const image = { type: "image" as const, data: png, mimeType: "image/png" };
+    expect(
+      projectSessionHistory(
+        [
+          {
+            role: "user",
+            content: [{ type: "text", text: "look" }, image],
+          },
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "inspect" },
+              { type: "text", text: "here" },
+              image,
+            ],
+          },
+          {
+            role: "toolResult",
+            toolName: "read",
+            content: [image],
+          },
+        ],
+        ["u1", "a1", "t1"],
+      ),
+    ).toEqual([
+      {
+        role: "user",
+        text: "look",
+        entryId: "u1",
+        images: [{ mimeType: "image/png", dataUrl: `data:image/png;base64,${png}` }],
+      },
+      { role: "thinking", text: "inspect", entryId: "a1" },
+      {
+        role: "assistant",
+        text: "here",
+        entryId: "a1",
+        images: [{ mimeType: "image/png", dataUrl: `data:image/png;base64,${png}` }],
+      },
+      {
+        role: "tool",
+        text: "Tool result",
+        toolName: "read",
+        isError: false,
+        entryId: "t1",
+      },
+    ]);
+  });
+
+  it("rebuilds local image artifacts from persisted tool metadata", () => {
+    expect(
+      projectSessionHistory([
+        {
+          role: "toolResult",
+          toolName: "write",
+          args: { path: "output/v10.gif" },
+          content: [{ type: "text", text: "wrote image" }],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: "tool",
+        text: "wrote image",
+        toolName: "write",
+        isError: false,
+        args: { path: "output/v10.gif" },
+        images: [{ path: "output/v10.gif", mimeType: "image/gif" }],
+      },
+    ]);
+  });
+
   it("prefers getBranch so abandoned siblings are not shown after navigateTree", () => {
     const allEntries = [
       {

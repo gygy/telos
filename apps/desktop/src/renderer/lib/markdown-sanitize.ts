@@ -38,5 +38,12 @@ export const markdownSanitizeSchema: SanitizeSchema = {
     th: [...(defaultSchema.attributes?.th ?? []), "align", "colSpan", "rowSpan", "scope", "width"],
     td: [...(defaultSchema.attributes?.td ?? []), "align", "colSpan", "rowSpan", "width"],
     div: [...(defaultSchema.attributes?.div ?? []), ["className", "content-table-scroll"]],
+    img: [...(defaultSchema.attributes?.img ?? []), "src", "alt", "title"],
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    src: Array.from(
+      new Set([...(defaultSchema.protocols?.src ?? []), "http", "https", "data", "file"]),
+    ),
   },
 };

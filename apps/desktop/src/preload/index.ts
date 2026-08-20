@@ -115,8 +115,8 @@ const api: PixDesktopApi = {
       ipcRenderer.invoke("pix:workspace:search-paths", query ?? "", options),
     saveClipboardImage: (options) =>
       ipcRenderer.invoke("pix:workspace:save-clipboard-image", options),
-    readAttachmentPreview: (path) =>
-      ipcRenderer.invoke("pix:workspace:read-attachment-preview", path),
+    readAttachmentPreview: (path, options) =>
+      ipcRenderer.invoke("pix:workspace:read-attachment-preview", path, options),
     ensureDefault: () => ipcRenderer.invoke("pix:workspace:ensure-default"),
     ensureConversation: () => ipcRenderer.invoke("pix:workspace:ensure-conversation"),
     removeRecent: (cwd) => ipcRenderer.invoke("pix:workspace:remove-recent", cwd),

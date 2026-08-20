@@ -14,7 +14,12 @@ import {
   processBlockCoversLiveActivity,
   type TimelineItem,
 } from "@/lib/timeline";
-import { TimelineLiveStatus, TimelineProcessBlock, TimelineRow } from "./TimelineRow.tsx";
+import {
+  TimelineLiveStatus,
+  TimelineMediaRow,
+  TimelineProcessBlock,
+  TimelineRow,
+} from "./TimelineRow.tsx";
 import { MessageTrail } from "./MessageTrail.tsx";
 import { deriveMessageTrailItems } from "@/lib/message-trail";
 import type { Locale } from "@/lib/i18n";
@@ -138,7 +143,7 @@ export function SessionTimelineContent(props: SessionTimelineContentProps) {
       {hasActivity ? (
         <>
           {blocks.map((block) => {
-            const messageId = block.type === "process" ? block.id : block.item.id;
+            const messageId = block.type === "item" ? block.item.id : block.id;
             return (
               <MessageScrollerItem
                 key={messageId}
@@ -160,6 +165,12 @@ export function SessionTimelineContent(props: SessionTimelineContentProps) {
                     {...(block.startedAt ? { startedAt: block.startedAt } : {})}
                     {...(block.endedAt ? { endedAt: block.endedAt } : {})}
                     {...(block.durationLabel ? { durationLabel: block.durationLabel } : {})}
+                    {...(props.workspacePath ? { workspacePath: props.workspacePath } : {})}
+                  />
+                ) : block.type === "media" ? (
+                  <TimelineMediaRow
+                    images={block.images}
+                    locale={locale}
                     {...(props.workspacePath ? { workspacePath: props.workspacePath } : {})}
                   />
                 ) : (

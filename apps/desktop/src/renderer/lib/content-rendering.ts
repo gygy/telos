@@ -8,6 +8,20 @@ export type ContentLinkTarget =
 
 const VIDEO_EXTENSIONS = new Set(["avi", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "ogv", "webm"]);
 
+const INLINE_IMAGE_EXTENSIONS = new Set([
+  "avif",
+  "bmp",
+  "gif",
+  "heic",
+  "jpeg",
+  "jpg",
+  "png",
+  "svg",
+  "tif",
+  "tiff",
+  "webp",
+]);
+
 function safeDecode(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -23,6 +37,11 @@ function pathExtension(value: string): string {
 
 export function contentMediaKind(source: string): ContentMediaKind {
   return VIDEO_EXTENSIONS.has(pathExtension(source)) ? "video" : "image";
+}
+
+/** Local files that should render inline in the conversation (not a source-cite chip). */
+export function isInlineImagePath(source: string): boolean {
+  return INLINE_IMAGE_EXTENSIONS.has(pathExtension(source));
 }
 
 function isAbsolutePath(value: string): boolean {

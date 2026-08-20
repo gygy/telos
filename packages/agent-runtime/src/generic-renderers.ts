@@ -38,7 +38,7 @@ function textFromContent(content: unknown): string {
     .map((part) => {
       if (typeof part === "string") return part;
       if (isRecord(part) && part.type === "text" && typeof part.text === "string") return part.text;
-      if (isRecord(part) && part.type === "image") return "[image]";
+      // Image parts are projected separately (extractSessionImages) and rendered in the timeline
       return "";
     })
     .filter(Boolean)

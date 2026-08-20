@@ -110,6 +110,40 @@ describe("live stream (append-only)", () => {
     expect(state.items[2]).toMatchObject({ kind: "tool", status: "completed" });
   });
 
+  it("attaches tool result images onto the matching running tool row", () => {
+    const image = {
+      mimeType: "image/png",
+      dataUrl:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    };
+    let state = emptyLiveStream();
+    state = applyRuntimeEventToLiveStream(
+      state,
+      { type: "tool.started", toolCallId: "img", toolName: "read", args: { path: "shot.png" } },
+      [],
+      { sequence: 1 },
+    );
+    state = applyRuntimeEventToLiveStream(
+      state,
+      {
+        type: "tool.completed",
+        toolCallId: "img",
+        toolName: "read",
+        output: "",
+        isError: false,
+        images: [image],
+      },
+      [],
+      { sequence: 2 },
+    );
+    expect(state.items[0]).toMatchObject({
+      kind: "tool",
+      status: "completed",
+      output: "",
+      images: [image],
+    });
+  });
+
   it("never shortens an existing assistant buffer across a long stream", () => {
     let state = emptyLiveStream();
     let prev = state;

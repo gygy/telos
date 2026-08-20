@@ -1,4 +1,4 @@
-import type { HostEvent, SessionHistoryMessage } from "@pix/contracts";
+import type { HostEvent, SessionHistoryMessage, SessionImage } from "@pix/contracts";
 
 export type ThreadRunState =
   | "idle"
@@ -16,6 +16,7 @@ export type TimelineItem =
       kind: "user";
       text: string;
       attachments?: string[];
+      images?: SessionImage[];
       timestamp?: string;
       entryId?: string;
     }
@@ -23,6 +24,7 @@ export type TimelineItem =
       id: string;
       kind: "assistant";
       text: string;
+      images?: SessionImage[];
       timestamp?: string;
       entryId?: string;
     }
@@ -41,6 +43,8 @@ export type TimelineItem =
       timestamp?: string;
       /** ISO end when tool.completed was observed. */
       endedAt?: string;
+      /** Inline images from the tool result content parts. */
+      images?: SessionImage[];
     }
   | {
       id: string;
@@ -79,6 +83,12 @@ export type ProcessActivity = {
 /** Render blocks: process steps collapse under “已处理” / live activity. */
 export type TimelineBlock =
   | { type: "item"; item: TimelineItem }
+  | {
+      type: "media";
+      id: string;
+      images: SessionImage[];
+      timestamp?: string;
+    }
   | {
       type: "process";
       id: string;
@@ -139,6 +149,7 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
         kind: "user",
         text: content.text,
         ...(content.paths.length > 0 ? { attachments: content.paths } : {}),
+        ...(item.images?.length ? { images: item.images } : {}),
         ...(item.entryId ? { entryId: item.entryId } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
       });
@@ -149,6 +160,7 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
         id: `history-assistant-${index}`,
         kind: "assistant",
         text: item.text,
+        ...(item.images?.length ? { images: item.images } : {}),
         ...(item.entryId ? { entryId: item.entryId } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
       });
@@ -177,6 +189,7 @@ export function historyToTimeline(history: SessionHistoryMessage[]): TimelineIte
         ...(args !== undefined ? { args } : {}),
         // edit tool details.diff has real 1-based file line numbers from pi.
         ...(item.details !== undefined ? { details: item.details } : {}),
+        ...(item.images?.length ? { images: item.images } : {}),
         ...(item.timestamp ? { timestamp: item.timestamp } : {}),
         ...(item.endedAt ? { endedAt: item.endedAt } : {}),
       });
@@ -342,9 +355,12 @@ export function projectEventsToTimeline(
         const tool = tools.get(runtimeEvent.toolCallId);
         if (tool) {
           tool.status = runtimeEvent.isError ? "error" : "completed";
-          tool.output = runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done");
+          tool.output =
+            runtimeEvent.output ||
+            (runtimeEvent.isError ? "Tool failed" : runtimeEvent.images?.length ? "" : "Done");
           tool.endedAt = endTs;
           if (runtimeEvent.details !== undefined) tool.details = runtimeEvent.details;
+          if (runtimeEvent.images?.length) tool.images = runtimeEvent.images;
         } else {
           items.push({
             id: `tool-end-${runtimeEvent.toolCallId}`,
@@ -352,8 +368,11 @@ export function projectEventsToTimeline(
             toolCallId: runtimeEvent.toolCallId,
             toolName: runtimeEvent.toolName,
             status: runtimeEvent.isError ? "error" : "completed",
-            output: runtimeEvent.output || (runtimeEvent.isError ? "Tool failed" : "Done"),
+            output:
+              runtimeEvent.output ||
+              (runtimeEvent.isError ? "Tool failed" : runtimeEvent.images?.length ? "" : "Done"),
             ...(runtimeEvent.details !== undefined ? { details: runtimeEvent.details } : {}),
+            ...(runtimeEvent.images?.length ? { images: runtimeEvent.images } : {}),
             timestamp: endTs,
             endedAt: endTs,
           });
@@ -447,6 +466,53 @@ function shellOutputMarkdown(output: string, exitCode: number): string {
 
 type ProcessStepItem = Extract<TimelineItem, { kind: "thinking" | "tool" }>;
 
+function sessionImageKey(image: SessionImage): string {
+  return image.path ? `file:${image.path}` : `data:${image.mimeType}:${image.dataUrl}`;
+}
+
+function imagePathTail(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/");
+  return parts[parts.length - 1] || path;
+}
+
+/** True when the assistant markdown already cites this local file. */
+export function assistantTextShowsImage(text: string, image: SessionImage): boolean {
+  if (!image.path) return false;
+  const path = image.path.trim();
+  if (!path || !text) return false;
+  if (text.includes(path)) return true;
+  const name = imagePathTail(path);
+  return name.length > 1 && text.includes(name);
+}
+
+function collectToolImages(items: readonly TimelineItem[]): SessionImage[] {
+  const images: SessionImage[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.kind !== "tool" || !item.images?.length) continue;
+    for (const image of item.images) {
+      const key = sessionImageKey(image);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      images.push(image);
+    }
+  }
+  return images;
+}
+
+/**
+ * Product files stay a first-class media row (not assistant speech).
+ * Skip anything the reply already cites in markdown.
+ */
+function turnProductImages(
+  source: readonly TimelineItem[],
+  assistantText?: string,
+): SessionImage[] {
+  const images = collectToolImages(source);
+  if (!assistantText) return images;
+  return images.filter((image) => !assistantTextShowsImage(assistantText, image));
+}
+
 /**
  * One user turn → at most one process block (“已处理”).
  *
@@ -478,6 +544,20 @@ export function buildTimelineBlocks(items: TimelineItem[]): TimelineBlock[] {
       ...(!open && endedAt ? { endedAt } : {}),
       ...(open ? { open: true } : {}),
       ...(durationLabel ? { durationLabel } : {}),
+    });
+  };
+
+  const pushMedia = (ownerId: string, source: readonly TimelineItem[], assistantText?: string) => {
+    const images = turnProductImages(source, assistantText);
+    if (images.length === 0) return;
+    const timestamp = source.findLast(
+      (item) => item.kind === "tool" && item.images?.length,
+    )?.timestamp;
+    blocks.push({
+      type: "media",
+      id: `media-${ownerId}`,
+      images,
+      ...(timestamp ? { timestamp } : {}),
     });
   };
 
@@ -521,6 +601,11 @@ export function buildTimelineBlocks(items: TimelineItem[]): TimelineBlock[] {
         false,
         finalAssistant.kind === "assistant" ? finalAssistant.timestamp : undefined,
       );
+      pushMedia(
+        finalAssistant.id,
+        turn,
+        finalAssistant.kind === "assistant" ? finalAssistant.text : undefined,
+      );
       blocks.push({ type: "item", item: finalAssistant });
       for (let i = lastAssistantIdx + 1; i < turn.length; i++) {
         const it = turn[i]!;
@@ -559,6 +644,7 @@ export function buildTimelineBlocks(items: TimelineItem[]): TimelineBlock[] {
           }
         }
         pushProcess(steps, true, undefined);
+        pushMedia(turn[lastStepIdx]?.id ?? turn[0]!.id, turn.slice(0, lastStepIdx + 1));
         for (let i = lastStepIdx + 1; i < turn.length; i++) {
           blocks.push({ type: "item", item: turn[i]! });
         }
@@ -689,7 +775,7 @@ export function processBlockCoversLiveActivity(
     return false;
   }
 
-  const last = blocks[blocks.length - 1];
+  const last = blocks.findLast((block) => block.type !== "media");
   if (!last || last.type !== "process" || !last.open) return false;
   // Waiting / summarizing stay as trailing markers (not process-header phases).
   // Recovering is folded into the open process header via livePhase.

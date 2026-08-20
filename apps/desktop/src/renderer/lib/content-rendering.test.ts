@@ -4,6 +4,7 @@ import {
   contentSourceUrl,
   formatFileLinkLabel,
   formatWorkspaceRelativePath,
+  isInlineImagePath,
   parseContentLink,
 } from "./content-rendering.ts";
 
@@ -11,6 +12,8 @@ describe("conversation content targets", () => {
   it("classifies video sources independently from images", () => {
     expect(contentMediaKind("/tmp/demo.mp4?download=1")).toBe("video");
     expect(contentMediaKind("/tmp/screenshot.webp")).toBe("image");
+    expect(isInlineImagePath("output/v10.gif")).toBe(true);
+    expect(isInlineImagePath("player.tscn")).toBe(false);
   });
 
   it("parses local file line links and safe external URLs", () => {

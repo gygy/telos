@@ -73,6 +73,7 @@ import {
   enrichModelThinkingFromCatalog,
   isThinkingLevel,
 } from "./thinking-levels.ts";
+import { extractSessionImages, extractToolSessionImages } from "./session-images.ts";
 import {
   listBuiltinSlashCommands,
   projectSessionTree,
@@ -86,6 +87,7 @@ export {
   projectToolPresentation,
   sanitizeSerializable,
 } from "./generic-renderers.ts";
+export { extractSessionImages, extractToolSessionImages } from "./session-images.ts";
 export { authJsonPath, deleteProviderCredential, persistProviderApiKey } from "./auth-json.ts";
 export {
   ensureModelsJsonTemplate,
@@ -513,16 +515,33 @@ export function projectSessionHistory(
     };
     if (row.role === "user") {
       const text = textFromMessageContent(row.content).trim();
-      if (text) {
+      const images = extractSessionImages(row.content);
+      if (text || images.length > 0) {
         const item: SessionHistoryMessage = { role: "user", text };
+        if (images.length > 0) item.images = images;
         if (entryId) item.entryId = entryId;
         history.push(item);
       }
     } else if (row.role === "assistant") {
-      for (const part of assistantContentParts(row.content)) {
-        const item: SessionHistoryMessage = { role: part.role, text: part.text.trim() };
+      const images = extractSessionImages(row.content);
+      const parts = assistantContentParts(row.content);
+      const lastAssistantIndex = parts.findLastIndex((part) => part.role === "assistant");
+      if (parts.length === 0 && images.length > 0) {
+        const item: SessionHistoryMessage = { role: "assistant", text: "", images };
         if (entryId) item.entryId = entryId;
         history.push(item);
+      } else {
+        for (const [partIndex, part] of parts.entries()) {
+          const item: SessionHistoryMessage = { role: part.role, text: part.text.trim() };
+          if (images.length > 0 && partIndex === lastAssistantIndex) item.images = images;
+          if (entryId) item.entryId = entryId;
+          history.push(item);
+        }
+        if (images.length > 0 && lastAssistantIndex < 0) {
+          const item: SessionHistoryMessage = { role: "assistant", text: "", images };
+          if (entryId) item.entryId = entryId;
+          history.push(item);
+        }
       }
     } else if (row.role === "toolResult") {
       const raw = message as {
@@ -552,12 +571,22 @@ export function projectSessionHistory(
           }
         }
       }
+      const toolName = typeof row.toolName === "string" ? row.toolName : "tool";
+      const images = extractToolSessionImages({
+        toolName,
+        args,
+        content: row.content,
+        result: message,
+        isError: row.isError === true,
+      });
+      const text = textFromMessageContent(row.content).trim();
       const item: SessionHistoryMessage = {
         role: "tool",
-        text: textFromMessageContent(row.content).trim() || "Tool result",
-        toolName: typeof row.toolName === "string" ? row.toolName : "tool",
+        text: text || (images.length > 0 ? "" : "Tool result"),
+        toolName,
         isError: row.isError === true,
       };
+      if (images.length > 0) item.images = images;
       if (args !== undefined) item.args = args;
       if (command) item.command = command;
       // pi edit stores real file line numbers in details.diff / details.patch — keep for UI.

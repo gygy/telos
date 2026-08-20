@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
-import { TimelineRow } from "./TimelineRow.tsx";
+import { TimelineMediaRow, TimelineRow } from "./TimelineRow.tsx";
 import type { TimelineItem } from "../lib/timeline.ts";
 
 function renderUser(item: Extract<TimelineItem, { kind: "user" }>): string {
@@ -66,5 +66,41 @@ describe("TimelineRow user message", () => {
     expect(html).toContain('aria-label="design.png"');
     expect(html).toContain('data-kind="image"');
     expect(html).not.toContain('data-slot="attachment-title"');
+  });
+
+  it("renders inline image content parts from the session", () => {
+    const html = renderToStaticMarkup(
+      createElement(TimelineRow, {
+        item: {
+          id: "asst-image",
+          kind: "assistant",
+          text: "Here is the screenshot.",
+          images: [
+            {
+              mimeType: "image/png",
+              dataUrl:
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            },
+          ],
+        },
+        locale: "zh",
+      }),
+    );
+    expect(html).toContain('data-testid="timeline-images"');
+    expect(html).toContain("content-image-button");
+    expect(html).toContain("data:image/png;base64,");
+  });
+
+  it("renders local image artifacts in a first-class media row", () => {
+    const html = renderToStaticMarkup(
+      createElement(TimelineMediaRow, {
+        locale: "zh",
+        workspacePath: "/work/project",
+        images: [{ path: "/work/project/output/v10.gif", mimeType: "image/gif" }],
+      }),
+    );
+    expect(html).toContain('data-testid="timeline-process-media"');
+    expect(html).toContain("content-image-button");
+    expect(html).toContain("file:///work/project/output/v10.gif");
   });
 });

@@ -5260,55 +5260,76 @@ void app
         return filePath;
       },
     );
-    /** Local image → small data-URL thumbnail for AttachmentMedia variant="image". */
-    ipcMain.handle("pix:workspace:read-attachment-preview", async (_event, filePath?: string) => {
-      if (typeof filePath !== "string" || !filePath.trim()) return undefined;
-      const abs = isAbsolute(filePath) ? resolve(filePath) : resolve(filePath);
-      if (!existsSync(abs)) return undefined;
-      try {
-        if (!lstatSync(abs).isFile()) return undefined;
-      } catch {
-        return undefined;
-      }
-      const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase();
-      if (
-        ![
-          ".png",
-          ".jpg",
-          ".jpeg",
-          ".gif",
-          ".webp",
-          ".svg",
-          ".bmp",
-          ".tif",
-          ".tiff",
-          ".heic",
-          ".avif",
-        ].includes(ext)
-      ) {
-        return undefined;
-      }
-      try {
-        const image = nativeImage.createFromPath(abs);
-        if (image.isEmpty()) return undefined;
-        const { width, height } = image.getSize();
-        const maxEdge = 160;
-        let out = image;
-        if (width > maxEdge || height > maxEdge) {
-          const scale = Math.min(maxEdge / Math.max(width, 1), maxEdge / Math.max(height, 1));
-          out = image.resize({
-            width: Math.max(1, Math.round(width * scale)),
-            height: Math.max(1, Math.round(height * scale)),
-            quality: "good",
-          });
+    /** Local image → data-URL. Default maxEdge 160 (chips); pass a larger edge for timeline display. */
+    ipcMain.handle(
+      "pix:workspace:read-attachment-preview",
+      async (_event, filePath?: string, options?: { maxEdge?: number }) => {
+        if (typeof filePath !== "string" || !filePath.trim()) return undefined;
+        const abs = isAbsolute(filePath) ? resolve(filePath) : resolve(filePath);
+        if (!existsSync(abs)) return undefined;
+        try {
+          if (!lstatSync(abs).isFile()) return undefined;
+        } catch {
+          return undefined;
         }
-        const png = out.toPNG();
-        if (!png.length || png.length > 1_500_000) return undefined;
-        return `data:image/png;base64,${png.toString("base64")}`;
-      } catch {
-        return undefined;
-      }
-    });
+        const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase();
+        if (
+          ![
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".svg",
+            ".bmp",
+            ".tif",
+            ".tiff",
+            ".heic",
+            ".avif",
+          ].includes(ext)
+        ) {
+          return undefined;
+        }
+        const requested = typeof options?.maxEdge === "number" ? options.maxEdge : 160;
+        const maxEdge = Math.min(2048, Math.max(32, Math.round(requested)));
+        const maxBytes = maxEdge > 320 ? 12_000_000 : 1_500_000;
+        const originalMime =
+          ext === ".gif"
+            ? "image/gif"
+            : ext === ".webp"
+              ? "image/webp"
+              : ext === ".svg"
+                ? "image/svg+xml"
+                : undefined;
+        try {
+          // Keep GIF/WebP/SVG bytes so animation and vectors survive (nativeImage → PNG does not).
+          if (originalMime && (ext === ".gif" || ext === ".svg" || maxEdge > 320)) {
+            const raw = readFileSync(abs);
+            if (raw.length && raw.length <= maxBytes) {
+              return `data:${originalMime};base64,${raw.toString("base64")}`;
+            }
+            if (ext === ".gif" || ext === ".svg") return undefined;
+          }
+          const image = nativeImage.createFromPath(abs);
+          if (image.isEmpty()) return undefined;
+          const { width, height } = image.getSize();
+          let out = image;
+          if (width > maxEdge || height > maxEdge) {
+            const scale = Math.min(maxEdge / Math.max(width, 1), maxEdge / Math.max(height, 1));
+            out = image.resize({
+              width: Math.max(1, Math.round(width * scale)),
+              height: Math.max(1, Math.round(height * scale)),
+              quality: "good",
+            });
+          }
+          const png = out.toPNG();
+          if (!png.length || png.length > maxBytes) return undefined;
+          return `data:image/png;base64,${png.toString("base64")}`;
+        } catch {
+          return undefined;
+        }
+      },
+    );
     ipcMain.handle("pix:trust:get", () => supervisor?.getTrust());
     ipcMain.handle("pix:trust:set", (_event, trusted: boolean) => supervisor?.setTrust(trusted));
     ipcMain.handle("pix:models:list", () => supervisor?.listModels());

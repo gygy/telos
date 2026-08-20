@@ -102,6 +102,15 @@ describe("MarkdownContent", () => {
     const image = render("![preview](/tmp/design%20preview.png)");
     expect(image).toContain("content-image-button");
     expect(image).toContain("file:///tmp/design%20preview.png");
+    const dataImage = render(
+      "![inline](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==)",
+    );
+    expect(dataImage).toContain("content-image-button");
+    expect(dataImage).toContain("data:image/png;base64,");
+    const linkedGif = render("[播放 v10 动态 GIF](output/v10.gif)", "/work/project");
+    expect(linkedGif).toContain("content-image-button");
+    expect(linkedGif).toContain("file:///work/project/output/v10.gif");
+    expect(linkedGif).not.toContain("content-file-link");
   });
 
   it("renders GFM footnotes as a Sources section with citation chips", () => {

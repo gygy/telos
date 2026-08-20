@@ -1,6 +1,7 @@
 import "./proxy-bootstrap.ts";
 import {
   createPixRuntime,
+  extractToolSessionImages,
   projectCustomEntry,
   projectCustomMessage,
   projectToolPresentation,
@@ -44,6 +45,7 @@ process.on("unhandledRejection", (reason) => {
 let handle: PixRuntimeHandle | undefined;
 let unsubscribe: (() => void) | undefined;
 let sequence = 0;
+const toolArgsByCallId = new Map<string, unknown>();
 
 function post(event: HostEvent): void {
   parentPort.postMessage(event);
@@ -211,8 +213,10 @@ function userMessageText(message: unknown): string | undefined {
 function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined {
   switch (event.type) {
     case "agent_start":
+      toolArgsByCallId.clear();
       return { type: "agent.started" };
     case "agent_settled":
+      toolArgsByCallId.clear();
       return { type: "agent.settled" };
     case "queue_update":
       return {
@@ -309,6 +313,7 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
       return result;
     }
     case "tool_execution_start": {
+      toolArgsByCallId.set(event.toolCallId, event.args);
       const projected = projectToolPresentation({
         toolName: event.toolName,
         toolCallId: event.toolCallId,
@@ -322,6 +327,10 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
       };
     }
     case "tool_execution_end": {
+      const rawContent =
+        typeof event.result === "object" && event.result !== null && "content" in event.result
+          ? (event.result as { content?: unknown }).content
+          : event.result;
       const projected = projectToolPresentation({
         toolName: event.toolName,
         toolCallId: event.toolCallId,
@@ -332,6 +341,15 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
             : undefined,
         isError: event.isError,
       });
+      const args = toolArgsByCallId.get(event.toolCallId);
+      toolArgsByCallId.delete(event.toolCallId);
+      const images = extractToolSessionImages({
+        toolName: event.toolName,
+        args,
+        content: rawContent,
+        result: event.result,
+        isError: event.isError,
+      });
       return {
         type: "tool.completed",
         toolCallId: event.toolCallId,
@@ -339,6 +357,7 @@ function projectRuntimeEvent(event: AgentSessionEvent): RuntimeEvent | undefined
         output: projected.content,
         isError: projected.isError,
         ...(projected.details !== undefined ? { details: projected.details } : {}),
+        ...(images.length > 0 ? { images } : {}),
       };
     }
     default:

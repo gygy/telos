@@ -91,6 +91,116 @@ describe("runtime timeline", () => {
     });
   });
 
+  it("keeps tool result images on live completion and history replay", () => {
+    const image = {
+      mimeType: "image/png",
+      dataUrl:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    };
+    const live = projectEventsToTimeline(
+      [
+        runtimeEvent(1, {
+          type: "tool.started",
+          toolCallId: "img-1",
+          toolName: "read",
+          args: { path: "/tmp/shot.png" },
+        }),
+        runtimeEvent(2, {
+          type: "tool.completed",
+          toolCallId: "img-1",
+          toolName: "read",
+          output: "",
+          isError: false,
+          images: [image],
+        }),
+      ],
+      [],
+    );
+    expect(live).toMatchObject([
+      {
+        kind: "tool",
+        toolName: "read",
+        status: "completed",
+        output: "",
+        images: [image],
+      },
+    ]);
+
+    const replayed = historyToTimeline([
+      {
+        role: "tool",
+        text: "",
+        toolName: "read",
+        images: [image],
+      },
+    ]);
+    expect(replayed[0]).toMatchObject({
+      kind: "tool",
+      images: [image],
+    });
+  });
+
+  it("shows produced files as a media row, not as assistant speech", () => {
+    const pathImage = { path: "output/v10.gif", mimeType: "image/gif" };
+    const blocks = buildTimelineBlocks([
+      { id: "u1", kind: "user", text: "make it" },
+      {
+        id: "tool1",
+        kind: "tool",
+        toolName: "write",
+        status: "completed",
+        images: [pathImage],
+      },
+      { id: "a1", kind: "assistant", text: "done" },
+    ]);
+
+    expect(blocks.map((block) => block.type)).toEqual(["item", "process", "media", "item"]);
+    expect(blocks[2]).toMatchObject({
+      type: "media",
+      images: [pathImage],
+    });
+    expect(blocks[3]).toMatchObject({
+      type: "item",
+      item: { kind: "assistant", text: "done" },
+    });
+  });
+
+  it("does not duplicate a path the assistant markdown already shows", () => {
+    const pathImage = { path: "output/v10.gif", mimeType: "image/gif" };
+    const blocks = buildTimelineBlocks([
+      { id: "u1", kind: "user", text: "make it" },
+      {
+        id: "tool1",
+        kind: "tool",
+        toolName: "write",
+        status: "completed",
+        images: [pathImage],
+      },
+      { id: "a1", kind: "assistant", text: "[播放 v10](output/v10.gif)" },
+    ]);
+    expect(blocks.map((block) => block.type)).toEqual(["item", "process", "item"]);
+    expect(blocks[2]).toMatchObject({
+      type: "item",
+      item: { kind: "assistant", text: "[播放 v10](output/v10.gif)" },
+    });
+  });
+
+  it("keeps tool media visible while the process is still open", () => {
+    const pathImage = { path: "output/v10.gif", mimeType: "image/gif" };
+    const blocks = buildTimelineBlocks([
+      { id: "u1", kind: "user", text: "make it" },
+      {
+        id: "tool1",
+        kind: "tool",
+        toolName: "write",
+        status: "completed",
+        images: [pathImage],
+      },
+    ]);
+    expect(blocks.map((block) => block.type)).toEqual(["item", "process", "media"]);
+    expect(blocks[2]).toMatchObject({ type: "media", images: [pathImage] });
+  });
+
   it("projects persisted thinking and extracts attached path metadata", () => {
     expect(
       historyToTimeline([

@@ -44,9 +44,10 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageContent, MessageFooter } from "@/components/ui/message";
+import type { SessionImage } from "@pix/contracts";
 import { ContentCodeBlock } from "./ContentCodeBlock.tsx";
 import { ImagePreviewDialog } from "./ContentPreviewDialog.tsx";
-import { MarkdownContent } from "./MarkdownContent.tsx";
+import { ContentImage, MarkdownContent } from "./MarkdownContent.tsx";
 import {
   attachmentLabel,
   attachmentPresentation,
@@ -158,6 +159,54 @@ function liveStatusIcon(phase: ProcessActivityPhase): ReactNode {
 }
 
 /** Monochrome kind glyph — matches composer chips / shadcn Attachment. */
+function TimelineImages(props: {
+  images: SessionImage[];
+  locale: Locale;
+  workspacePath?: string | undefined;
+}) {
+  if (props.images.length === 0) return null;
+  return (
+    <div className="timeline-images" data-testid="timeline-images">
+      {props.images.map((image, index) => {
+        const src = image.path ?? image.dataUrl;
+        return (
+          <ContentImage
+            key={`${src}-${index}`}
+            src={src}
+            workspacePath={props.workspacePath}
+            locale={props.locale}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export function TimelineMediaRow(props: {
+  images: SessionImage[];
+  locale: Locale;
+  workspacePath?: string | undefined;
+}) {
+  return (
+    <div className="timeline-process-media" data-testid="timeline-process-media">
+      <TimelineImages
+        images={props.images}
+        locale={props.locale}
+        workspacePath={props.workspacePath}
+      />
+    </div>
+  );
+}
+
+function shouldRenderContentImages(item: {
+  attachments?: string[] | undefined;
+  images?: SessionImage[] | undefined;
+}): SessionImage[] {
+  if (!item.images?.length) return [];
+  if (item.attachments?.some((path) => isPreviewableImagePath(path))) return [];
+  return item.images;
+}
+
 function attachmentIcon(kind: AttachmentKind) {
   const props = { className: "size-3.5", strokeWidth: 1.75 } as const;
   if (kind === "folder") return <Folder {...props} />;
@@ -569,6 +618,7 @@ export const TimelineRow = memo(function TimelineRow(props: {
   }
 
   if (item.kind === "user") {
+    const contentImages = shouldRenderContentImages(item);
     if (editing) {
       return (
         <Message
@@ -632,6 +682,13 @@ export const TimelineRow = memo(function TimelineRow(props: {
           {item.attachments?.length ? (
             <AttachmentList paths={item.attachments} locale={props.locale} />
           ) : null}
+          {contentImages.length ? (
+            <TimelineImages
+              images={contentImages}
+              locale={props.locale}
+              workspacePath={props.workspacePath}
+            />
+          ) : null}
           {item.text ? (
             <Bubble align="end" variant="secondary">
               <BubbleContent>
@@ -668,6 +725,13 @@ export const TimelineRow = memo(function TimelineRow(props: {
           >
             {item.text}
           </MarkdownContent>
+          {item.images?.length ? (
+            <TimelineImages
+              images={item.images}
+              locale={props.locale}
+              workspacePath={props.workspacePath}
+            />
+          ) : null}
           {/* AI: 复制 · fork · 日期时间 */}
           <MetaActions
             locale={props.locale}
