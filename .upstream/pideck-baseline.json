@@ -16,7 +16,7 @@
     "authoredAt": "2026-09-13T03:36:27Z",
     "committedAt": "2026-09-13T03:36:27Z",
     "recordedAt": "2026-09-13T12:35:00Z",
-    "note": "Telos 首次从 pideck-github 导入时的 GitHub main 尖端。后续同步以该 commit 为起点做增量对比与可选合入。"
+    "note": "First Telos import tip of GitHub ayuayue/PiDeck main. Use this commit as the start of incremental / selective sync."
   },
   "readOnly": true
 }

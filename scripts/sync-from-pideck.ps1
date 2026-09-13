@@ -37,7 +37,8 @@ $TelosOverlays = @(
     "TELOS-UPSTREAM.md",
     ".upstream/pideck-baseline.json",
     "README.md",
-    "package.json"
+    "package.json",
+    "src/renderer/src/App.tsx"
 )
 
 function Get-GitExe {
@@ -113,7 +114,8 @@ if ($Source -eq "local" -or ($Source -eq "auto" -and (Test-Path (Join-Path $Loca
 }
 
 Write-Host "Fetching read-only upstream: $remote"
-Invoke-Git fetch $remote --tags
+# Avoid failing when leftover tags from a previous upstream clash.
+Invoke-Git fetch $remote "refs/heads/main:refs/remotes/$remote/main"
 $upstream = "$remote/main"
 $tip = (& $git @GitConfig rev-parse --short $upstream).Trim()
 $tipFull = (& $git @GitConfig rev-parse $upstream).Trim()
