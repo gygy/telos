@@ -1,7 +1,7 @@
-appId: dev.pix.app
-productName: Pix
+appId: app.telos.desktop
+productName: Telos
 # package.json name is @pix/desktop — override so AppImage/deb paths stay valid.
-executableName: Pix
+executableName: Telos
 asar: true
 # Native dependencies ship N-API/prebuilt binaries and are exercised under the
 # target Electron runtime. Rebuilding node-pty discards those prebuilds and adds
@@ -40,10 +40,11 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 #   blockmaps  — differential downloads when electron-builder emits them
 #
 # app-update.yml is embedded by electron-builder and always by scripts/after-pack.mjs.
+# Telos releases: wire to your own feed when ready (do not publish to upstream pix).
 publish:
   provider: github
-  owner: num-scope
-  repo: pix
+  owner: sheng
+  repo: telos
   releaseType: release
 mac:
   # Optional Developer ID via CSC_LINK. Auto-update does not require it — mac
