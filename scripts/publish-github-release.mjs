@@ -101,31 +101,45 @@ function ensureAssetsExist() {
 	}
 }
 
-function ensureReleaseAnchor(token) {
-	return ghRequest(`/repos/${OWNER}/${REPO}`).then((info) => {
-		if (Number(info.size) > 0) return;
-		console.log("Repo is empty; pushing empty release-anchor commit (no README/source)…");
-		const tmp = join(tmpdir(), `telos-gh-anchor-${Date.now()}`);
-		mkdirSync(tmp, { recursive: true });
-		try {
-			execFileSync("git", ["init", "-q"], { cwd: tmp, stdio: "inherit" });
-			execFileSync("git", ["checkout", "-q", "-b", "main"], { cwd: tmp, stdio: "inherit" });
-			execFileSync(
-				"git",
-				["-c", "user.email=release@telos.local", "-c", "user.name=Telos Release", "commit", "--allow-empty", "-m", "chore: release anchor (binaries via GitHub Releases only)"],
-				{ cwd: tmp, stdio: "inherit" },
-			);
-			const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
-			execFileSync(
-				"git",
-				["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, "push", `https://github.com/${OWNER}/${REPO}.git`, "HEAD:main"],
-				{ cwd: tmp, stdio: "inherit" },
-			);
-			console.log("Pushed empty anchor to github/main");
-		} finally {
-			rmSync(tmp, { recursive: true, force: true });
+async function ensureReleaseAnchor(token) {
+	// Prefer "already has a release or commits" over GitHub's size===0 (tiny repos still report size 0).
+	try {
+		await ghRequest(`/repos/${OWNER}/${REPO}/releases/tags/${tag}`);
+		return;
+	} catch {
+		// no release yet
+	}
+	try {
+		const commits = await ghRequest(`/repos/${OWNER}/${REPO}/commits?sha=main&per_page=1`);
+		if (Array.isArray(commits) && commits.length > 0) return;
+	} catch (error) {
+		const msg = String(error.message || error);
+		if (!/empty|Conflict|Git Repository is empty/i.test(msg)) {
+			console.warn("commit probe:", msg);
 		}
-	});
+	}
+
+	console.log("Repo has no commits; pushing empty release-anchor commit (no README/source)…");
+	const tmp = join(tmpdir(), `telos-gh-anchor-${Date.now()}`);
+	mkdirSync(tmp, { recursive: true });
+	const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+	try {
+		execFileSync("git", ["init", "-q"], { cwd: tmp, stdio: "inherit" });
+		execFileSync("git", ["checkout", "-q", "-b", "main"], { cwd: tmp, stdio: "inherit" });
+		execFileSync(
+			"git",
+			["-c", "user.email=release@telos.local", "-c", "user.name=Telos Release", "commit", "--allow-empty", "-m", "chore: release anchor (binaries via GitHub Releases only)"],
+			{ cwd: tmp, stdio: "inherit" },
+		);
+		execFileSync(
+			"git",
+			["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, "push", `https://github.com/${OWNER}/${REPO}.git`, "HEAD:main"],
+			{ cwd: tmp, stdio: "inherit" },
+		);
+		console.log("Pushed empty anchor to github/main");
+	} finally {
+		rmSync(tmp, { recursive: true, force: true });
+	}
 }
 
 async function uploadAsset(releaseId, asset) {
