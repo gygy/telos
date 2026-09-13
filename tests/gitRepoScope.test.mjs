@@ -100,7 +100,7 @@ describe("listGitRepos", () => {
 
     for (const dir of [project, web, api, skipped]) {
       git(dir, "init");
-      git(dir, "config", "user.name", "PiDeck Test");
+      git(dir, "config", "user.name", "Telos Test");
       git(dir, "config", "user.email", "test@example.com");
     }
 

@@ -6,9 +6,9 @@
 > 引用时以本文件为准。
 >
 > 依据（三方）：
-> - 官方实装包 `node_modules/@deepseek-ai/*`（0.1.5-rc.1，PiDeck 锁定版本）；
+> - 官方实装包 `node_modules/@deepseek-ai/*`（0.1.5-rc.1，Telos 锁定版本）；
 > - 上游仓库快照 `C:/tmp/pi-github-repos/deepseek-ai/deepseek-harness`（HEAD `c291e79`，2026-09-10，即 rc.2 发布日）；
-> - PiDeck `dev` 分支源码（`src/main/dsh/**`、`scripts/**`）。
+> - Telos `dev` 分支源码（`src/main/dsh/**`、`scripts/**`）。
 >
 > 复核方法：实跑 `node scripts/dump-typert-endpoints.mjs`、对 22 个 `typert.host.js` 描述符统计
 > `namespace/method` 对、对 `dsh-web-app`/`dsh-base` 的 `cordis.patch.yml` 做集合差、逐条核对官方
@@ -29,9 +29,9 @@ P2 之前必须有 `dsh-plugin-parity-probe`（parity 文档 P0 spike）的结�
 
 | # | 出处 | 原文 | 核实结果 | 修正 |
 |---|---|---|---|---|
-| 1 | review §1 / §5.1 | "PiDeck 手写 **27** 个端点" | `DshRemoteClient` 实际 **30 个 unary**（26 字面量 + 4 个 `goalRefAction` 变量端点）+ 2 条流（`session/follow`、`$events`）+ `$events/result` 瀑布应答 | 见 §2.2 全表；"27" 是把 `rpc.call("` 的**调用次数**（27，含 `session/page` 两处）误当作**唯一端点数** |
+| 1 | review §1 / §5.1 | "Telos 手写 **27** 个端点" | `DshRemoteClient` 实际 **30 个 unary**（26 字面量 + 4 个 `goalRefAction` 变量端点）+ 2 条流（`session/follow`、`$events`）+ `$events/result` 瀑布应答 | 见 §2.2 全表；"27" 是把 `rpc.call("` 的**调用次数**（27，含 `session/page` 两处）误当作**唯一端点数** |
 | 2 | review §7 | `session-turn-outline` → "`session/turnOutline`（投影）" | `turnOutline` 是**投影单元**：`ctx.sessionProjections.register(turnOutlineProjectionDefinition)`（上游 `packages/session/session-turn-outline/src/index.ts:28`），**84 端点里没有** `session/turnOutline`；它经 `session/control` 流 / 投影 baseline 下发 | 表述改"`turnOutline` 投影单元（非端点）" |
-| 3 | review §7 段首 | "dsh-web-app 相对 dsh-base 多挂 **23** 行（ui-* 与 web 载体除外）。已挂其中 **13** 行" | 实际：web-app 94 行 − base 84 行 = 68 行；剔除 ui-*/web 载体/客户端运行时后 **host-ish 22 行**；PiDeck 已挂同 id 官方行 11（其余以自建行实现），未挂 11 中 **8 个是真实功能缺失**、3 个有等价/豁免（directory-picker→stub、locale/resources→浏览器面资源）（review 表列 7 行 = 把 session-reference+file-reference-local 并了一行，缺失集合完全正确） | 数字改 22 / 11 / 8（+3 豁免）；缺失集合不变 |
+| 3 | review §7 段首 | "dsh-web-app 相对 dsh-base 多挂 **23** 行（ui-* 与 web 载体除外）。已挂其中 **13** 行" | 实际：web-app 94 行 − base 84 行 = 68 行；剔除 ui-*/web 载体/客户端运行时后 **host-ish 22 行**；Telos 已挂同 id 官方行 11（其余以自建行实现），未挂 11 中 **8 个是真实功能缺失**、3 个有等价/豁免（directory-picker→stub、locale/resources→浏览器面资源）（review 表列 7 行 = 把 session-reference+file-reference-local 并了一行，缺失集合完全正确） | 数字改 22 / 11 / 8（+3 豁免）；缺失集合不变 |
 | 4 | parity §1 | "`hmr` 行显式 `disabled`（`hostEntry.ts:112`）" | `hostEntry.ts:121`：`patches.push({ id: "hmr", disabled: true })`；base 里 hmr 行 `disabled: true`（`dsh-base/cordis.patch.yml:21-26`） | 行号改 121，事实不变 |
 | 5 | parity §2.1 | "`PROFILE_TEMPLATES`（L331）… `DEFAULT_PROFILE_PATCH_RELOAD`（L377）" | `PROFILE_TEMPLATES` 实际 **L328**、web=`"live"` 在 **L335**；`DEFAULT_PROFILE_PATCH_RELOAD` 实际 **L359**（L377 是 `initProfile` 的 `@param` 注释行） | 行号修正，事实不变 |
 | 6 | parity §8 | "`runtime:pack` 的 `requiredPackages` 补 `cordis-plugin-hmr`、`cordis-plugin-timer`" | `scripts/pack-dsh-runtime.mjs:239` 的 `requiredPackages` 数组确实没有这两包（grep 0 命中）；但 `seedDirs` 覆盖全部 `node_modules/@deepseek-ai/*`，闭包从 `@deepseek-ai/dsh`/`dsh-base` 传递包含 hmr/timer（二者均声明依赖），**产物闭包已含** | 无需改 pack 逻辑；只需同步 `check-dsh-asar.mjs` 的 `REQUIRED`（L44）清单作显式断言 |
@@ -69,7 +69,7 @@ P2 之前必须有 `dsh-plugin-parity-probe`（parity 文档 P0 spike）的结�
 | skills | 1 | list |
 | **合计** | **84** | |
 
-### 2.2 PiDeck 实际使用的端点（30 unary + 2 流 + 1 瀑布应答）
+### 2.2 Telos 实际使用的端点（30 unary + 2 流 + 1 瀑布应答）
 
 `src/main/dsh/dshRemoteClient.ts` 全量（无遗漏，含变量端点）：
 
@@ -112,7 +112,7 @@ P2 之前必须有 `dsh-plugin-parity-probe`（parity 文档 P0 spike）的结�
 - `dsh-base/cordis.patch.yml`：84 行
 - 差集：web-app 独有 68 行；剔除 `ui-*`（客户端 UI）、`web-*`/`webserver`（web 载体）、
   `client-hmr`/`modules`/`connection`/`cordis-client-runner`（客户端运行时）→ **host-ish 22 行**
-- PiDeck 已挂：connection, api-remotes, file-upload, workspace, session-controller, session-stats,
+- Telos 已挂：connection, api-remotes, file-upload, workspace, session-controller, session-stats,
   settings-controller, workspace-controller, plugin-inventory, cordis-host-runner
   （`hostEntry.ts` 行 145-190 区间）+ 2 个**自建等价行**：`agent-presets`（`dshPresetComposition.ts:68`）、
   `subagent-model-selection-settings`（`:90`）、`directory-picker` 用 `pideck-directory-picker` stub 替代
@@ -120,10 +120,10 @@ P2 之前必须有 `dsh-plugin-parity-probe`（parity 文档 P0 spike）的结�
 
 ### 3.2 缺失行逐行核实表
 
-| 行 id（web-app） | 包（已核对） | 官方能力 | 用户可见影响 | PiDeck 现状 |
+| 行 id（web-app） | 包（已核对） | 官方能力 | 用户可见影响 | Telos 现状 |
 |---|---|---|---|---|
 | message-feedback | `@deepseek-ai/dsh-message-feedback` | 端点 `messageFeedback/{list,put,delete}` | 助手消息 👍/👎 反馈缺失 | 无对应实现 |
-| workspace-files | `@deepseek-ai/dsh-api-workspace-files` | 端点 `workspaceFiles/{list,read,readAll,readBytes,stat,changes,readRelated}` | 官方文件树/预览走 host 投影 | PiDeck 自读盘（行为可能漂移） |
+| workspace-files | `@deepseek-ai/dsh-api-workspace-files` | 端点 `workspaceFiles/{list,read,readAll,readBytes,stat,changes,readRelated}` | 官方文件树/预览走 host 投影 | Telos 自读盘（行为可能漂移） |
 | session-reference | `@deepseek-ai/dsh-session-reference` | `sessionReferenceResolver/candidates` + `fileReferences/list`（`@` 引用候选由 host 算） | 自建引用，等价但行为独立 | 自建实现 |
 | file-reference-local | `@deepseek-ai/dsh-file-reference-local` | 同上（本地文件引用后端） | 同上 | 同上 |
 | session-turn-outline | `@deepseek-ai/dsh-session-turn-outline` | **`turnOutline` 投影单元**（非端点！`ctx.sessionProjections.register`，上游 `session-turn-outline/src/index.ts:28`） | 官方轮次大纲 | 自建 turn 逻辑 |
@@ -135,24 +135,24 @@ P2 之前必须有 `dsh-plugin-parity-probe`（parity 文档 P0 spike）的结�
 修正 `session/turnOutline` 为投影单元。）
 
 **豁免说明**：`locale` / `resources` 在差集里但**不算缺失**——它们是 dsh-web-app 的浏览器面
-资源/本地化行，PiDeck 有自己的 i18n 与资源管线，不适用。
+资源/本地化行，Telos 有自己的 i18n 与资源管线，不适用。
 
 ### 3.3 与 review 文档数字的差异
 
 review 文档"23 行 / 已挂 13 / 未挂 7 行"：集合正确（7 个表行 = 8 个 id），但分母/已挂数偏一位。
 建议评审时引用精确口径：**host-ish 独有 22 行 = 已挂同 id 11 + 未挂 11（真实缺失 8 + 豁免 3）**；
-其中豁免 3 = `directory-picker`（PiDeck 用 `pideck-directory-picker` stub 等价替代）、
-`locale` / `resources`（浏览器面资源，PiDeck 自有 i18n/资源管线）。
+其中豁免 3 = `directory-picker`（Telos 用 `pideck-directory-picker` stub 等价替代）、
+`locale` / `resources`（浏览器面资源，Telos 自有 i18n/资源管线）。
 
 ## 4. S1–S3 桥减法核验
 
 | # | 桥（现状） | 官方等价端点 | 核验结果 | 前置 / 风险 |
 |---|---|---|---|---|
-| S1 | `pideck-command-bridge`（`/pideck-command/rpc`，`pideckCommandsBridge.ts:25`；行 `commands` 由 base 自带，`dsh-base/cordis.patch.yml:286`） | `commands/list`（已注册，§2.1） | **成立**。桥注释自己写明：存在是因为旧 ApiProxy wire 没有命令列表，PiDeck 只有 api-proxy 通道——Typert 迁移后理由消失 | 桥枚举 `ctx.commands.list(agent)` 带 live Agent 上下文，官方端点同样收 `agentId`，语义等价；删前补 e2e 回归 |
-| S2 | `pideck-plugin-bridge`（`/pideck-plugin/rpc`，`pideckPluginBridge.ts:31`；服务是 `ctx.dynamicCordisRunner` + `ctx.pluginInventory` 的薄包装，文件头注释自述） | `pluginInventory/list` + `dynamicCordisRunner/{inventory,invoke,runHostHalf,stopFromPanel,undefineFromPanel,settleUserRun,…}` | **成立**。官方端点已含面板手势语义（`stopFromPanel`/`undefineFromPanel`），桥只是把这些服务按 PiDeck 视图重新包装 | 桥另有「按会话归属、面板手势免审批」语义要与官方端点对齐确认；`mergeStaticPluginViews` 展示归并留渲染层 |
+| S1 | `pideck-command-bridge`（`/pideck-command/rpc`，`pideckCommandsBridge.ts:25`；行 `commands` 由 base 自带，`dsh-base/cordis.patch.yml:286`） | `commands/list`（已注册，§2.1） | **成立**。桥注释自己写明：存在是因为旧 ApiProxy wire 没有命令列表，Telos 只有 api-proxy 通道——Typert 迁移后理由消失 | 桥枚举 `ctx.commands.list(agent)` 带 live Agent 上下文，官方端点同样收 `agentId`，语义等价；删前补 e2e 回归 |
+| S2 | `pideck-plugin-bridge`（`/pideck-plugin/rpc`，`pideckPluginBridge.ts:31`；服务是 `ctx.dynamicCordisRunner` + `ctx.pluginInventory` 的薄包装，文件头注释自述） | `pluginInventory/list` + `dynamicCordisRunner/{inventory,invoke,runHostHalf,stopFromPanel,undefineFromPanel,settleUserRun,…}` | **成立**。官方端点已含面板手势语义（`stopFromPanel`/`undefineFromPanel`），桥只是把这些服务按 Telos 视图重新包装 | 桥另有「按会话归属、面板手势免审批」语义要与官方端点对齐确认；`mergeStaticPluginViews` 展示归并留渲染层 |
 | S3 | `pideck-slash-bridge`（`agent/pre-step` 拦截 `/` 消息，`hostEntry.ts:178` 生成的 `pideck-slash-bridge.js`） | `commands/execute`（dsh-web 客户端即直接调它） | **方向上成立**，但改动面最大：涉及命令执行时序、失败提示、审批语义，且 slash 目前不只走官方命令（缓存/提示回退 `DSH_COMMAND_SUGGESTIONS`） | review 文档自己也标注"评估后"；建议放 S1/S2 之后单独做 |
 
-三桥删除的**共同结构性前提**：PiDeck 的 `DshRemoteClient`/`DshApiClient` 已实现官方 Connection wire
+三桥删除的**共同结构性前提**：Telos 的 `DshRemoteClient`/`DshApiClient` 已实现官方 Connection wire
 （`hostEntry.ts:348` `ctx.connection.createSharedFetchHandler("/api")`），新增端点调用只是加两个方法，
 无新传输面。`pideck-directory-picker`（stub）与 `pideck-minimal-tool-filter` **保留**（无官方等价物）。
 
@@ -167,7 +167,7 @@ review 文档"23 行 / 已挂 13 / 未挂 7 行"：集合正确（7 个表行 = 
 | `watchUserPatches(ctx,…)` = `hmr.registerConfig(file, () => entry.update({config:{…patches: compose(loadOptionalPatches(file))}}))` | `dsh-app-boot/lib/index.js:1109-1115` | 事务性重应用；坏补丁不砸树 |
 | base 里 hmr 行 `disabled: true`（注释：Module reload is opt-in per profile…watch-only fallback） | `dsh-base/cordis.patch.yml:21-26` | **disabled 不妨碍** `loader.create` 方式的热应用 |
 
-PiDeck 改造点（与 parity 文档一致，标注证据）：
+Telos 改造点（与 parity 文档一致，标注证据）：
 1. `hostEntry.ts:121` 的 `{id:"hmr",disabled:true}` **保留**（照 CLI 语义走运行时 create）；
 2. boot 后仿 `profile-boot-*.js:321-337`：`loader.create(timer)` + `loader.create(hmr,{root:[]})` + 对
    `$DSH_HOME/cordis.patch.yml` 的 `watchUserPatches`（当前 `hostEntry` 无任何 watch，已确认）；
@@ -195,7 +195,7 @@ beside the configuration file"。
 | `PROFILE_TEMPLATES`（web=`live`，acp/headless/sdk=`startup`） | L328 / L335-347 | parity 文档引 L331，偏离 3 行 |
 | `DEFAULT_PROFILE_PATCH_RELOAD = "live"` | L359 | 文档引 L377（注释行） |
 | `initProfile(dir, bundles, patchReload = "live")`：写 `dsh-profile-<name>` package.json + `pnpm-workspace.yaml`（`nodeLinker: hoisted` / `autoInstallPeers: false`） | L379 / L368-369 | **精确命中** |
-| `prepareProfile`：每次 boot 重写 `cordis.yml` 空根（防 Loader 写回 bake） | `dsh/lib/profile-boot-*.js:206-209`、`PROFILE_ROOT_CONFIG` L124 | **精确命中**；PiDeck 只在缺失时写（`hostEntry.ts:234` `if (!existsSync(configPath))`）——差距如文档所述 |
+| `prepareProfile`：每次 boot 重写 `cordis.yml` 空根（防 Loader 写回 bake） | `dsh/lib/profile-boot-*.js:206-209`、`PROFILE_ROOT_CONFIG` L124 | **精确命中**；Telos 只在缺失时写（`hostEntry.ts:234` `if (!existsSync(configPath))`）——差距如文档所述 |
 | `resolveBundleDir`：installAnchor 优先于 profile 目录 | L826 | **精确命中** |
 | `loadProfileDirectory`（应用自有 profile，不出现在 CLI 查找） | L843 | 与 Electron desktop 的用法一致（上游 `apps/desktop-host/src/index.ts` 也走 `loadProfileDirectory` + `boot`） |
 | `healProfilesModuleFallback`：`$DSH_HOME/profiles/node_modules` + `withFileLock` + symlink(junction)/ESM proxy（`dsh.moduleFallback.targets`）；非 pkg 环境 `ensureSymlink`，pkg 环境 `ensureModuleProxy` | L657 / L407 / L548 | **精确命中** |
@@ -219,7 +219,7 @@ agent 的影响、S3 Windows junction 权限、S4 无包管理器降级）均按
 |---|---|---|
 | D1 profiles 根：私有 `.pideck/profiles` vs 共享 | 私有 | 与上游 `healProfilesModuleFallback` 的"按当前安装世代改写 `profiles/node_modules`"语义一致（§6.2），共享根确实会跨安装世代互相 heal 抖动——**建议成立** |
 | D2 去掉 `bareModuleBaseUrl` | 去掉 | §6.1 根因确认；但**必须以 spike S1 绿为前提**，否则退到"单锚点 + 绝对路径插件" |
-| D3 层序（PiDeck overlay 最高） | 改 | 行为变化真实存在（home 层将不能再覆盖 `pideck-*` 行），需 CHANGELOG + kill switch |
+| D3 层序（Telos overlay 最高） | 改 | 行为变化真实存在（home 层将不能再覆盖 `pideck-*` 行），需 CHANGELOG + kill switch |
 | D4 包管理器 pnpm→npm 探测 + 本地兜底 | 采纳 | 官方就是 pnpm 转发（§6.2），本地安装不依赖包管理器——与 runtime 自包含（pack-dsh-runtime 头部注释）互不冲突 |
 | D5 默认 `--ignore-scripts` | 采纳 | 官方 `allowBuilds` 指引存在（plugin-*.js ENOENT 分支的提示文案），有对齐锚点 |
 | D6 热应用优先 / 重启兜底 | 采纳 | P1 机制（§5）先行，天然支持 |
@@ -234,8 +234,8 @@ agent 的影响、S3 Windows junction 权限、S4 无包管理器降级）均按
    `docs/dsh-compat-gap-analysis.md`，即使入库也应对应 `docs/dsh-*` 系列命名。
 2. **`ClientTransportHooks` 归因**：review 文档（§5.5）的正确表述是"官方对**自带物理载体的 shell** 的
    扩展点"，且候选 G 明确说主进程不能直接 import 官方 client（首行 `window.__ModuleLoader__.load`）。
-   research 文档把它升格为"0.1.5 给**宿主**的正式扩展点、PiDeck 的 MessagePort 桥正好落在这里"——
-   PiDeck 实际用的是 host 半 `createSharedFetchHandler('/api')`（`hostEntry.ts:348`）+ 自写 `DshApiClient`
+   research 文档把它升格为"0.1.5 给**宿主**的正式扩展点、Telos 的 MessagePort 桥正好落在这里"——
+   Telos 实际用的是 host 半 `createSharedFetchHandler('/api')`（`hostEntry.ts:348`）+ 自写 `DshApiClient`
    （`DshApiClient.ts:59` 起），与 `ClientTransportHooks`（页面全局、client 半）无关。
 3. **`dsh-host-desktop-carrier`**：research 文档称"仓库里已有"——当前 master（c291e79）只有
    `apps/desktop-host`（`@deepseek-ai/dsh-desktop-host`）；`packages/host/desktop-carrier` 只出现在
@@ -261,7 +261,7 @@ e2e `dsh-plugins.spec.ts` + fixture `dsh-plugin-hello/`）**当前均不存在**
 # 1. 84 端点
 node scripts/dump-typert-endpoints.mjs                          # endpoints: 84
 
-# 2. PiDeck 端点（注意区分“调用次数”与“唯一端点”）：
+# 2. Telos 端点（注意区分“调用次数”与“唯一端点”）：
 grep -c 'rpc.call("' src/main/dsh/dshRemoteClient.ts            # 27 次调用（含 session/page 两处），唯一字面量 26
 grep -n 'goalRefAction("' src/main/dsh/dshRemoteClient.ts       # 4 个变量端点（392/396/400/404）
 # 唯一 unary = 26 + 4 = 30；两处源文档的 "27" 是误把调用次数当端点数

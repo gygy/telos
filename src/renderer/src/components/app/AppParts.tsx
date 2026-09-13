@@ -495,7 +495,7 @@ export function BrandLockup(props: { replayToken?: number } = {}) {
 			<span className="flex min-w-0 flex-col justify-center gap-1">
 				<TextShimmer
 					as="span"
-					className="brand-wordmark truncate text-[18px] font-[PiDeckDepartureMono] font-bold uppercase leading-none"
+					className="brand-wordmark truncate text-[18px] font-[TelosDepartureMono] font-bold uppercase leading-none"
 				>
 					Telos
 				</TextShimmer>

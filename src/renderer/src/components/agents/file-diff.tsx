@@ -3,7 +3,7 @@
 //
 // beUI 官方实现（官方/定制双轨收敛后的唯一实现，2026-08）。
 // 保留官方新增能力：流式状态图标（LoaderCircle/Check）、自动折叠与追底滚动；
-// 另含 PiDeck 本地扩展：`animateHeight`（展开/收起是否播放高度动画），
+// 另含 Telos 本地扩展：`animateHeight`（展开/收起是否播放高度动画），
 // 放在高度受外部 hug 测量（如 composer 卡）的容器内时传 false：折叠瞬时完成，
 // 避免 0.14s 连续高度变化被 ResizeObserver 逐帧上报导致外层面板/时间线抖动。
 
@@ -58,7 +58,7 @@ export interface FileDiffProps {
   onCopy?: () => void | Promise<void>;
   className?: string;
   /**
-   * [PiDeck local] 展开/收起是否播放高度动画（默认 true，保持 beui 原行为）。
+   * [Telos local] 展开/收起是否播放高度动画（默认 true，保持 beui 原行为）。
    * 放在高度受外部 hug 测量（如 composer 卡）的容器内时传 false：折叠瞬时完成，
    * 避免 0.14s 连续高度变化被 ResizeObserver 逐帧上报导致外层面板/时间线抖动。
    */

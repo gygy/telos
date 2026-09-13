@@ -35,7 +35,7 @@ export type SessionMutationResult = {
 };
 
 /**
- * 追加型消息条目（生图等 PiDeck 本地产物落盘用）：按 pi jsonl message 格式写入。
+ * 追加型消息条目（生图等 Telos 本地产物落盘用）：按 pi jsonl message 格式写入。
  * content 块格式与 pi 一致（text / image{source:{type:"base64",media_type,data}}）。
  */
 export type AppendMessageEntry = {
@@ -534,7 +534,7 @@ export class SessionFileEditor {
 	}
 
 	/**
-	 * 追加消息条目到会话末尾（生图等 PiDeck 本地产物落盘，不走 pi RPC）。
+	 * 追加消息条目到会话末尾（生图等 Telos 本地产物落盘，不走 pi RPC）。
 	 * 复用 mutate 的事务骨架：文件锁 / 备份 / 原子写 / reload marker 全保留，
 	 * 只把「定位既有条目」换成「以当前 leaf 为 parent 追加新行」。
 	 */

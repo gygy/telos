@@ -48,7 +48,7 @@ function atomgitContentsResponse(markdown) {
 }
 
 const ATOMGIT_API_URL =
-	"https://api.atomgit.com/api/v5/repos/ayuayue/PiDeck/contents/CHANGELOG.zh-CN.md?ref=main";
+	"https://api.atomgit.com/api/v5/repos/ayuayue/Telos/contents/CHANGELOG.zh-CN.md?ref=main";
 
 /** 每例独立临时缓存目录，用完即删。 */
 function makeCacheDir() {
@@ -201,7 +201,7 @@ test("languages are cached independently and corrupt cache entries are ignored",
 	const cacheDir = makeCacheDir();
 	try {
 		const enUrl =
-			"https://api.atomgit.com/api/v5/repos/ayuayue/PiDeck/contents/CHANGELOG.md?ref=main";
+			"https://api.atomgit.com/api/v5/repos/ayuayue/Telos/contents/CHANGELOG.md?ref=main";
 		const calls = [];
 		const service = new ChangelogService({
 			source: () => "atomgit",
@@ -210,7 +210,7 @@ test("languages are cached independently and corrupt cache entries are ignored",
 				{
 					[ATOMGIT_API_URL]: atomgitContentsResponse(REAL_CHANGELOG),
 					[enUrl]: jsonResponse('{"message":"Not Found"}'), // 英文仓库里不存在 → 形态异常回退
-					"https://raw.githubusercontent.com/ayuayue/PiDeck/main/CHANGELOG.md":
+					"https://raw.githubusercontent.com/ayuayue/Telos/main/CHANGELOG.md":
 						jsonResponse(REAL_CHANGELOG),
 				},
 				calls,

@@ -7,7 +7,7 @@ import type { AgentUiBatchQuestion, AgentUiResponse } from "../../shared/types";
  * - approval/requested：工具调用需要用户批准（approvalId 关联 host 侧审计）
  * - question/requested：批量提问（AskUserQuestionItem[]）
  *
- * PiDeck 侧把它们映射成 agents:ui-request 通道的 confirm / batch_ask 请求
+ * Telos 侧把它们映射成 agents:ui-request 通道的 confirm / batch_ask 请求
  * （渲染层复用现有 Ask 弹窗链路），应答再反向构造 DSH client-response。
  */
 
@@ -80,7 +80,7 @@ export function parseDshQuestionFrame(
 	return { requestId, sessionId, questions };
 }
 
-/** DSH 提问 → PiDeck 批量提问（confirm 无选项时降级为 confirm 类型按钮）。 */
+/** DSH 提问 → Telos 批量提问（confirm 无选项时降级为 confirm 类型按钮）。 */
 export function batchQuestionsFromDsh(items: DshQuestionItem[]): AgentUiBatchQuestion[] {
 	return items.map((item) => {
 		// DSH 的 select 问题必须带 options 才能渲染选项；无 options 降级 confirm
@@ -105,7 +105,7 @@ export function batchQuestionsFromDsh(items: DshQuestionItem[]): AgentUiBatchQue
 	});
 }
 
-/** approval 请求 → PiDeck confirm 请求（标题带工具名与原因，用户可见）。 */
+/** approval 请求 → Telos confirm 请求（标题带工具名与原因，用户可见）。 */
 export function approvalUiRequest(frame: DshApprovalFrame, agentId: string): Record<string, unknown> {
 	const tool = frame.toolName ?? "tool";
 	return {
@@ -116,7 +116,7 @@ export function approvalUiRequest(frame: DshApprovalFrame, agentId: string): Rec
 	};
 }
 
-/** question 请求 → PiDeck batch_ask 请求。 */
+/** question 请求 → Telos batch_ask 请求。 */
 export function questionUiRequest(frame: DshQuestionFrame, agentId: string): Record<string, unknown> {
 	return {
 		agentId,

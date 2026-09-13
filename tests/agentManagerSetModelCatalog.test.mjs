@@ -3,7 +3,7 @@
  *
  * 背景（2026-08 用户反馈）：deepseek 官方 provider 的目录模型
  * （deepseek-v4-flash-vision-exp，在 auth.json 有 key、pi --list-models 可见、
- * pi TUI 可用）在 PiDeck 中选择失败，报「模型未找到：…可能尚未在本地
+ * pi TUI 可用）在 Telos 中选择失败，报「模型未找到：…可能尚未在本地
  * models.json 中配置」。根因：运行中 Agent 的模型快照在启动时固化，若目录
  * （models-store.json 等）在 Agent 启动后才更新，set_model 会被 pi 拒绝；
  * 旧实现只检查 models.json（无该 provider）→ 误报「未配置」而非引导重启。

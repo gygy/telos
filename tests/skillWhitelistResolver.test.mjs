@@ -566,7 +566,7 @@ test("additionalAgentHomeDirs：WSL 家目录的 ~/.pi/agent/skills 与 ~/.agent
 	}
 });
 
-test("additionalAgentHomeDirs：PiDeck 禁用名与 frontmatter 禁用对 WSL 家目录技能同样生效", () => {
+test("additionalAgentHomeDirs：Telos 禁用名与 frontmatter 禁用对 WSL 家目录技能同样生效", () => {
 	const { resolveEnabledSkillPaths } = loadResolverModule();
 	const { root, home, cwd } = setupFixtures();
 	const wsl = setupWslHome(root, "wsl-home");

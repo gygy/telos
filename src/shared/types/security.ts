@@ -1,5 +1,5 @@
 /**
- * PiDeck 安全管理契约（shared/types/security.ts）
+ * Telos 安全管理契约（shared/types/security.ts）
  *
  * 安全门 = 「桌面端安全配置」 + 「pi-deck-security-gate 扩展」 两端协作：
  * - 本文件定义两端共享的数据结构（等级配置 / 策略快照）；
@@ -14,7 +14,7 @@
  * 4. 会话级覆盖：sessionId → levelId，输入框切换即时生效（快照重读）。
  */
 
-/** 受管控的内置工具全集（pi 内置 7 个 + PiDeck 提问工具） */
+/** 受管控的内置工具全集（pi 内置 7 个 + Telos 提问工具） */
 export type SecurityToolName =
 	| "read"
 	| "write"

@@ -8,7 +8,7 @@
 
 /** 一端（内置 / 覆盖层）的生效摘要；校验通过才有值。 */
 export type BuiltInExtensionsArtifactStatus = {
-	/** 包级版本号（manifest.version）；不跟 PiDeck 应用版本走。 */
+	/** 包级版本号（manifest.version）；不跟 Telos 应用版本走。 */
 	version: string;
 	/** 参与分发的文件数（含被扩展 import 的辅助模块）。 */
 	fileCount: number;

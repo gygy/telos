@@ -76,7 +76,7 @@ test("official BeUI TodoList source is placed in agents/ with official structure
 	assert.doesNotMatch(src, />To-dos</);
 });
 
-test("compact variant is optional, defaults to official classes, and uses PiDeck tokens", () => {
+test("compact variant is optional, defaults to official classes, and uses Telos tokens", () => {
 	const src = todoListSource();
 	// compact 是可选开关：接口声明 + 默认 false → 不传时官方类/行为完全不变
 	assert.match(src, /compact\?: boolean/);
@@ -94,7 +94,7 @@ test("compact variant is optional, defaults to official classes, and uses PiDeck
 	assert.match(official, /min-h-9 gap-2\.5/);
 	assert.match(official, /size-3\.5/);
 
-	// compact 分支禁止使用 raw text-sm/text-xs，必须走 PiDeck 语义字号 token
+	// compact 分支禁止使用 raw text-sm/text-xs，必须走 Telos 语义字号 token
 	for (const [, compactCls] of pairs) {
 		assert.ok(
 			!/text-(sm|xs)/.test(compactCls),

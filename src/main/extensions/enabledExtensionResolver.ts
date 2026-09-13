@@ -26,7 +26,7 @@ export type EnabledExtensionResolverOptions = {
 	cwd: string;
 	/** False when pi is started with --no-approve; forces a global-only whitelist. */
 	includeProjectResources?: boolean;
-	/** PiDeck settings 中的禁用条目（scope+source）。 */
+	/** Telos settings 中的禁用条目（scope+source）。 */
 	disabled: DisabledExtensionEntry[];
 	/** 已移除的内置扩展（独立机制，不参与 disabled 列表）。 */
 	removedBuiltInExtensions: readonly string[];
@@ -36,7 +36,7 @@ export type EnabledExtensionResolverOptions = {
 
 /**
  * Resolve the exact extension whitelist used with `--no-extensions`. Sources and filters mirror
- * pi 0.85, while PiDeck's scope-qualified disabled identities remain isolated from each other.
+ * pi 0.85, while Telos's scope-qualified disabled identities remain isolated from each other.
  */
 export function resolveEnabledExtensionPaths(
 	options: EnabledExtensionResolverOptions,

@@ -1,7 +1,7 @@
 /**
  * 应用公告（无服务器拉取模式）共享契约 —— 主进程与渲染层共用，禁止 import 运行时层。
  *
- * 架构：公告源 = PiDeck 仓库根的 announcements.json（git 管理，发公告 = commit）。
+ * 架构：公告源 = Telos 仓库根的 announcements.json（git 管理，发公告 = commit）。
  * 主进程 AnnouncementService 按多源 fallback 定时拉取（jsDelivr → 内置镜像代理 →
  * raw），解析校验后写 userData 缓存并向渲染层推送；渲染层只消费已过滤的
  * AnnouncementItem（TTL 过滤、版本门控在主进程做，渲染层不做业务判定）。

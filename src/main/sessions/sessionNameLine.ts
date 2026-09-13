@@ -1,7 +1,7 @@
 /**
- * 旧版 PiDeck 私有 sessionName 行识别与剔除（纯函数，零运行时依赖，便于单测）。
+ * 旧版 Telos 私有 sessionName 行识别与剔除（纯函数，零运行时依赖，便于单测）。
  *
- * 历史背景：旧版 PiDeck 重命名会话时会在 JSONL 文件头前置
+ * 历史背景：旧版 Telos 重命名会话时会在 JSONL 文件头前置
  * {"sessionName":<名称>,"ts":<时间戳>}（无 type 字段）。pi 要求会话文件
  * 首条可解析记录必须是 type:"session" 头（loadEntriesFromFile 校验 entries[0]），
  * 私有行位于头部时 pi 会拒绝加载（"Session file is not a valid pi session"，exit 1），

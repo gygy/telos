@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide walks through the main features of PiDeck step by step.
+This guide walks through the main features of Telos step by step.
 
 ## Workspace
 

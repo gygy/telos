@@ -107,7 +107,7 @@ export async function installTokendanceProvider(
 		name: TOKENDANCE_PROVIDER,
 		baseUrl: TOKENDANCE_BASE_URL,
 		api: "openai-completions",
-		// 请求维度归因：TokenDance 平台按 X-App-URL 将调用计入 PiDeck（覆盖 Key 归因）
+		// 请求维度归因：TokenDance 平台按 X-App-URL 将调用计入 Telos（覆盖 Key 归因）
 		headers: { [TOKENDANCE_APP_URL_HEADER]: TOKENDANCE_APP_URL },
 		models: piModels,
 		apiKey,

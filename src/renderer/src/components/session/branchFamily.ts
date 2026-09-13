@@ -4,7 +4,7 @@ import type { SessionRecord } from "../../../../shared/types";
  * 会话分支族派生（纯函数，node 单测直接加载，保持零运行时依赖）。
  *
  * pi 的分支模型：/fork、/clone 生成的新会话在文件头记录 parentSession 路径，
- * SessionCatalog 解析为 parentSessionId。因此 PiDeck 的分支单位是「会话」——
+ * SessionCatalog 解析为 parentSessionId。因此 Telos 的分支单位是「会话」——
  * parent = 来源会话，siblings = 同源分支（含自身，按创建时间排序），
  * children = 以当前会话为来源的下游分支。
  */

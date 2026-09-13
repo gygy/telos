@@ -293,7 +293,7 @@ export function getProjectAgentSessionDisplay({
 	// DSH 会话没有文件路径，只能按 dshSessionId 配对——否则激活后侧栏出现
 	// 「agent 行 + 会话行」两个相同标题的重复条目。
 	// 配对键有两把：dshSessionId（主键，attach 回写 catalog 后可用）与
-	// deckSessionId（兜底，agent tab 自带 PiDeck 会话身份）——automation 链路
+	// deckSessionId（兜底，agent tab 自带 Telos 会话身份）——automation 链路
 	// attach 回写是 fire-and-forget，渲染层快照可能先于 attach 到达，此时
 	// session.dshSessionId 还没落盘，只按 dshSessionId 配对会漏配产生重复条目。
 	const dshAgentBySessionId = new Map<string, AgentTab>();

@@ -75,7 +75,7 @@ function blankDefinition(transport: McpServerTransport): McpServerDefinition {
 }
 
 export const McpTab = forwardRef<McpTabHandle, {
-	/** PiDeck 已加载项目（项目作用域下拉数据源）；Chat 项目由选择器过滤。 */
+	/** Telos 已加载项目（项目作用域下拉数据源）；Chat 项目由选择器过滤。 */
 	projects?: Array<{ id: string; name: string; kind?: string }>;
 	/** 当前激活项目 id：项目作用域默认选中并跟随激活项目变化。 */
 	activeProjectId?: string;

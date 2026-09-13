@@ -17,7 +17,7 @@
 | 通信 | stdio JSON-RPC（`PiRpcClient`） | MessagePort fetch 桥（`DshApiClient` 覆写 `doFetch`，四象限信封 + SSE 帧） |
 | 网关 | `AgentManager`（5230 行） | `DshAgentManager`（958 行） |
 | 路由 | — | `CompositeAgentGateway` 按 `AgentTab.backend` 路由 |
-| 会话持久化 | 会话文件 JSONL（`SessionScanner`/`SessionHistoryReader`） | `$DSH_HOME` session log（`session.jsonl.zstd`），PiDeck catalog 只存映射 |
+| 会话持久化 | 会话文件 JSONL（`SessionScanner`/`SessionHistoryReader`） | `$DSH_HOME` session log（`session.jsonl.zstd`），Telos catalog 只存映射 |
 | 消息投影 | `AgentMessageProjector`（事件 → ChatMessage） | `dshEventProjector`（纯函数，SessionEvent → ChatMessage/ThinkingUpdate/ToolEventView） |
 | 迟到流治理 | `streamGate`（纯函数状态机） | `dshRuntimeControl`（纯函数状态机） |
 | 审批/提问 | pi 扩展 `ask_question`/`trust` | `approval/requested` + `question/requested` → `agents:ui-request` 桥 |
@@ -62,7 +62,7 @@
 
 ### 1.5 DSH wire 领域 API 使用状态（已装包类型核查）
 
-> 依据：`node_modules/@deepseek-ai/dsh-host-apiproxy/lib/types/api/*.d.ts`。✅=PiDeck 已用；⏳=可用未接；❌=无此能力。
+> 依据：`node_modules/@deepseek-ai/dsh-host-apiproxy/lib/types/api/*.d.ts`。✅=Telos 已用；⏳=可用未接；❌=无此能力。
 
 | 领域 | 方法 | 状态 | 备注 |
 |---|---|---|---|
@@ -76,7 +76,7 @@
 | goals | create / edit / pause / resume / complete / clear | ⏳ G5 | UI 后置 |
 | subagents | list / history / prompt / interrupt | ⏳ G6 | UI 后置 |
 | skills | list | ⏳ G7 | 至少可做呈现 |
-| host | describe / pickDirectory / listDirectory / createDirectory / openPath | ⏳ | 当前用 directoryPicker stub；可接 PiDeck 目录选择器 |
+| host | describe / pickDirectory / listDirectory / createDirectory / openPath | ⏳ | 当前用 directoryPicker stub；可接 Telos 目录选择器 |
 | downloads | sessionLog（host-only GET 路由，返回会话日志 ZIP） | ⏳ G10/A5 | 桥需扩展字节流/附件响应 |
 | agent-presets | list / setDefault 等 | ✅ | 配置页预设 tab |
 | session-search | 侧栏搜索语义工具（上限 20/snippet 240） | ⏳ G9 | 与 sessions.search 配套 |
@@ -93,7 +93,7 @@
 |---|---|---|---|---|
 | G1 | **会话删除/归档的 DSH 语义** | 删除会话只删 catalog 映射记录，host 侧会话数据留在 `$DSH_HOME`（`session.jsonl.zstd` 不清理），用户删了「以为没了」实际还在；归档同理 | 明确策略：删映射时是否同步删 host 会话（wire 无 `session.delete`，需查 host 是否有删除 API 或文档化「只删映射」并提示用户） | `SessionCatalog` / `DshAgentManager` / sessionIpc |
 | G2 | **图片附件（D14）** | 桥 body 只支持字符串，`attachment` 未接 | 桥协议扩展字节载荷（base64 或二进制 transferable），启用 `attachment-local` 行（sharp 已 asarUnpack 待命），composer 图片粘贴/拖拽对 DSH 会话生效 | `dshHostBridge` / `hostEntry` / `DshAgentManager.prepareResendFromMessage` / Composer |
-| G3 | **会话删除后 host 残留的会话列表清理**（与 G1 联动） | `session.list` 会列出 host 中所有会话；被 PiDeck 删除映射的会话无法从 UI 访问，但占用 `$DSH_HOME` 空间 | 提供「清理孤儿 DSH 会话」入口或删除映射时同步处理 | `DshHost` / 配置页 overview |
+| G3 | **会话删除后 host 残留的会话列表清理**（与 G1 联动） | `session.list` 会列出 host 中所有会话；被 Telos 删除映射的会话无法从 UI 访问，但占用 `$DSH_HOME` 空间 | 提供「清理孤儿 DSH 会话」入口或删除映射时同步处理 | `DshHost` / 配置页 overview |
 
 ### P1
 
@@ -146,7 +146,7 @@
 | B2 | DSH 会话删除后 host 侧会话的处置（G1） | **wire 无 `session.delete/remove`**（已核查 `dsh-host-apiproxy/lib/types/api/sessions.d.ts`：list/search/create/history/models/selectModel/rename/fork/prompt/attachment/updateQueue/cancel）→ 删除语义只能「删映射 + 文档化 host 数据保留」或未来走 host 侧自定义命令 |
 | B3 | DSH 会话搜索 `session.search` 的可用性 | **可用**：`sessions.d.ts` 有 search；`session-search.d.ts` 定义侧栏语义（结果上限 20、snippet 240 码点） |
 | B4 | `turn/end` 是否携带 usage/token 数据 | **待验证**：`dshEventProjector` 未投影 usage；需查 host 事件形状（`dsh-session-stats`/`dsh-token-meter` 包存在，有可行路径） |
-| B5 | 配置页「DSH 审批自动放行」与 DSH 自身 approval 策略的关系 | 两层并存：PiDeck 开关（`dshApprovalAutoAllow`，approval 帧直接应答）+ host `permission` 预设（sandbox 模式 + approval 策略捆绑）→ 需文档化优先级 |
+| B5 | 配置页「DSH 审批自动放行」与 DSH 自身 approval 策略的关系 | 两层并存：Telos 开关（`dshApprovalAutoAllow`，approval 帧直接应答）+ host `permission` 预设（sandbox 模式 + approval 策略捆绑）→ 需文档化优先级 |
 | B6 | 双 host / 多实例同 `$DSH_HOME` 并发 | **无任何防护**（`src/main/dsh/` 无 lock/占用检测）→ 启动时检测并提示，避免静默损坏 session log |
 | B7 | DSH 会话的「重开上次会话」恢复体验 | restart attach 已实现；应用启动时侧栏 DSH 历史会话可打开恢复（懒启动 host） |
 
@@ -277,7 +277,7 @@
 | **S2 收尾 + 公共抽象一期** | A4 注释修正、B6 同目录并发提示、D5 pending 表生命周期、D6 mux 重连补帧、E5 环境策略、E6 日志/消息处理、E8/E9 abort 泄漏与竞态、E10/E15 清理与退出登记；C12 退出清理表；C2/C11/C13 的等价修复已在 DshHostProcess/DshApiClient 内部落地（健康信号超时/请求超时/崩溃限次退避/pending 清理），基类化后置；C5 ModelCatalog 渲染侧已由 C19 覆盖（主进程侧 SessionAgentGateway.getAvailableModels 即统一接口，无需再抽）；C8 PromptSerializer 后置（pi 协议队列语义有回归风险） | S1 | 重构后 pi/dsh 全量回归（e2e 双后端） | ✅（抽象基类化后置） |
 | **S3 公共抽象二期 + 数据面** | C18 SessionBackendMark、C19 useBackendModelCatalog、C20 SecurityControl、C21 DEFAULT_AGENT_BACKEND、C9 buildAttachPatch、C12 QuitCleanupRegistry、C1 dshBackend 依赖分组、C10 withRuntimeReservation、C22 useSaveRegistry 已完成；C6 偏好存储现状已满足（SessionCatalog=store，Coordinator.applyPreferences=applyOnActivate）；C3 历史分页**判定无需额外抽象**——所有分页路径已统一返回 `{ messages, total, nextBefore }` 形状，pi/dsh 分支经 `readDshHistoryPage` 注入隔离，再抽 HistoryPageGateway 属负优化（增加间接层、让装配层变胖） | S2 | sessionIpc deps 收敛；backend 特判消除；UI 双后端分支收敛 | ✅（C3 已论证无需抽象） |
 | **S4 功能补齐 P1** | ✅ 全部完成：F5 复制路径入口、G11 设置页 DSH tab、G12 plan/权限徽标、G4 `/commands` 建议菜单、G16 usage 统计投影、D7 注释对齐、D8 abort 后 error 不投影、D9 工具卡收口（commit 976c02c8 / b2b2a212）、G9 会话全文搜索、G5 目标管理（goal/change 投影 + create/操作 + 工具面板）、G6 子代理呈现（subagent.list/history + 工具面板）（commit e3b116a1） | S3 | e2e 新增覆盖 | ✅ 10/10 |
-| **S5 功能补齐 P2 + 增强** | ✅ 全部完成：F6 imagegen 隐藏、F7 署名 i18n、E14 getStatus 语义、D16 restart 校验、E12 桥 origin 校验、D13 setThinking 顺序、G1 删除提示、E16 getClient 单例、F9 路径拼接、G3/D11 孤儿检测、G17 DSH RPC 日志（复用 RpcLogger + 侧栏开关分流，commit f183f548/2062b278/c7fe6112/b4310c94）、**G2 图片附件**（`session.prompt` 的 `PromptContentPart` 原生支持内联 base64 image，无需桥字节扩展——upload 端点方案已废弃；Composer 附件放开 + 重发携带 images + 投影 imageBlocksFromContent，commit 已合）、**G14 DSH 会话归档恢复**（`DshHost.archiveSession/unarchiveSession/listArchivedSessions`：目录移入 `$DSH_HOME/.pideck-archive` + manifest，会话列表右键归档、配置页概览归档区一键恢复并重建 catalog 记录；`workspaceDirFor`/`dshSessionFilePath` 抽到 `dshSessionPath.ts` 供 DshAgentManager/DshHost 共用，单测 `dshArchive.test.mjs`）、**G13 插件配置区动态化**（插件 tab 不再硬编码 3 分区：dsh-settings 契约规定 namespace 即插件短名，除 PiDeck 独占管理的保留命名空间（模型/安全/预设）外 host 注册的命名空间全部按插件呈现，新插件自动出现；分类器纯函数 + 单测 `dshPluginNamespaces.test.mjs`）；D14/D15/E13 论证为现状可接受或已知限制；**G13 的安装/卸载/启停按钮论证为宿主契约限制**：`IApiClient`/`ApiProxy` 无 plugin 域（`dsh-host-plugin-inventory` 仅 Typert 远程面，PiDeck 的 ApiProxy RPC 传输不可达），官方 dsh-web 的插件页同样只读（inventory + configurable 两个只读 tab，install = 编辑 host cordis 配置），cordis-host-runner 未随部署提供——配置修改走「源文件」raw tab，插件区负责动态发现与配置 | S4 | 全量手测 + 打包验证 | ✅ 14/14 |
+| **S5 功能补齐 P2 + 增强** | ✅ 全部完成：F6 imagegen 隐藏、F7 署名 i18n、E14 getStatus 语义、D16 restart 校验、E12 桥 origin 校验、D13 setThinking 顺序、G1 删除提示、E16 getClient 单例、F9 路径拼接、G3/D11 孤儿检测、G17 DSH RPC 日志（复用 RpcLogger + 侧栏开关分流，commit f183f548/2062b278/c7fe6112/b4310c94）、**G2 图片附件**（`session.prompt` 的 `PromptContentPart` 原生支持内联 base64 image，无需桥字节扩展——upload 端点方案已废弃；Composer 附件放开 + 重发携带 images + 投影 imageBlocksFromContent，commit 已合）、**G14 DSH 会话归档恢复**（`DshHost.archiveSession/unarchiveSession/listArchivedSessions`：目录移入 `$DSH_HOME/.pideck-archive` + manifest，会话列表右键归档、配置页概览归档区一键恢复并重建 catalog 记录；`workspaceDirFor`/`dshSessionFilePath` 抽到 `dshSessionPath.ts` 供 DshAgentManager/DshHost 共用，单测 `dshArchive.test.mjs`）、**G13 插件配置区动态化**（插件 tab 不再硬编码 3 分区：dsh-settings 契约规定 namespace 即插件短名，除 Telos 独占管理的保留命名空间（模型/安全/预设）外 host 注册的命名空间全部按插件呈现，新插件自动出现；分类器纯函数 + 单测 `dshPluginNamespaces.test.mjs`）；D14/D15/E13 论证为现状可接受或已知限制；**G13 的安装/卸载/启停按钮论证为宿主契约限制**：`IApiClient`/`ApiProxy` 无 plugin 域（`dsh-host-plugin-inventory` 仅 Typert 远程面，Telos 的 ApiProxy RPC 传输不可达），官方 dsh-web 的插件页同样只读（inventory + configurable 两个只读 tab，install = 编辑 host cordis 配置），cordis-host-runner 未随部署提供——配置修改走「源文件」raw tab，插件区负责动态发现与配置 | S4 | 全量手测 + 打包验证 | ✅ 14/14 |
 
 ## 6. 验证门禁（沿用 AGENTS.md）
 
@@ -343,7 +343,7 @@
   dsh-tool-cordis 同语义）。
 - **面板手势**（run/stop/uninstall）走 `requestId=null` 的 direct gesture，无需审批；
   模型驱动的 Client 激活审批流不在本 UI 范围。
-- **只支持 Host 半区**：Client 半区需 dsh-web 浏览器页面渲染，PiDeck 桌面端没有
+- **只支持 Host 半区**：Client 半区需 dsh-web 浏览器页面渲染，Telos 桌面端没有
   client runtime——安装表单提示用户只填 Host 源码。
 - Host 源码在 DSH host 进程内执行，运行器明示**不是安全边界**：UI 文案提示只安装
   自己编写的代码。

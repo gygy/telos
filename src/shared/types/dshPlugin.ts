@@ -31,7 +31,7 @@ export type DshStaticPluginView = {
 	fiberPhase: string | null;
 	/**
 	 * 条目来源：user = $DSH_HOME/cordis.patch.yml 用户补丁层声明（用户自装插件）；
-	 * builtin = dsh base / 随包预设 / PiDeck 自有组合。缺省视为 builtin
+	 * builtin = dsh base / 随包预设 / Telos 自有组合。缺省视为 builtin
 	 * （旧 host 未带该字段时的兼容语义）。
 	 */
 	origin?: "builtin" | "user";
@@ -52,7 +52,7 @@ export type DshUserPluginUninstallResult = {
 	rowRemoved: boolean;
 	/** 移除成功时的补丁文件备份路径（同目录 .bak-<时间戳>）。 */
 	backupPath?: string;
-	/** 同时移入回收站的插件目录（deleteFiles 且位于 PiDeck 管理目录时给出）。 */
+	/** 同时移入回收站的插件目录（deleteFiles 且位于 Telos 管理目录时给出）。 */
 	removedPluginDir?: string;
 	/** rowRemoved=false / 删除文件失败时的原因。 */
 	reason?: string;

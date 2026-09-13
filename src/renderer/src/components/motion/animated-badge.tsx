@@ -43,7 +43,7 @@ export interface AnimatedBadgeProps extends Omit<
   pulse?: boolean;
   contentKey?: string | number;
   /**
-   * 裸图标模式（PiDeck 扩展，官方无此 prop）：去掉胶囊边框/背景/内边距，
+   * 裸图标模式（Telos 扩展，官方无此 prop）：去掉胶囊边框/背景/内边距，
    * 仅保留图标滚动/旋转动画。用于会话 Tab 等紧凑内嵌场景（官方 sm 胶囊仍偏大）。
    */
   bare?: boolean;

@@ -85,7 +85,7 @@ test("append/read round-trip: 一轮生图记录（user 带参考图 + assistant
 		assert.equal(messages[1].role, "assistant");
 		assert.equal(messages[1].meta.imageGen.status, "complete");
 		assert.equal(messages[1].images[0].data, "REVG");
-		// 明确落在 PiDeck userData 的 imagegen/sessions 下，文件名 = sessionId.jsonl
+		// 明确落在 Telos userData 的 imagegen/sessions 下，文件名 = sessionId.jsonl
 		const file = join(dir, `${UUID_A}.jsonl`);
 		const raw = await readFile(file, "utf8");
 		assert.equal(raw.split("\n").filter(Boolean).length, 2);

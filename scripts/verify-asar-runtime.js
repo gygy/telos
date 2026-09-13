@@ -57,7 +57,7 @@ const SHOULD_BE_GONE = [
 ];
 
 // 主进程模型目录是 extraResources，不再依赖根 pi-ai SDK；DSH 自身的 pi-ai
-// 仍由 @deepseek-ai 闭包按需保留，不能把它当作 PiDeck 主进程的 MUST_KEEP 根。
+// 仍由 @deepseek-ai 闭包按需保留，不能把它当作 Telos 主进程的 MUST_KEEP 根。
 const REQUIRED_RESOURCE_FILES = ["pi-ai-catalog.json", "pi-ai-catalog.manifest.json"];
 const resourcesDir = path.join(unpackedDir, "resources");
 const missingResources = REQUIRED_RESOURCE_FILES.filter((name) => !fs.existsSync(path.join(resourcesDir, name)));

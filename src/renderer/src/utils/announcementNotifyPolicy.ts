@@ -17,7 +17,7 @@ export type AnnouncementBusyContext = {
 	agentBusy: boolean;
 	/** 任意模态对话框打开（toast 会压在弹窗上层，观感差）。 */
 	modalOpen: boolean;
-	/** 窗口失焦/最小化/隐藏到托盘（用户不在看 PiDeck）。 */
+	/** 窗口失焦/最小化/隐藏到托盘（用户不在看 Telos）。 */
 	windowInactive: boolean;
 };
 

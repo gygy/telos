@@ -66,7 +66,7 @@ test("restores image-only history messages with a localized placeholder", () => 
   assert.equal(messages[0].meta.entryId, "entry-image");
 });
 
-test("restores assistant image-only history messages (PiDeck imagegen persistence)", () => {
+test("restores assistant image-only history messages (Telos imagegen persistence)", () => {
   const messages = createProjector().convert("agent", [{
     role: "assistant",
     // 生图落盘格式：Anthropic 风格 source 包装（与 SessionHistoryReader 同协议）

@@ -49,7 +49,7 @@ export function emptyProjectResourceOverrides(): ProjectResourceOverrides {
 	};
 }
 
-/** Reads PiDeck-only project overrides without treating malformed pi settings as trusted data. */
+/** Reads Telos-only project overrides without treating malformed pi settings as trusted data. */
 export function readProjectResourceOverrides(projectRoot: string): ProjectResourceOverrides {
 	try {
 		const parsed: unknown = JSON.parse(

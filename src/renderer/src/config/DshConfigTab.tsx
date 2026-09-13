@@ -366,7 +366,7 @@ export const DshConfigTab = forwardRef<DshConfigTabHandle, {
 		[namespaces],
 	);
 	// G13：插件分区动态化——DSH 的 settings namespace 即插件短名（dsh-settings 契约），
-	// 除 PiDeck 独占管理的保留命名空间（模型/安全/预设）外，host 注册的命名空间全部按插件呈现。
+	// 除 Telos 独占管理的保留命名空间（模型/安全/预设）外，host 注册的命名空间全部按插件呈现。
 	const pluginNamespaces = useMemo(
 		() => namespaces.filter((ns) => isDshPluginNamespace(ns.ns)),
 		[namespaces],
@@ -555,7 +555,7 @@ export const DshConfigTab = forwardRef<DshConfigTabHandle, {
 											</div>
 										)}
 									</div>
-									{/* G13 深化：动态 Cordis 插件管理（define/run/stop/undefine），PiDeck 独有能力保留在配置页。
+									{/* G13 深化：动态 Cordis 插件管理（define/run/stop/undefine），Telos 独有能力保留在配置页。
 									    与上方静态插件配置卡片分区：横线 + 间距隔开，避免两区视觉粘连。 */}
 									<div className="mt-6 border-t border-border/60 pt-4">
 										<DshPluginSection />
@@ -1102,9 +1102,9 @@ function PresetsTab(props: {
 /**
  * 安全 tab（对齐 dsh-web 的 permission 预设）：新会话默认权限预设
  * （read-only / workspace-write / danger-full-access，sandbox + approval 捆绑）
- * + PiDeck 侧的审批自动放行开关（仅影响本应用内的 DSH 会话）。
+ * + Telos 侧的审批自动放行开关（仅影响本应用内的 DSH 会话）。
  * 默认预设保存与 Pi 管理页一致：草稿暂存，顶部统一保存提交；
- * autoAllow 是 PiDeck 运行时开关，即时生效不入统一保存。
+ * autoAllow 是 Telos 运行时开关，即时生效不入统一保存。
  */
 function SecurityTab(props: {
 	namespace?: DshNamespaceView;

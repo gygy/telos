@@ -31,7 +31,7 @@ export class WorktreeService {
 	 * 使用 git worktree list --porcelain 解析。
 	 *
 	 * 主工作区 = git 仓库根 checkout（由 --git-common-dir 推导），而非当前 projectPath：
-	 * 当 PiDeck 从某个子 worktree 打开时，projectPath 是 worktree 目录，主工作区
+	 * 当 Telos 从某个子 worktree 打开时，projectPath 是 worktree 目录，主工作区
 	 * 会作为普通条目出现在列表中；若不排除，用户误点删除会整目录 rm -rf（曾导致
 	 * 主工作区 40G 数据丢失）。
 	 */
@@ -130,8 +130,8 @@ export class WorktreeService {
 		// 回收站不可用时 trashPath 抛错：删除失败比永久丢失安全（历史教训：误删 40G）。
 		await trashPath(worktreePath, { source: "git:worktree-remove" });
 
-		// 删除 PiDeck 创建的分支：旧版本使用 pideck/{slug}，新版本使用与目录名一致的 {slug}。
-		// 对外部 worktree 尽量保守，只在“分支名等于目录名”时认为是 PiDeck 创建的同名工作区。
+		// 删除 Telos 创建的分支：旧版本使用 pideck/{slug}，新版本使用与目录名一致的 {slug}。
+		// 对外部 worktree 尽量保守，只在“分支名等于目录名”时认为是 Telos 创建的同名工作区。
 		const worktreeDirName = basename(worktreePath);
 		if (entry.branch?.startsWith("pideck/") || entry.branch === worktreeDirName) {
 			await execFileAsync(currentGitExecutable(), ["branch", "-D", entry.branch], { cwd: projectPath }).catch(() => undefined);

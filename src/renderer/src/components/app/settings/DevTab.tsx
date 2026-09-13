@@ -71,7 +71,7 @@ type SelectOption = { value: string; label: string; disabled?: boolean };
 export const DevTab = memo(function DevTab(props: DevTabProps) {
   const { draft, updateDraft, isDirty } = props;
   const piPath = props.customPiPath || props.piStatus?.command || "";
-  // 后台检查发现可提示的 PiDeck 新版本（未跳过）时高亮设置页更新分区。
+  // 后台检查发现可提示的 Telos 新版本（未跳过）时高亮设置页更新分区。
   const updateStatus = useAtomValue(updateStatusAtom);
   const piCliStatus = updateStatus?.piCli ?? null;
   // 手动检查的结果比定时后台快照更新，统一决定提示内容和更新按钮是否可用。

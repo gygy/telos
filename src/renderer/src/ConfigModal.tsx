@@ -256,7 +256,7 @@ type ConfigModalProps = {
 	onSaved: () => void;
 	/** 当前项目身份：项目资源 IPC 只接受由主进程登记的 projectId。 */
 	projectId?: string;
-	/** PiDeck 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
+	/** Telos 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
 	projects?: Array<{ id: string; name: string; kind?: Project["kind"] }>;
 	/** Chat workspace has no project resource scope. */
 	projectKind?: Project["kind"];
@@ -298,7 +298,7 @@ export type ConfigPaneProps = {
 	onSaved?: () => void;
 	/** 当前项目身份：项目资源 IPC 只接受由主进程登记的 projectId。 */
 	projectId?: string;
-	/** PiDeck 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
+	/** Telos 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
 	projects?: Array<{ id: string; name: string; kind?: Project["kind"] }>;
 	/** Chat workspace has no project resource scope. */
 	projectKind?: Project["kind"];
@@ -444,7 +444,7 @@ function ConfigModalContent(props: ConfigModalContentProps) {
 	const { open, onClose, onSaved, projectId, projectKind, projectName, projects = [], resourceOnly = false, embedded, focusConfigTab, focusProvider, focusBackendPane } = props;
 	/**
 	 * 资源作用域是派生值而非可切换 state：
-	 * - 主配置页固定 global（全局安装 + 用户 ~/.pi 自装 + PiDeck 内置）；项目级技能/扩展/提示词
+	 * - 主配置页固定 global（全局安装 + 用户 ~/.pi 自装 + Telos 内置）；项目级技能/扩展/提示词
 	 *   的管理入口在项目右键的「资源管理」弹窗，这里不再提供全局/项目下拉（双入口反而混乱）。
 	 * - 资源管理器模式（resourceOnly，项目右键进入）固定为入口项目。
 	 * MCP 页例外：项目级 mcp.json 没有其它管理入口，作用域切换内聚在 McpTab 自己的 state 里。

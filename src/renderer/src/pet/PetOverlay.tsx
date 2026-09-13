@@ -40,7 +40,7 @@ const NOTIF_COLOR: Record<PetNotification["type"], string> = {
 	waiting: "#a16207",
 };
 
-/** 标题黑色（PiDeck --color-text-primary） */
+/** 标题黑色（Telos --color-text-primary） */
 const TITLE_COLOR = "#202124";
 /** 气泡文字字重：统一加粗 */
 const NOTIF_FONT_WEIGHT = 700;
@@ -54,7 +54,7 @@ type Props = {
 	scale: number;
 	/** 有效 UI 字号档位：气泡字号由此推导 */
 	fontMode: AppFontSizeMode;
-	/** 气泡字体栈（跟随 PiDeck 字体设置：system/sans/serif/custom） */
+	/** 气泡字体栈（跟随 Telos 字体设置：system/sans/serif/custom） */
 	fontStack: string;
 };
 

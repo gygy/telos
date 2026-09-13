@@ -7,7 +7,7 @@
  * - probes：旧全局探针数组（AI/高级用户直接写，运行时按 baseUrl 合并探测，只读兼容）。
  *
  * 为什么是声明式 JSON 而不是脚本：
- * - 用量查询跑在 PiDeck 主进程（net.fetch + 密钥脱敏），不存在任意代码执行风险；
+ * - 用量查询跑在 Telos 主进程（net.fetch + 密钥脱敏），不存在任意代码执行风险；
  * - JSON 文件与 pi CLI 完全隔离，不影响用户在终端里用 pi；
  * - 配置入口唯一：模型/认证页的用量查询弹窗（经 config:get/save-usage-probes）。
  *

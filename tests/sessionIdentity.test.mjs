@@ -126,7 +126,7 @@ test("isValidPiSessionFileHead rejects pi-subagents transcript dumps without a t
 
 test("isValidPiSessionFileHead skips legacy sessionName heads before judging the first real record", () => {
   const { isValidPiSessionFileHead } = loadModule();
-  // 旧版 PiDeck 私有 sessionName 头行（#114 存量损坏）：跳过后首条真实记录带 type → 接受。
+  // 旧版 Telos 私有 sessionName 头行（#114 存量损坏）：跳过后首条真实记录带 type → 接受。
   const legacyHead = `${JSON.stringify({ sessionName: "老版私有头", ts: 1 })}\n${JSON.stringify({
     type: "session_info",
     name: "老版私有头",
@@ -174,16 +174,16 @@ test("AgentManager keys preserve WSL case and identity at the process boundary",
 test("resolves a native relative sessionFile against the project path", () => {
   const { toAbsoluteSessionPath } = loadModule();
   assert.equal(
-    toAbsoluteSessionPath(".pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl", "D:\\Project\\PiDeck", "native"),
-    "D:\\Project\\PiDeck\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
+    toAbsoluteSessionPath(".pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl", "D:\\Project\\Telos", "native"),
+    "D:\\Project\\Telos\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
   );
 });
 
 test("resolves native relative paths with forward slashes and normalizes output to backslashes", () => {
   const { toAbsoluteSessionPath } = loadModule();
   assert.equal(
-    toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:/Project/PiDeck", "native"),
-    "D:\\Project\\PiDeck\\.pi\\sessions\\session.jsonl",
+    toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:/Project/Telos", "native"),
+    "D:\\Project\\Telos\\.pi\\sessions\\session.jsonl",
   );
 });
 
@@ -202,8 +202,8 @@ test("passes through already-absolute native and WSL paths", () => {
 test("resolves a WSL relative sessionFile against the /mnt/<drive> project base", () => {
   const { toAbsoluteSessionPath } = loadModule();
   assert.equal(
-    toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:\\Project\\PiDeck", "wsl"),
-    "/mnt/d/Project/PiDeck/.pi/sessions/session.jsonl",
+    toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:\\Project\\Telos", "wsl"),
+    "/mnt/d/Project/Telos/.pi/sessions/session.jsonl",
   );
 });
 
@@ -212,12 +212,12 @@ test("relative and absolute forms canonicalize to the same origin key", () => {
   const relative = buildSessionOriginKey({
     source: "pi",
     environment: "native",
-    filePath: toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:\\Project\\PiDeck", "native"),
+    filePath: toAbsoluteSessionPath(".pi/sessions/session.jsonl", "D:\\Project\\Telos", "native"),
   });
   const absolute = buildSessionOriginKey({
     source: "pi",
     environment: "native",
-    filePath: "D:\\Project\\PiDeck\\.pi\\sessions\\session.jsonl",
+    filePath: "D:\\Project\\Telos\\.pi\\sessions\\session.jsonl",
   });
   assert.equal(relative, absolute);
 });

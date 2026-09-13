@@ -66,7 +66,7 @@ const isDevBuild = !app.isPackaged || __PIDECK_DEV_BUILD__;
 const isE2E = process.env.PIDECK_E2E === "1";
 
 // 开发态与正式版隔离 userData。
-// 否则 npm run dev 会与已安装的 PiDeck 共用数据/锁，表现为「开发启动被复用到正式版窗口」。
+// 否则 npm run dev 会与已安装的 Telos 共用数据/锁，表现为「开发启动被复用到正式版窗口」。
 // 未打包的 npm run dev：功能分支再按 git 分支名拆目录（pi-desktop-dev-<branch>），
 // 避免多个 worktree 同时启动共用 catalog / 单实例锁 / DSH home。main/dev 仍用历史目录。
 // 打包的 dist:win:dev 仍固定 pi-desktop-dev（与脚本约定一致，复用现有开发配置）。
@@ -84,7 +84,7 @@ const explicitUserDataDir =
 		?.slice("--user-data-dir=".length);
 if (isDevBuild) {
 	// 显式固定目录名：dev 构建的 productName 是 phidsDev，
-	// 默认 userData 会落在 %APPDATA%\PiDeckDev，必须指回 dev 配置目录以复用现有配置。
+	// 默认 userData 会落在 %APPDATA%\TelosDev，必须指回 dev 配置目录以复用现有配置。
 	// 例外：命令行显式传入 --user-data-dir（e2e 隔离、多实例调试）时尊重该路径，
 	// 否则 e2e 会读到本机真实开发数据（settings/projects 全部污染测试断言）。
 	if (explicitUserDataDir) {
@@ -130,7 +130,7 @@ if (!electronChromiumSandboxEnabled) {
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=384");
 
 // Windows 系统通知必须设置 AppUserModelID，否则通知不显示、点击事件不触发。
-// Telos 使用独立 AUMID，避免与已安装的 PiDeck（com.ayuayue.pi-desktop）共用任务栏图标/名称。
+// Telos 使用独立 AUMID，避免与已安装的 Telos（com.ayuayue.pi-desktop）共用任务栏图标/名称。
 if (process.platform === "win32") {
 	const packagedAppId = "app.telos.desktop";
 	const devAppId =
@@ -1402,7 +1402,7 @@ function printStartupInfo() {
 			"color: #8b5cf6; font-weight: bold;"
 		);
 		console.log(
-			"%c│                      PiDeck Desktop                      │",
+			"%c│                      Telos Desktop                      │",
 			"color: #8b5cf6; font-weight: bold; font-size: 16px;"
 		);
 		console.log(
@@ -2300,7 +2300,7 @@ async function sendAgentPromptWithIntegrations(
 	const sessionChatId = bridgeConnected ? bridge.getSessionChatId(input.agentId) : undefined;
 	let agentInstruction: string | undefined;
 	const buildFeishuActionInstruction = (chatId?: string) => [
-		"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，PiDeck 会按当前会话绑定自动上传。",
+		"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，Telos 会按当前会话绑定自动上传。",
 		chatId ? `当前绑定的飞书 chat_id: ${chatId}。这是只读上下文，用于确认当前会话绑定；发送文件仍必须用 [SEND_FILE:本地文件路径]。` : undefined,
 	].filter(Boolean).join("\n");
 
@@ -2326,7 +2326,7 @@ async function sendAgentPromptWithIntegrations(
 			});
 			bridge.trackDocRequest(tab.id, docTitle);
 			void bridge.forwardUserMessageToFeishu(tab.id, input.message).catch((error) => {
-				console.error("[Feishu] forward PiDeck message failed:", error);
+				console.error("[Feishu] forward Telos message failed:", error);
 			});
 			agentInstruction = `${buildFeishuActionInstruction(bridge.getSessionChatId(tab.id))}\n创建飞书文档时，先输出完整正文，最后独立一行写 [CREATE_DOC:文档标题]。`;
 		}
@@ -2339,7 +2339,7 @@ async function sendAgentPromptWithIntegrations(
 			});
 			if (input.message.trim()) {
 				void bridge.forwardUserMessageToFeishu(tab.id, input.message).catch((error) => {
-					console.error("[Feishu] forward PiDeck message failed:", error);
+					console.error("[Feishu] forward Telos message failed:", error);
 				});
 			}
 		}
@@ -2420,7 +2420,7 @@ function registerIpc() {
 		resolveWslEnvironment: async (distro, user) => {
 			const { resolveWslEnvironment } = await import("./wsl/WslEnvironment");
 			return resolveWslEnvironment(distro, user, {
-				warn: (msg: string, detail: Record<string, unknown>) => console.warn("[PiDeck] " + msg, detail),
+				warn: (msg: string, detail: Record<string, unknown>) => console.warn("[Telos] " + msg, detail),
 			});
 		},
 	});
@@ -2467,7 +2467,7 @@ function registerIpc() {
 		log: (message, ...args) => appLogger.info("imagegen", message, ...args),
 	});
 	// 生图 session 独立存储：无 pi 会话文件的纯生图草稿把历史落盘到这里（重启可恢复），
-	// 不依赖 pi 会话文件也不进 pi 的 sessions 目录（PiDeck userData/imagegen/sessions）。
+	// 不依赖 pi 会话文件也不进 pi 的 sessions 目录（Telos userData/imagegen/sessions）。
 	const imageSessionStore = new ImageSessionStore({
 		getStorePath: () => join(app.getPath("userData"), "imagegen", "sessions"),
 	});
@@ -2505,7 +2505,7 @@ function registerIpc() {
 				}
 			}
 			// 生图独立持久化：imagegen 后端会话（可能残留无意义的 pi filePath）与无 pi 会话文件的
-			// 纯生图草稿，都落盘到 ImageSession 独立存储（PiDeck userData 下的 imagegen/sessions），
+			// 纯生图草稿，都落盘到 ImageSession 独立存储（Telos userData 下的 imagegen/sessions），
 			// 不再依赖 pi 会话文件；并把会话提升为 active，防重启时 staleDrafts 清理丢入口——
 			// 否则生图历史重启即失（2026 用户反馈）。只有非 imagegen 且有 filePath 才写 pi 文件。
 			if (entry.backend === "imagegen" || !entry.filePath) {
@@ -2833,7 +2833,7 @@ function registerIpc() {
 		source: () => settingsStore.get().updateSource,
 		customHost: () => settingsStore.get().customUpdateSourceUrl,
 	});
-	// 内置扩展热更新：版本号不跟 PiDeck 应用版本走（见 resources/extensions/extensions-manifest.json），
+	// 内置扩展热更新：版本号不跟 Telos 应用版本走（见 resources/extensions/extensions-manifest.json），
 	// 打包态 resources 只读，更新写进 userData 覆盖层，路径解析侧覆盖层优先 → 重启会话即生效。
 	const builtInExtensionRoots = resolveBuiltInExtensionRoots();
 	const builtInExtensionsUpdater = new BuiltInExtensionsUpdater({
@@ -3093,7 +3093,7 @@ function registerIpc() {
 	// 资源管理器右键菜单（HKCU）：菜单显示名跟随主进程 locale（可能随设置语言切换）
 	registerShellMenuIpc({
 		appLogger,
-		menuTitle: mainCopy("shellMenu.openWithPiDeck"),
+		menuTitle: mainCopy("shellMenu.openWithTelos"),
 	});
 }
 
@@ -3391,7 +3391,7 @@ app.whenReady().then(async () => {
 		() => !app.isPackaged,
 		() => app.isPackaged,
 		// 声明的配套 dsh 版本（package.json）：与已装 runtime 比对得出 updateAvailable，
-		// 升级 PiDeck 后旧 runtime 仍「兼容」会被一直选用，UI 需要这个信号提示更新。
+		// 升级 Telos 后旧 runtime 仍「兼容」会被一直选用，UI 需要这个信号提示更新。
 		() => readDeclaredDshVersion(app.getAppPath()),
 	);
 	dshRuntimeStatus.subscribe((status) => {
@@ -3967,7 +3967,7 @@ app.whenReady().then(async () => {
 		if (wslEnabled && wslDistro && wslUser) {
 			const { resolveWslEnvironment: resolveWsl2 } = await import("./wsl/WslEnvironment");
 			const wslEnv = await resolveWsl2(wslDistro, wslUser, {
-				warn: (msg: string, detail: unknown) => console.warn("[PiDeck] " + String(msg), detail),
+				warn: (msg: string, detail: unknown) => console.warn("[Telos] " + String(msg), detail),
 			});
 			await sessionScanner.configureWsl(wslEnv);
 			agentManager.configureWsl(wslEnv);
@@ -4004,7 +4004,7 @@ app.whenReady().then(async () => {
 	void cleanupPasteFiles?.().catch((error: unknown) => {
 		void appLogger.warn("app", "Paste file cleanup failed during startup", error);
 	});
-	// DSH runtime 自动更新（打包态）：升级 PiDeck 后若已装 runtime 与声明版本不一致
+	// DSH runtime 自动更新（打包态）：升级 Telos 后若已装 runtime 与声明版本不一致
 	// （outdated，被硬门控挡住无法启动 host），启动期后台自动重装配套版本并回收旧
 	// 版本目录——与其让用户手动点「重新安装」，不如升级后首次启动自动完成。
 	// notInstalled 不自动装（用户未选择使用 DSH，保持安装引导）；dev 跳过（项目
@@ -4045,7 +4045,7 @@ app.whenReady().then(async () => {
 	// 模型 capability cache 的 hydration 在 syncWslConfig 后启动，确保它与 PiProcess
 	// 使用同一套 WSL HOME/config 目录；不阻塞首帧。
 	void syncWslConfig().then(async () => {
-		// 冷启动先刷 pi 模型目录缓存（models-store.json）再 hydration：PiDeck 的 RPC
+		// 冷启动先刷 pi 模型目录缓存（models-store.json）再 hydration：Telos 的 RPC
 		// 进程都带 --offline，pi 启动时的自动目录网络刷新被跳过；目录若不主动刷新
 		// 只能靠 TUI 更新，可能长期滞后（官方 provider 新模型导致「列表有、Agent
 		// 快照没有」的选择失败，2026-08 deepseek 场景）。目录过期才刷（mtime 节流），
@@ -4251,17 +4251,17 @@ app.whenReady().then(async () => {
 	void appLogger?.error("app", "Application startup failed", error);
 	void import("electron").then(({ dialog }) => {
 		dialog.showErrorBox(
-			"PiDeck failed to start",
+			"Telos failed to start",
 			error instanceof Error ? (error.stack ?? error.message) : String(error),
 		);
 	}).catch(() => undefined);
 });
 
 /**
- * 删除用户扩展目录中的 PiDeck 扩展文件（历史部署或已下线扩展）。
+ * 删除用户扩展目录中的 Telos 扩展文件（历史部署或已下线扩展）。
  * 内置扩展现改为 -e 从 app resources 加载，用户目录不应再有 pi-deck-* 副本。
  */
-async function removeStalePiDeckExtension(extensionName: string, homeDir?: string): Promise<void> {
+async function removeStaleTelosExtension(extensionName: string, homeDir?: string): Promise<void> {
 	const home = homeDir ?? app.getPath("home");
 	const targetPath = join(home, ".pi", "agent", "extensions", extensionName);
 	await rm(targetPath, { force: true });
@@ -4286,7 +4286,7 @@ async function migrateLegacyBuiltInExtensions(): Promise<void> {
 	}
 	for (const home of homes) {
 		for (const name of legacyNames) {
-			await removeStalePiDeckExtension(name, home).catch(() => undefined);
+			await removeStaleTelosExtension(name, home).catch(() => undefined);
 		}
 	}
 }
@@ -4329,7 +4329,7 @@ async function ensurePiSettingsDefaults(configDir: string, piVersionHint?: strin
 	if (changed) {
 		await mkdir(configDir, { recursive: true });
 		await writeFile(filePath, JSON.stringify(current, null, 2), "utf8");
-		console.log('[PiDeck] Ensured pi settings defaults at:', filePath);
+		console.log('[Telos] Ensured pi settings defaults at:', filePath);
 	}
 }
 

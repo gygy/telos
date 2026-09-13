@@ -9,7 +9,7 @@ import type { PetDragMode } from "./PetDragDirection";
 import { loadSpriteSheet, type SpriteSheet } from "./PetSpriteSheet";
 import "./pet.css";
 
-/** 宠物窗需要的窄外观：缩放 + 有效 UI 字号档位 + 气泡字体栈（跟随 PiDeck 字体设置） */
+/** 宠物窗需要的窄外观：缩放 + 有效 UI 字号档位 + 气泡字体栈（跟随 Telos 字体设置） */
 type PetAppearance = { scale: number; fontMode: AppFontSizeMode; fontStack: string };
 
 function readAppearance(s: {

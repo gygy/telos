@@ -7,7 +7,7 @@ import { generatePiAiCatalog } from "../scripts/generate-pi-ai-catalog.mjs";
 const CATALOG_RESOURCE = "pi-ai-catalog.json";
 const MANIFEST_RESOURCE = "pi-ai-catalog.manifest.json";
 
-test("PiDeck 将主进程 pi-ai catalog 作为构建期资源分发", () => {
+test("Telos 将主进程 pi-ai catalog 作为构建期资源分发", () => {
 	const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 	assert.equal(
 		pkg.dependencies?.["@earendil-works/pi-ai"],

@@ -30,7 +30,7 @@ export const PROXY_BYPASS_ENV_KEYS = ["NO_PROXY", "no_proxy"] as const;
  * undici 默认不读 HTTP_PROXY 等环境变量，只有设置 NODE_USE_ENV_PROXY=1（Node 22.21+/24.5+，
  * Electron 43 内置 Node 24.18.1 支持，已实测）后，globalThis.fetch / node:http(s) 才会按
  * HTTP_PROXY/HTTPS_PROXY/NO_PROXY 走代理。DSH host 运行在 utilityProcess（Electron 内置 Node），
- * LLM 客户端用 globalThis.fetch，因此不设此开关时，PiDeck 注入的代理 env 对 DSH 完全无效。
+ * LLM 客户端用 globalThis.fetch，因此不设此开关时，Telos 注入的代理 env 对 DSH 完全无效。
  */
 export const NODE_USE_ENV_PROXY = "NODE_USE_ENV_PROXY";
 

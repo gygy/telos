@@ -4,7 +4,7 @@
  * 数据源（只读，采集由各后端插件负责）：
  *  - pi：pi-tracker 写入的 usage.jsonl
  *  - DSH：dsh-bill 写入的 $DSH_HOME/dsh-bill/records.jsonl
- * PiDeck 只读数据做展示，不承担采集职责（扩展机制：装插件=开功能）。
+ * Telos 只读数据做展示，不承担采集职责（扩展机制：装插件=开功能）。
  *
  * 注意：IPC 结构化克隆不支持 Set，聚合内部可用 Set，跨层 DTO 一律用数组。
  */

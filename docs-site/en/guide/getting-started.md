@@ -1,6 +1,6 @@
 # Quick Start
 
-There are two ways to use PiDeck: download a pre-built installer or run from source.
+There are two ways to use Telos: download a pre-built installer or run from source.
 
 ## Download & Install
 
@@ -10,7 +10,7 @@ There are two ways to use PiDeck: download a pre-built installer or run from sou
    - **macOS**: `.dmg` (Apple Silicon / Intel)
    - **Linux**: `.AppImage` or `.deb`
 3. Run the installer and follow the setup wizard.
-4. Launch PiDeck — you'll see the project workspace and session panel.
+4. Launch Telos — you'll see the project workspace and session panel.
 
 ## Run from Source
 
@@ -25,7 +25,7 @@ There are two ways to use PiDeck: download a pre-built installer or run from sou
 ```bash
 # Clone the repository
 git clone https://github.com/gygy/telos.git
-cd PiDeck
+cd Telos
 
 # Install dependencies
 npm install
@@ -49,4 +49,4 @@ Output files are placed in the `release/` directory.
 
 1. Click **"Add Project"** or drag a folder into the workspace panel.
 2. Select a project to open its session view.
-3. Type your prompt in the composer and press Enter — PiDeck will start a pi RPC agent for that project.
+3. Type your prompt in the composer and press Enter — Telos will start a pi RPC agent for that project.

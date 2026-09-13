@@ -141,8 +141,8 @@ test("defaultUrlTransform keeps local file hrefs on win/mac/linux and clears uns
 	const { defaultUrlTransform } = markdownCore;
 	// Windows：裸盘符（F:/、F:\\）+ 行号不能当协议清空（回归：href 被清 → 点击无反应）
 	assert.equal(
-		defaultUrlTransform("F:/PiDeck/packages/dsh-tool-pwsh-persistent/src/index.ts:309"),
-		"F:/PiDeck/packages/dsh-tool-pwsh-persistent/src/index.ts:309",
+		defaultUrlTransform("F:/Telos/packages/dsh-tool-pwsh-persistent/src/index.ts:309"),
+		"F:/Telos/packages/dsh-tool-pwsh-persistent/src/index.ts:309",
 	);
 	assert.equal(
 		defaultUrlTransform("C:\\Users\\x\\a.ts:12"),

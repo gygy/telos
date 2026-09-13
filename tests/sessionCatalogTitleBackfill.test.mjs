@@ -146,9 +146,9 @@ test("an externally appended pi session_info refreshes an existing real catalog 
     await catalog.load();
 
     const [initial] = await catalog.mergeScanned("project-1", [
-      lightSummary({ name: "PiDeck 旧标题", updatedAt: 1000 }),
+      lightSummary({ name: "Telos 旧标题", updatedAt: 1000 }),
     ]);
-    assert.equal(initial.title, "PiDeck 旧标题");
+    assert.equal(initial.title, "Telos 旧标题");
     assert.equal(fetcherCalls, 0);
 
     // pi-tui /name 会在 JSONL 末尾追加 session_info，同时改变 mtime/size；轻量扫描

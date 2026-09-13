@@ -7,7 +7,7 @@ import type { TranslationKey } from "../i18n/rendererCopy.zh-CN";
 import { showNotice } from "../utils/notice";
 import { writeClipboard } from "../utils/clipboard";
 
-/** PiDeck 内置扩展名 → source 文件名映射 */
+/** Telos 内置扩展名 → source 文件名映射 */
 const PIDEK_BUILTIN_SOURCE: Record<string, string> = {
 	"pi-deck-todo": "pi-deck-todo.ts",
 	"pi-deck-plan-mode": "pi-deck-plan-mode.ts",

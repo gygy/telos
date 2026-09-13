@@ -110,7 +110,7 @@ export class AgentMessageProjector {
 					entryIndex = taken.nextIndex;
 					const currentEntryId = taken.entryId;
 					const thinking = this.extractThinking(typed.content);
-					// 生图等 PiDeck 本地落盘的 assistant 消息可能只有图片块、没有文本。
+					// 生图等 Telos 本地落盘的 assistant 消息可能只有图片块、没有文本。
 					const images = this.extractImages(typed.content);
 					// SessionFileEditor 将持久化 extra 展开到 assistant 消息顶层，
 					// 因此历史生图标识位于 typed.api / typed.imageGen。
@@ -394,7 +394,7 @@ export class AgentMessageProjector {
 
 	/** 从 pi 历史消息 content 中恢复图片附件，用于历史会话重新打开后的图片展示。
 	 *  兼容两种图片块：
-	 *  - 直接块 { type:"image", data, mimeType }（PiDeck 落盘旧格式）
+	 *  - 直接块 { type:"image", data, mimeType }（Telos 落盘旧格式）
 	 *  - Anthropic 风格 { type:"image", source:{ type:"base64", media_type, data } }
 	 *    （pi jsonl / SessionHistoryReader.extractResendContent 同协议） */
 	private extractImages(content: unknown): ImageContent[] {

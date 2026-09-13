@@ -1,5 +1,5 @@
 /**
- * web-main — PiDeck Web 服务 React 入口（A2）。
+ * web-main — Telos Web 服务 React 入口（A2）。
  * 独立于主窗口 renderer；通过 /api/* 与主进程 WebServiceManager 通信。
  *
  * 重构后与桌面端共享同一套样式基座（styles.css → foundation/timeline/surfaces/

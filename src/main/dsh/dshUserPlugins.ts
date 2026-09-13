@@ -1,9 +1,9 @@
 /**
  * DSH 用户自装插件的识别与卸载（纯函数 + 文件操作，可单测）。
  *
- * 来源判定：host 的插件组合来自多层 patch（base / 随包预设 / PiDeck 自有行 /
+ * 来源判定：host 的插件组合来自多层 patch（base / 随包预设 / Telos 自有行 /
  * home 用户补丁层）。其中 **$DSH_HOME/cordis.patch.yml** 是官方约定的用户自装层
- * （`dsh plugin add` 与手动安装都写这里，PiDeck 的安装脚本同样写这里）——
+ * （`dsh plugin add` 与手动安装都写这里，Telos 的安装脚本同样写这里）——
  * 出现在该文件里的条目即「用户安装」，其余为「自带」。
  *
  * 卸载 = 从该文件移除对应行（其余层不归用户管，禁止触碰）。采用**行级手术**而不是
@@ -205,7 +205,7 @@ export function removeUserPatchRow(text: string, target: RemoveRowTarget): Remov
 }
 
 /**
- * 从 Loader 行的 name 推导可删除的插件目录：仅当它指向 PiDeck 管理目录
+ * 从 Loader 行的 name 推导可删除的插件目录：仅当它指向 Telos 管理目录
  * （userData/dsh-plugins/<pkg>/…）时返回该插件根（含 package.json 的最近祖先），
  * 其余位置（用户自选路径、runtime 内、node_modules）一律不动。
  */

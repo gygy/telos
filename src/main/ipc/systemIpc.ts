@@ -1170,7 +1170,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
 		app.quit();
 	});
 
-	// 与托盘「退出 PiDeck」同语义：先置 isQuitting，再 app.quit()。
+	// 与托盘「退出 Telos」同语义：先置 isQuitting，再 app.quit()。
 	// 不能复用 appWindowClose——开启 closeToTray 时 win.close() 只 hide，崩溃页再藏起来用户就退不掉。
 	ipcMain.handle(ipcChannels.appQuit, () => {
 		if (isQuitting) isQuitting.value = true;
@@ -1342,7 +1342,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
 			}
 			if (settings.wslEnabled && settings.wslDistro && settings.wslUser && resolveWslEnvironment) {
 				const environment = await resolveWslEnvironment(settings.wslDistro, settings.wslUser, {
-					warn: (msg: string, detail: unknown) => console.warn("[PiDeck] " + String(msg), detail),
+					warn: (msg: string, detail: unknown) => console.warn("[Telos] " + String(msg), detail),
 				});
 				if (configureSessionScannerWsl) await configureSessionScannerWsl(environment);
 				if (configureSkillManagerWsl) configureSkillManagerWsl(environment);

@@ -251,7 +251,7 @@ test("installImageGenTemplate copies the bundled image-gen skill into the global
 	});
 });
 
-test("toggle 同步持久化 PiDeck settings 禁用列表（白名单模式依据）", async () => {
+test("toggle 同步持久化 Telos settings 禁用列表（白名单模式依据）", async () => {
 	await withTemporaryHome(async (home) => {
 		const { SkillManager } = loadSkillManagerModule();
 		const manager = new SkillManager(home);

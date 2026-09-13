@@ -55,7 +55,7 @@ const roots = [...inAsar]
 		"node-addon-require-builtin-win32-x64-msvc",
 		"dsh-tool-pwsh-persistent",
 		"dsh-bill",
-		// PiDeck 主进程改读 extraResources catalog；DSH 的 pi-ai 由 @deepseek-ai 闭包追踪。
+		// Telos 主进程改读 extraResources catalog；DSH 的 pi-ai 由 @deepseek-ai 闭包追踪。
 		"undici",
 	]);
 

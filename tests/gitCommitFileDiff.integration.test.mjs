@@ -61,7 +61,7 @@ before(() => {
   // Windows 开发机常配 core.autocrlf=true，会把 checkout 内容转成 CRLF，
   // 使基于 `\n` 的内容断言在 Windows 上偶发失败；测试仓库强制关闭。
   git("config", "core.autocrlf", "false");
-  git("config", "user.name", "PiDeck Test");
+  git("config", "user.name", "Telos Test");
   git("config", "user.email", "test@example.com");
 });
 

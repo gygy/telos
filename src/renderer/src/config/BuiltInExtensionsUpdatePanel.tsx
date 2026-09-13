@@ -24,7 +24,7 @@ type Busy = "check" | "update" | "restore" | "restorePrevious" | null;
 function getBuiltInApi(): BuiltInExtensionsApi {
 	const api = (window as unknown as { piDesktop?: { extensions?: BuiltInExtensionsApi } })
 		.piDesktop?.extensions;
-	if (!api?.builtInStatus) throw new Error("PiDeck built-in extensions API is not available");
+	if (!api?.builtInStatus) throw new Error("Telos built-in extensions API is not available");
 	return api;
 }
 
@@ -35,7 +35,7 @@ function errorText(error: unknown): string {
 /**
  * 内置扩展版本与热更新面板（扩展设置页「已安装」区块顶部，全局作用域可见）。
  *
- * 为什么单独一块：内置扩展的版本号是**包级**的（extensions-manifest.json，不跟 PiDeck 应用
+ * 为什么单独一块：内置扩展的版本号是**包级**的（extensions-manifest.json，不跟 Telos 应用
  * 版本走），更新粒度也是整包（逐文件 sha256 比对），塞进每行扩展的「当前/最新」版本列会误导。
  * 这里集中展示「内置版本 / 覆盖层版本 / 远端版本 + 变更文件数」，并提供检测/更新/还原入口；
  * 表格里的内置行只显示当前生效版本号。

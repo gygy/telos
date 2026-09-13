@@ -47,7 +47,7 @@ type PiProcessLocator = Pick<
 type PiProcessOptions = {
   agentHomeDir?: string;
   /**
-   * 解析当前应通过 -e 注入的 PiDeck 内置扩展绝对路径。
+   * 解析当前应通过 -e 注入的 Telos 内置扩展绝对路径。
    * 未提供时 RPC 不注入内置扩展（兼容测试/探针）。
    */
   resolveBuiltInExtensionPaths?: (
@@ -108,7 +108,7 @@ type PiProcessOptions = {
    */
   proxyOverride?: SessionProxyMode;
   /**
-   * spawn pi 前对会话文件的预检/修复回调（如剔除旧版 PiDeck 私有 sessionName 头行，
+   * spawn pi 前对会话文件的预检/修复回调（如剔除旧版 Telos 私有 sessionName 头行，
    * 该行会让 pi 报 "Session file is not a valid pi session" 并 exit 1）。
    * 返回是否发生修复；抛错或未注入都不阻塞启动（pi 自身的加载错误更接近事实，留日志即可）。
    */
@@ -118,7 +118,7 @@ type PiProcessOptions = {
 /**
  * 估算 --skill 注入占用的命令行字符数（含选项名、分隔符与可能的引号）。
  *
- * 为什么需要：技能白名单（--no-skills + 逐条 --skill）必须由 PiDeck 自己枚举
+ * 为什么需要：技能白名单（--no-skills + 逐条 --skill）必须由 Telos 自己枚举
  * 「pi 本来会加载的全部技能」，命令行长度因此 O(技能数)，技能多的用户会直接撑爆命令行。
  * 该估算与 locator.resolveArgCharBudget() 给出的通道预算比较（各通道上限差 4 倍，
  * 见 PiLocator 中的常量注释），超限就整体放弃注入——pi 走默认发现，本次「禁用技能」
@@ -271,7 +271,7 @@ export class PiProcess extends EventEmitter {
   async start(sessionPath?: string, trustOverride?: "approve" | "no-approve", noSession?: boolean) {
     if (this.proc) return this.rpc!;
 
-    // 预检会话文件：旧版 PiDeck 私有 sessionName 头行会让 pi 拒绝加载（exit 1）。
+    // 预检会话文件：旧版 Telos 私有 sessionName 头行会让 pi 拒绝加载（exit 1）。
     // 修复失败不阻塞启动——pi 自身的报错会进入启动诊断，比静默吞掉更有价值。
     if (sessionPath && !noSession && this.options.repairSessionFileBeforeStart) {
       try {
@@ -337,7 +337,7 @@ export class PiProcess extends EventEmitter {
       !this.settings?.piRpcNoExtensions &&
       (!this.settings?.disableExtensionWhitelist || !includeProjectResources);
 
-    // PiDeck 内置扩展：从 app resources 以 -e 注入，不再复制到 ~/.pi/agent/extensions。
+    // Telos 内置扩展：从 app resources 以 -e 注入，不再复制到 ~/.pi/agent/extensions。
     // piRpcNoExtensions 或白名单模式时不再单独注入（白名单列表已包含内置扩展）。
     const builtInPaths = this.options.resolveBuiltInExtensionPaths?.(
       this.settings,
@@ -355,11 +355,11 @@ export class PiProcess extends EventEmitter {
       });
       console.log(`[PiProcess] Extension whitelist mode: ${whitelistPaths.length} extensions via -e`);
     } else if (builtInPaths.length > 0 && !this.settings?.piRpcNoExtensions) {
-      void getAppLogger()?.info("pi-process", "Loading PiDeck built-in extensions via -e", {
+      void getAppLogger()?.info("pi-process", "Loading Telos built-in extensions via -e", {
         extensions: builtInPaths.map((path) => path.split(/[/\\]/).pop()).join(", "),
       });
       console.log(
-        "[PiProcess] Loading PiDeck built-in extensions via -e:",
+        "[PiProcess] Loading Telos built-in extensions via -e:",
         builtInPaths.map((path) => path.split(/[/\\]/).pop()).join(", "),
       );
     }
@@ -450,7 +450,7 @@ export class PiProcess extends EventEmitter {
     // 技能白名单模式：存在禁用技能时 --no-skills 关自动发现 + 逐条 --skill 注入未禁用的技能。
     // pi 的 frontmatter disable-model-invocation 只阻止模型自动调用、不阻止加载（用户仍可
     // /skill:name 手动触发）；「不加载」唯一可靠手段就是白名单（与扩展白名单同构）。
-    // 解析器返回 null = 无禁用项，不启用（pi 默认发现全部技能，兼容 PiDeck 未跟踪的安装）。
+    // 解析器返回 null = 无禁用项，不启用（pi 默认发现全部技能，兼容 Telos 未跟踪的安装）。
     const skillWhitelistPaths = this.options.resolveEnabledSkillPaths?.(
       this.settings,
       this.cwd,
@@ -666,7 +666,7 @@ export class PiProcess extends EventEmitter {
     if (this.options.feishuLinked) {
       env.PIDECK_FEISHU_LINKED = "1";
     }
-    // 会话自动标题由 PiDeck 内置扩展在 agent_settled 后独立调用模型；
+    // 会话自动标题由 Telos 内置扩展在 agent_settled 后独立调用模型；
     // 显式注入 0/1，避免继承宿主环境中的同名变量。设置变更对新建/重启 Agent 生效。
     env.PIDECK_AUTO_SESSION_TITLE = this.settings?.autoSessionTitle === false ? "0" : "1";
 
@@ -680,7 +680,7 @@ export class PiProcess extends EventEmitter {
         stdio: ["pipe", "pipe", "pipe"],
         shell: invocation.shell,
         // env 已在上方合并安全门环境变量（PIDECK_SECURITY_CONFIG / PIDECK_SESSION_ID）
-        // Windows：PiDeck 是无控制台的 GUI 进程，隐藏子进程窗口以免 cmd.exe 弹出控制台。
+        // Windows：Telos 是无控制台的 GUI 进程，隐藏子进程窗口以免 cmd.exe 弹出控制台。
         env,
         windowsHide: true,
         windowsVerbatimArguments: invocation.windowsVerbatimArguments,

@@ -45,7 +45,7 @@ test("redactSecrets masks emails and phone numbers", () => {
 
 test("createPathMasker replaces home directory with ~", () => {
   const mask = createPathMasker("C:/Users/john");
-  assert.equal(mask("C:/Users/john/AppData/Roaming/PiDeck"), "~/AppData/Roaming/PiDeck");
+  assert.equal(mask("C:/Users/john/AppData/Roaming/Telos"), "~/AppData/Roaming/Telos");
   // 兜底规则：非 home 的其他用户路径也脱敏
   const result = mask("D:/Users/someone/foo");
   assert.ok(!result.includes("someone"));

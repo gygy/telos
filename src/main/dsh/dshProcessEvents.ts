@@ -162,7 +162,7 @@ export function collectDshProcessEvent(
 		}
 		case "llm/retry": {
 			// dsh-web layout.ts：失败/重试请求没有 assistant 消息时仍发 request-only cell。
-			// PiDeck 聊天时间线不投影 llm/retry，轨迹账本单独收这条过程记录。
+			// Telos 聊天时间线不投影 llm/retry，轨迹账本单独收这条过程记录。
 			const retry = asNumber(data.retry);
 			if (retry === undefined) return undefined;
 			const maxRetries = asNumber(data.maxRetries);

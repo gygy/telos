@@ -26,7 +26,7 @@
 - host 侧：`dsh-host-apiproxy` 提供 `ctx.apiProxy`，`toFetchHandler(ctx.apiProxy)`
   产出 fetch 形态 handler；hostEntry 里以 `{id:"api-gateway"}` 行挂载。
 - client 侧：`AbstractApiClient`（`doFetch` 抽象 + postJson/readSse + 领域方法
-  sessions.*/goals.*/...），PiDeck 用 MessagePort 桥覆写 doFetch（DshApiClient）。
+  sessions.*/goals.*/...），Telos 用 MessagePort 桥覆写 doFetch（DshApiClient）。
 - 事件流：`client.events.mux()` 长连接 SSE。
 
 ### 新（0.1.5）
@@ -39,7 +39,7 @@
 | 领域控制器 | `dsh-api-session-controller` / `dsh-api-settings-controller` / `dsh-api-workspace-controller` / `dsh-api-workspace-files` | 端点实现 + zod 校验描述符（typert.host.js） |
 | 客户端 | `dsh-client-connection/client` | `createWebConnectionRpc(doFetch?, openStream?)` → `ClientConnectionRpc.call(channel, endpoint, payload, signal): Promise<ConnectionRpcResult<T>>`；`ClientTransportHooks` 官方注明供 "owns a different physical transport 的 shell"（如 worker postMessage tunnel）提供 fetch + openStream 两个 half |
 
-**关键结论：PiDeck 现有的 MessagePort fetch 桥（dshHostBridge 协议）与官方
+**关键结论：Telos 现有的 MessagePort fetch 桥（dshHostBridge 协议）与官方
 `RpcFetch = (input: URL, init: RequestInit) => Promise<Response>` 形态一致，
 unary 部分基本可保留；流式（mux）需要新增 Gateway 流载体。**
 
@@ -74,7 +74,7 @@ channel 统一用 `/api`；payload 为描述符里的命名参数（见各包 ty
 返回值统一为 `RemoteResult<T> = {ok:true,value}|{ok:false,error}`（新），
 旧代码里 `{ok:true,value}` 形态基本同构。
 
-## 4. PiDeck 传输设计
+## 4. Telos 传输设计
 
 ### host 侧（utilityProcess / hostEntry.ts）
 1. 挂载行调整（对齐 dsh-web-app@0.1.5 cordis.patch.yml 的 host 半）：
@@ -135,7 +135,7 @@ channel 统一用 `/api`；payload 为描述符里的命名参数（见各包 ty
   （0.1.5 的 v0→v1 迁移要求 descriptor v3，拒绝时抛出
   `SessionFormatUnsupportedError: subagent/descriptor N uses unsupported
   descriptor version 2`，原始日志保持不变）。受影响会话的 `session/list` 仍能
-  列出（只读 header/投影缓存），但 `session/page` 读不到——PiDeck 侧会显示明确
+  列出（只读 header/投影缓存），但 `session/page` 读不到——Telos 侧会显示明确
   错误（readHistoryPage 不再静默返回空）。修复得等上游 deepseek-harness 补
   v2 descriptor 的迁移（或对旧生成降级读取）；如需用户侧兜底，可在扫描层标注
   「旧版本写入、无法迁移」并把日志归档保留。2026-09 实测：79 个会话中 7 个命中

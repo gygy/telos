@@ -4,7 +4,7 @@
  * 为什么需要这一层：`wsl.exe -d D -u U <cmd>` 用的是**非登录、非交互** shell，
  * nvm / fnm / volta / asdf / mise 的 PATH 注入写在 `~/.bashrc` 的交互守卫之后
  * （Ubuntu 默认 `.bashrc` 开头就 `case $- in *i*) ... *) return`），
- * 所以这类 shell 里 `which pi` 必然为空 —— 表现为「WSL 里能用 pi，PiDeck 说未检测到」。
+ * 所以这类 shell 里 `which pi` 必然为空 —— 表现为「WSL 里能用 pi，Telos 说未检测到」。
  * 即便拿到绝对路径，pi 的 shebang 是 `#!/usr/bin/env node`，node 不在 PATH 时仍会失败。
  *
  * 因此本模块约定两件事，探测与启动必须共用：

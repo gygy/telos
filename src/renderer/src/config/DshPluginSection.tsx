@@ -320,7 +320,7 @@ export function PluginInventoryView() {
 
 	/**
 	 * 卸载用户自装插件（两步确认后的第二步）：
-	 * 主进程从 $DSH_HOME/cordis.patch.yml 移除对应行（先备份），PiDeck 管理目录内的
+	 * 主进程从 $DSH_HOME/cordis.patch.yml 移除对应行（先备份），Telos 管理目录内的
 	 * 插件文件一并移入回收站；成功后重启 DSH host 让移除立即生效。
 	 */
 	const uninstallUserPlugin = async (entry: DshStaticPluginView) => {

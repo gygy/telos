@@ -153,7 +153,7 @@ test("WSL 模式下 PIDECK_SESSION_ID（UUID 身份 key）原样注入，不经 
 	// 任何模式都应原样注入；只有 securitySnapshotPath（真实 Windows 路径，扩展要 fs 读）才需要转换。
 	const { PiProcess, mockLocator, getCaptured } = loadPiProcess();
 	const uuid = "550e8400-e29b-41d4-a716-446655440000";
-	const snapshotPath = "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json";
+	const snapshotPath = "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json";
 
 	const proc = new PiProcess(
 		"C:\\proj",
@@ -172,7 +172,7 @@ test("WSL 模式下 PIDECK_SESSION_ID（UUID 身份 key）原样注入，不经 
 	// snapshotPath 是真实 Windows 路径（扩展需 fs 打开），WSL 下仍要转成 /mnt/c/...
 	assert.equal(
 		captured.env.PIDECK_SECURITY_CONFIG,
-		"/mnt/c/Users/tester/AppData/Roaming/PiDeck-dev/security-policy.json",
+		"/mnt/c/Users/tester/AppData/Roaming/Telos-dev/security-policy.json",
 	);
 });
 
@@ -184,7 +184,7 @@ test("默认（未开启总开关）且存在禁用项时注入 --no-extensions 
 		mockLocator,
 		{
 			resolveEnabledExtensionPaths: () => ["C:\\ext\\a.ts", "C:\\ext\\b.ts"],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -228,7 +228,7 @@ test("白名单总开关 disableExtensionWhitelist=true 时不再注入 --no-ext
 		mockLocator,
 		{
 			resolveEnabledExtensionPaths: () => ["C:\\ext\\a.ts"],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -247,7 +247,7 @@ test("存在禁用技能时注入 --no-skills + 逐条 --skill 白名单", async
 		{
 			// 模拟技能白名单解析器：存在禁用项 → 返回启用技能路径
 			resolveEnabledSkillPaths: () => ["C:\\Users\\tester\\skills\\a\\SKILL.md", "C:\\Users\\tester\\skills\\b\\SKILL.md"],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -279,7 +279,7 @@ test("技能数量超出启动通道的命令行预算时整体跳过白名单�
 		mockLocator,
 		{
 			resolveEnabledSkillPaths: () => manySkills,
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -309,7 +309,7 @@ test("数百个技能在 node 直启通道下不再被误拦（旧的一刀切 5
 		mockLocator,
 		{
 			resolveEnabledSkillPaths: () => manySkills,
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -340,7 +340,7 @@ test("WSL 家目录的 --skill 白名单路径（UNC）转换为 distro 内 Linu
 				"\\\\wsl.localhost\\Ubuntu-24.04\\root\\.agents\\skills\\wsl-skill\\SKILL.md",
 				"\\\\wsl.localhost\\Ubuntu-24.04\\root\\.pi\\agent\\skills\\wsl-pi-skill\\SKILL.md",
 			],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -364,7 +364,7 @@ test("无禁用技能（resolver 返回 null）时不注入 --no-skills/--skill"
 		mockLocator,
 		{
 			resolveEnabledSkillPaths: () => null,
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -383,7 +383,7 @@ test("存在禁用模板时注入 --no-prompt-templates + 逐条 --prompt-templa
 		{
 			// 模拟模板白名单解析器：存在禁用项 → 返回启用模板路径
 			resolveEnabledPromptPaths: () => ["C:\\Users\\tester\\prompts\\a.md", "C:\\Users\\tester\\prompts\\b.md"],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -406,7 +406,7 @@ test("无禁用模板（resolver 返回 null）时不注入 --no-prompt-template
 		mockLocator,
 		{
 			resolveEnabledPromptPaths: () => null,
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);
@@ -424,7 +424,7 @@ test("piRpcNoSkills 总开关开启时不注入技能白名单", async () => {
 		mockLocator,
 		{
 			resolveEnabledSkillPaths: () => ["C:\\Users\\tester\\skills\\a\\SKILL.md"],
-			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\PiDeck-dev\\security-policy.json",
+			securitySnapshotPath: "C:\\Users\\tester\\AppData\\Roaming\\Telos-dev\\security-policy.json",
 		},
 	);
 	await proc.start(undefined, undefined, true);

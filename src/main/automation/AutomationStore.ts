@@ -47,7 +47,7 @@ type PersistedAutomationState = {
 type RunPatch = Partial<Omit<AutomationRun, "id" | "taskId" | "taskName" | "projectId" | "events">>;
 
 /**
- * Owns PiDeck's automation.json. All mutations are serialized so rapid scheduler/runtime
+ * Owns Telos's automation.json. All mutations are serialized so rapid scheduler/runtime
  * events cannot let an older write overwrite a newer in-memory revision.
  */
 export class AutomationStore {
@@ -78,7 +78,7 @@ export class AutomationStore {
 			run.endedAt = endedAt;
 			run.durationMs = run.startedAt ? Math.max(0, endedAt - run.startedAt) : undefined;
 			run.updatedAt = endedAt;
-			run.error = "PiDeck stopped before this automation run completed";
+			run.error = "Telos stopped before this automation run completed";
 			run.events = appendRunEvent(run.events, "interrupted", endedAt, run.error);
 			shouldPersist = true;
 		}

@@ -13,7 +13,7 @@ import {
  * 从 DSH_HOME 磁盘只读扫描外部根会话（不启动 host、不 attach、不写文件）。
  *
  * 为什么不走 host `sessions.list` / `sessions.history`：
- * - DSH 官方不支持同一 DSH_HOME 双 host；PiDeck 再 fork 会写 `.pideck-host.lock`，
+ * - DSH 官方不支持同一 DSH_HOME 双 host；Telos 再 fork 会写 `.pideck-host.lock`，
  *   并对冷会话打 history（相当于 attach），会把 dsh-web 正在用的 session log 抢走/覆盖。
  * - 用户要的是「启动侧栏就有会话」，不是「先把 host 拉起来再手动导入」。
  *

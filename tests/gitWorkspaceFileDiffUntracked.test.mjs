@@ -63,7 +63,7 @@ before(() => {
 
   git("init");
   git("config", "core.autocrlf", "false");
-  git("config", "user.name", "PiDeck Test");
+  git("config", "user.name", "Telos Test");
   git("config", "user.email", "test@example.com");
 });
 

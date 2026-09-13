@@ -29,7 +29,7 @@
 ### Weird window behavior (multiple instances / won't close)
 
 - Settings → General → Window: check "Close to tray" — the window may be hidden, not quit;
-- The single-instance switch needs an **app restart**; different PiDeck versions can run side by side (version-based mutex), so don't mistake this for a bug.
+- The single-instance switch needs an **app restart**; different Telos versions can run side by side (version-based mutex), so don't mistake this for a bug.
 
 ### Wrong language / fonts
 
@@ -182,7 +182,7 @@ Settings → Storage & logs:
 
 ### Privacy & telemetry
 
-PiDeck sends an **anonymous, low-frequency** `app_heartbeat` (version spread/platform/active installs) by default; no project paths, code, or message content. Disable in Settings → Dev → Privacy → telemetry. Review the diagnostic report before sharing (it's sanitized, but check anyway).
+Telos sends an **anonymous, low-frequency** `app_heartbeat` (version spread/platform/active installs) by default; no project paths, code, or message content. Disable in Settings → Dev → Privacy → telemetry. Review the diagnostic report before sharing (it's sanitized, but check anyway).
 
 ---
 

@@ -5,7 +5,7 @@
  *   <quoted_context label="…" message_id="…">…</quoted_context>
  *   <referenced_session name="…">…</referenced_session>
  *   <skill name="…">…</skill>                    （pi 展开 /skill:名称）
- *   <prompt_template name="…">…</prompt_template>（PiDeck 展开 /模板名）
+ *   <prompt_template name="…">…</prompt_template>（Telos 展开 /模板名）
  *
  * 任何面向人的纯文本出口（侧栏会话 preview、Web 端消息、子代理转录、会话定位轴标题、
  * 复制/队列预览）都必须先折叠成 `❝label` / `&名称` / `/名称`，不能漏出 XML 原文。
@@ -86,7 +86,7 @@ export function parseExpandedSkillBlocks(text: string): ExpandedNamedReferenceBl
 	return parseNamedReferenceBlocks(text, "skill");
 }
 
-/** 从 PiDeck 展开的 `<prompt_template name="…">…</prompt_template>` 块恢复模板名。 */
+/** 从 Telos 展开的 `<prompt_template name="…">…</prompt_template>` 块恢复模板名。 */
 export function parseExpandedPromptTemplateBlocks(
 	text: string,
 ): ExpandedNamedReferenceBlock[] {

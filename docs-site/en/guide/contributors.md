@@ -4,7 +4,7 @@ outline: false
 
 # Contributors
 
-PiDeck is an open-source project and everyone is welcome to contribute.
+Telos is an open-source project and everyone is welcome to contribute.
 
 ## Core Maintainer
 
@@ -31,7 +31,7 @@ PiDeck is an open-source project and everyone is welcome to contribute.
 
 ## How to Contribute
 
-PiDeck welcomes contributions of all kinds:
+Telos welcomes contributions of all kinds:
 
 - **Code** — Bug fixes, features, and improvements
 - **Documentation** — Improvements to this site and guides

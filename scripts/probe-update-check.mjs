@@ -123,8 +123,8 @@ record(
 	`latest=${upgrade.latestVersion}`,
 );
 record(
-	/\/PiDeck\/releases/.test(upgrade.releaseUrl ?? ""),
-	"release 指向 PiDeck 仓库（非旧名 pi-desktop）",
+	/\/Telos\/releases/.test(upgrade.releaseUrl ?? ""),
+	"release 指向 Telos 仓库（非旧名 pi-desktop）",
 	upgrade.releaseUrl ?? "(missing)",
 );
 record(

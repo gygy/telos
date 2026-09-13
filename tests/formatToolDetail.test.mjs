@@ -24,7 +24,7 @@ function enTranslate(key, params = {}) {
 test("formatToolDetail 拼出工具/状态/参数/结果（中文兜底文案）", () => {
   const text = formatToolDetail(
     "read",
-    { path: "F:/PiDeck/src/a.ts", offset: 1, limit: 50 },
+    { path: "F:/Telos/src/a.ts", offset: 1, limit: 50 },
     { content: [{ type: "text", text: "import fs from \"node:fs\";" }] },
     false,
     defaultToolDetailTranslate,
@@ -32,7 +32,7 @@ test("formatToolDetail 拼出工具/状态/参数/结果（中文兜底文案）
   assert.match(text, /^工具：read/);
   assert.match(text, /状态：完成/);
   assert.match(text, /参数：/);
-  assert.match(text, /"path": "F:\/PiDeck\/src\/a\.ts"/);
+  assert.match(text, /"path": "F:\/Telos\/src\/a\.ts"/);
   assert.match(text, /结果：/);
   assert.match(text, /import fs from "node:fs";/);
   assert.doesNotMatch(text, /详情：/);

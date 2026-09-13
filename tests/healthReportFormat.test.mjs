@@ -26,8 +26,8 @@ function makeReport(overrides = {}) {
       chromeVersion: "130.0.0",
       nodeVersion: "22.0.0",
       installMode: "installed",
-      userDataDir: "~/AppData/Roaming/PiDeck",
-      logsDir: "~/AppData/Roaming/PiDeck/logs",
+      userDataDir: "~/AppData/Roaming/Telos",
+      logsDir: "~/AppData/Roaming/Telos/logs",
       appRssBytes: 500 * 1024 * 1024,
       appHeapUsedBytes: 200 * 1024 * 1024,
       systemTotalMemoryBytes: 16 * 1024 * 1024 * 1024,
@@ -76,10 +76,10 @@ test("formatMarkdown includes description, checks, environment and logs", () => 
   const out = formatMarkdown(makeReport(), CONTEXT);
   assert.ok(out.includes("会话起不来"), "should include description");
   assert.ok(out.includes("1. 打开应用"), "should include repro steps");
-  assert.ok(out.includes("PiDeck 1.2.3"), "should include app version");
+  assert.ok(out.includes("Telos 1.2.3"), "should include app version");
   assert.ok(out.includes("disk.space"), "should include check id");
   assert.ok(out.includes("spawn failed"), "should include recent log");
-  assert.ok(out.startsWith("# PiDeck Diagnostic Report"), "should start with title");
+  assert.ok(out.startsWith("# Telos Diagnostic Report"), "should start with title");
 });
 
 test("formatMarkdown surfaces today's error/warn counts and collection totals", () => {
@@ -104,7 +104,7 @@ test("formatMarkdown notes truncation when collected logs exceed the display lim
 test("formatCard is compact and contains problem + environment", () => {
   const out = formatCard(makeReport(), CONTEXT);
   assert.ok(out.includes("会话起不来"), "should include problem");
-  assert.ok(out.includes("PiDeck 1.2.3"), "should include version");
+  assert.ok(out.includes("Telos 1.2.3"), "should include version");
   assert.ok(out.includes("errors") || out.includes("error"), "should mention errors");
 });
 
@@ -121,13 +121,13 @@ test("formatAiPrompt sets up a support-engineer role", () => {
 test("formatAiPrompt embeds project context when provided", () => {
   const projectContext = {
     projectId: "proj-1",
-    projectName: "PiDeck",
+    projectName: "Telos",
     agentsMd: "## 架构规则\n- 禁止 any\n- 用 Jotai\n",
     agentsMdTruncated: false,
     skills: ["pideck-doctor", "git-helper"],
   };
   const out = formatAiPrompt(makeReport(), CONTEXT, projectContext);
-  assert.ok(out.includes("## 项目上下文（PiDeck）"), "should include project context section");
+  assert.ok(out.includes("## 项目上下文（Telos）"), "should include project context section");
   assert.ok(out.includes("项目地址（源码仓库）：https://github.com/ayuayue/PiDeck"), "should point at the GitHub repo (local source is usually absent)");
   assert.ok(out.includes("- 禁止 any"), "should embed AGENTS.md content");
   assert.ok(out.includes("pideck-doctor"), "should list project skills");
@@ -137,7 +137,7 @@ test("formatAiPrompt embeds project context when provided", () => {
 test("formatAiPrompt marks truncated AGENTS.md and omits empty project context", () => {
   const truncated = {
     projectId: "proj-1",
-    projectName: "PiDeck",
+    projectName: "Telos",
     agentsMd: "# rules",
     agentsMdTruncated: true,
     skills: [],

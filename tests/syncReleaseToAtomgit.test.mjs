@@ -53,13 +53,13 @@ test('planAssetActions: 同名同大小 → 跳过；远端没有 → 上传（�
 test('planAssetActions: 同名但大小不同 → 冲突（v0.7.5 事故回归：旧版静默跳过）', () => {
   // 同版本号重建产物重发版：GitHub 上新构建 165302370 字节，远端还是旧构建 165111111 字节
   const plan = planAssetActions(
-    [{ name: 'PiDeck-0.7.5-setup.exe', size: 165302370 }],
-    [{ name: 'PiDeck-0.7.5-setup.exe', size: 165111111 }],
+    [{ name: 'Telos-0.7.5-setup.exe', size: 165302370 }],
+    [{ name: 'Telos-0.7.5-setup.exe', size: 165111111 }],
   );
   assert.deepEqual(plan, {
     uploads: [],
     skips: [],
-    conflicts: [{ name: 'PiDeck-0.7.5-setup.exe', githubSize: 165302370, remoteSize: 165111111 }],
+    conflicts: [{ name: 'Telos-0.7.5-setup.exe', githubSize: 165302370, remoteSize: 165111111 }],
   });
 });
 

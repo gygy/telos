@@ -205,7 +205,7 @@ test("mergePiProvider writes the api key inline into models.json (ModelsTab-comp
       models: [{ id: "grok-4.6" }],
     },
   );
-  // 密钥内联进 models.json：PiDeck 的 ModelsTab 只读/写 provider.apiKey，
+  // 密钥内联进 models.json：Telos 的 ModelsTab 只读/写 provider.apiKey，
   // 若只写 auth.json 会让迁移后的 key 在 Models 页显示为空。
   assert.equal(merged.models.providers.weishiair.apiKey, "sk-test");
   assert.equal(merged.auth.weishiair, undefined);

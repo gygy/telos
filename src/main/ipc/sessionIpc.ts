@@ -1051,7 +1051,7 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 		async (_event, sessionId: string): Promise<string | undefined> => {
 			if (typeof sessionId !== "string" || !sessionId.trim()) return undefined;
 			const entry = sessionCatalog.get(sessionId);
-			// DSH 会话的系统提示由 harness 在请求时组装（persona + sections），PiDeck
+			// DSH 会话的系统提示由 harness 在请求时组装（persona + sections），Telos
 			// 只能从 request/header 事件取；运行时会话读投影缓存，历史会话从 host history
 			// 折叠（未装配/无数据返回 undefined，轨迹不展示，不阻断）。
 			if (entry?.backend === "dsh" && readDshSystemPrompt) {

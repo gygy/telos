@@ -172,7 +172,7 @@ function loadAgentManagerModule() {
       // 停止身份缓存（72fe93da 起 AgentManager 依赖）：真实加载保持身份核对行为
       if (specifier === "./stoppedMessageIdentity") return loadTsCommonJs("src/main/pi/stoppedMessageIdentity.ts");
       if (specifier === "electron") {
-        return { app: { getName: () => "PiDeck" }, Notification: { isSupported: () => false } };
+        return { app: { getName: () => "Telos" }, Notification: { isSupported: () => false } };
       }
       // 共享扩展 resolver（issue #181）：本测试不涉及扩展加载，透传空实现即可
       if (specifier === "../extensions/piProcessExtensionResolvers") {

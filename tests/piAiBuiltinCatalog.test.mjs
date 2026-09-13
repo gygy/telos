@@ -240,7 +240,7 @@ test("真实生成 catalog：gpt-4o 有 contextWindow", () => {
 
 test("真实生成 catalog：0.85.0 的 qwen3.8-max 可供主进程读取", () => {
 	const entry = lookupPiAiCatalogEntry(getPiAiCatalogIndex(), "opencode-go", "qwen3.8-max");
-	assert.ok(entry, "qwen3.8-max 应命中 PiDeck 0.85.0 artifact");
+	assert.ok(entry, "qwen3.8-max 应命中 Telos 0.85.0 artifact");
 	assert.equal(entry.contextWindow, 1000000);
 	assert.equal(entry.maxTokens, 131072);
 });

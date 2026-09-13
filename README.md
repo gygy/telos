@@ -1,6 +1,6 @@
 ﻿# Telos
 
-Telos 是基于 [PiDeck](https://github.com/ayuayue/PiDeck) 定制的**智能编程助手**桌面工作台（对接 [pi](https://pi.dev) / DSH 等编码 Agent）。
+Telos 是基于上游 [PiDeck](https://github.com/ayuayue/PiDeck) 定制的**智能编程助手**桌面工作台（对接 [pi](https://pi.dev) / DSH 等编码 Agent）。
 
 - **本仓库（产品）**：[https://github.com/gygy/telos](https://github.com/gygy/telos)
 - **上游只读镜像**：`G:\gitea\pideck-github`（GitHub `ayuayue/PiDeck`）。Telos 定时拉取上游，并可用基线 commit 做增量对比与选择性同步。

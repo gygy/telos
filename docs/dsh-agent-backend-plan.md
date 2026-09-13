@@ -1,11 +1,11 @@
 # DSH 双 Agent 后端接入对照计划
 
-> 目标：在 PiDeck 中把 DeepSeek Harness（DSH）作为**第二个 agent 后端**接入，与 pi 后端并列，同一项目下两种 agent 会话可自由创建、切换、浏览；DSH 侧采用**深融合（无 `dsh web`）**路线：进程内 `boot()` 引导完整 host，通过官方 `ApiProxy` 契约驱动，传输形态从 stdio 演进到 utilityProcess + IPC 桥。
-> 非目标：不做「同一会话中途换引擎」（pi 会话文件与 DSH session log 格式不同，迁移=重放）；不导入 DSH 历史会话为只读浏览源（一期不做 scanner，走 `session.list` 实时映射）；不把 DSH 的 Web GUI / 浏览器 UI 搬进 PiDeck。
+> 目标：在 Telos 中把 DeepSeek Harness（DSH）作为**第二个 agent 后端**接入，与 pi 后端并列，同一项目下两种 agent 会话可自由创建、切换、浏览；DSH 侧采用**深融合（无 `dsh web`）**路线：进程内 `boot()` 引导完整 host，通过官方 `ApiProxy` 契约驱动，传输形态从 stdio 演进到 utilityProcess + IPC 桥。
+> 非目标：不做「同一会话中途换引擎」（pi 会话文件与 DSH session log 格式不同，迁移=重放）；不导入 DSH 历史会话为只读浏览源（一期不做 scanner，走 `session.list` 实时映射）；不把 DSH 的 Web GUI / 浏览器 UI 搬进 Telos。
 
 **状态：** 已全部落地（2026-08-15 快照）：v2 utilityProcess 传输为当前形态；P0（D01–D12）全通；P1 按能力声明缺失（D13 编辑/删除历史、D14 图片附件、D15 命令列表未做，D16 思考档位已实现）；P2 中 plan 模式与 agent-preset 已提前落地，goals/subagents UI 与动态插件管理仍后置。pi 零回归，typecheck + 全量单测绿，`npm run pack` 打包验证通过。落地细节、模块清单与计划偏差见 §12。  
 **范围：** 桌面端；pi 现有链路零改动  
-**原则：** DSH 契约（`ApiProxy`）传输无关，传输载体可替换；PiDeck 架构规则（session-first / Jotai / IPC 注册式 / 单向依赖）继续生效；DSH 的事由 DSH 做，PiDeck 只做进程、映射与 UI。
+**原则：** DSH 契约（`ApiProxy`）传输无关，传输载体可替换；Telos 架构规则（session-first / Jotai / IPC 注册式 / 单向依赖）继续生效；DSH 的事由 DSH 做，Telos 只做进程、映射与 UI。
 
 ---
 
@@ -13,7 +13,7 @@
 
 | 现状 | 诉求 |
 |------|------|
-| PiDeck 只管理 pi RPC Agent（stdio JSON-RPC） | 用户希望同一桌面同时使用 pi 与 DSH 两种 agent，可随意切换 |
+| Telos 只管理 pi RPC Agent（stdio JSON-RPC） | 用户希望同一桌面同时使用 pi 与 DSH 两种 agent，可随意切换 |
 | DSH 是独立的 Cordis harness（CLI `dsh`，web GUI `dsh web`） | 不希望「第二个 GUI / 后台常驻 HTTP 服务 / 依赖用户另装 dsh」的割裂体验 |
 
 DSH 官方包（`@deepseek-ai/dsh` rc.6）自带程序化引导 API 与传输无关的 JSON-RPC 契约，深融合在技术上是官方预留形态（见 §2 证据 3）。
@@ -66,7 +66,7 @@ boot(binName, absoluteConfigPath, patches?, prepare?, bareModuleBaseUrl?): Promi
 
 | 原生依赖 | 所在子包（base 行） | 加载方式 | 处置 | 落地（2026-08-15） |
 |---|---|---|---|---|
-| `node-pty@^1.1.0` | `dsh-subprocess-local`（`subprocess`） | boot 即静态 import | disable 行，或 electron-rebuild（PiDeck 已有 node-pty 经验：asarUnpack + fix-pty-permissions） | ✅ base 行保留（未 disable），host 在 utilityProcess 内加载；持久 pwsh 插件亦自含 node-pty |
+| `node-pty@^1.1.0` | `dsh-subprocess-local`（`subprocess`） | boot 即静态 import | disable 行，或 electron-rebuild（Telos 已有 node-pty 经验：asarUnpack + fix-pty-permissions） | ✅ base 行保留（未 disable），host 在 utilityProcess 内加载；持久 pwsh 插件亦自含 node-pty |
 | `sharp@^0.35.3` | `dsh-attachment-local`（`attachment-local`） | boot 即加载 | disable 行（失去 DSH 图片附件），或 rebuild | ⚠️ 原生绑定随包打包兼容（asarUnpack + `patch-sharp-index.js`），但 attachment-local 能力未启用（桥不支持字节载荷，见 §12.4 #3） |
 | `koffi@^3.1.0`（win） | `dsh-fs-local` / `dsh-session-persistence-jsonl` / `dsh-sandbox-windows-acl` | 仅 Windows 特定路径**动态 import** | 包可安装即可；触发路径可接受 | ✅ 随包（win32 asarUnpack）；另用于 Windows 隐藏控制台治理（§12.4 #7） |
 | `node-addon-landlock-run`（linux） | `dsh-sandbox-local` | linux 原生 | disable 或 rebuild | ⚠️ Linux 侧按需验证（未在 Windows 开发环境核查） |
@@ -76,7 +76,7 @@ boot(binName, absoluteConfigPath, patches?, prepare?, bareModuleBaseUrl?): Promi
 
 ### 2.6 模块解析与打包
 
-- 子包按包名互相 import，node_modules 平铺即可；bundle 解析「安装目录优先」，内嵌到 PiDeck 的 node_modules 后自然成立。
+- 子包按包名互相 import，node_modules 平铺即可；bundle 解析「安装目录优先」，内嵌到 Telos 的 node_modules 后自然成立。
 - `boot(..., bareModuleBaseUrl)` 的 `bareModuleBaseUrl` 正是为「宿主（而非配置项目）持有完整插件集」设计——内嵌场景用它，无需 profile 目录 symlink 机制。
 
 ---
@@ -88,9 +88,9 @@ boot(binName, absoluteConfigPath, patches?, prepare?, bareModuleBaseUrl?): Promi
 | 对比项 | web sidecar（弃） | 深融合（选） |
 |---|---|---|
 | 进程 | 额外 spawn `dsh web`，占用端口 | host 内嵌（utilityProcess / stdio 子进程） |
-| 依赖 | 用户需另装 `dsh` CLI（或打包，体积更大） | dsh 包进 PiDeck 依赖，版本锁定 |
+| 依赖 | 用户需另装 `dsh` CLI（或打包，体积更大） | dsh 包进 Telos 依赖，版本锁定 |
 | 体验 | 后台 HTTP 服务 + 端口 | 无端口无浏览器，完全原生 |
-| 可控性 | 只能消费 /api | 可自定义组合、禁用插件、注入 PiDeck 专属 Cordis 插件行 |
+| 可控性 | 只能消费 /api | 可自定义组合、禁用插件、注入 Telos 专属 Cordis 插件行 |
 | 代价 | 0 | 打包体积 +200~400MB、原生 ABI、版本锁 rc.6 |
 
 ### 3.2 传输形态演进（(c) → (b)，官方注释预告的形态）
@@ -98,11 +98,11 @@ boot(binName, absoluteConfigPath, patches?, prepare?, bareModuleBaseUrl?): Promi
 | 阶段 | 形态 | 说明 | 落地 |
 |---|---|---|---|
 | PoC | 独立 Node 脚本同进程 `boot()` + `InProcessApiClient` | 验证组合与全流程，不碰 Electron | ✅ `scripts/dsh-embed-probe.mjs`（`npm run probe:dsh`） |
-| v1 | **(c) 无 web 的 stdio sidecar** | PiDeck 自写 30 行入口（`boot()` + stdio JSON-RPC 循环），`ELECTRON_RUN_AS_NODE` 或系统 node spawn；与 pi 的 `PiRpcClient` 模式同构，最稳落地 | 未实施（被 v2 直接取代） |
+| v1 | **(c) 无 web 的 stdio sidecar** | Telos 自写 30 行入口（`boot()` + stdio JSON-RPC 循环），`ELECTRON_RUN_AS_NODE` 或系统 node spawn；与 pi 的 `PiRpcClient` 模式同构，最稳落地 | 未实施（被 v2 直接取代） |
 | v2 | **(b) utilityProcess + 薄桥** | `AbstractApiClient` 子类覆写 `doFetch` 走 `postMessage`，host 侧 `toFetchHandler(api).fetch` 当处理器；复用四象限信封与 SSE 帧 | ✅ 当前形态（`hostEntry.ts` + `DshApiClient` + `dshHostBridge.ts`） |
 | （不推荐） | (a) 主进程内嵌 | 原生 ABI + 崩溃面 + 启动时间全压主进程，仅 PoC 用 | ❌ 未采用 |
 
-**关键：v1→v2 是纯传输替换**，`DshAgentManager` 面对同一个 `ApiProxy` 契约，PiDeck 侧代码不变。
+**关键：v1→v2 是纯传输替换**，`DshAgentManager` 面对同一个 `ApiProxy` 契约，Telos 侧代码不变。
 
 ---
 
@@ -131,7 +131,7 @@ boot(binName, absoluteConfigPath, patches?, prepare?, bareModuleBaseUrl?): Promi
 
 ---
 
-## 6. PiDeck 侧架构设计
+## 6. Telos 侧架构设计
 
 ### 6.1 类型层（`src/shared/`）
 
@@ -176,9 +176,9 @@ src/main/dsh/
 └── js-yaml.d.ts             # js-yaml 类型声明
 ```
 
-### 6.4 事件映射（DSH → PiDeck 模型）
+### 6.4 事件映射（DSH → Telos 模型）
 
-| PiDeck 概念 | DSH 来源 | 说明 |
+| Telos 概念 | DSH 来源 | 说明 |
 |---|---|---|
 | `ChatMessage` user | `user/message` 事件（`'user-rpc'` source 带 rpcId，与发送请求对账） | 发送即乐观回显，比 pi 的 message_start 占位更简单 |
 | `ChatMessage` assistant | `assistant/chunk` 累加；`turn/end` 结算 | 逐 chunk 推送，渲染层现有 streamdown 直接消费 |
@@ -195,7 +195,7 @@ src/main/dsh/
 
 ### 6.6 会话持久化与映射
 
-DSH 会话由 DSH 自己持久化（`$DSH_HOME`，session log 事件流，`session-persistence-jsonl` 行）。PiDeck `SessionCatalog` 对 DSH 会话只存一条映射记录：`SessionRecord.id`（PiDeck mint）↔ DSH `sessionId` + `backend: "dsh"` + `cwd`；历史浏览走 `session.history`（分页、`projections` 块给标题基线），**不**复用 `SessionScanner`（那是 pi 文件扫描）。
+DSH 会话由 DSH 自己持久化（`$DSH_HOME`，session log 事件流，`session-persistence-jsonl` 行）。Telos `SessionCatalog` 对 DSH 会话只存一条映射记录：`SessionRecord.id`（Telos mint）↔ DSH `sessionId` + `backend: "dsh"` + `cwd`；历史浏览走 `session.history`（分页、`projections` 块给标题基线），**不**复用 `SessionScanner`（那是 pi 文件扫描）。
 
 **落地补充（与 §9 原「默认隔离」决策不同，见 §12.4）：** DSH_HOME 默认优先使用用户真实 `~/.dsh`（与 `dsh` CLI 行为一致，配置/凭证/会话全在同一处）；仅当 `~/.dsh` 不存在（全新用户）才回退应用私有 `userData/dsh-home`，不再复制任何文件。重启后通过 catalog 中的 `dshSessionId` 映射 attach 旧 host 会话并重放历史尾部，`dshSessionId` 不换绑（restart/fork 后同步更新映射）。
 
@@ -249,7 +249,7 @@ DSH 会话由 DSH 自己持久化（`$DSH_HOME`，session log 事件流，`sessi
 
 | ID | 能力 | 说明 | 状态 |
 |----|------|------|------|
-| D17 | 动态 Cordis 插件 | `cordis-host-runner` 保留，PiDeck 内可运行 `@pluginId` 插件（管理 UI 后置） | ⏳ 部分：配置页提供 agent-loop/shell/web-search 插件分区（dsh-web 同源命名空间），无插件安装/管理 UI |
+| D17 | 动态 Cordis 插件 | `cordis-host-runner` 保留，Telos 内可运行 `@pluginId` 插件（管理 UI 后置） | ⏳ 部分：配置页提供 agent-loop/shell/web-search 插件分区（dsh-web 同源命名空间），无插件安装/管理 UI |
 | D18 | goals / plan-mode / skills / subagents | DSH 原生能力；`goal.*` / `subagent.*` API 已就绪，UI 呈现后置 | ⚠️ plan-mode 已提前落地（`/plan` + plan/mode 事件 → `planModeActive`）；goals/subagents 的 UI 呈现仍后置 |
 | D19 | 会话 agentPreset | `agent-presets` 行（default: standard）是 web 特有；自建组合时可注入 preset 目录 | ✅ 已实现（`dshPresetComposition` 注入随包 system 根 + `$DSH_HOME/.agent-presets` 用户根；配置页「预设设置」列出 standard/code/minimal/cordis 并支持设为默认） |
 
@@ -274,7 +274,7 @@ DSH 会话由 DSH 自己持久化（`$DSH_HOME`，session log 事件流，`sessi
 |---|---|---|
 | 打包体积 +200~400MB（150+ 子包） | 依赖树瘦身（按需禁用行）、native 模块 asarUnpack；若验收不过退回 stdio sidecar 复用用户环境（代码不变，仅传输/定位差异） | ✅ 已控制：依赖显式锁定 19 个 `@deepseek-ai/*` 子包 + `check-dsh-asar.mjs` 打包回归校验；sharp/koffi/node-addon-require-builtin 已 asarUnpack（见 §12.6） |
 | 原生 ABI（node-pty/sharp/koffi/landlock） | v1 先 disable 原生重行；v2 在 utilityProcess 内单独 rebuild，主进程零污染 | ✅ host 在 utilityProcess 内加载原生模块；sharp 打包经 `patch-sharp-index.js` 修复（DLL 与 .node 同目录）；Windows 控制台治理见 §12.5 |
-| 版本锁定 rc.6 | DSH 升级跟随 PiDeck 发版；信封 schema drift 由 `clientRequestSchema` zod 校验层兜底报错而非静默错位 | ✅ 锁定 `^0.1.0-rc.6` |
+| 版本锁定 rc.6 | DSH 升级跟随 Telos 发版；信封 schema drift 由 `clientRequestSchema` zod 校验层兜底报错而非静默错位 | ✅ 锁定 `^0.1.0-rc.6` |
 | DSH host 崩溃 | utilityProcess/子进程可重启（限次）；主进程内嵌形态禁用 | ✅ 崩溃限次重启（3 次）+ `abortAllPending` 中断悬挂请求（会话静默断开已修复） |
 | `$DSH_HOME` 与用户 CLI 会话冲突 | 默认隔离（userData 下）可选共享；双 host 同目录并发不做支持 | ⚠️ 策略已调整：默认直接用 `~/.dsh`（与 CLI 共享），仅全新用户回退 userData/dsh-home（见 §12.4）；双 host 同目录并发仍不支持 |
 | 双后端状态串扰 | 事件严格带 `sessionId+agentId+runtimeGeneration`，沿用现有 Coordinator 门禁 | ✅ 沿用（DSH agentId = `dsh:<sessionId>`） |
@@ -298,7 +298,7 @@ DSH 会话由 DSH 自己持久化（`$DSH_HOME`，session log 事件流，`sessi
 
 ## 11. 参考（证据文件索引）
 
-> 以下为调研时核查的 DSH rc.6 源码位置（npx 缓存内的安装树，仅作证据留存；产品实现以 PiDeck 依赖锁定版本为准）。
+> 以下为调研时核查的 DSH rc.6 源码位置（npx 缓存内的安装树，仅作证据留存；产品实现以 Telos 依赖锁定版本为准）。
 
 - 引导 API：`@deepseek-ai/dsh-app-boot/lib/index.js`（`boot` L1166、`mountRootInclude` L963、profile 工具集 L308+）
 - 客户端/契约：`@deepseek-ai/dsh-host-apiproxy/lib/index.js`（`AbstractApiClient` L5307、`InProcessApiClient` L5538、`toFetchHandler` L4983、`ApiProxyService` L5590）；`lib/types/api/`（`rpc.d.ts` 四象限、`sessions.d.ts`、`events.d.ts`、`approvals.d.ts`、`rpc-map.d.ts`）

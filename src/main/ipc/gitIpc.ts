@@ -423,7 +423,7 @@ export function registerGitIpc({
 					(entry) => normalizeForCompare(entry.path) === normalizedTarget,
 				);
 				// 如果 git 已经没有该 worktree（包括用户在外部删过导致 remove 返回 false），
-				// 也要清理 PiDeck 项目记录，否则重启后会从 projects.json 恢复成"删不掉"。
+				// 也要清理 Telos 项目记录，否则重启后会从 projects.json 恢复成"删不掉"。
 				if (ok || !stillInGit) {
 					const child = projectStore.findByPath(projectStoredPath(hostWorktreePath, project));
 					if (child) await projectStore.remove(child.id);

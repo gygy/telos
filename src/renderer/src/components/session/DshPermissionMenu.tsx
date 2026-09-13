@@ -1,7 +1,7 @@
 /**
  * DSH 会话权限预设选择器（输入框底栏安全位）
  *
- * DSH 后端不适用 PiDeck 内置安全等级（SecurityStore/安全门是 pi 链路的产物），
+ * DSH 后端不适用 Telos 内置安全等级（SecurityStore/安全门是 pi 链路的产物），
  * 走 DSH 自己的权限预设：read-only / workspace-write / danger-full-access
  * （sandbox 模式 + approval 策略的捆绑，与 dsh-web 的 PermissionSelect 同一组值）。
  *

@@ -2,7 +2,7 @@
  * pi-ai 模型目录的运行时生成（纯函数，不触 fs / electron）。
  *
  * 设置页「模型目录」更新到「最新」时，直接从 @earendil-works/pi-ai 的 npm 包
- * dist/providers/data/*.json 重新生成 artifact，而不是从 PiDeck 仓库分支拉取
+ * dist/providers/data/*.json 重新生成 artifact，而不是从 Telos 仓库分支拉取
  * 预生成件（分支源会滞后于 npm 最新的 pi-ai，如 main 停在 0.85.0 而 npm 已 0.85.1）。
  *
  * 生成逻辑与 scripts/generate-pi-ai-catalog.mjs 逐字节对齐（同一输入得到相同输出），

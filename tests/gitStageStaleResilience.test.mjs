@@ -63,7 +63,7 @@ before(() => {
   git("init");
   // Windows 开发机常配 core.autocrlf=true，会把 checkout 内容转成 CRLF；测试仓库强制关闭。
   git("config", "core.autocrlf", "false");
-  git("config", "user.name", "PiDeck Test");
+  git("config", "user.name", "Telos Test");
   git("config", "user.email", "test@example.com");
 });
 

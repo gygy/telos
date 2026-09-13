@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 安装第三方 DSH 插件到 PiDeck 的 DSH runtime 环境（自包含、与 runtime 解耦）。
+ * 安装第三方 DSH 插件到 Telos 的 DSH runtime 环境（自包含、与 runtime 解耦）。
  *
  *   node scripts/install-dsh-plugin.mjs <npm spec> [--runtime <...\dsh-runtime>] [--dest <插件目录>]
  *                                      [--dsh-home <dir>] [--dry-run]
@@ -11,7 +11,7 @@
  * 为什么不是简单 `npm i`：
  * - host 的模块解析锚点只有 runtime 的 node_modules（`--dsh-node-modules`），ESM 没有
  *   NODE_PATH 双源回退；装到 app / 别的目录的包 host 根本看不见。
- * - 但把插件装进 runtime node_modules 会被 runtime 的升级/重装（含 PiDeck 的自动更新）
+ * - 但把插件装进 runtime node_modules 会被 runtime 的升级/重装（含 Telos 的自动更新）
  *   整目录删掉。所以这里采用「插件放独立目录 + Loader 行用绝对路径」的形态：
  *   插件目录自带它静态 import 的依赖（undici/schemastery 等），runtime 换版本也不影响。
  *
@@ -222,7 +222,7 @@ if (register) {
 		writeFileSync(
 			patchPath,
 			[
-				"# PiDeck / DSH 用户补丁层（官方层级：作用于每个 profile）",
+				"# Telos / DSH 用户补丁层（官方层级：作用于每个 profile）",
 				"# 由 install-dsh-plugin.mjs 登记；Loader 行 name 用绝对路径引用，",
 				"# 插件本体放在 userData/dsh-plugins/ 下（与 runtime 解耦）。",
 				"# 第三方插件 = 在 host 进程内执行任意代码，安装前请自行确认来源可信。",
@@ -238,7 +238,7 @@ if (register) {
 	console.log(`  请在其中加入（或确认已有）这个 Loader 行：\n`);
 	console.log(rowText);
 } else {
-	console.log(`\n请创建 ${patchPath} 并写入以下内容（PiDeck host 会对每个 profile 应用该层）：\n`);
+	console.log(`\n请创建 ${patchPath} 并写入以下内容（Telos host 会对每个 profile 应用该层）：\n`);
 	console.log(rowText);
 }
 console.log("提示：改完重启 DSH host（配置页「重启 host」）生效；插件在 host 进程内执行代码，请确认来源可信。");

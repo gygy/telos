@@ -3,7 +3,7 @@
  *
  * 设计决策：参考 pi-rewind 扩展（MIT）的 checkpoint 模型，但把「文件回退」做成
  * 主进程 GitService 域的纯 git 能力（不依赖 pi 进程），从而天然跨后端——
- * dsh 会话跑在同一个仓库里，checkpoint 照常可用；也避免 PiDeck 无法程序化
+ * dsh 会话跑在同一个仓库里，checkpoint 照常可用；也避免 Telos 无法程序化
  * 驱动 pi 扩展命令的通道缺失问题（RPC 类型表里没有「执行扩展命令」）。
  *
  * 本文件只放跨进程契约类型 + 边界校验纯函数，禁止引入运行时依赖。
@@ -35,7 +35,7 @@ export type RewindRestoreResult = {
 export type RewindCheckpointSummary = {
 	/** checkpoint id（= git ref 名最后一段，如 turn-<sessionUuid>-<turn>-<ts>） */
 	id: string;
-	/** 所属会话 id（PiDeck SessionRecord.id / pi sessionId） */
+	/** 所属会话 id（Telos SessionRecord.id / pi sessionId） */
 	sessionId: string;
 	trigger: RewindCheckpointTrigger;
 	turnIndex: number;

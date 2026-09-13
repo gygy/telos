@@ -15,7 +15,7 @@ export type ShellMenuIpcDeps = {
 
 /**
  * 资源管理器右键菜单 IPC（HKCU 注册，portable / NSIS 安装包都可用）。
- * 开关即注册表状态：启用写 HKCU\Software\Classes\Directory(\(Background\))?\shell\PiDeck，
+ * 开关即注册表状态：启用写 HKCU\Software\Classes\Directory(\(Background\))?\shell\Telos，
  * 禁用删键；查询实时读注册表，不落 settings.json（避免双份状态漂移）。
  * 非 Windows 平台不支持，返回 supported=false 让 UI 隐藏开关。
  */

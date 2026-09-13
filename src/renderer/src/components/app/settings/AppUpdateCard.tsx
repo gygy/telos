@@ -11,7 +11,7 @@ import { Progress } from "../../ui-shadcn/progress";
 import { ChangelogDialog } from "./ChangelogDialog";
 
 type AppUpdateCardProps = {
-	/** 当前 PiDeck 版本（设置里显示 vX.Y.Z）。 */
+	/** 当前 Telos 版本（设置里显示 vX.Y.Z）。 */
 	appVersion: string;
 	/** 当前运行平台；macOS 无签名发行物使用手动更新交付。 */
 	platform: AppInfo["platform"];

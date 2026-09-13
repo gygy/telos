@@ -18,7 +18,7 @@ import type {
 
 /**
  * 配置备份管理器：把 pi 配置文件（~/.pi/agent/ 下 models.json / auth.json / settings.json / mcp.json）
- * 与 PiDeck 设置（userData/settings.json）打包成带时间戳的 JSON 备份。
+ * 与 Telos 设置（userData/settings.json）打包成带时间戳的 JSON 备份。
  *
  * 设计要点：
  * - 依赖全部注入（getConfigDir / getUserDataDir / getAppVersion），模块不 import electron，
@@ -32,9 +32,9 @@ import type {
 export type ConfigBackupManagerDeps = {
 	/** 当前生效的 pi 配置目录（WSL 切换后跟随 configManager.getConfigDir()）。 */
 	getConfigDir: () => string;
-	/** PiDeck userData 目录（备份目录与 pideck settings.json 都挂在这里）。 */
+	/** Telos userData 目录（备份目录与 pideck settings.json 都挂在这里）。 */
 	getUserDataDir: () => string;
-	/** 当前 PiDeck 版本（升级检测用）。 */
+	/** 当前 Telos 版本（升级检测用）。 */
 	getAppVersion: () => string;
 	/** 错误上报（调用方注入 logger，模块自身不输出）。 */
 	onError?: (message: string, detail: unknown) => void;

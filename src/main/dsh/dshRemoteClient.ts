@@ -16,7 +16,7 @@ function envelope<T>(promise: Promise<DshRpcResult<T>>): Promise<DshEnvelope<T>>
 /**
  * DSH 0.1.5 Typert Remote 适配层（docs/dsh-0.1.5-typert-migration.md §4）。
  *
- * 目标：把 PiDeck 既有调用面（旧 AbstractApiClient 的领域方法签名与
+ * 目标：把 Telos 既有调用面（旧 AbstractApiClient 的领域方法签名与
  * `{result:{ok,value|error}}` 信封）映射到 0.1.5 的 Connection RPC 端点，
  * 让 DshHost / DshAgentManager 的调用点改动最小化。
  *

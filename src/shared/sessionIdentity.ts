@@ -32,7 +32,7 @@ export const SUBAGENT_ARTIFACTS_DIR_NAME = "subagent-artifacts";
  *
  * 用于扫描索引前过滤掉非会话 JSONL——pi-subagents 的 transcript 转储首条记录
  * 用 recordType 而非 type（无 type 头），会被本校验拒绝，防止其在侧栏出现无法
- * 打开的条目（#168）。旧版 PiDeck 私有 sessionName 头行（#114 存量损坏）会被
+ * 打开的条目（#168）。旧版 Telos 私有 sessionName 头行（#114 存量损坏）会被
  * 跳过——这类文件由 repairCorruptSessionHeader 在打开时修复，扫描期不应隐藏。
  *
  * 与 pi 严格的「首条记录 type==="session" && typeof id==="string"」相比略宽容：

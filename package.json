@@ -1,8 +1,8 @@
 {
-  "name": "pi-desktop",
+  "name": "telos",
   "version": "0.7.5",
   "dshRuntimeVersion": "0.1.5-rc.1",
-  "description": "Telos is an intelligent programming assistant desktop workbench based on PiDeck, managing pi AI coding agents across local projects.",
+  "description": "Telos — desktop workbench for managing pi / DSH AI coding agents across local projects.",
   "private": true,
   "license": "MIT",
   "author": {

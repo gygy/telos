@@ -106,9 +106,9 @@ test("reads an installed WSL npm extension version through its canonical host pa
 	}
 });
 
-test("setEnabled 写入 PiDeck settings 的 scoped 禁用列表（不再写 pi settings.json）", async () => {
+test("setEnabled 写入 Telos settings 的 scoped 禁用列表（不再写 pi settings.json）", async () => {
 	// 旧实现读写 ~/.pi/agent/settings.json 的 disabledExtensions；pi 0.82.x 不识别该键，
-	// 新实现改为写 PiDeck 自身设置（scope+source），启动 RPC 时由白名单模式生效。
+	// 新实现改为写 Telos 自身设置（scope+source），启动 RPC 时由白名单模式生效。
 	let pideckSettings = {};
 	const { ExtensionManager } = loadExtensionManager();
 	const manager = new ExtensionManager(

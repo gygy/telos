@@ -29,7 +29,7 @@ async function withTemporaryHome(run) {
 	}
 }
 
-test("toggle 同步持久化 PiDeck settings 禁用列表（模板白名单模式依据）", async () => {
+test("toggle 同步持久化 Telos settings 禁用列表（模板白名单模式依据）", async () => {
 	await withTemporaryHome(async (home) => {
 		const { PromptManager } = loadPromptManagerModule();
 		const manager = new PromptManager(home);

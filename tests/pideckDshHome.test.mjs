@@ -1,5 +1,5 @@
 /**
- * PiDeck 特有文件在 $DSH_HOME 下的统一落点（.pideck）：
+ * Telos 特有文件在 $DSH_HOME 下的统一落点（.pideck）：
  * - 路径纯函数（归档/用量配置/宿主锁都在 .pideck 子目录内）；
  * - 旧位置（.pideck-archive / usage-probes.json / .pideck-host.lock）一次性迁移，幂等。
  * DSH 官方约定文件（storages/、.credentials.yaml 等）不允许进 .pideck。
@@ -33,7 +33,7 @@ function withHome(fn) {
   }
 }
 
-test("全部 PiDeck 特有路径都落在 $DSH_HOME/.pideck 内", () => {
+test("全部 Telos 特有路径都落在 $DSH_HOME/.pideck 内", () => {
   const home = "/home/user/.dsh";
   assert.equal(PIDECK_DSH_DIR, ".pideck");
   assert.ok(pideckDshHome(home).endsWith(join(".dsh", ".pideck")));

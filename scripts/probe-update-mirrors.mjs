@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
-const SETUP = "PiDeck-0.7.3-setup.exe";
+const SETUP = "Telos-0.7.3-setup.exe";
 const MIRRORS = [
   { id: "ghfast", base: "https://ghfast.top/https://github.com/gygy/telos/releases/latest/download" },
   { id: "ghproxy-net", base: "https://ghproxy.net/https://github.com/gygy/telos/releases/latest/download" },

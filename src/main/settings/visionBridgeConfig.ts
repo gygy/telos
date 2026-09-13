@@ -2,8 +2,8 @@
  * 视觉桥配置管理（主进程侧）。
  *
  * 配置文件 ~/.pi/agent/pi-deck-vision.json 与 resources/extensions/pi-deck-vision.ts
- * 扩展读取的是同一份文件：PiDeck 只负责「界面化编辑」，扩展负责「运行时消费」，
- * 所以脱离 PiDeck 单独使用 pi + 该扩展时，手动编辑同一配置文件即可生效。
+ * 扩展读取的是同一份文件：Telos 只负责「界面化编辑」，扩展负责「运行时消费」，
+ * 所以脱离 Telos 单独使用 pi + 该扩展时，手动编辑同一配置文件即可生效。
  *
  * 安全约束：IPC 入参不可信，saveConfig 逐字段白名单校验后再落盘；
  * apiKey 允许写入配置文件（与 auth.json 同级信任域），但不进日志。
@@ -149,8 +149,8 @@ export class VisionBridgeConfigManager {
 
 	/** 保存配置：白名单校验后写回 ~/.pi/agent/pi-deck-vision.json。
 	 * 用户未显式填 apiKey/baseUrl 时，从 pi models.json 解析该 provider 的 inline 配置
-	 * （PiDeck「配置模型」页把 key 存在 models.json 的 provider.apiKey，auth.json 里没有），
-	 * 保证扩展脱离 PiDeck 单独跑也能直接读取，无需用户重复填写。
+	 * （Telos「配置模型」页把 key 存在 models.json 的 provider.apiKey，auth.json 里没有），
+	 * 保证扩展脱离 Telos 单独跑也能直接读取，无需用户重复填写。
 	 */
 	async saveConfig(input: unknown): Promise<VisionSaveResult> {
 		const next = sanitizeConfig(input);
@@ -159,7 +159,7 @@ export class VisionBridgeConfigManager {
 		}
 		// 未显式填写的 key/baseUrl 从 models.json 的 provider 配置补齐（仅当缺失时）；
 		// provider 本身是 URL（如 https://open.mwy.asia 这类网关）时直接作为 baseUrl，
-		// 保证扩展脱离 PiDeck 单独跑也能解析端点。
+		// 保证扩展脱离 Telos 单独跑也能解析端点。
 		if (!next.apiKey || !next.baseUrl) {
 			try {
 				const modelsResult = await this.configManager.getModelsConfig();

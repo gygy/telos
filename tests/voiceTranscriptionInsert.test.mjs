@@ -20,10 +20,10 @@ test("replaces the captured selection and returns a paired caret", () => {
 		target,
 		currentSessionId: "s1",
 		currentDraft: target.draft,
-		text: "PiDeck",
+		text: "Telos",
 	});
 	assert.equal(result.ok, true);
-	assert.equal(result.value, "hello PiDeck!");
+	assert.equal(result.value, "hello Telos!");
 	assert.equal(result.caret, 12);
 });
 
@@ -32,16 +32,16 @@ test("preserves a later edit wholly before or after the captured selection", () 
 		target,
 		currentSessionId: "s1",
 		currentDraft: "Say hello world!",
-		text: "PiDeck",
+		text: "Telos",
 	});
-	assert.equal(before.value, "Say hello PiDeck!");
+	assert.equal(before.value, "Say hello Telos!");
 	const after = resolveVoiceTranscriptionInsertion({
 		target,
 		currentSessionId: "s1",
 		currentDraft: "hello world! Again",
-		text: "PiDeck",
+		text: "Telos",
 	});
-	assert.equal(after.value, "hello PiDeck! Again");
+	assert.equal(after.value, "hello Telos! Again");
 });
 
 test("rejects overlapping edits, ambiguous caret edits, and session switches", () => {
@@ -49,7 +49,7 @@ test("rejects overlapping edits, ambiguous caret edits, and session switches", (
 		target,
 		currentSessionId: "s1",
 		currentDraft: "hello changed!",
-		text: "PiDeck",
+		text: "Telos",
 	}).ok, false);
 	assert.equal(resolveVoiceTranscriptionInsertion({
 		target: { sessionId: "s1", draft: "abc", from: 1, to: 1 },
@@ -61,6 +61,6 @@ test("rejects overlapping edits, ambiguous caret edits, and session switches", (
 		target,
 		currentSessionId: "s2",
 		currentDraft: target.draft,
-		text: "PiDeck",
+		text: "Telos",
 	}).ok, false);
 });

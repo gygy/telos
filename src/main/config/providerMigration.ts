@@ -540,7 +540,7 @@ export function mergePiProvider(
 	};
 	const nextAuth = { ...auth };
 	if (snapshot.apiKey) {
-		// 密钥内联写进 models.json，与 PiDeck 配置弹窗 ModelsTab 保持一致
+		// 密钥内联写进 models.json，与 Telos 配置弹窗 ModelsTab 保持一致
 		// （该编辑器只读/写 provider.apiKey，不读 auth.json）。
 		// 此前迁移把 key 搬进 auth.json 并从 models.json 删除，导致迁移后
 		// Models 页 key 显示为空、字段看似丢失，且编辑器再保存会把空键写回。

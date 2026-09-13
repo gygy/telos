@@ -70,10 +70,10 @@ export class ExtensionManager {
 	constructor(
 		private readonly locator: PiLocator,
 		private readonly getSettings: SettingsProvider,
-		/** 获取 PiDeck 桌面设置（含 removedBuiltInExtensions） */
-		private readonly getPiDeckSettings: () => AppSettings = getSettings,
-		/** 保存 PiDeck 桌面设置的部分更新 */
-		private readonly patchPiDeckSettings: (
+		/** 获取 Telos 桌面设置（含 removedBuiltInExtensions） */
+		private readonly getTelosSettings: () => AppSettings = getSettings,
+		/** 保存 Telos 桌面设置的部分更新 */
+		private readonly patchTelosSettings: (
 			patch: Partial<AppSettings>,
 		) => Promise<AppSettings> = async () => getSettings(),
 		private readonly translate: ExtensionCopy = () => "Extension operation failed.",
@@ -193,16 +193,16 @@ export class ExtensionManager {
 			}
 		}
 
-		// 通过 PiDeck 桌面设置标记启用状态（与 pi disabledExtensions 分离）。
+		// 通过 Telos 桌面设置标记启用状态（与 pi disabledExtensions 分离）。
 		// 必须在冲突检测前初始化：后续逻辑会写回 removedBuiltInExtensions 并删磁盘文件。
-		const removedBuiltIn = new Set(this.getPiDeckSettings().removedBuiltInExtensions ?? []);
+		const removedBuiltIn = new Set(this.getTelosSettings().removedBuiltInExtensions ?? []);
 		// 用户禁用的非内置扩展：按 scope+source 匹配（同名可在 user/project 两级独立开关）。
 		const disabledExtKeys = new Set(
-			(this.getPiDeckSettings().disabledExtensions ?? []).map(
+			(this.getTelosSettings().disabledExtensions ?? []).map(
 				(entry) => `${entry.scope}:${entry.source}`,
 			),
 		);
-		// 内置扩展版本：包级版本号（extensions-manifest.json，不跟 PiDeck 应用版本走），
+		// 内置扩展版本：包级版本号（extensions-manifest.json，不跟 Telos 应用版本走），
 		// 覆盖层（热更新）优先。逐行写入而非只在补齐分支赋值——内置条目可能来自
 		// pi list、本地目录扫描、兜底补齐三条路径，版本只认「当前生效的那一份」。
 		const builtInVersion = this.builtInRoots
@@ -315,7 +315,7 @@ export class ExtensionManager {
 
 	/**
 	 * 卸载后清理禁用记录：1) 旧路径遗留的 pi settings.json disabledExtensions（兼容手动写入/旧版，
-	 * 按 source 匹配）；2) PiDeck settings 的 scoped 条目——只清与本次卸载相同作用域的条目，
+	 * 按 source 匹配）；2) Telos settings 的 scoped 条目——只清与本次卸载相同作用域的条目，
 	 * 避免「卸载项目版但保留用户版禁用状态」被误清。
 	 */
 	private async clearDisabledEntry(
@@ -335,15 +335,15 @@ export class ExtensionManager {
 			// settings 不存在或解析失败时忽略；卸载主流程已成功
 		}
 		try {
-			const current = this.getPiDeckSettings().disabledExtensions ?? [];
+			const current = this.getTelosSettings().disabledExtensions ?? [];
 			const next = current.filter(
 				(entry) => !(entry.scope === scope && entry.source === source),
 			);
 			if (next.length !== current.length) {
-				await this.patchPiDeckSettings({ disabledExtensions: next });
+				await this.patchTelosSettings({ disabledExtensions: next });
 			}
 		} catch {
-			// PiDeck 设置写入失败不阻塞卸载主流程
+			// Telos 设置写入失败不阻塞卸载主流程
 		}
 	}
 
@@ -365,7 +365,7 @@ export class ExtensionManager {
 	}
 
 	private async saveRemovedBuiltIn(removedList: string[]): Promise<void> {
-		await this.patchPiDeckSettings({ removedBuiltInExtensions: removedList });
+		await this.patchTelosSettings({ removedBuiltInExtensions: removedList });
 	}
 
 	/**
@@ -377,7 +377,7 @@ export class ExtensionManager {
 		if (!normalized.startsWith("pi-deck-")) {
 			throw new Error("只能操作内置扩展");
 		}
-		const current = this.getPiDeckSettings().removedBuiltInExtensions ?? [];
+		const current = this.getTelosSettings().removedBuiltInExtensions ?? [];
 		if (!current.includes(normalized)) {
 			await this.saveRemovedBuiltIn([...current, normalized]);
 		}
@@ -400,7 +400,7 @@ export class ExtensionManager {
 	 */
 	async restoreBuiltIn(source: string): Promise<void> {
 		const normalized = source.trim();
-		const current = this.getPiDeckSettings().removedBuiltInExtensions ?? [];
+		const current = this.getTelosSettings().removedBuiltInExtensions ?? [];
 		const next = current.filter((s) => s !== normalized);
 		if (next.length === current.length) return;
 		await this.saveRemovedBuiltIn(next);
@@ -412,7 +412,7 @@ export class ExtensionManager {
 	async uninstall(source: string, scope: PiExtensionSummary["scope"] = "user"): Promise<void> {
 		const normalized = source.trim();
 		if (!normalized) throw new Error(this.translate("mainExtension.sourceRequired"));
-		// 阻止卸载 PiDeck 内置扩展（如 pi-deck-file-capture）
+		// 阻止卸载 Telos 内置扩展（如 pi-deck-file-capture）
 		if (normalized.startsWith("pi-deck-")) {
 			throw new Error(this.translate("mainExtension.builtInCannotUninstall"));
 		}
@@ -560,7 +560,7 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * 开关扩展：enabled=false 写入 PiDeck settings 的 disabledExtensions（scope+source），
+	 * 开关扩展：enabled=false 写入 Telos settings 的 disabledExtensions（scope+source），
 	 * 启动 RPC 时由白名单模式生效；enabled=true 从列表移除。
 	 * 不写 pi settings.json：pi 0.82.x 不支持 disabledExtensions，写了也不生效。
 	 */
@@ -582,21 +582,21 @@ export class ExtensionManager {
 				);
 			}
 		}
-		const current = this.getPiDeckSettings().disabledExtensions ?? [];
+		const current = this.getTelosSettings().disabledExtensions ?? [];
 		const key = (entry: DisabledExtensionEntry) => `${entry.scope}:${entry.source}`;
 		// 同 scope+source 只保留一条；不同 scope（user/project）相互独立，同名可在一处禁用、另一处启用。
 		const next = current.filter((entry) => key(entry) !== `${scope}:${source.trim()}`);
 		if (!enabled) {
 			next.push({ scope, source: source.trim() });
 		}
-		await this.patchPiDeckSettings({ disabledExtensions: next });
+		await this.patchTelosSettings({ disabledExtensions: next });
 		// 开关状态变化后同步清缓存，避免 UI 显示旧 enabled。
 		this.invalidateListCache();
 	}
 
-	/** 当前禁用的扩展条目（PiDeck settings，白名单模式依据）。 */
+	/** 当前禁用的扩展条目（Telos settings，白名单模式依据）。 */
 	getDisabledExtensions(): DisabledExtensionEntry[] {
-		return this.getPiDeckSettings().disabledExtensions ?? [];
+		return this.getTelosSettings().disabledExtensions ?? [];
 	}
 
 	/**
@@ -604,7 +604,7 @@ export class ExtensionManager {
 	 * 默认 false：有禁用列表时 PiProcess 才启用白名单模式。
 	 */
 	isWhitelistDisabled(): boolean {
-		return Boolean(this.getPiDeckSettings().disableExtensionWhitelist);
+		return Boolean(this.getTelosSettings().disableExtensionWhitelist);
 	}
 
 	/**
@@ -614,7 +614,7 @@ export class ExtensionManager {
 	 * 开关变化不影响扩展列表本身，无需 invalidateListCache。
 	 */
 	async setWhitelistDisabled(enabled: boolean): Promise<void> {
-		await this.patchPiDeckSettings({ disableExtensionWhitelist: Boolean(enabled) });
+		await this.patchTelosSettings({ disableExtensionWhitelist: Boolean(enabled) });
 	}
 
 	/**
@@ -662,7 +662,7 @@ export class ExtensionManager {
 		timeout: number,
 		options: { offline?: boolean; cwd?: string; projectInstall?: boolean } = {},
 	): Promise<string> {
-		// 项目安装必须让 pi 读取已通过 PiDeck trust 校验的项目资源；--no-approve 会绕过该路径。
+		// 项目安装必须让 pi 读取已通过 Telos trust 校验的项目资源；--no-approve 会绕过该路径。
 		const finalArgs = [...args];
 		if (!options.projectInstall && await this.noApproveSupported()) {
 			finalArgs.push("--no-approve");

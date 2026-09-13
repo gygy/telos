@@ -9,7 +9,7 @@
  * 依赖包整体缺席」（@earendil-works/pi-ai 空壳、koffi 的 src/ 被裁）这类
  * host 加载到一半才崩的问题。真实 boot 是这类缺陷的唯一可靠门禁。
  *
- * 插件组合镜像 src/main/dsh/hostEntry.ts 的 patches，但跳过 PiDeck 私有插件
+ * 插件组合镜像 src/main/dsh/hostEntry.ts 的 patches，但跳过 Telos 私有插件
  * （pideck-* 是 app 侧代码、随 app 分发，不在 runtime 归档里，不属于本校验对象）；
  * 其余全部为 runtime 包，与 host 实际加载路径一致。
  */

@@ -208,7 +208,7 @@ test("uninstall removes a local extension and clears its stale disable entry", a
     await writeFile(join(extensionsDir, "local-tool.ts"), "export default {};", "utf8");
     await writeFile(settingsPath, JSON.stringify({ disabledExtensions: ["local-tool.ts", "other.ts"] }), "utf8");
 
-    // 拆分后构造签名：(locator, getSettings, getPiDeckSettings, patchPiDeckSettings, translate)
+    // 拆分后构造签名：(locator, getSettings, getTelosSettings, patchTelosSettings, translate)
     const manager = new ExtensionManager(
       {},
       () => ({}),

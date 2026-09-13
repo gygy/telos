@@ -1,7 +1,7 @@
 /**
  * WebEventStream — pi RPC 事件 → AI SDK v5 UIMessageStream SSE 帧 翻译器。
  *
- * 背景：PiDeck Web 服务前端原来是 600ms 轮询 /api/state，回复期间没有任何流式反馈。
+ * 背景：Telos Web 服务前端原来是 600ms 轮询 /api/state，回复期间没有任何流式反馈。
  * 本模块把主进程收到的 pi agent 事件（agent_start / message_update / tool_execution_* / agent_end）
  * 翻译成 AI SDK v5 的 UIMessageStream 线协议（data: {json}\n\n 帧 + [DONE] 终止），
  * 后端按该协议输出 SSE，前端可先用 vanilla fetch 消费实现打字机效果（A1），

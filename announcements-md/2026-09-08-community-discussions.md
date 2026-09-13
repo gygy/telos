@@ -6,7 +6,7 @@ category: guide
 publishedAt: 2026-09-08T00:30:00+08:00
 effectiveUntil: 2099-12-31T00:00:00+08:00
 ---
-PiDeck 的 **GitHub Discussions 讨论板块**已开启，欢迎来社区交流：
+Telos 的 **GitHub Discussions 讨论板块**已开启，欢迎来社区交流：
 
 **https://github.com/gygy/telos/discussions**
 

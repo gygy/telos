@@ -87,7 +87,7 @@ test("官方 DeepSeek 的 llm.models 组 id 别名归一：deepseek-official / l
   });
 });
 
-test("无 apiKeyEnv 的非 ASCII route（如「组」）：ref 用 PiDeck 稳定摘要", async () => {
+test("无 apiKeyEnv 的非 ASCII route（如「组」）：ref 用 Telos 稳定摘要", async () => {
   await withSettings(SETTINGS, async (dir) => {
     const group = await loadDshUsageProviderProfile(dir, "组");
     assert.equal(group.baseUrl, "https://ai.shitai.cc/v1");

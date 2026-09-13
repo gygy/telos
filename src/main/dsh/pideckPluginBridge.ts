@@ -1,12 +1,12 @@
 /**
- * pideck-plugin-bridge：PiDeck ↔ DSH host 的动态 Cordis 插件管理桥（G13 深化）。
+ * pideck-plugin-bridge：Telos ↔ DSH host 的动态 Cordis 插件管理桥（G13 深化）。
  *
  * 挂在 DSH host 组合内（hostEntry patches insert，经绝对路径加载本产物），把
  * cordis 动态插件运行器（ctx.dynamicCordisRunner）与静态 Loader 清单
  * （ctx.pluginInventory）暴露成一个主进程可经 fetch 桥调用的服务
  * （ctx.pideckPluginBridge，协议见 pluginBridgeRpc）。
  *
- * 语义与 dsh-tool-cordis 完全一致（本文件只是把同一服务对象暴露给 PiDeck 面板）：
+ * 语义与 dsh-tool-cordis 完全一致（本文件只是把同一服务对象暴露给 Telos 面板）：
  * - 动态插件是**进程内临时扩展**：define 不落盘、不写仓库/配置，重启即失；
  * - 插件按会话归属（sessionId），生命周期方法要求该会话有 live Agent；
  * - 面板手势（run/stop/uninstall）走 requestId=null 的 direct gesture 路径，无需审批；

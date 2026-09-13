@@ -1,5 +1,5 @@
 @font-face {
-  font-family: "PiDeckPlantin";
+  font-family: "TelosPlantin";
   src: url("./fonts/PlantinNowVariable-Upright.woff2") format("woff2");
   font-style: normal;
   font-weight: 300 900;
@@ -7,7 +7,7 @@
 }
 
 @font-face {
-  font-family: "PiDeckPlantin";
+  font-family: "TelosPlantin";
   src: url("./fonts/PlantinNowVariable-Italic.woff2") format("woff2");
   font-style: italic;
   font-weight: 300 900;
@@ -15,7 +15,7 @@
 }
 
 @font-face {
-  font-family: "PiDeckCommitMono";
+  font-family: "TelosCommitMono";
   src: url("./fonts/CommitMono-400-Regular.otf") format("opentype");
   font-style: normal;
   font-weight: 400;
@@ -23,7 +23,7 @@
 }
 
 @font-face {
-  font-family: "PiDeckDepartureMono";
+  font-family: "TelosDepartureMono";
   src: url("./fonts/DepartureMono-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
@@ -52,9 +52,9 @@
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: var(--pideck-hero-gradient);
   --vp-font-family-base: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --vp-font-family-mono: "PiDeckCommitMono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --pideck-font-brand: "PiDeckPlantin", Georgia, "Times New Roman", serif;
-  --pideck-font-display-mono: "PiDeckDepartureMono", "PiDeckCommitMono", ui-monospace, monospace;
+  --vp-font-family-mono: "TelosCommitMono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --pideck-font-brand: "TelosPlantin", Georgia, "Times New Roman", serif;
+  --pideck-font-display-mono: "TelosDepartureMono", "TelosCommitMono", ui-monospace, monospace;
 }
 
 .dark {

@@ -92,7 +92,7 @@ test("preload 暴露与 previewApi stub 三处同步", () => {
 
 test("backend 维度贯通：DSH 链路 = $DSH_HOME/.pideck 配置 + DSH 凭据库", () => {
   const configManager = readFileSync("src/main/config/ConfigManager.ts", "utf8");
-  // 配置目录按 backend 分流（pi=configDir；dsh=$DSH_HOME/.pideck —— PiDeck 特有文件统一收拢目录）。
+  // 配置目录按 backend 分流（pi=configDir；dsh=$DSH_HOME/.pideck —— Telos 特有文件统一收拢目录）。
   assert.match(configManager, /usageProbeSettingsDir\(backend: UsageProbeBackend\)/);
   assert.match(configManager, /pideckUsageProbesDir\(dshHome\)/);
   // DSH 凭据：models/auth 无 key 时回退 DSH 凭据库（credentialRefFor 常规 <ROUTE>_API_KEY）。

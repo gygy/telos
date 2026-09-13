@@ -8,13 +8,13 @@ const execFileAsync = promisify(execFile);
  * 资源管理器右键菜单注册（HKCU，免管理员）：
  * - Directory\shell：文件夹图标上右键；
  * - Directory\Background\shell：文件夹空白处右键。
- * 两者都注册，覆盖用户在不同位置触发「用 PiDeck 打开」。
+ * 两者都注册，覆盖用户在不同位置触发「用 Telos 打开」。
  * 菜单命令统一走 `--open-project <绝对路径>`，主进程据此跳转/新增项目。
  */
 const REG_BASE = "HKCU\\Software\\Classes";
 export const SHELL_MENU_KEYS = {
-	folder: `${REG_BASE}\\Directory\\shell\\PiDeck`,
-	background: `${REG_BASE}\\Directory\\Background\\shell\\PiDeck`,
+	folder: `${REG_BASE}\\Directory\\shell\\Telos`,
+	background: `${REG_BASE}\\Directory\\Background\\shell\\Telos`,
 } as const;
 
 /**
@@ -44,7 +44,7 @@ async function keyExists(key: string): Promise<boolean> {
 }
 
 /**
- * 注册「用 PiDeck 打开」右键菜单（覆盖式写操作，重复调用幂等）。
+ * 注册「用 Telos 打开」右键菜单（覆盖式写操作，重复调用幂等）。
  * @param exePath 应用可执行文件绝对路径；dev 下为 electron.exe（会带 app 路径参数）
  * @param appPath dev 模式下的应用根目录，packaged 模式传空串
  * @param menuTitle 右键菜单显示名（新建目录场景），默认英文
@@ -52,7 +52,7 @@ async function keyExists(key: string): Promise<boolean> {
 export async function registerShellContextMenu(
 	exePath: string,
 	appPath = "",
-	menuTitle = "Open with PiDeck",
+	menuTitle = "Open with Telos",
 ): Promise<void> {
 	const add = (key: string, value: string, valueName?: string) =>
 		execFileAsync("reg", [
@@ -64,7 +64,7 @@ export async function registerShellContextMenu(
 			// execFile 经 libuv 拼命令行时，含空格的参数会被外层引号包裹、反斜杠加倍（" → \\"），
 			// reg.exe 解析命令行只还原一层，最终写进注册表的会变成字面 \"——Explorer 触发时把 \"
 			// 当作路径一部分解析，报“Windows 无法访问指定设备、路径或文件”。实测不预转义时
-			// reg.exe 能正确存入嵌套引号（如 "D:\path\PiDeck.exe" --open-project "%1"）。
+			// reg.exe 能正确存入嵌套引号（如 "D:\path\Telos.exe" --open-project "%1"）。
 			value,
 			"/f",
 		]);

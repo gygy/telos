@@ -29,7 +29,7 @@ import { resolveConfiguredPackageResources } from "../packageResourceResolver";
  * 技能仍被加载（用户仍可 /skill:name 手动触发）。完全禁用唯一可靠的手段是
  * `--no-skills`（关自动发现）+ 显式 `--skill` 白名单（`--no-skills` 下仍加载）。
  * 但 -ns 下 pi 连目录扫描、settings.skills 数组、包技能都不发现，所以启用白名单时
- * PiDeck 必须把「pi 本来会加载的全部技能」自己枚举出来，剔除禁用项后逐条注入。
+ * Telos 必须把「pi 本来会加载的全部技能」自己枚举出来，剔除禁用项后逐条注入。
  *
  * 枚举与过滤规则逐条对齐 pi 0.85 的 DefaultPackageManager.resolve() /
  * collectSkillEntries / addIgnoreRules / isEnabledByOverrides / applyPatterns：
@@ -41,7 +41,7 @@ import { resolveConfiguredPackageResources } from "../packageResourceResolver";
  *      对象条目 { source, skills, autoload } 的过滤语义（空数组 = 全禁，autoload:false = delta）
  *   5. ignore 规则（.gitignore/.ignore/.fdignore，逐目录前缀化）应用于自动发现目录
  *
- * 返回 null = 无禁用项，白名单关闭（pi 自动发现，兼容 PiDeck 未跟踪的手动安装）；
+ * 返回 null = 无禁用项，白名单关闭（pi 自动发现，兼容 Telos 未跟踪的手动安装）；
  * 返回数组（可能为空）= 白名单开启，调用方需同时传 --no-skills。
  *
  * Package sources use their managed npm/git/local install locations, including manifest globs.
@@ -80,7 +80,7 @@ export function resolveEnabledSkillPaths(
 			? readProjectResourceOverrides(cwd).disabledGlobalSkills
 			: [],
 	);
-	// 扫描过程中发现的 PiDeck 禁用/frontmatter 排除项计数：无任何禁用时返回 null（白名单关闭）。
+	// 扫描过程中发现的 Telos 禁用/frontmatter 排除项计数：无任何禁用时返回 null（白名单关闭）。
 	const excluded = { count: 0 };
 	const enabledForScope = (
 		skillFile: string,
@@ -200,7 +200,7 @@ export type SkillWhitelistResolverOptions = {
 	cwd: string;
 	/** False when the trust decision rejects project resources. */
 	includeProjectResources?: boolean;
-	/** PiDeck settings 中禁用的全局技能名（比较时小写）。 */
+	/** Telos settings 中禁用的全局技能名（比较时小写）。 */
 	disabledNames: string[];
 };
 
@@ -230,8 +230,8 @@ function readSkillMeta(skillFile: string): { name: string; modelInvocationDisabl
 
 /**
  * 技能文件是否应注入白名单：frontmatter 无 name（读不到，注入后由 pi 校验丢弃）视为
- * 未禁用；显式禁用列表（PiDeck settings ∪ 项目 settings）或 frontmatter 的
- * disable-model-invocation（老版 PiDeck 禁用语义，仅阻止自动调用）都排除——
+ * 未禁用；显式禁用列表（Telos settings ∪ 项目 settings）或 frontmatter 的
+ * disable-model-invocation（老版 Telos 禁用语义，仅阻止自动调用）都排除——
  * 后者一并排除让旧禁用状态升级后直接变为「不加载」，无需用户重新操作。
  */
 function isEnabledSkill(
@@ -259,7 +259,7 @@ function isEnabledSkill(
 function collectSkillDir(
 	dir: string,
 	mode: "pi" | "agents",
-	isPiDeckEnabled: (skillFile: string) => boolean,
+	isTelosEnabled: (skillFile: string) => boolean,
 	addPath: (path: string) => void,
 	overridesBase: string,
 	overrides: string[],
@@ -280,7 +280,7 @@ function collectSkillDir(
 		const fullPath = join(dir, entry.name);
 		if (!isFileEntry(entry, fullPath)) continue;
 		if (igRef.ignores(toPosixPath(relative(root, fullPath)))) return;
-		if (isPiDeckEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
+		if (isTelosEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
 			addPath(fullPath);
 		}
 		return; // 有 SKILL.md 的目录不再递归，与 pi 一致
@@ -293,7 +293,7 @@ function collectSkillDir(
 		if (isDirEntry(entry, fullPath)) {
 			const relPath = toPosixPath(relative(root, fullPath));
 			if (igRef.ignores(`${relPath}/`)) continue;
-			collectSkillDir(fullPath, mode, isPiDeckEnabled, addPath, overridesBase, overrides, root, igRef);
+			collectSkillDir(fullPath, mode, isTelosEnabled, addPath, overridesBase, overrides, root, igRef);
 			continue;
 		}
 		if (!isFileEntry(entry, fullPath)) continue;
@@ -304,7 +304,7 @@ function collectSkillDir(
 		if (!entry.name.toLowerCase().endsWith(".md")) continue;
 		if (!((mode === "pi" && isRootLevel) || (mode === "agents" && !isRootLevel))) continue;
 		if (igRef.ignores(toPosixPath(relative(root, fullPath)))) continue;
-		if (isPiDeckEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
+		if (isTelosEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
 			addPath(fullPath);
 		}
 	}
@@ -344,7 +344,7 @@ function collectSettingsSkills(
 	base: string,
 	plain: string[],
 	patterns: string[],
-	isPiDeckEnabled: (skillFile: string) => boolean,
+	isTelosEnabled: (skillFile: string) => boolean,
 	addPath: (path: string) => void,
 ): void {
 	const allFiles: string[] = [];
@@ -363,7 +363,7 @@ function collectSettingsSkills(
 	}
 	const enabledSet = applyPatterns(allFiles, patterns, base);
 	for (const file of allFiles) {
-		if (enabledSet.has(file) && isPiDeckEnabled(file)) addPath(file);
+		if (enabledSet.has(file) && isTelosEnabled(file)) addPath(file);
 	}
 }
 

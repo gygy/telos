@@ -2,7 +2,7 @@
  * rewind checkpoint 常量（移植自 pi-rewind core.ts，MIT）。
  *
  * 与 pi-rewind 保持一致：ref 命名空间、过滤阈值、忽略目录全部对齐，
- * 保证 PiDeck 与 pi CLI 场景下创建的 checkpoint 互相可读——同一仓库里
+ * 保证 Telos 与 pi CLI 场景下创建的 checkpoint 互相可读——同一仓库里
  * 谁打的点都能被另一方列出/恢复，这是 refs 存储（而非内存存储）的收益。
  */
 

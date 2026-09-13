@@ -124,7 +124,7 @@ const zhStatus = (title, status) => L.layoutNotificationSegments(measure, title,
 const kinds = (rows) => JSON.stringify(rows.map((row) => row.map((s) => s.kind).join("|")));
 const texts = (rows) => JSON.stringify(rows.map((row) => row.map((s) => s.text).join("")));
 
-test("petFontStack resolves PiDeck font presets", () => {
+test("petFontStack resolves Telos font presets", () => {
 	assert.match(L.petFontStack("system", ""), /^-apple-system/);
 	assert.match(L.petFontStack("sans", ""), /^"Inter"/);
 	assert.match(L.petFontStack("serif", ""), /^Georgia/);

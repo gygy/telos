@@ -213,7 +213,7 @@ test("parseContextPressureProjection returns undefined for empty or foreign valu
 test("projection parsers accept the unwrapped mux-frame unit value", () => {
 	// 回归：mux session/projection 帧的 value 是单元值本体（host onChanged 原样下发），
 	// 不是 attach projections.values 的 { key: 单元值 } 包装；之前帧被静默丢弃，
-	// 运行中会话的圆环永远走字符估算兜底（表现 = 「dsh-web 准、PiDeck 不准」）。
+	// 运行中会话的圆环永远走字符估算兜底（表现 = 「dsh-web 准、Telos 不准」）。
 	const pressure = parseContextPressureProjection({ pressureTokens: 1200, projectedTokens: 1500, contextWindow: 64_000 });
 	assert.equal(pressure.pressureTokens, 1200);
 	assert.equal(pressure.projectedTokens, 1500);

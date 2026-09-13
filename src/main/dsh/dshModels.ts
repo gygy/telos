@@ -1,7 +1,7 @@
 import type { AvailableModel, DshDiscoveredModel, FetchedModel } from "../../shared/types";
 
 /**
- * DSH host 模型目录 → PiDeck AvailableModel 列表（纯函数，可单测）。
+ * DSH host 模型目录 → Telos AvailableModel 列表（纯函数，可单测）。
  *
  * 输入是 host wire 的 ModelProviderGroup[]（llm.models / session.models 同构），
  * 输出透传每个模型声明支持的思考档位（reasoning.efforts）——选择器按模型过滤档位，
@@ -24,7 +24,7 @@ export type DshModelGroupInput = {
 };
 
 
-/** DSH host 模型目录 → PiDeck AvailableModel 列表（纯函数，可单测）。 */
+/** DSH host 模型目录 → Telos AvailableModel 列表（纯函数，可单测）。 */
 export function toDshAvailableModels(groups: DshModelGroupInput[]): AvailableModel[] {
 	const result: AvailableModel[] = [];
 	for (const group of groups) {

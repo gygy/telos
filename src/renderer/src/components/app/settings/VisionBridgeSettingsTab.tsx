@@ -364,7 +364,7 @@ export function VisionBridgeSettingsTab(props: {
 				</SettingRow>
 			</SettingsSection>
 
-			{/* 配置文件位置说明：扩展与 PiDeck 共享 */}
+			{/* 配置文件位置说明：扩展与 Telos 共享 */}
 			<SettingsSection
 				title={t("settings.vision.configFile")}
 				description={

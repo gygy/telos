@@ -401,7 +401,7 @@ test("collectDisplayedSessionIds excludes drafts already shown as agent or sessi
 			id: "live-1",
 			projectId: "p1",
 			cwd: "C:/project",
-			title: "PiDeck agent",
+			title: "Telos agent",
 			status: "running",
 			sessionPath: "C:/sessions/draft.jsonl",
 			createdAt: 20,

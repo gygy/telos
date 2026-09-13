@@ -8,7 +8,7 @@ import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
  * pideckSessionBridge 回归（0.1.5 session/page 的 throughSeq cursor 来源）。
  *
  * 背景：`session/page` 的 throughSeq 必须 ≤ 会话 cursor，官方约定它来自 follow
- * 开帧快照；PiDeck 的历史浏览是冷读路径（不能 follow，promote 会激活 Agent），
+ * 开帧快照；Telos 的历史浏览是冷读路径（不能 follow，promote 会激活 Agent），
  * 因此由本桥把 sessionQuery observation cursor 暴露给主进程。任何对 throughSeq
  * 语义的误用（MAX_SAFE_INTEGER、负数等）都会让历史读取静默变空——见
  * docs/dsh-0.1.5-typert-migration.md 与 DshAgentManager.historyPage 注释。

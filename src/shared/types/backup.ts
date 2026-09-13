@@ -2,7 +2,7 @@
  * 配置备份（config-backup）共享类型：主进程 / preload / 渲染层共同依赖的契约。
  *
  * 备份对象：pi 配置文件（models.json / auth.json / settings.json / mcp.json）
- * 与 PiDeck 设置（userData/settings.json）。备份以单文件 JSON 包落盘，
+ * 与 Telos 设置（userData/settings.json）。备份以单文件 JSON 包落盘，
  * 内部键带命名空间前缀（`pi/`、`pideck/`），避免两个同名 settings.json 冲突。
  */
 
@@ -24,7 +24,7 @@ export type ConfigBackupMeta = {
 	id: string;
 	/** 备份创建时间（ISO 字符串）。 */
 	createdAt: string;
-	/** 备份时的 PiDeck 版本（用于升级检测与展示）。 */
+	/** 备份时的 Telos 版本（用于升级检测与展示）。 */
 	appVersion: string;
 	/** 触发原因。 */
 	reason: ConfigBackupReason;

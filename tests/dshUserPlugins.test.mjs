@@ -16,7 +16,7 @@ const {
 } = loadTsCommonJs("src/main/dsh/dshUserPlugins.ts");
 
 const SAMPLE_PATCH = [
-	"# PiDeck / DSH 用户补丁层",
+	"# Telos / DSH 用户补丁层",
 	"# 注释必须原样保留",
 	"",
 	"- insert:",
@@ -150,7 +150,7 @@ test("removeUserPatchRow：未命中返回 removed=false 且原文不变", () =>
 	assert.equal(result.text, SAMPLE_PATCH);
 });
 
-test("resolveManagedPluginDir：仅 PiDeck 管理目录内的路径返回插件根", () => {
+test("resolveManagedPluginDir：仅 Telos 管理目录内的路径返回插件根", () => {
 	// 插件根必须真实存在 package.json（函数靠 existsSync 向上找插件根）
 	const root = mkdtempSync(join(tmpdir(), "pideck-managed-"));
 	try {

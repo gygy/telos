@@ -615,7 +615,7 @@ export function registerStoreIpc({
 				if (enabled) await extensionManager.restoreBuiltIn(source);
 				else await extensionManager.disableBuiltIn(source);
 			} else {
-				// 非内置扩展禁用记录存 PiDeck settings（scope+source），启动 RPC 时走白名单模式生效。
+				// 非内置扩展禁用记录存 Telos settings（scope+source），启动 RPC 时走白名单模式生效。
 				await extensionManager.setEnabled(source, enabled, scope);
 			}
 			void appLogger.info("extension", "Extension toggled", { source, enabled, scope });

@@ -6,7 +6,7 @@ import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
 /**
  * 安全门集成契约测试：
  * - 内置扩展清单包含安全门（否则 -e 注入会缺失）
- * - 扩展源文件自包含（不 import PiDeck 源码）
+ * - 扩展源文件自包含（不 import Telos 源码）
  * - 扩展声明的快照字段与主进程 buildSnapshot 输出一致（schema 契约）
  * - PIDECK_* 环境变量在 PiProcess 启动路径中注入
  */
@@ -28,7 +28,7 @@ test("BUILT_IN_EXTENSIONS includes pi-deck-security-gate.ts", () => {
 	assert.ok(!isBuiltInExtensionName("../pi-deck-security-gate.ts"));
 });
 
-test("security gate extension is self-contained (no PiDeck src imports)", () => {
+test("security gate extension is self-contained (no Telos src imports)", () => {
 	const source = readFileSync("resources/extensions/pi-deck-security-gate.ts", "utf8");
 	assert.doesNotMatch(source, /from\s+["']\.\.?\//);
 	assert.doesNotMatch(source, /from\s+["']src\//);
@@ -76,7 +76,7 @@ test("extension snapshot field names match buildSnapshot output", () => {
 	}
 });
 
-test("extension reads tool_call input fields that PiDeck built-in tools emit", () => {
+test("extension reads tool_call input fields that Telos built-in tools emit", () => {
 	const extSource = readFileSync("resources/extensions/pi-deck-security-gate.ts", "utf8");
 	// read/write/edit 的路径字段是 filePath（与飞书工具摘要一致，不是 path）；
 	// grep/find/ls 的目录字段是 path；bash 用 command。

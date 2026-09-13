@@ -199,7 +199,7 @@ export function createRealAutoUpdater(options?: {
 	}
 	autoUpdater.autoDownload = options?.isAutoDownloadEnabled?.() ?? true;
 	autoUpdater.autoInstallOnAppQuit = false;
-	// 日志走 PiDeck 自己的日志体系（UpdateService.log），关掉 electron-updater 默认 logger。
+	// 日志走 Telos 自己的日志体系（UpdateService.log），关掉 electron-updater 默认 logger。
 	autoUpdater.logger = null;
 	// 当前生效的镜像 feed URL（null = 官方 GitHub）；setFeedUrl 在此之上往返切换。
 	let currentFeedUrl: string | null = feedOverride;

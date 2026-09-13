@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PiDeck 资源作用域管理原型</title>
+  <title>Telos 资源作用域管理原型</title>
   <style>
     :root {
       color-scheme: light;
@@ -327,7 +327,7 @@
   </svg>
 
   <div class="workspace" aria-hidden="true">
-    <aside><div class="workspace-brand"><span class="pi-mark">π</span>PiDeck</div><div class="workspace-block"></div><div class="workspace-block short"></div><div class="workspace-block"></div><div class="workspace-block short"></div></aside>
+    <aside><div class="workspace-brand"><span class="pi-mark">π</span>Telos</div><div class="workspace-block"></div><div class="workspace-block short"></div><div class="workspace-block"></div><div class="workspace-block short"></div></aside>
     <section class="workspace-center"><div class="workspace-top"></div><div class="workspace-lines"><span></span><span></span><span></span></div><div class="workspace-bottom"></div></section>
     <aside></aside>
   </div>
@@ -369,7 +369,7 @@
                 <span class="scope-label">查看范围</span>
                 <button class="scope-trigger" id="scope-trigger" aria-haspopup="listbox" aria-expanded="false">
                   <span class="scope-icon project" id="scope-icon"><svg><use href="#folder"/></svg></span>
-                  <span class="scope-copy"><strong id="scope-title">PiDeck</strong><small id="scope-path">F:\PiDeck</small></span><svg><use href="#chevron"/></svg>
+                  <span class="scope-copy"><strong id="scope-title">Telos</strong><small id="scope-path">F:\Telos</small></span><svg><use href="#chevron"/></svg>
                 </button>
                 <div class="scope-menu" id="scope-menu" role="listbox" aria-label="选择资源范围"></div>
               </div>
@@ -410,7 +410,7 @@
     };
 
     const projects = [
-      { id: "pideck", name: "PiDeck", path: "F:\\PiDeck", live: true },
+      { id: "pideck", name: "Telos", path: "F:\\Telos", live: true },
       { id: "proma", name: "Proma", path: "F:\\Proma", live: true },
       { id: "web-lab", name: "web-lab", path: "D:\\work\\web-lab", live: false }
     ];
@@ -423,7 +423,7 @@
       ],
       skills: [
         { id: "council", name: "council-mode", source: "~/.pi/agent/skills/council-mode", detail: "召集多个顾问交叉评审决策", note: "Pi 全局技能", enabled: true },
-        { id: "doctor", name: "pideck-doctor", source: "~/.pi/agent/skills/pideck-doctor", detail: "诊断 PiDeck 环境与运行问题", note: "Pi 全局技能", enabled: true },
+        { id: "doctor", name: "pideck-doctor", source: "~/.pi/agent/skills/pideck-doctor", detail: "诊断 Telos 环境与运行问题", note: "Pi 全局技能", enabled: true },
         { id: "image", name: "image-gen", source: "~/.pi/agent/skills/image-gen", detail: "生成图片与视觉素材", note: "Pi 全局技能", enabled: true },
         { id: "usage", name: "usage-probe", source: "~/.agents/skills/usage-probe", detail: "扩展供应商用量查询能力", note: "Agents 全局技能", enabled: false }
       ],
@@ -442,11 +442,11 @@
     const projectRows = {
       pideck: {
         extensions: [
-          { id: "request-recovery", name: "pi-deck-request-size-recovery", source: ".pi/extensions/request-size-recovery.ts", path: "F:\\PiDeck\\.pi\\extensions\\request-size-recovery.ts", enabled: true },
-          { id: "release-guard", name: "release-guard", source: ".pi/extensions/release-guard.ts", path: "F:\\PiDeck\\.pi\\extensions\\release-guard.ts", enabled: true }
+          { id: "request-recovery", name: "pi-deck-request-size-recovery", source: ".pi/extensions/request-size-recovery.ts", path: "F:\\Telos\\.pi\\extensions\\request-size-recovery.ts", enabled: true },
+          { id: "release-guard", name: "release-guard", source: ".pi/extensions/release-guard.ts", path: "F:\\Telos\\.pi\\extensions\\release-guard.ts", enabled: true }
         ],
-        skills: [{ id: "electron-review", name: "electron-security-review", source: ".pi/skills/electron-security-review", detail: "检查 Electron IPC 与进程边界", note: "项目技能", enabled: true }, { id: "release-check", name: "release-check", source: ".agents/skills/release-check", detail: "执行 PiDeck 发版核对流程", note: "项目 Agents 技能", enabled: true }],
-        prompts: [{ id: "issue-triage", name: "/issue-triage", source: ".pi/prompts/issue-triage.md", detail: "按 PiDeck 规范分析并定位 Issue", note: "项目模板", enabled: true }, { id: "release-notes", name: "/release-notes", source: ".pi/prompts/release-notes.md", detail: "生成中英文发版说明", note: "项目模板", enabled: true }],
+        skills: [{ id: "electron-review", name: "electron-security-review", source: ".pi/skills/electron-security-review", detail: "检查 Electron IPC 与进程边界", note: "项目技能", enabled: true }, { id: "release-check", name: "release-check", source: ".agents/skills/release-check", detail: "执行 Telos 发版核对流程", note: "项目 Agents 技能", enabled: true }],
+        prompts: [{ id: "issue-triage", name: "/issue-triage", source: ".pi/prompts/issue-triage.md", detail: "按 Telos 规范分析并定位 Issue", note: "项目模板", enabled: true }, { id: "release-notes", name: "/release-notes", source: ".pi/prompts/release-notes.md", detail: "生成中英文发版说明", note: "项目模板", enabled: true }],
         mcp: [{ id: "local-docs", name: "local-docs", source: ".pi/mcp.json", detail: "索引当前项目的开发文档", note: "stdio · lazy", enabled: true }]
       },
       proma: {

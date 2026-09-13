@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 生成 PiDeck 内置扩展清单：resources/extensions/extensions-manifest.json。
+ * 生成 Telos 内置扩展清单：resources/extensions/extensions-manifest.json。
  *
  * 为什么需要：内置扩展（resources/extensions/*.ts）随应用分发，RPC 启动时经
  * `-e <绝对路径>` 注入 pi。打包态 resources 目录不可写，扩展出了 bug 只能等下一次

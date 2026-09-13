@@ -1,8 +1,8 @@
 /**
- * pideck-command-bridge：PiDeck ↔ DSH host 的会话命令枚举桥（D15）。
+ * pideck-command-bridge：Telos ↔ DSH host 的会话命令枚举桥（D15）。
  *
  * 背景：官方 ApiProxy wire 没有命令列表方法（dsh-web 的命令补全走浏览器端
- * Typert Remote `commands.list`，PiDeck 只有 api-proxy RPC 通道拿不到）。
+ * Typert Remote `commands.list`，Telos 只有 api-proxy RPC 通道拿不到）。
  * 本插件把 host 进程内的命令注册表（`ctx.commands.list(agent)`，CommandDescriptor）
  * 暴露成一个主进程可经 fetch 桥调用的服务（`ctx.pideckCommandsBridge`），
  * 与 pideckPluginBridge 同构：前缀路由 + POST JSON + { ok, value|error } 信封。

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PiDeck 资源页统一改造原型（扩展 / 技能 / 提示词）</title>
+  <title>Telos 资源页统一改造原型（扩展 / 技能 / 提示词）</title>
   <style>
     :root {
       color-scheme: dark;
@@ -176,8 +176,8 @@
           <div class="scope-menu" id="scopeMenu" hidden>
             <div class="scope-item on" data-scope="global"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>全局</div>
             <div class="scope-sep"></div>
-            <div class="scope-item" data-scope="p1"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>PiDeck</div>
-            <div class="scope-item" data-scope="p2"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>PiDeck-cloud-sync</div>
+            <div class="scope-item" data-scope="p1"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>Telos</div>
+            <div class="scope-item" data-scope="p2"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>Telos-cloud-sync</div>
             <div class="scope-item" data-scope="p3"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>巡检</div>
             <div class="scope-item" data-scope="p4"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>测试</div>
           </div>
@@ -306,15 +306,15 @@
       { name: "pi-subagents", src: "npm:pi-subagents", kind: "global", scope: "global", ver: "当前 0.65.0 · 最新 0.65.1", path: "C:\\Users\\…\\.pi\\agent\\npm\\node_modules\\pi-subagents", on: true },
       { name: "pi-deck-todo", src: "pi-deck-todo.ts", kind: "builtin", scope: "global", ver: "-", path: "resources\\extensions\\pi-deck-todo.ts", on: true },
       { name: "pi-deck-vision", src: "pi-deck-vision.ts", kind: "builtin", scope: "global", ver: "-", path: "resources\\extensions\\pi-deck-vision.ts", on: true },
-      { name: "local-helper", src: "local-helper.ts", kind: "project", scope: "p1", ver: "-", path: "F:\\PiDeck\\.pi\\extensions\\local-helper.ts", on: false },
-      { name: "team-bridge", src: "npm:team-bridge", kind: "project", scope: "p2", ver: "当前 1.0.3 · 最新 1.0.3", path: "F:\\PiDeck-cloud-sync\\.pi\\npm\\node_modules\\team-bridge", on: true },
+      { name: "local-helper", src: "local-helper.ts", kind: "project", scope: "p1", ver: "-", path: "F:\\Telos\\.pi\\extensions\\local-helper.ts", on: false },
+      { name: "team-bridge", src: "npm:team-bridge", kind: "project", scope: "p2", ver: "当前 1.0.3 · 最新 1.0.3", path: "F:\\Telos-cloud-sync\\.pi\\npm\\node_modules\\team-bridge", on: true },
       { name: "context-mode", src: "npm:context-mode", kind: "global", scope: "global", ver: "当前 1.2.0 · 最新 1.2.0", path: "C:\\Users\\…\\.pi\\agent\\npm\\node_modules\\context-mode", on: false },
     ];
     const skillData = [
       { name: "image-gen", desc: "生成图片。读取生图供应商配置，调用 OpenAI 兼容的图片生成 API…", kind: "global", scope: "global", path: "~/.pi/agent/skills/image-gen", on: true },
-      { name: "pideck-doctor", desc: "排查 PiDeck 桌面应用的问题。引导用户生成环境诊断报告…", kind: "global", scope: "global", path: "~/.pi/agent/skills/pideck-doctor", on: true },
-      { name: "usage-probe", desc: "为 PiDeck 的「用量查询」功能排查/扩展供应商支持…", kind: "global", scope: "global", path: "~/.pi/agent/skills/usage-probe", on: true },
-      { name: "demo-skill", desc: "A project-local skill", kind: "project", scope: "p1", path: "F:\\PiDeck\\.pi\\skills\\demo-skill", on: true },
+      { name: "pideck-doctor", desc: "排查 Telos 桌面应用的问题。引导用户生成环境诊断报告…", kind: "global", scope: "global", path: "~/.pi/agent/skills/pideck-doctor", on: true },
+      { name: "usage-probe", desc: "为 Telos 的「用量查询」功能排查/扩展供应商支持…", kind: "global", scope: "global", path: "~/.pi/agent/skills/usage-probe", on: true },
+      { name: "demo-skill", desc: "A project-local skill", kind: "project", scope: "p1", path: "F:\\Telos\\.pi\\skills\\demo-skill", on: true },
       { name: "paseo", desc: "Paseo reference for managing workspaces…", kind: "global", scope: "global", path: "~/.agents/skills/paseo", on: false },
       { name: "ci-helper", desc: "项目 CI 流程技能", kind: "project", scope: "p3", path: "F:\\巡检\\.pi\\skills\\ci-helper", on: false },
     ];
@@ -326,7 +326,7 @@
       { name: "test", desc: "Write tests for a function or component covering edge cases", kind: "builtin", scope: "global", on: false },
       { name: "code-review", desc: "项目内代码评审模板", kind: "project", scope: "p4", on: false },
     ];
-    const projectNames = { p1: "PiDeck", p2: "PiDeck-cloud-sync", p3: "巡检", p4: "测试" };
+    const projectNames = { p1: "Telos", p2: "Telos-cloud-sync", p3: "巡检", p4: "测试" };
 
     // ── 图标 ──────────────────────────────────
     const ICONS = {

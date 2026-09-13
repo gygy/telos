@@ -47,7 +47,7 @@ function readDisabledPromptNames(settings: Record<string, unknown>): string[] {
 export class PromptManager {
 	private promptsDir: string;
 	private wslEnvironment: WslEnvironment | null = null;
-	/** PiDeck 设置的读取/写入（禁用列表持久化）；未配置时开关不生效（旧行为）。 */
+	/** Telos 设置的读取/写入（禁用列表持久化）；未配置时开关不生效（旧行为）。 */
 	private settingsProvider: (() => AppSettings) | null = null;
 	private settingsPatcher: ((patch: Partial<AppSettings>) => Promise<AppSettings>) | null = null;
 
@@ -58,7 +58,7 @@ export class PromptManager {
 		this.promptsDir = join(home ?? homedir(), ".pi", "agent", "prompts");
 	}
 
-	/** 注入 PiDeck 设置读写：启用后 toggle 同步持久化禁用列表（模板白名单模式的依据）。 */
+	/** 注入 Telos 设置读写：启用后 toggle 同步持久化禁用列表（模板白名单模式的依据）。 */
 	configureSettings(
 		getSettings: () => AppSettings,
 		patchSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>,
@@ -67,7 +67,7 @@ export class PromptManager {
 		this.settingsPatcher = patchSettings;
 	}
 
-	/** 模板名是否在 PiDeck settings 禁用列表（小写比较；未配置 settings 时视为未禁用）。 */
+	/** 模板名是否在 Telos settings 禁用列表（小写比较；未配置 settings 时视为未禁用）。 */
 	private isDisabledInSettings(name: string): boolean {
 		if (!this.settingsProvider) return false;
 		const key = name.toLowerCase();
@@ -77,7 +77,7 @@ export class PromptManager {
 	}
 
 	/**
-	 * 开关模板：写 PiDeck settings 禁用列表（模板白名单模式 --no-prompt-templates/
+	 * 开关模板：写 Telos settings 禁用列表（模板白名单模式 --no-prompt-templates/
 	 * --prompt-template 的依据）。内置推荐模板（builtin://，无磁盘文件）不可禁用。
 	 */
 	async toggle(filePath: string, enabled: boolean): Promise<PiPromptTemplateSummary> {
@@ -95,7 +95,7 @@ export class PromptManager {
 		return { ...template, enabled };
 	}
 
-	/** Reads project-local prompt disables; global PiDeck settings must not affect equal project names. */
+	/** Reads project-local prompt disables; global Telos settings must not affect equal project names. */
 	private async readProjectDisabledPromptNames(
 		projectRoot: string,
 		boundary: ProjectFileReadBoundary,
@@ -277,7 +277,7 @@ export class PromptManager {
 				content: raw,
 				userCreated: true,
 				scope: "global",
-				// 禁用状态 = PiDeck settings 禁用列表（模板白名单模式的依据）
+				// 禁用状态 = Telos settings 禁用列表（模板白名单模式的依据）
 				enabled: !this.isDisabledInSettings(name),
 			});
 		}

@@ -1207,7 +1207,7 @@ export class ConfigManager {
 	 */
 	private usageProbeSettingsDir(backend: UsageProbeBackend): string {
 		if (backend === "dsh") {
-			// DSH 链路配置统一落 $DSH_HOME/.pideck/（PiDeck 特有文件收拢目录）。
+			// DSH 链路配置统一落 $DSH_HOME/.pideck/（Telos 特有文件收拢目录）。
 			const dshHome = this.dshUsage?.getHomeDir() ?? this.configDir;
 			return pideckUsageProbesDir(dshHome);
 		}

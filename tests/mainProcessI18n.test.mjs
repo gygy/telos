@@ -22,8 +22,8 @@ test("main-process copy resolves locale and interpolates stable product text", (
   assert.equal(mainProcessT("en-US", "tray.showWindow"), "Show window");
   assert.equal(mainProcessT("en-US", "pet.switch"), "Switch pet");
   assert.equal(
-    mainProcessT("en-US", "session.historyTitle", { project: "PiDeck" }),
-    "PiDeck history",
+    mainProcessT("en-US", "session.historyTitle", { project: "Telos" }),
+    "Telos history",
   );
   assert.equal(mainProcessT("en-US", "session.imagePlaceholder"), "[Image]");
   assert.equal(
@@ -270,7 +270,7 @@ test("main-process user surfaces use stable copy and keep caught details in logs
   ]) {
     assert.match(source, new RegExp(`mainCopy\\("${key.replaceAll(".", "\\.")}"`));
   }
-  assert.doesNotMatch(source, /label:\s*"(?:显示窗口|退出 PiDeck)"/);
+  assert.doesNotMatch(source, /label:\s*"(?:显示窗口|退出 Telos)"/);
   assert.doesNotMatch(source, /title:\s*"选择聊天记录目录"/);
   assert.doesNotMatch(source, /error:\s*`无法连接到 WSL[^`]*\$\{err/);
   assert.doesNotMatch(source, /throw new Error\(`(?:搜索|获取|导入|读取)[^`]*\$\{message\}`\)/);

@@ -1,9 +1,9 @@
 /**
- * PiDeck 特有文件在 DSH_HOME 下的统一落点：`$DSH_HOME/.pideck/`。
+ * Telos 特有文件在 DSH_HOME 下的统一落点：`$DSH_HOME/.pideck/`。
  *
  * 为什么收进一个点目录：
  * - ~/.dsh 与 dsh CLI 共用，根下散落 pideck 私有文件会让用户难以区分
- *   「哪个是 dsh 的、哪个是 PiDeck 的」；统一后备份/迁移/清理只需处理一个目录；
+ *   「哪个是 dsh 的、哪个是 Telos 的」；统一后备份/迁移/清理只需处理一个目录；
  * - 避免与 dsh 未来新增的根级文件撞名。
  *
  * 边界（不可逾越）：
@@ -22,10 +22,10 @@
 import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
-/** PiDeck 特有文件在 DSH_HOME 下的统一子目录名。 */
+/** Telos 特有文件在 DSH_HOME 下的统一子目录名。 */
 export const PIDECK_DSH_DIR = ".pideck";
 
-/** DSH_HOME 下的 PiDeck 私有目录（不存在时调用方 mkdirSync 创建）。 */
+/** DSH_HOME 下的 Telos 私有目录（不存在时调用方 mkdirSync 创建）。 */
 export function pideckDshHome(dshHome: string): string {
 	return join(dshHome, PIDECK_DSH_DIR);
 }
@@ -51,7 +51,7 @@ export function pideckUsageProbesDir(dshHome: string): string {
 }
 
 /**
- * 一次性迁移旧版 PiDeck 数据（幂等；失败静默——不阻塞 DSH host 启动）：
+ * 一次性迁移旧版 Telos 数据（幂等；失败静默——不阻塞 DSH host 启动）：
  * - `$DSH_HOME/.pideck-archive/` → `$DSH_HOME/.pideck/archive/`
  * - `$DSH_HOME/usage-probes.json` → `$DSH_HOME/.pideck/usage-probes.json`
  * - `$DSH_HOME/.pideck-host.lock` → `$DSH_HOME/.pideck/host.lock`

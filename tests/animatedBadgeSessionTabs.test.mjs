@@ -22,7 +22,7 @@ test("animated-badge component copied with official markers", () => {
 	assert.match(source, /status === "loading" && !icon[\s\S]*?className="inline-flex animate-pideck-spin"/);
 	assert.match(source, /ICON_ROLL_VARIANTS/);
 	assert.match(source, /pulse = status === "loading"/);
-	// 与官方 API 对齐：showIcon / contentKey / size + PiDeck bare 扩展
+	// 与官方 API 对齐：showIcon / contentKey / size + Telos bare 扩展
 	assert.match(source, /showIcon = true/);
 	assert.match(source, /contentKey/);
 	assert.match(source, /bare\?: boolean;/);

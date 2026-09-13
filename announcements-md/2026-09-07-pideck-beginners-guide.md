@@ -1,12 +1,12 @@
 ---
 id: 2026-09-07-pideck-beginners-guide
-title: PiDeck 新手入门：从零开始用好你的编码助手
+title: Telos 新手入门：从零开始用好你的编码助手
 level: info
 category: guide
 publishedAt: 2026-09-07T23:30:00+08:00
 effectiveUntil: 2099-12-31T00:00:00+08:00
 ---
-PiDeck 让你在多个项目目录之间，稳定地管理并运行 pi 编码助手会话。这篇指南带你走一遍最常用的操作。
+Telos 让你在多个项目目录之间，稳定地管理并运行 pi 编码助手会话。这篇指南带你走一遍最常用的操作。
 
 ## 第一步：添加项目并创建会话
 

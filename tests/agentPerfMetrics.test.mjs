@@ -4,7 +4,7 @@ import test from "node:test";
 
 // 最近一次回复的性能指标（TTFT/总耗时/TPS）由主进程 AgentManager 在流式事件上本地计时，
 // 经 AgentRuntimeState 下发，渲染层在 ctx.detail 面板展示。pi 不暴露任何耗时字段，
-// 因此这三个指标完全由 PiDeck 计算——此处静态断言计算与展示链路完整。
+// 因此这三个指标完全由 Telos 计算——此处静态断言计算与展示链路完整。
 
 test("AgentManager keeps per-agent streaming perf timers", () => {
 	const source = readFileSync("src/main/pi/AgentManager.ts", "utf8");

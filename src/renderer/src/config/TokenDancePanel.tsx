@@ -1,7 +1,7 @@
 /**
  * TokenDancePanel — Pi 配置管理「模型」页的 TokenDance 入口卡片。
  *
- * 与 PiDeck 的关系边界（用户确认的方案）：
+ * 与 Telos 的关系边界（用户确认的方案）：
  * - 不做任何内置/展示层注入：模型不存在于配置时，会话模型列表也不会出现；
  * - 卡片提供「一键配置」：用户点击 → 同意弹窗 → 授权 → 自动拿到 API Key → 写入
  *   pi models.json（与 DSH 模型目录），之后一切走既有链路；
@@ -61,7 +61,7 @@ type SetupFlow = { flowId: string; authUrl: string };
  *
  * 主路径（callback 模式）：start → 开浏览器 → 用户在授权页点确认 → 平台把一次性 code
  * 重定向回本机回环端口 → 主进程用 PKCE verifier 交换出 API Key → 立即写入配置。
- * 用户视角只有一个动作：点「授权并一键配置」，然后回到 PiDeck 看结果。
+ * 用户视角只有一个动作：点「授权并一键配置」，然后回到 Telos 看结果。
  *
  * 降级路径：端口绑定失败或等待超时 → 展开手动区，允许粘贴授权码（headless 交换）
  * 或直接粘贴已在后台创建好的 API Key。
@@ -226,7 +226,7 @@ function TokenDanceSetupDialog(props: {
 						</>
 					)}
 
-					{/* 归因说明：Key 会带上 app_url，用户可核对不是 PiDeck 偷偷收集信息 */}
+					{/* 归因说明：Key 会带上 app_url，用户可核对不是 Telos 偷偷收集信息 */}
 					<p className="text-[11px] text-text-tertiary">
 						{t("config.tokendance.oauthAppUrl", { appUrl: TOKENDANCE_APP_URL })}
 					</p>

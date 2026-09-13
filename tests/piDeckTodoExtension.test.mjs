@@ -6,7 +6,7 @@ import vm from "node:vm";
 
 const extensionPath = "resources/extensions/pi-deck-todo.ts";
 const statePath = "resources/extensions/pi-deck-todo-state.ts";
-const selfPath = "C:/PiDeck/resources/extensions/pi-deck-todo.ts";
+const selfPath = "C:/Telos/resources/extensions/pi-deck-todo.ts";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));

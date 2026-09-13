@@ -19,7 +19,7 @@
  * - 每次启动 Agent 时强制重取（防用户直接改文件不生效）。
  *
  * 目录缓存（models-store.json）刷新：
- * PiDeck 的 RPC 进程一律带 --offline，pi 启动时的自动目录网络刷新（非 offline 时
+ * Telos 的 RPC 进程一律带 --offline，pi 启动时的自动目录网络刷新（非 offline 时
  * main() 会异步 modelRuntime.refresh 并写 models-store.json）被跳过，目录只能靠 TUI
  * 更新 → 长期滞后会让选择器显示「目录有但运行中 Agent 快照没有」的模型（如官方
  * provider 的新模型）。冷启动时用 pi update --models（唯一显式刷新入口，内置 15s
@@ -568,7 +568,7 @@ export const MODEL_CATALOG_REFRESH_ARGS = ["update", "--models"] as const;
  * 目录缓存过期阈值：models-store.json 的 mtime 距今超过该值才值得冷启动刷新。
  * 与 pi 内置 withRemoteCatalog 的远程目录刷新节流（REMOTE_CATALOG_REFRESH_INTERVAL_MS=4h）
  * 保持一致：4h 内任何来源（TUI / 手动 pi update --models / 上次冷启动）更新过目录，
- * PiDeck 就不再出手；超过 4h 无人管过才兜底刷一次（force 网络请求，内置 15s 超时）。
+ * Telos 就不再出手；超过 4h 无人管过才兜底刷一次（force 网络请求，内置 15s 超时）。
  */
 export const MODEL_CATALOG_STALE_MS = 4 * 60 * 60 * 1000;
 

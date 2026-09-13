@@ -5,8 +5,8 @@
 //   collapseOnComplete 自动折叠与 reopen）保持官方原样；
 // - 与仓库约定的适配：用户可见文案走 i18n（AGENTS.md 硬性要求）、
 //   scrollbar-hide 换成 Tailwind 任意属性（仓库不引入第三方 scrollbar 工具类）；
-// - 额外的 `compact` 可选密度开关（默认 false = 官方类/行为原样）：仅由 PiDeck
-//   宿主（Header Popover）传入，把官方 text-sm/text-xs 换成 PiDeck 语义字号 token
+// - 额外的 `compact` 可选密度开关（默认 false = 官方类/行为原样）：仅由 Telos
+//   宿主（Header Popover）传入，把官方 text-sm/text-xs 换成 Telos 语义字号 token
 //   （字号体系 text-widget > text-widget-item > text-widget-detail：默认 11/10/9px，
 //   均比右侧徽章小且随「界面字号」联动，窄窗口 vw 收缩；计数用 text-caption）并收紧垂直度量
 //   （h-11→h-9、
@@ -59,7 +59,7 @@ export interface TodoListProps {
   onOpenChange?: (open: boolean) => void;
   collapseOnComplete?: boolean;
   maxHeight?: number;
-  /** PiDeck 桌面紧凑密度开关；默认 false 保持官方类与行为，仅宿主（Header Popover）传入。 */
+  /** Telos 桌面紧凑密度开关；默认 false 保持官方类与行为，仅宿主（Header Popover）传入。 */
   compact?: boolean;
   className?: string;
 }

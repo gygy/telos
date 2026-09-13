@@ -4,7 +4,7 @@ import { hasActiveAutomationRun } from "./automationPolicy";
 import type { AutomationStore } from "./AutomationStore";
 
 const TICK_INTERVAL_MS = 1_000;
-// Catch-up window: check missed runs if PiDeck was offline for at most 7 days.
+// Catch-up window: check missed runs if Telos was offline for at most 7 days.
 const MAX_CATCH_UP_WINDOW_MS = 7 * 24 * 60 * 60_000;
 
 export type AutomationSchedulerTriggerHandler = (task: AutomationTask, scheduledFor: number, trigger: "schedule" | "catch-up") => Promise<void>;

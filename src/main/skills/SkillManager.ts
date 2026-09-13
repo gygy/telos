@@ -36,7 +36,7 @@ type SkillCopy = (
  */
 export class SkillManager {
 	private locations: PiSkillLocation[];
-	/** PiDeck 设置的读取/写入（禁用列表持久化）；未配置时开关仅写 frontmatter（旧行为）。 */
+	/** Telos 设置的读取/写入（禁用列表持久化）；未配置时开关仅写 frontmatter（旧行为）。 */
 	private settingsProvider: (() => AppSettings) | null = null;
 	private settingsPatcher: ((patch: Partial<AppSettings>) => Promise<AppSettings>) | null = null;
 
@@ -47,7 +47,7 @@ export class SkillManager {
 		this.locations = this.buildLocations(home ?? homedir());
 	}
 
-	/** 注入 PiDeck 设置读写：启用后 toggle 同步持久化禁用列表（技能白名单模式的依据）。 */
+	/** 注入 Telos 设置读写：启用后 toggle 同步持久化禁用列表（技能白名单模式的依据）。 */
 	configureSettings(
 		getSettings: () => AppSettings,
 		patchSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>,
@@ -123,7 +123,7 @@ export class SkillManager {
 		const raw = await readFile(skill.path, "utf8");
 		const next = this.setFrontmatterBoolean(raw, "disable-model-invocation", !enabled);
 		await writeFile(skill.path, next, "utf8");
-		// 同步 PiDeck settings 禁用列表（技能白名单模式 --no-skills/--skill 的依据）。
+		// 同步 Telos settings 禁用列表（技能白名单模式 --no-skills/--skill 的依据）。
 		// frontmatter 标记保留：老版本 UI 的禁用状态、手动编辑场景仍以此为准，
 		// 白名单解析器对两者都排除，显示与加载保持一致。
 		if (this.settingsProvider && this.settingsPatcher) {
@@ -177,7 +177,7 @@ export class SkillManager {
 			const targetDir = join(this.locations[0].path, skillName);
 			await mkdir(targetDir, { recursive: true });
 			const targetPath = join(targetDir, SKILL_FILE);
-			// 模板覆盖前保留用户禁用状态：PiDeck 技能开关把 disable-model-invocation
+			// 模板覆盖前保留用户禁用状态：Telos 技能开关把 disable-model-invocation
 			// 写进这份 SKILL.md 的 frontmatter，无条件覆盖会在每次启动时把用户禁用的
 			// 内置技能重置为启用（「重启后技能全部恢复」bug 的根源）。模板正文仍随
 			// 应用更新同步，仅该状态字段需回迁。
@@ -301,7 +301,7 @@ export class SkillManager {
 			sourceId: location.id,
 			sourceLabel: location.label,
 			type,
-			// 禁用 = PiDeck settings 禁用列表 ∪ frontmatter 标记（老版语义）；两者任一命中
+			// 禁用 = Telos settings 禁用列表 ∪ frontmatter 标记（老版语义）；两者任一命中
 			// 都视为禁用，与技能白名单解析器的排除规则一致
 			enabled:
 				frontmatter["disable-model-invocation"] !== "true" &&
@@ -311,7 +311,7 @@ export class SkillManager {
 		};
 	}
 
-	/** 技能名是否在 PiDeck settings 禁用列表（小写比较；未配置 settings 时视为未禁用）。 */
+	/** 技能名是否在 Telos settings 禁用列表（小写比较；未配置 settings 时视为未禁用）。 */
 	private isDisabledInSettings(name: string): boolean {
 		if (!this.settingsProvider) return false;
 		const key = name.toLowerCase();

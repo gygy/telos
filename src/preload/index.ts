@@ -195,7 +195,7 @@ const api = {
 				supported: boolean;
 				registered: boolean;
 			}>,
-		/** 启用/取消「用 PiDeck 打开」右键菜单（HKCU 写入，portable 亦可用） */
+		/** 启用/取消「用 Telos 打开」右键菜单（HKCU 写入，portable 亦可用） */
 		setEnabled: (enabled: boolean) =>
 			ipcRenderer.invoke(ipcChannels.shellMenuSetEnabled, enabled) as Promise<{
 				supported: boolean;
@@ -1362,7 +1362,7 @@ const api = {
 			subscribe(ipcChannels.appOpenInBrowser, callback),
 		restart: () => ipcRenderer.invoke(ipcChannels.appRestart) as Promise<void>,
 		quit: () => ipcRenderer.invoke(ipcChannels.appQuit) as Promise<void>,
-		// 打开 PiDeck 数据目录（配置/会话/诊断），文件管理器由主进程按平台选择
+		// 打开 Telos 数据目录（配置/会话/诊断），文件管理器由主进程按平台选择
 		openDataDir: () =>
 			ipcRenderer.invoke(
 				ipcChannels.appOpenDataDir,
@@ -2120,7 +2120,7 @@ try {
 		error instanceof Error
 			? { message: error.message, stack: error.stack }
 			: { message: String(error) };
-	console.error("[PiDeck preload] Failed to expose desktop API", detail);
+	console.error("[Telos preload] Failed to expose desktop API", detail);
 	ipcRenderer.send(ipcChannels.preloadError, detail);
 }
 

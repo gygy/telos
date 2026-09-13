@@ -2,7 +2,7 @@ import type { SessionRecord } from "../../shared/types";
 
 /**
  * DSH 外部会话同步（跨工具兼容深化）：把 DSH_HOME 里由 dsh-web 等其他工具创建的
- * host 根会话映射进 PiDeck catalog，侧栏即可直接查看/加载/续聊。
+ * host 根会话映射进 Telos catalog，侧栏即可直接查看/加载/续聊。
  *
  * 本模块只做编排与纯策略（选项目、过滤已导入、标题归一），不碰 Electron：
  * - 幂等由 SessionCatalog.createDraft 的 dshSessionId 去重保证（重复导入只更新不新增）；

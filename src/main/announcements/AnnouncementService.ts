@@ -290,7 +290,7 @@ export class AnnouncementService {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-announcements" },
+				headers: { "user-agent": "Telos-announcements" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = await response.arrayBuffer();

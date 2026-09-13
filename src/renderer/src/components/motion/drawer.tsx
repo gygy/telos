@@ -20,7 +20,7 @@ export interface DrawerProps {
   /** Close when the backdrop is clicked. Default true. */
   dismissable?: boolean;
   /**
-   * PiDeck 扩展（beui 官方无此 prop）：透传到背板与面板的共同包装层。
+   * Telos 扩展（beui 官方无此 prop）：透传到背板与面板的共同包装层。
    *
    * 背板与面板是同级的两个 fixed 兄弟节点，调用方需要一个能把「整张抽屉」
    * 一次性标记出来的挂载点 —— 例如公告详情抽屉要挂 data-* 属性，让外层

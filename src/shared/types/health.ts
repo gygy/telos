@@ -130,7 +130,7 @@ export type HealthReportContext = {
 /**
  * 问题反馈「新建会话分析」附带的项目上下文（主进程读取，已脱敏/截断）。
  *
- * 用途：AI 分析提示词除了环境体检报告，还应带上 PiDeck 工程自身的规范与技能，
+ * 用途：AI 分析提示词除了环境体检报告，还应带上 Telos 工程自身的规范与技能，
  * 让新会话里的 pi 在正确约束下排查。AGENTS.md 内容做大小上限截断，避免提示词失控。
  */
 export type FeedbackProjectContext = {

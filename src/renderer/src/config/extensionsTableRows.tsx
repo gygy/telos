@@ -91,7 +91,7 @@ export function ExtensionTableRow(props: {
 			</TableCell>
 			<TableCell className="whitespace-nowrap text-caption text-muted-foreground">
 				{extension.builtIn
-					// 内置扩展是**包级**版本号（extensions-manifest.json，不跟 PiDeck 应用版本走）：
+					// 内置扩展是**包级**版本号（extensions-manifest.json，不跟 Telos 应用版本走）：
 					// 只显示当前生效版本（覆盖层优先），「最新」与更新入口由上方内置扩展面板统一负责。
 					? t("config.builtInExt.rowVersion", { version: extension.currentVersion ?? "-" })
 					: t("config.extensionVersions", {

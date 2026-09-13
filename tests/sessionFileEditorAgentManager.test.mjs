@@ -56,7 +56,7 @@ function loadAgentManager() {
       if (specifier === "../../shared/fileChanges") return { collectLatestTurnFileChanges: () => [] };
       if (specifier === "electron") {
         return {
-          app: { getName: () => "PiDeck", getPath: () => "C:/tmp" },
+          app: { getName: () => "Telos", getPath: () => "C:/tmp" },
           Notification: { isSupported: () => false },
         };
       }

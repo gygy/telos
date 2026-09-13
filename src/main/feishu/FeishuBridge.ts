@@ -153,7 +153,7 @@ export class FeishuBridge {
 	private unsubscribeLocalEvents: (() => void) | null = null;
 	// 哪些 session 是飞书发起的（不需要 session mirror）
 	private feishuSessions = new Set<string>();
-	/** 飞书消息触发中的运行，agent_end 期间不要再走 PiDeck 本地同步，避免文件/文本重复发送。 */
+	/** 飞书消息触发中的运行，agent_end 期间不要再走 Telos 本地同步，避免文件/文本重复发送。 */
 	private feishuDrivenRuns = new Set<string>();
 
 	private lastUserMessageId = new Map<string, string>();
@@ -299,12 +299,12 @@ export class FeishuBridge {
 	/**
 	 * 移除绑定：取消飞书群与 Agent 的关联，清理会话级别的同步状态。
 	 * 注意：这不会停止 Agent 进程，只是取消飞书侧的关联关系。
-	 * Agent 在 PiDeck 中继续正常运行。
+	 * Agent 在 Telos 中继续正常运行。
 	 */
 	removeBinding(chatId: string): boolean {
 		const binding = this.chatBindings.get(chatId);
 		if (!binding) return false;
-		// 仅取消绑定，不终止 Agent。Agent 在 PiDeck 中继续独立运行。
+		// 仅取消绑定，不终止 Agent。Agent 在 Telos 中继续独立运行。
 		// 用户手动取消关联不应影响 Agent 的使用状态。
 		this.unindexBinding(binding);
 		this.chatBindings.delete(chatId);
@@ -721,7 +721,7 @@ export class FeishuBridge {
 		try {
 			// 飞书来源也必须显式注入宿主发送规则；否则 Agent 会回退到 lark-cli 并询问 chat_id。
 			const feishuActionInstruction = [
-				"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，PiDeck 会按当前会话绑定自动上传。",
+				"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，Telos 会按当前会话绑定自动上传。",
 				"只有用户明确要求发送、上传或分享文件时才写 [SEND_FILE:本地文件路径]；如果只是要求保存到本地，不要写该标记。",
 				`当前绑定的飞书 chat_id: ${chatId}。这是只读上下文，用于确认当前会话绑定；发送文件仍必须用 [SEND_FILE:本地文件路径]。`,
 				"这是飞书群聊消息。请直接回复用户。",
@@ -936,7 +936,7 @@ export class FeishuBridge {
 			}
 		}
 
-		// 只有用户显式手动连接过的 PiDeck 会话，才把 Agent 结果同步到飞书。
+		// 只有用户显式手动连接过的 Telos 会话，才把 Agent 结果同步到飞书。
 		if (!this.feishuSessions.has(agentId) && !this.feishuDrivenRuns.has(agentId) && !this.cardTerminalSucceeded.has(agentId) && typed.type === "agent_end") {
 			log(`[Feishu Bridge] agent_end 触发 syncPiMessageToFeishu, agentId=${agentId.slice(0,8)}`);
 			const chatId = this.getBestChatId(agentId);
@@ -971,7 +971,7 @@ export class FeishuBridge {
 
 		// 先扫 [CREATE_DOC:] 标记
 		await this.processFeishuActions(chatId, agentId).catch((e) =>
-			logErr("[Feishu Bridge] process PiDeck Feishu actions failed:", e));
+			logErr("[Feishu Bridge] process Telos Feishu actions failed:", e));
 
 		// 没有标记但用户说了要做飞书文档 → 用完整回答正文自动创建
 		const pendingTitle = this.pendingDocRequests.get(agentId);
@@ -990,14 +990,14 @@ export class FeishuBridge {
 		this.pendingDocRequests.set(agentId, title);
 	}
 
-	/** 由 PiDeck 宿主按当前会话绑定发送文件，避免 Agent 自己搜索群聊发错 chat。 */
+	/** 由 Telos 宿主按当前会话绑定发送文件，避免 Agent 自己搜索群聊发错 chat。 */
 	async sendFileForSession(agentId: string, filePath: string): Promise<string> {
 		const chatId = this.getBestChatId(agentId);
 		if (!chatId) return feishuT(this.locale, "session.unbound");
 		return this.sendFeishuFile(chatId, filePath);
 	}
 
-	/** 将 PiDeck 中的用户消息转发到飞书群（双向同步：Pi → 飞书） */
+	/** 将 Telos 中的用户消息转发到飞书群（双向同步：Pi → 飞书） */
 	async forwardUserMessageToFeishu(agentId: string, text: string): Promise<void> {
 		if (!this.connection.client || !text.trim()) return;
 		const chatId = this.getBestChatId(agentId);
@@ -1009,8 +1009,8 @@ export class FeishuBridge {
 			}
 			return;
 		}
-		// 带上 PiDeck 标识，方便在飞书中区分消息来源
-		await this.sendSmartMessage(chatId, `💻 **PiDeck**:\n${text}`);
+		// 带上 Telos 标识，方便在飞书中区分消息来源
+		await this.sendSmartMessage(chatId, `💻 **Telos**:\n${text}`);
 
 		// 检测用户是否要创建飞书文档，记下来等 Agent 回答完后自动创建
 		const docTitle = wantsFeishuDoc(text);

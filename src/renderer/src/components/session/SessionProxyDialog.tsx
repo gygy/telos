@@ -13,7 +13,7 @@
  *   「停止 → 启动」两步（本弹框存在的核心价值之一）。
  * - DSH 会话：DSH 是单一共享 host（无 per-session 通道），设置聚合到 host fork env
  *   （off 优先于 on），需 host 重启后生效；host 的 LLM 请求经 globalThis.fetch（undici），
- *   PiDeck 同时注入 NODE_USE_ENV_PROXY=1 使其真正读取代理环境变量（Node 22.21+ 行为）。
+ *   Telos 同时注入 NODE_USE_ENV_PROXY=1 使其真正读取代理环境变量（Node 22.21+ 行为）。
  *   **不能按会话重启 host**——那会杀掉所有 DSH 会话，所以这里只提示、不自动重启。
  */
 import { useEffect, useState } from "react";

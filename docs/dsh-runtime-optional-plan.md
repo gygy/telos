@@ -1,6 +1,6 @@
 # DSH Runtime 独立化与按需安装方案（AgentRuntimeProvider）
 
-> 目标：把 DSH runtime（28 个 `@deepseek-ai/*` 依赖）从 PiDeck 安装包中拆出，改为**用户按需下载、可配置、可独立升级**的托管组件；并将「agent 后端 runtime 管理」抽象为 `AgentRuntimeProvider`，为后续更多 agent 后端接入 PiDeck 提供统一插槽。
+> 目标：把 DSH runtime（28 个 `@deepseek-ai/*` 依赖）从 Telos 安装包中拆出，改为**用户按需下载、可配置、可独立升级**的托管组件；并将「agent 后端 runtime 管理」抽象为 `AgentRuntimeProvider`，为后续更多 agent 后端接入 Telos 提供统一插槽。
 > 参考：flowix（Tauri 应用）将 dsh host 独立为 `dsh-flowix-host` 组件、按需获取的做法。
 > 非目标：不改 dsh 深融合架构（utilityProcess + ApiProxy IPC 桥）；不改 pi 现有链路；不做「同一会话中途换引擎」。
 
@@ -18,19 +18,19 @@
 | 安装包总体积（win-unpacked） | 510MB |
 | dev 环境 `node_modules/@deepseek-ai` | 199MB |
 | package.json 中 dsh 相关依赖 | 28 个，全部锁定 `0.1.1-rc.2` |
-| PiDeck 侧 dsh 桥接代码 | `src/main/dsh/` 28 个模块 + hostEntry chunk + 渲染层 DSH 配置/会话 UI |
+| Telos 侧 dsh 桥接代码 | `src/main/dsh/` 28 个模块 + hostEntry chunk + 渲染层 DSH 配置/会话 UI |
 
 ### 1.2 动机（按强度排序）
 
 1. **心智负担**：只用 pi 的用户（预期是大多数）在设置里看到完整 DSH Tab（供应商/模型/插件/凭据），新建会话时看到 DSH agent 选项，全部是噪音。未安装态下这些 UI 应当整体消失，只留一个「安装 DSH 后端」入口。
-2. **版本解耦**：dsh 处于 rc 快速迭代期。当前每次升级 dsh 都必须发布新版 PiDeck；独立 runtime 后 dsh 升级走独立通道，app 版本节奏不被绑死。
-3. **多 agent 扩展性**：PiDeck 的定位是「多 agent 桌面工作台」。后续任何 agent 后端接入都应复用同一套「声明 → 可用性检查 → 按需安装 → 解析启动」机制，而不是每个 agent 都往包里塞 runtime。
+2. **版本解耦**：dsh 处于 rc 快速迭代期。当前每次升级 dsh 都必须发布新版 Telos；独立 runtime 后 dsh 升级走独立通道，app 版本节奏不被绑死。
+3. **多 agent 扩展性**：Telos 的定位是「多 agent 桌面工作台」。后续任何 agent 后端接入都应复用同一套「声明 → 可用性检查 → 按需安装 → 解析启动」机制，而不是每个 agent 都往包里塞 runtime。
 4. **形态对称**：pi 后端本就是外部命令（`PiLocator` 解析用户自装 pi，支持 WSL）。dsh 内嵌反而是不对称的；独立化后两个后端在 runtime 管理上统一。
 5. **包体积**：~26MB（约 5%）+ dev 侧 199MB 安装时间。是最弱但仍然真实的收益。
 
 ### 1.3 关键技术事实（已核查）
 
-- dsh runtime **不是单个 CLI**，而是 28 个必须版本对齐的 npm 包；PiDeck 侧的 `hostEntry.js`（由 electron-vite 独立 chunk 打进 `out/main`）通过 `bareModuleBaseUrl`（即 `--dsh-node-modules` 参数）从 node_modules 解析这些包。
+- dsh runtime **不是单个 CLI**，而是 28 个必须版本对齐的 npm 包；Telos 侧的 `hostEntry.js`（由 electron-vite 独立 chunk 打进 `out/main`）通过 `bareModuleBaseUrl`（即 `--dsh-node-modules` 参数）从 node_modules 解析这些包。
 - **接缝天然存在**：`DshHost` 构造时 `require.resolve("@deepseek-ai/dsh-base/package.json")` 定位 appRoot 并传入 `--dsh-node-modules`。把这一解析改为「优先指向外部 runtime 目录」即可外置，hostEntry 侧零改动。
 - 本地构建包 `dsh-tool-pwsh-persistent`（packages/）与 `dsh-bill` 同样被 hostEntry external，属于 runtime payload 的一部分，打包脚本需一并收入。
 - electron.vite 对 `@deepseek-ai/*` 的 external 规则保持不变（hostEntry 仍随 app 打包）。
@@ -40,7 +40,7 @@
 ## 2. 目标架构
 
 ```
-┌─ PiDeck 安装包（不含 dsh runtime）────────────────┐
+┌─ Telos 安装包（不含 dsh runtime）────────────────┐
 │  App 核心 + hostEntry chunk + dsh 桥接代码        │
 │  ┌─ AgentRuntimeProvider 注册表 ──────────────┐   │
 │  │ pi  : external-command（用户自装，现状即如此）│   │
@@ -178,7 +178,7 @@ dsh 仍随包分发，但把「runtime 是否可用」做成一等状态并据�
 **剩余一件事（在线更新源）**
 
 体积优化已做（47.2MB → 33.6MB，见上表）。还想再降就得**整包排除**，但那需要实测 host 是否加载，
-风险显著高于文件级裁剪——候选是 `dsh-web*` / `dsh-client-*`（43 个包，9.3MB，PiDeck 有自己 UI）、
+风险显著高于文件级裁剪——候选是 `dsh-web*` / `dsh-client-*`（43 个包，9.3MB，Telos 有自己 UI）、
 `@img/sharp` 18MB、`@vscode/ripgrep` 5MB。验证方式是排除后用**真实 Electron 启动 host 并发一条消息**，
 而不是只做静态检查。收益/风险比不划算，暂不做。
 

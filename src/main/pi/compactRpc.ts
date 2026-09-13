@@ -20,7 +20,7 @@ export function createCompactRpcRequest(prompt?: string): CompactRpcRequest {
 	if (!trimmed) return { type: "compact" };
 	return {
 		type: "compact",
-		// TODO(remove-compat): remove `prompt` after PiDeck raises its minimum pi
+		// TODO(remove-compat): remove `prompt` after Telos raises its minimum pi
 		// version to 0.84+ and completes the documented migration window.
 		prompt: trimmed,
 		customInstructions: trimmed,

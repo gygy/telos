@@ -42,7 +42,7 @@ function run() {
 		name: "xterm-256color",
 		cols: 1000,
 		rows: 30,
-		cwd: "F:\\PiDeck",
+		cwd: "F:\\Telos",
 		env: { ...process.env },
 	});
 	handle.onData((d) => {
@@ -108,7 +108,7 @@ results.push(await step(s, "git log --oneline -3 秒回（不分页）", "git lo
 	(c) => /[0-9a-f]{7,}/.test(c)));
 
 // 4) Set-Location 状态跨调用保持
-await step(s, "Set-Location 生效", "Set-Location 'F:\\PiDeck\\src\\main\\dsh'; Get-Location", () => true);
+await step(s, "Set-Location 生效", "Set-Location 'F:\\Telos\\src\\main\\dsh'; Get-Location", () => true);
 results.push(await step(s, "状态保持：下一条 Get-Location 仍在 src\\main\\dsh", "Get-Location",
 	(c) => c.includes("src\\main\\dsh")));
 

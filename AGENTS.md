@@ -2,14 +2,14 @@
 
 ## 项目简介
 
-PiDeck 是一个面向本地开发工作的 Electron 桌面应用，用于在多个项目目录之间管理和运行 pi RPC Agent。应用提供多项目工作区、会话时间线、历史会话恢复、文件抽屉、Git 面板、模型选择、工具调用展示、内置浏览器、中文提示词精选、技能/扩展商店以及打包发布能力，目标是让用户可以在桌面端更稳定地管理多个 pi 编码助手会话。
+Telos 是一个面向本地开发工作的 Electron 桌面应用，用于在多个项目目录之间管理和运行 pi RPC Agent。应用提供多项目工作区、会话时间线、历史会话恢复、文件抽屉、Git 面板、模型选择、工具调用展示、内置浏览器、中文提示词精选、技能/扩展商店以及打包发布能力，目标是让用户可以在桌面端更稳定地管理多个 pi 编码助手会话。
 
 技术栈：Electron 38 + React 19 + TypeScript + Vite。
 
 **核心边界（不可逾越）：**
 
 - pi 负责 Agent 行为、工具调用、会话读写、模型调用 —— **pi 的事不要替它做**。
-- PiDeck 负责窗口管理、进程生命周期、会话浏览/导入、Git 面板、终端、设置 —— **UI 框架的事 pi 也不要做**。
+- Telos 负责窗口管理、进程生命周期、会话浏览/导入、Git 面板、终端、设置 —— **UI 框架的事 pi 也不要做**。
 - 两者通过 stdio JSON-RPC 通信，禁止引入第二条通信通道（如直接 HTTP 到 pi 内部）。
 
 ## 代码结构与跨层契约
@@ -21,7 +21,7 @@ PiDeck 是一个面向本地开发工作的 Electron 桌面应用，用于在多
 - `src/preload/index.ts` 通过 `contextBridge` 暴露最小 `PiDesktopApi`；新增 IPC 必须同步共享通道、main handler、preload 方法三处，订阅 API 必须返回 unsubscribe。
 - `src/renderer/` 只通过 `desktopApi`/preload 调用桌面能力。跨组件状态使用 Jotai atom，副作用放 hook，视图放 component；不得直接 import Node/Electron 或新增第二种全局状态方案。
 - `SessionRecord.id` 是跨重启的稳定会话身份，`agentId` 仅表示当前 pi 子进程。所有 runtime 命令和事件都必须带 `sessionId + agentId + runtimeGeneration`，拒绝旧 runtime 的迟到结果。
-- pi 只通过 stdio JSON-RPC 与 PiDeck 通信；PiDeck 不复刻 pi 的 Agent/工具/会话行为，也不为访问 pi 引入第二条通信通道。
+- pi 只通过 stdio JSON-RPC 与 Telos 通信；Telos 不复刻 pi 的 Agent/工具/会话行为，也不为访问 pi 引入第二条通信通道。
 - 持久化结构、设置和 session catalog 变更必须兼容旧数据；listener、timer、子进程、terminal 和 watcher 必须在同一模块找到配对清理路径。
 
 
@@ -73,7 +73,7 @@ src/
 ### 内置扩展热更新（resources/extensions + userData 覆盖层）
 
 - 内置扩展（`resources/extensions/*.ts`）随包分发，RPC 启动时经 `-e <绝对路径>` 注入 pi。打包态 `resources` 只读，扩展出 bug 原本只能等下次发版；**热更新**把这条例外路径补上：拉远端清单 → 写 `<userData>/builtin-extensions/` 覆盖层 → 路径解析覆盖层优先 → 重启会话即生效。
-- 清单 `resources/extensions/extensions-manifest.json`（schemaVersion / version / bundleSha256 / 每文件 name+sha256+bytes）由 `scripts/generate-extensions-manifest.mjs` 生成并**提交到仓库 main 分支**，`npm run generate:extensions-manifest` 生成、`npm run check:extensions-manifest` 校验，已挂进 `npm run build` / `build:fast`。版本号 `version` 是**包级**版本（`--set-version` bump），**不跟 PiDeck 应用版本走**。
+- 清单 `resources/extensions/extensions-manifest.json`（schemaVersion / version / bundleSha256 / 每文件 name+sha256+bytes）由 `scripts/generate-extensions-manifest.mjs` 生成并**提交到仓库 main 分支**，`npm run generate:extensions-manifest` 生成、`npm run check:extensions-manifest` 校验，已挂进 `npm run build` / `build:fast`。版本号 `version` 是**包级**版本（`--set-version` bump），**不跟 Telos 应用版本走**。
 - **`package.json` 的 `extraResources` filter 必须同时包含 `*.ts` 与 `extensions-manifest.json`**，否则打包版没有清单，扩展页看不到内置版本（漏了就只剩目录扫描兜底）。
 - 更新/检测入口在扩展设置页的「内置扩展」面板（`BuiltInExtensionsUpdatePanel`）+ `extensions:builtin-update-*` 通道；默认源 AtomGit（`api.atomgit.com/api/v5/repos/.../contents/...` 返回 base64，匿名可读），`settings.updateSource=github` 时 GitHub raw 直连优先。分支只接受 main/dev 白名单。
 - **判据是逐文件 sha256，不是版本号**：改了扩展却忘记 bump 版本也必须能检出更新；远端清单里出现**本地不认识的新文件名一律忽略**（注入清单 `BUILT_IN_EXTENSIONS` 编译在应用代码里，热更新不该也无法凭空引入新代码）。
@@ -302,7 +302,7 @@ src/
 
 ### GitHub 协作说明
 
-详见 `docs/PiDeck-协作说明.md`。
+详见 `docs/Telos-协作说明.md`。
 
 ## 长期重构纪律
 

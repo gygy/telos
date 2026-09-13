@@ -7,7 +7,7 @@ import {
 } from "../../shared/formatToolDetail";
 
 /**
- * DSH SessionEvent → PiDeck ChatMessage 投影（纯函数，无副作用，可单测）。
+ * DSH SessionEvent → Telos ChatMessage 投影（纯函数，无副作用，可单测）。
  *
  * 事件形状（PoC 实测）：SessionEvent = { type, seq, time, data }，正文在 data：
  * - user/message.data.content[]：内容块（{type:'text', text}）
@@ -44,7 +44,7 @@ export type DshProjection = {
 	usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
 	/** DSH 当轮真实系统提示（request/header 事件的 EpochHeader.system；last wins；
 	 *  缺失 = 会话尚未发过请求头）。dsh-web 轨迹同源——DSH 的系统提示由 harness 按
-	 *  persona + sections 在请求时组装，PiDeck 只能从请求头拿到文本。 */
+	 *  persona + sections 在请求时组装，Telos 只能从请求头拿到文本。 */
 	systemPrompt?: string;
 	/** 路由上下文容量（request/context 事件携带的 contextWindow，adapter 上报时才有）：
 	 *  上下文圆环的窗口数据源（dsh-web ContextMeter 同源；与 token-meter 的
@@ -488,7 +488,7 @@ export function projectDshEvent(
 					: "tool";
 			const callId = typeof data.callId === "string" ? data.callId : undefined;
 			// DSH 的 arguments 是 JSON 字符串（模型调用侧约定，host 侧 presentCall 也
-			// JSON.parse 后消费）。解析成对象投影进 meta.args——PiDeck 工具卡片的
+			// JSON.parse 后消费）。解析成对象投影进 meta.args——Telos 工具卡片的
 			// 副标题（command/path/pattern/query/url）、详情、文件 diff 与 SKILL 识别
 			// 全部读 meta.args；解析失败时保留原始字符串（渲染层 parseToolArgs 双兼容）。
 			const rawArgs = data.arguments;

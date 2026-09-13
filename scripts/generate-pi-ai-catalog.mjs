@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 从开发期 @earendil-works/pi-ai 的 provider JSON 提取 PiDeck 所需模型目录。
+ * 从开发期 @earendil-works/pi-ai 的 provider JSON 提取 Telos 所需模型目录。
  *
- * 运行时 PiDeck 只消费模型规格，不能为读取约 648KB catalog 而携带整套 pi-ai
+ * 运行时 Telos 只消费模型规格，不能为读取约 648KB catalog 而携带整套 pi-ai
  * SDK 及其 HTTP/provider 依赖。该脚本在构建前生成可随应用分发的静态 artifact：
  *
  *   resources/pi-ai-catalog.json
@@ -56,7 +56,7 @@ function positiveInt(value) {
 	return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-/** 输入模型条目裁剪为 PiDeck 主进程的实际消费字段。 */
+/** 输入模型条目裁剪为 Telos 主进程的实际消费字段。 */
 export function extractCatalogEntry(model) {
 	if (!isRecord(model)) return undefined;
 	const id = normalizedModelId(model.id);

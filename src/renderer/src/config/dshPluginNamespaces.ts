@@ -5,7 +5,7 @@ import type { TranslationKey } from "../i18n";
  *
  * 依据 dsh-settings 契约：settings namespace 即插件短名（"lowercase kebab-case,
  * as in plugin short names"）——DSH host 是 cordis 插件组合，不存在独立于插件的
- * 「宿主设置」。因此除 PiDeck 独占管理的保留命名空间外，host 注册的其余命名空间
+ * 「宿主设置」。因此除 Telos 独占管理的保留命名空间外，host 注册的其余命名空间
  * 都属于插件配置区：不再硬编码 3 分区，host 新增插件（如未来的 mcp-client）注册
  * 配置命名空间后，「插件」tab 自动出现该分区。
  */

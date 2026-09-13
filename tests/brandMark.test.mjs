@@ -17,12 +17,12 @@ test("in-app brand surfaces use the Pi glyph, not the spider mark", () => {
   assert.doesNotMatch(mark, /brandMarkSrc/);
   assert.match(lockup, /<PiLogoCanvas size=\{18\}/);
   // beUI 两行字标（5fcca0b8）：wordmark 由 TextShimmer 承载，不再用 aria-hidden span
-  assert.match(lockup, />\s*PiDeck\s*<\/TextShimmer>/);
+  assert.match(lockup, />\s*Telos\s*<\/TextShimmer>/);
   assert.match(app, PI_GLYPH);
   assert.match(boot, /id="boot-logo-silver"/);
   assert.match(boot, PI_GLYPH);
   assert.match(webBrand, /<PiLogoCanvas size=\{18\}/);
-  assert.match(webBrand, />\s*PiDeck\s*</);
+  assert.match(webBrand, />\s*Telos\s*</);
   assert.match(webTimeline, /<LogoMark size=\{66\} \/>/);
   for (const source of [mark, lockup, app, boot, webBrand, webTimeline]) {
     assert.doesNotMatch(source, /M7\.5 15\.5C3\.5 14/);

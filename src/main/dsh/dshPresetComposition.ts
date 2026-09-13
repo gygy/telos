@@ -3,7 +3,7 @@
  *
  * 背景：dsh CLI 的 profile-boot 会在引导时把随包发布的 agent-presets 根目录
  * （SHIPPED_PRESET_ROOT，即 <dsh 包>/config/agent-presets）注入组合，并声明
- * `default: standard`。PiDeck 的 hostEntry 是自组组合（base patch + 自身 overlay），
+ * `default: standard`。Telos 的 hostEntry 是自组组合（base patch + 自身 overlay），
  * 不声明 agent-presets 行时 `agentPreset.list` 返回空名单（配置页「预设设置」空白），
  * 新会话也没有默认预设可用。这里把该行抽成纯函数，hostEntry 装配、单测验证同一来源。
  *
@@ -23,7 +23,7 @@ export function shippedPresetRoot(agentPresetsPackageDir: string): string {
  * 所禁用的基础层行 id 清单。
  *
  * 背景：dsh-base 为无 preset 的 TUI/headless 保留进程级全局工具；web 表面必须
- * 把这些基础行禁用，才能让每个会话由自己的 agent preset 组装工具目录。PiDeck
+ * 把这些基础行禁用，才能让每个会话由自己的 agent preset 组装工具目录。Telos
  * 自组 host 若只挂 agentPresetsRow 而漏掉这段禁用，minimal/standard/code 都只是
  * 叠加自己的工具，全局工具仍会泄漏进所有会话（极简模式失效的根因）。
  */

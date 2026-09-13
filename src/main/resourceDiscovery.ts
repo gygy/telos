@@ -32,7 +32,7 @@ export type DiscoveredSkillResource = {
 	sourceId: ResourceDiscoverySourceId;
 	sourceLabel: string;
 	description: string;
-	/** 是否可用（排除 PiDeck settings 禁用列表后）。 */
+	/** 是否可用（排除 Telos settings 禁用列表后）。 */
 	enabled: boolean;
 	/** 由 package / settings 声明或来自祖先目录：不得当作本地文件直接编辑。 */
 	managed: boolean;
@@ -68,11 +68,11 @@ export type ResourceDiscoveryOptions = {
 	cwd?: string;
 	/** False when the trust decision rejects project resources. */
 	includeProjectResources?: boolean;
-	/** PiDeck settings 中禁用的全局技能名（比较时小写）。 */
+	/** Telos settings 中禁用的全局技能名（比较时小写）。 */
 	disabledSkillNames?: string[];
-	/** PiDeck settings 中禁用的全局模板名（比较时小写）。 */
+	/** Telos settings 中禁用的全局模板名（比较时小写）。 */
 	disabledPromptNames?: string[];
-	/** PiDeck settings 中禁用的扩展条目（scope+source）。 */
+	/** Telos settings 中禁用的扩展条目（scope+source）。 */
 	disabledExtensions?: { scope: "user" | "project" | "unknown"; source: string }[];
 };
 

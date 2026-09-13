@@ -9,7 +9,7 @@ import ts from "typescript";
 import vm from "node:vm";
 
 // WorktreeService 删除安全回归测试。
-// 背景：从子 worktree 打开 PiDeck 时，主工作区会泄漏进 worktree 列表；
+// 背景：从子 worktree 打开 Telos 时，主工作区会泄漏进 worktree 列表；
 // 删除主工作区时 git worktree remove 失败被 catch 吞掉后仍执行 rm -rf，
 // 曾导致主项目目录（40G）被整个删除。
 // 本测试通过 stub execFile 模拟 git 输出、真实操作临时目录，验证：
@@ -199,7 +199,7 @@ test("remove() 正常删除 worktree：目录进回收站、分支被删除", as
 		// 目录应移入回收站（fake trashPath 模拟真实移动：源目录被删除）
 		assert.ok(trashCalls.some((p) => lower(p) === lower(wtB)), "worktree 目录应移入回收站");
 		assert.ok(!existsSync(wtB), "回收站移动后源目录应不存在");
-		// 分支名（feat-b）等于目录名 → PiDeck 创建的 worktree，应删除分支
+		// 分支名（feat-b）等于目录名 → Telos 创建的 worktree，应删除分支
 		assert.ok(
 			calls.some((c) => c.args[0] === "branch" && c.args[1] === "-D" && c.args[2] === "feat-b"),
 			"应删除同名分支 feat-b",

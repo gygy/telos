@@ -65,8 +65,8 @@ Thanks to everyone who filed issues and feature requests on GitHub! 🙏
 ### 🚀 New Features
 - **App update & portable build optimizations** — The update card now explicitly informs Windows portable users that the in-app update runs the setup installer, with a direct link to download the portable executable manually from GitHub Releases; Linux AppImage auto-updates now preserve a fixed artifact name to cleanly overwrite the running binary in place without breaking desktop shortcuts; update mirror health check dynamically resolves the real setup asset filename from `latest.yml` with path traversal sanitization, eliminating hardcoded version numbers; failing GitHub direct updates now suggest switching to a mirror.
 - **WorkBuddy session import** — Import WorkBuddy sessions automatically from `~/.workbuddy/projects` matching the current project: the project context menu gains an "Import WorkBuddy Sessions" action, listing sessions by recency with new / current / outdated badges. Injected system-reminder contexts and user_query wrappers are cleanly stripped to preserve original prompts, reasoning thoughts and tool call executions are merged into standard assistant turns, and file rollback snapshot noise is filtered out; imported sessions display a dedicated WorkBuddy source badge with sidebar filtering support.
-- **Enhanced project and directory context menus** — Sidebar chat projects now open the full project context menu; directories now support an "Open in PiDeck" context menu action.
-- **About dialog displays runtime component versions** — The About modal now shows not only the PiDeck app version, but also detected versions of the pi CLI, DeepSeek DSH, bundled pi-ai model catalog, and the package build timestamp.
+- **Enhanced project and directory context menus** — Sidebar chat projects now open the full project context menu; directories now support an "Open in Telos" context menu action.
+- **About dialog displays runtime component versions** — The About modal now shows not only the Telos app version, but also detected versions of the pi CLI, DeepSeek DSH, bundled pi-ai model catalog, and the package build timestamp.
 - **Config backup & announcement system advancements** — Config backups now support manual export, single-file and full restore, and batch deletion; announcements have migrated to the `announcements-md` build pipeline with full Markdown rendering, detail modals, and community discussion links.
 - **DSH version fallback & auto-usage query toggle** — Enhanced fallback version detection for the DSH runtime, along with an auto-usage query toggle for model providers.
 - **Unified settings multi-level tabs & store search UI** — Restyled multi-level navigation tabs in Config Management and unified the store search bar appearance; sidebar branding area upgraded with a two-line beUI wordmark layout.
@@ -89,7 +89,7 @@ Thanks to everyone who filed issues and feature requests on GitHub! 🙏
 - **Announcement center entry hides when reminders are off** — Turning off announcement reminders also hides the sidebar announcement entry.
 
 ### 🐛 Fixes
-- **WSL environment Node/pi detection** — Fixes an issue where desktop PiDeck could not detect pi in WSL environments using version managers like nvm or fnm (#191).
+- **WSL environment Node/pi detection** — Fixes an issue where desktop Telos could not detect pi in WSL environments using version managers like nvm or fnm (#191).
 - **Split-pane independent Git branch display** — Split panes now show and switch Git branches independently based on the active session's project scope.
 - **Session timeline stick-to-bottom smoothing** — Fixed race conditions during streaming and scrolling so auto-scrolling to the bottom is much smoother.
 - **Adaptive inference for ask_question type** — The `type` field in extension tool questions is now optional and automatically inferred based on the question shape.
@@ -144,7 +144,7 @@ Thanks to all group members who submitted suggestions and bug reports! 🙏
 - **Deep links into config backends** — Deep links open the Pi or DSH page inside Config Management directly.
 - **beUI rolled out across the app** — UI switches over to beUI components; the sidebar marks sessions that are currently running.
 - **Subagents and session widget cards** — Built-in pi-subagents extension reads child-agent records and detects failures; todos, subagents, and file changes share one segmented card, and historical sessions can still show todo snapshots.
-- **pi-tui rename sync** — Renaming a session in pi-tui now shows up in the PiDeck sidebar after a project refresh or session restart, instead of sticking to the old title.
+- **pi-tui rename sync** — Renaming a session in pi-tui now shows up in the Telos sidebar after a project refresh or session restart, instead of sticking to the old title.
 - **ask_question multi-select** — Question cards support multi-select with a single submit.
 - **On-demand fast packing** — `dist:fast` can target portable / zip / nsis so local installers are quicker to verify.
 - **DSH runtime version detection & worktree fade-out** — Built-in DSH runtimes show the detected version; deleting a worktree fades out instead of vanishing abruptly.
@@ -179,7 +179,7 @@ Thanks to all group members who submitted suggestions and bug reports! 🙏
 - **Spinner animation unified** — Loading states share one animation utility so spinners don’t freeze.
 - **Subagent records survive restart and fork** — Start anchors persist (killed-by-restart agents are marked stopped); a full entry-table scan keeps fork side-branch records.
 - **Tool results can open files** — Tool output is tighter, and results can open the matching file in the workspace.
-- **Extension-provided models selectable in pickers** — The model selector, connection test, and Git commit-message generation load extensions by default (falling back to no-extension mode on failure), so models registered by extensions in the CLI are also selectable in PiDeck.
+- **Extension-provided models selectable in pickers** — The model selector, connection test, and Git commit-message generation load extensions by default (falling back to no-extension mode on failure), so models registered by extensions in the CLI are also selectable in Telos.
 - **Checkpoint lists no longer show "No checkpoints yet" forever** — Reading switched to a single `git cat-file --batch` (SHAs via stdin, no command-line length limit), fixing the list coming back empty once a repository accumulated hundreds of refs; the checkpoints panel also gained a manual refresh button.
 - **No more flashing CMD windows** — Pi child processes are spawned hidden on Windows, so launching a session no longer pops a console window.
 - **Usage probe failures are diagnosable** — Every failed attempt (URL/method/status/redacted response summary) is recorded and shown when all probes miss; New API-style management endpoints no longer get a redundant `/v1` attempt, and failures are grouped into actionable hints.
@@ -206,8 +206,8 @@ Thanks to all group members who submitted suggestions and bug reports! 🙏
 - **Multi-segment usage badges** — Usage now renders multi-window segments (5h / weekly / MCP, three-tier percentages): cards show all segments dot-separated, model-selector rows show the most severe segment for alerting; segment labels share one table with the detail panel, and custom probe window names are shown as-is.
 - **DSH usage query pipeline** — Same usage display and probe configuration on the DSH model config page: config stored at `$DSH_HOME/.pideck/usage-probes.json`, credentials read from the DSH credential store (`.credentials.yaml`); identical to the pi side and fully isolated.
 - **Usage query AI assist** — The usage dialog gains an AI-assist button that drops a prepared prompt (driving the usage-probe skill) into the main session composer to look up unsupported providers; without an active session it copies the prompt to the clipboard instead.
-- **PiDeck-specific files consolidated** — Session archives / host mutex lock / usage config under DSH_HOME now live in `~/.dsh/.pideck/` (one-time migration; the migration logic will be removed in the next release once the legacy layout is confirmed gone).
-- **Proactive update notifications (quota-free)** — PiDeck and Pi CLI now auto-check for updates every 2h in the background (first check 30s after launch). When a new version is found, a dot badge appears on the Settings gear and the update dialog opens automatically (once per version, with "Skip this version" support). The check source switched from the GitHub REST API to the `releases/latest` redirect + `latest.yml` (aligned with electron-updater's strategy): no more 60/hour/IP quota limit and no authentication required.
+- **Telos-specific files consolidated** — Session archives / host mutex lock / usage config under DSH_HOME now live in `~/.dsh/.pideck/` (one-time migration; the migration logic will be removed in the next release once the legacy layout is confirmed gone).
+- **Proactive update notifications (quota-free)** — Telos and Pi CLI now auto-check for updates every 2h in the background (first check 30s after launch). When a new version is found, a dot badge appears on the Settings gear and the update dialog opens automatically (once per version, with "Skip this version" support). The check source switched from the GitHub REST API to the `releases/latest` redirect + `latest.yml` (aligned with electron-updater's strategy): no more 60/hour/IP quota limit and no authentication required.
 - **Release pipeline now ships latest.yml** — electron-builder gains `publish` (provider: github); `dist:win` prints the asset list to upload with the Release. Channel metadata is platform-specific (Windows: `latest.yml` / macOS: `latest-mac.yml` / Linux: `latest-linux.yml`) and each client reads its own platform file; when missing, the client falls back to the atom/API path automatically.
 - **Check timeout protection** — Every GitHub check request has a 10s timeout: with a broken local network, manual "Check for Updates" spins at most 10s then shows an error and can be retried; background checks keep scheduling the next round after failure (eliminating the historical "infinite spinner, manual update blocked" issue).
 - **Pi CLI background check** — Pi CLI version is checked every 2h alongside the app; a toast notifies about new versions and the "Version & Updates" settings section shows current → latest.
@@ -217,7 +217,7 @@ Thanks to all group members who submitted suggestions and bug reports! 🙏
 
 ### 🐛 Fixes
 - **Update check fallback path** — When a Release lacks latest.yml, the check now degrades to the atom feed + REST fallback instead of failing outright.
-- **Update check pipeline hardening** — Repo coordinates unified into PiDeck constants (no longer relying on GitHub rename redirects); recommended download assets get a HEAD availability check with automatic naming-variant correction on 404 (falling back to opening the release page in a browser when all variants fail); version comparison now honors semver pre-release semantics (beta < same-number stable, so beta clients get notified about stable releases); a pre/post-release end-to-end self-check script was added.
+- **Update check pipeline hardening** — Repo coordinates unified into Telos constants (no longer relying on GitHub rename redirects); recommended download assets get a HEAD availability check with automatic naming-variant correction on 404 (falling back to opening the release page in a browser when all variants fail); version comparison now honors semver pre-release semantics (beta < same-number stable, so beta clients get notified about stable releases); a pre/post-release end-to-end self-check script was added.
 - **DSH usage query provider normalization** — `deepseek-official` / `llm-deepseek` are now normalized to `deepseek` on both main process and renderer, fixing usage/balance missing in the model selector and the orb panel while the DSH card row still showed it (all three now share one cache key, so refreshing one refreshes all).
 - **File manager open & terminal ownership fixes** — Windows now launches explorer.exe via absolute path and uses `shell.openPath` to open directories (macOS too), so the window properly activates to the foreground; the terminal button falls back to the current session's project when `activeProjectId` isn't synced, so cross-project sessions keep showing "Open terminal".
 - **Session panel terminal fold height sync** — The fold/expand height sync was reworked to read the composer's steady-state size before `setLayout`, fixing the fold-then-height-not-released and floating-input issues.
@@ -922,9 +922,9 @@ Thanks to all group members who submitted suggestions and bug reports! 🙏
   hidden while the agent is busy; fills the original prompt into the composer
   for edit-and-resend.
 - **Boot splash official pi assembly animation** — Cold-start overlay loops the
-  same pixel tetromino logo animation as the sidebar (larger/faster); PiDeck
+  same pixel tetromino logo animation as the sidebar (larger/faster); Telos
   title and subtitle use Plantin brand serif to match the empty-state tone.
-- **Single-instance window reuse** — On by default: opening PiDeck again focuses
+- **Single-instance window reuse** — On by default: opening Telos again focuses
   the existing window (including tray-hidden) instead of spawning another
   process; can be disabled in Common settings (restart required).
 - **Startup window size presets** — Appearance setting for maximized / fullscreen
@@ -1027,7 +1027,7 @@ community testing environment 🎉
 
 > 💬 **Join our QQ group for feedback & discussion: 1026218644**
 
-Thanks to all users who submitted suggestions and bug reports for PiDeck! 🙏
+Thanks to all users who submitted suggestions and bug reports for Telos! 🙏
 
 ---
 
@@ -1036,7 +1036,7 @@ Thanks to all users who submitted suggestions and bug reports for PiDeck! 🙏
 ### 🚀 New Features
 
 - **Sidebar brand lockup redesign** — The official pi canvas logo now uses a cropped
-  bounding box (no empty board space), displays the PiDeck wordmark in Plantin serif,
+  bounding box (no empty board space), displays the Telos wordmark in Plantin serif,
   and animates on agent start/close events for visual feedback. The settled color is
   theme-adaptive (ink/white).
 - **Multi-tab file editor** — Up to 5 concurrent editor tabs, modal/drawer dual mode,
@@ -1206,7 +1206,7 @@ community testing environment 🎉
   - Success pulse animation + toast feedback
 - **Built-in Browser Preview**
   - New right-drawer browser panel with tabs, URL bar, refresh/home/back/forward controls
-  - Fullscreen mode and PC/mobile/tablet viewport presets for quickly checking web pages without leaving PiDeck
+  - Fullscreen mode and PC/mobile/tablet viewport presets for quickly checking web pages without leaving Telos
   - External-link fallback opens unsupported protocols in the system browser
 - **Session Manager Modal**
   - Open from project context menu: lists all project sessions with multi-select delete
@@ -1483,7 +1483,7 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 - **Header action buttons**: "New Session", "Files" and "Terminal" now share
   consistent height, padding, font weight and baseline
 - **Logs page**: Added log level filter and time range filter
-- **Homepage link**: Added PiDeck website button in bottom-left sidebar
+- **Homepage link**: Added Telos website button in bottom-left sidebar
 
 ### 🐛 Bug Fixes
 
@@ -1545,7 +1545,7 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 ## v0.6.0 - 2026-06-14
 
 ### Added
-- Claude session import from the project context menu, converting local Claude JSONL sessions into PiDeck history sessions.
+- Claude session import from the project context menu, converting local Claude JSONL sessions into Telos history sessions.
 - Composer command history with Up/Down navigation for quickly reusing previous prompts while editing at the first or last line.
 - Performance testing script and renderer helpers for validating long-session rendering improvements.
 
@@ -1568,22 +1568,22 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 ## v0.5.0 - 2026-06-14
 
 ### Added
-- LAN web service: Settings can now start a local HTTP service so devices on the same network can open PiDeck through the host machine's IP and configured port.
+- LAN web service: Settings can now start a local HTTP service so devices on the same network can open Telos through the host machine's IP and configured port.
 - pi Extension management: the configuration modal now includes extension management alongside Models, Auth, Settings, Raw config, and Skills.
-- Git branch creation: the branch selector can create a new branch from the current branch without leaving PiDeck.
+- Git branch creation: the branch selector can create a new branch from the current branch without leaving Telos.
 - Project context action: project rows can be revealed directly in the system file manager.
 - VitePress documentation site and a full UI design audit, documenting the current desktop workbench architecture and design-system direction.
 
 ### Improved
 - Major desktop shell refresh: the project sidebar, chat workspace, drawer, composer, splitters, context menus, and modal surfaces now use a shared semantic token system for typography, color, spacing, radius, focus, and motion.
 - Dark mode coverage is now much broader across the workspace, Settings, Config, Feedback, RPC logs, Codex import, image preview, message stream, tool calls, terminal dock, and confirmation dialogs.
-- Full-screen Settings, Config, and Feedback pages now fit the custom Electron titlebar better and avoid overlapping the PiDeck titlebar/brand area.
+- Full-screen Settings, Config, and Feedback pages now fit the custom Electron titlebar better and avoid overlapping the Telos titlebar/brand area.
 - Sidebar workflows are clearer: recent project sessions are shown inline, left-click opens or reuses the session, right-click is reserved for management actions, and the agent-row close button was removed to reduce misclicks.
 - Session and agent context menus now focus on management actions; historical sessions can be renamed, copied, exported, inspected through RPC logs, or deleted from the sidebar menu.
-- Settings dropdowns now use a custom PiDeck-styled select component instead of native browser select popups.
+- Settings dropdowns now use a custom Telos-styled select component instead of native browser select popups.
 - Header actions are grouped by branch context, session actions, and panel toggles; the model/status chips have more breathing room and no longer feel clipped by the header divider.
 - Shared UI primitives now cover buttons, icon buttons, close buttons, text fields, and select fields, reducing visual drift across Settings, Config, Feedback, updates, environment checks, and import dialogs.
-- PiDeck branding, fonts, logo treatment, image preview overlays, picker palettes, and terminal typography have been refined for a more consistent desktop feel.
+- Telos branding, fonts, logo treatment, image preview overlays, picker palettes, and terminal typography have been refined for a more consistent desktop feel.
 - Localization coverage is much broader across workspace flows, configuration, settings, window controls, feedback, update prompts, RPC logs, model/thinking pickers, and low-frequency toasts.
 - Terminal Pi Soft now adapts to dark mode with a dedicated xterm palette.
 
@@ -1592,7 +1592,7 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 - Windows pi shim startup keeps the expected Node runtime alignment.
 - Configuration modal crash boundaries and white-screen recovery were improved for unsupported or complex config shapes.
 - Codex-imported sessions now preserve their original timestamp for both created and updated times, keeping imported session ordering stable.
-- Settings and Config pages no longer overlap the custom titlebar PiDeck label when opened in the custom titlebar layout.
+- Settings and Config pages no longer overlap the custom titlebar Telos label when opened in the custom titlebar layout.
 
 ## v0.4.17 - 2026-06-11
 
@@ -1660,7 +1660,7 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 ### Added
 - Project history quick action: each project row now includes a dedicated history button, so historical sessions can be opened without relying on the context menu.
 - Per-answer file-change summary: each completed agent answer now shows a compact list of modified file names and changed line counts directly below that answer, while the Files panel keeps the session-wide overview.
-- In-app update check: PiDeck now periodically checks the latest GitHub Release and shows release notes plus browser download links when a newer version is available.
+- In-app update check: Telos now periodically checks the latest GitHub Release and shows release notes plus browser download links when a newer version is available.
 - Update failure guidance: manual update checks now explain GitHub connectivity issues, suggest configuring the desktop proxy, and provide a direct Release-page fallback.
 
 ### Fixed
@@ -2008,7 +2008,7 @@ Thanks to @ayuayue, @1900EasonJin, @zx3022448 for their contributions!
 ## v0.1.0 - 2026-05-31
 
 ### Added
-- Initial PiDeck workbench.
+- Initial Telos workbench.
 - Multi-project desktop workspace for managing local folders.
 - Multiple pi RPC agents running side by side.
 - Session history drawer and historical session restore.

@@ -414,7 +414,7 @@ test("tool/result 带参数时 detailText 含参数段（PI 同款分节）", ()
 	let p = projectDshEvent(undefined, event("tool/call", 6, {
 		toolName: "read",
 		callId: "call-1",
-		arguments: JSON.stringify({ file_path: "F:/PiDeck/src/a.ts", offset: 1, limit: 50 }),
+		arguments: JSON.stringify({ file_path: "F:/Telos/src/a.ts", offset: 1, limit: 50 }),
 	}), AGENT);
 	p = projectDshEvent(p, event("tool/result", 7, {
 		message: {
@@ -425,7 +425,7 @@ test("tool/result 带参数时 detailText 含参数段（PI 同款分节）", ()
 	const detail = p.messages[0].meta?.detailText ?? "";
 	assert.match(detail, /工具：read/);
 	assert.match(detail, /参数：/);
-	assert.match(detail, /"file_path": "F:\/PiDeck\/src\/a\.ts"/);
+	assert.match(detail, /"file_path": "F:\/Telos\/src\/a\.ts"/);
 	assert.match(detail, /结果：/);
 	assert.match(detail, /export function foo\(\) \{\}/);
 	assert.equal(p.messages[0].meta?.truncated, undefined);
@@ -433,7 +433,7 @@ test("tool/result 带参数时 detailText 含参数段（PI 同款分节）", ()
 
 test("tool/call 的 arguments（JSON 字符串）解析进 meta.args，host view 透传进 meta.view", () => {
 	// DSH 的 tool/call.arguments 是 JSON 字符串（host 侧 presentCall 也 JSON.parse 后消费）；
-	// PiDeck 工具卡片的副标题（command/path/pattern/query/url）、详情与 diff 都读 meta.args。
+	// Telos 工具卡片的副标题（command/path/pattern/query/url）、详情与 diff 都读 meta.args。
 	let p = projectDshEvent(undefined, event("tool/call", 6, {
 		toolName: "pwsh",
 		callId: "call-1",
@@ -642,10 +642,10 @@ test("request/header 折叠系统提示（EpochHeader.system，last wins）", ()
 	// DSH 系统提示由 harness 在请求时组装（persona + sections），request/header 事件
 	// 携带完整文本（dsh-web 轨迹同源）；同一会话多次请求头取最后一次。
 	let p = projectDshEvent(undefined, event("request/header", 3, {
-		header: { system: "你是 PiDeck 的 DSH 代理。\n## 准则\n…" },
+		header: { system: "你是 Telos 的 DSH 代理。\n## 准则\n…" },
 		reason: { kind: "steer", step: 1 },
 	}), AGENT);
-	assert.equal(p.systemPrompt, "你是 PiDeck 的 DSH 代理。\n## 准则\n…");
+	assert.equal(p.systemPrompt, "你是 Telos 的 DSH 代理。\n## 准则\n…");
 	assert.equal(p.stateChanged, true);
 	p = projectDshEvent(p, event("request/header", 7, {
 		header: { system: "更新后的系统提示" },

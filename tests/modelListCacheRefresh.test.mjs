@@ -12,7 +12,7 @@ import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
  * 2) refreshModelCatalogIfStale：fresh 跳过不碰 CLI；stale 分支走 pi update --models
  * 3) 源码装配断言：index.ts 冷启动挂点 + PiModelCapabilityCache 监视 models-store.json
  *
- * 背景：PiDeck 的 RPC 进程都带 --offline，pi 启动时不自动刷新模型目录
+ * 背景：Telos 的 RPC 进程都带 --offline，pi 启动时不自动刷新模型目录
  * （非 offline 时 pi main() 会异步 modelRuntime.refresh 并写 models-store.json），
  * 目录只能靠 TUI 更新 → 长期滞后会让选择器显示「目录有但运行中 Agent 快照没有」
  * 的模型（2026-08 deepseek 官方 provider 新模型选择失败：Agent 01:53 启动 vs
@@ -71,7 +71,7 @@ test("isModelCatalogStale: default threshold behavior on 4h boundary", async () 
     const store = join(dir, "models-store.json");
     await writeFile(store, "{}");
     const now = Date.now();
-    // 3h 前更新过：默认阈值（4h）内 → 不需要刷（TUI/上次冷启动刷过，PiDeck 不重复出手）。
+    // 3h 前更新过：默认阈值（4h）内 → 不需要刷（TUI/上次冷启动刷过，Telos 不重复出手）。
     await utimes(store, new Date(now - 3 * HOUR), new Date(now - 3 * HOUR));
     assert.equal(await isModelCatalogStale(dir, undefined, () => now), false);
     // 5h 前更新过：超过默认阈值 → 需要兜底刷一次。

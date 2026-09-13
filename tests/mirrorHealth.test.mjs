@@ -171,34 +171,34 @@ test("探测加超时保护：单请求最坏耗时不超过 PROBE_TIMEOUT_MS", 
 test("resolveProbeFileName：优先从 files[].url 提取 setup.exe 文件名", () => {
 	const yml = `version: 0.8.0
 files:
-  - url: PiDeck-0.8.0-setup.exe
+  - url: Telos-0.8.0-setup.exe
     sha512: abc
-  - url: PiDeck-0.8.0-portable.exe
+  - url: Telos-0.8.0-portable.exe
     sha512: def
-path: PiDeck-0.8.0-setup.exe
+path: Telos-0.8.0-setup.exe
 `;
-	assert.equal(resolveProbeFileName(yml), "PiDeck-0.8.0-setup.exe");
+	assert.equal(resolveProbeFileName(yml), "Telos-0.8.0-setup.exe");
 });
 
 test("resolveProbeFileName：支持带路径与查询串的 URL，清洗非法字符", () => {
 	const ymlWithPath = `version: 0.8.1
 files:
-  - url: releases/download/v0.8.1/PiDeck-0.8.1-setup.exe?token=xyz
+  - url: releases/download/v0.8.1/Telos-0.8.1-setup.exe?token=xyz
 `;
-	assert.equal(resolveProbeFileName(ymlWithPath), "PiDeck-0.8.1-setup.exe");
+	assert.equal(resolveProbeFileName(ymlWithPath), "Telos-0.8.1-setup.exe");
 
 	// 包含路径穿越字符应触发回退
 	const ymlEvil = `version: 0.8.2
 files:
   - url: ../../etc/passwd
 `;
-	assert.equal(resolveProbeFileName(ymlEvil), "PiDeck-0.8.2-setup.exe");
+	assert.equal(resolveProbeFileName(ymlEvil), "Telos-0.8.2-setup.exe");
 });
 
 test("resolveProbeFileName：无 url 列表时按 version 规范回退", () => {
 	const ymlSimple = `version: 0.9.0\nreleaseDate: 2026-09-03\n`;
-	assert.equal(resolveProbeFileName(ymlSimple), "PiDeck-0.9.0-setup.exe");
+	assert.equal(resolveProbeFileName(ymlSimple), "Telos-0.9.0-setup.exe");
 
 	const ymlEmpty = ``;
-	assert.equal(resolveProbeFileName(ymlEmpty), "PiDeck-setup.exe");
+	assert.equal(resolveProbeFileName(ymlEmpty), "Telos-setup.exe");
 });

@@ -383,7 +383,7 @@ export const CommonTab = memo(function CommonTab(props: CommonTabProps) {
         </SettingRow>
       </SettingsSection>
 
-      {/* 文件资源管理器集成：注册「用 PiDeck 打开」右键菜单（目录与空白处），
+      {/* 文件资源管理器集成：注册「用 Telos 打开」右键菜单（目录与空白处），
           HKCU 写入即时生效；非 Windows 平台开关置灰并提示。 */}
       <SettingsSection
         title={t("settings.shellContextMenuSection")}

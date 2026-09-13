@@ -356,7 +356,7 @@ test("第二个 runtime 的 follow 泵也必须创建（共享 mux 已在跑不�
 	// 回归（2026-09-12）：startMux 的 ensureFollowPump 曾放在共享 mux 启动路径里，
 	// 第二个会话 startMux 时 mux 已在跑、提前 return 把 follow 泵整个吞掉——
 	// 0.1.5 会话 journal 事件只走 follow 泵，于是新会话发送后 host 正常跑完回合
-	// 但 PiDeck 收不到任何事件（无流式、无收口、无报错，页面空白）。
+	// 但 Telos 收不到任何事件（无流式、无收口、无报错，页面空白）。
 	const { host, client } = makeFakeHost();
 	let followOpens = 0;
 	const innerFollow = client.sessionsFollow.bind(client);

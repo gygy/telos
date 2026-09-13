@@ -1,5 +1,5 @@
 /**
- * 将 PiDeck 曾内置的 prompt 模板写入商店数据库（xueprompts.db）。
+ * 将 Telos 曾内置的 prompt 模板写入商店数据库（xueprompts.db）。
  *
  * 背景：这批模板曾写死在 PromptManager.ts 的 BUILTIN_TEMPLATES（builtin://），
  * 2026-09-07 提交 02dc7953 整体移除；还原版 md 位于 docs/pi-prompt-templates/。

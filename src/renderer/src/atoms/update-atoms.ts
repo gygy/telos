@@ -7,7 +7,7 @@ import type { AppUpdateStatusSnapshot } from "../../../shared/types";
  */
 export const updateStatusAtom = atom<AppUpdateStatusSnapshot | null>(null);
 
-/** 是否有「可提示」的 PiDeck 更新：有更新 且 未被用户跳过（角标显隐依据）。 */
+/** 是否有「可提示」的 Telos 更新：有更新 且 未被用户跳过（角标显隐依据）。 */
 export const pendingAppUpdateAtom = atom<boolean>((get) => {
 	const snapshot = get(updateStatusAtom);
 	if (!snapshot?.app) return false;

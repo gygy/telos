@@ -357,7 +357,7 @@ export class ChangelogService {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-changelog" },
+				headers: { "user-agent": "Telos-changelog" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = await response.arrayBuffer();

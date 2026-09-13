@@ -53,7 +53,7 @@ type SessionScanMessage = {
   content?: unknown;
   provider?: string;
   model?: string;
-  /** 生图消息标识：PiDeck 本地写入的 api=openai-images 或 imageGen 元数据 */
+  /** 生图消息标识：Telos 本地写入的 api=openai-images 或 imageGen 元数据 */
   api?: string;
   imageGen?: unknown;
 };
@@ -691,7 +691,7 @@ export class SessionScanner {
    * 加载该会话（/resume 中也不可见，见 #114）。pi 原生 /rename 的做法是末尾追加
    * {type:"session_info", id, parentId, timestamp, name}，读取时取最后一条。
    *
-   * 顺带剔除旧版 PiDeck 写入的 sessionName 私有行，修复已被破坏的会话文件。
+   * 顺带剔除旧版 Telos 写入的 sessionName 私有行，修复已被破坏的会话文件。
    * 支持 WSL 路径。
    */
   async rename(filePath: string, newName: string): Promise<void> {
@@ -708,7 +708,7 @@ export class SessionScanner {
   /**
    * 修复会话文件头部的两类损坏（在 AgentManager 每次 spawn pi 前调用，经 PiProcess options 注入）：
    *
-   * 1. 旧版 PiDeck 私有 sessionName 头行（#114 存量受损文件）。
+   * 1. 旧版 Telos 私有 sessionName 头行（#114 存量受损文件）。
    * 2. 首行被写成「<文件路径>.jsonl{JSON} 粘连」（2026-08 用户现场：路径与 session header
    *    无换行粘连，pi 跳过坏行后首条记录变成 model_change，拒绝加载）。
    *
@@ -773,7 +773,7 @@ export class SessionScanner {
    * parentId 指向追加前最后一条带 id 的记录（没有则 null，由 pi 视为新根）。
    * 会话树靠 parentId 串联，指向最后一片叶子可保持链条完整。
    *
-   * 同时剔除旧版 PiDeck 的 {"sessionName":...} 私有行（无 type 字段）：pi 无法识别，
+   * 同时剔除旧版 Telos 的 {"sessionName":...} 私有行（无 type 字段）：pi 无法识别，
    * 位于文件头时会破坏首行校验导致整个会话无法加载（#114 的存量受损文件）。
    */
   private appendSessionInfoLine(raw: string, name: string, extra?: Record<string, unknown>): string {
@@ -1412,7 +1412,7 @@ export class SessionScanner {
 
   /**
    * 快速校验 Windows 本地路径是否为 Pi Agent 会话 JSONL（非备份/导出/重命名残留）。
-   * 真实会话的首行通常是 `type: session`；兼容 PiDeck 重命名后前置的 sessionName 元数据，
+   * 真实会话的首行通常是 `type: session`；兼容 Telos 重命名后前置的 sessionName 元数据，
    * 但要求随后仍出现 type 字段，不能只凭任意 JSON 对象误判为父会话。
    */
   private readLocalFileHead(filePath: string, maxBytes = 4096): string {
@@ -1713,7 +1713,7 @@ export class SessionScanner {
     }
 
     // 会话名优先级与 pi getSessionName 一致：最后一条 session_info 为准；
-    // 旧版 PiDeck 的 sessionName 私有行及其他字段仅作降级回退。
+    // 旧版 Telos 的 sessionName 私有行及其他字段仅作降级回退。
     // pi 默认 sessionName / 未改名的 session_info 是 JSONL 文件名时间戳，不能当标题。
     // 与轻量补名共用 inferScanNameFromLines，保证两处推断结果一致。
     const inferred = inferScanNameFromLines(lines, (content) => this.extractText(content));

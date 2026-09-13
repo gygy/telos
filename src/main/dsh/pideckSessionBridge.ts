@@ -1,5 +1,5 @@
 /**
- * pideck-session-bridge：PiDeck ↔ DSH host 的会话冷读元数据桥。
+ * pideck-session-bridge：Telos ↔ DSH host 的会话冷读元数据桥。
  *
  * 背景（0.1.5 Typert Remote 契约，见 docs/dsh-0.1.5-typert-migration.md）：
  * `session/page` 的 `throughSeq` 是「包含式日志切点」，必须 ≤ 该会话当前
@@ -7,7 +7,7 @@
  * 的开帧快照（官方 client 的 SessionEventStream 就是「先 open follow、再拿快照
  * cursor 往回翻页」）。
  *
- * PiDeck 的历史浏览是**冷读**路径：点击历史 DSH 会话时 runtime 尚未激活。
+ * Telos 的历史浏览是**冷读**路径：点击历史 DSH 会话时 runtime 尚未激活。
  * 不能开 follow 拿 cursor——follow 对 cold 会话会走 promote() 真正激活 Agent
  * （resolveObservedAgent，见 dsh-api-session-controller 的 `promote` 实现），
  * 浏览历史不该拉起会话。因此这里把 host 内 sessionQuery 的 observation cursor

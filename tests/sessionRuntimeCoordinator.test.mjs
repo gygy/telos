@@ -1216,7 +1216,7 @@ test("runtime thinking persists the backend-confirmed level in the session catal
   assert.equal(harness.entry.thinkingLevel, "max");
 });
 test("DSH model change preserves the recorded thinking preference", async () => {
-  // 模型和思考档位是独立选择。即使 host 此次返回了规范化后的 high，PiDeck 也不能
+  // 模型和思考档位是独立选择。即使 host 此次返回了规范化后的 high，Telos 也不能
   // 擅自把用户保存的 max 改掉；用户切回别的模型时仍应保留原选择。
   const { SessionRuntimeCoordinator } = loadCoordinator();
   const harness = createHarness({
@@ -1241,7 +1241,7 @@ test("DSH model change preserves the recorded thinking preference", async () => 
 });
 
 test("DSH model change keeps the thinking preference when the new model reports none", async () => {
-  // 模型目录没有 reasoningEfforts 不是 PiDeck 清空选择的理由；后端后续决定如何处理。
+  // 模型目录没有 reasoningEfforts 不是 Telos 清空选择的理由；后端后续决定如何处理。
   const { SessionRuntimeCoordinator } = loadCoordinator();
   const harness = createHarness({
     entry: { backend: "dsh", thinkingLevel: "max" },
@@ -1264,7 +1264,7 @@ test("DSH model change keeps the thinking preference when the new model reports 
 
 test("DSH activation preserves a thinking preference the host explicitly rejects", async () => {
   // 能力判断属于 host / pi-ai。当前模型拒绝档位时仍保留用户偏好，以便 provider、
-  // 模型或其配置随后变化后再次应用；PiDeck 不可根据一次错误静默清空选择。
+  // 模型或其配置随后变化后再次应用；Telos 不可根据一次错误静默清空选择。
   const { SessionRuntimeCoordinator } = loadCoordinator();
   const harness = createHarness({
     entry: {

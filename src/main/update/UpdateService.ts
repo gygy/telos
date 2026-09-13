@@ -241,7 +241,7 @@ export class UpdateService {
 		this.pushSnapshot();
 	}
 
-	/** 跳过某个 PiDeck 版本（该版本不再主动提示，手动检测仍可查看）。 */
+	/** 跳过某个 Telos 版本（该版本不再主动提示，手动检测仍可查看）。 */
 	async skipVersion(version: string): Promise<void> {
 		if (!version) return;
 		await this.deps.settingsStore.update({ updateSkippedVersion: version }).catch(() => undefined);
@@ -378,7 +378,7 @@ export class UpdateService {
 			this.installWatchdog = null;
 			if (!this.isInstallInProgress()) return;
 			this.restoreAfterInstallFailure(
-				"The update installer did not start before PiDeck finished waiting to exit.",
+				"The update installer did not start before Telos finished waiting to exit.",
 			);
 		}, Math.max(0, timeoutMs));
 		// 不能让失败的安装尝试成为主进程唯一的活跃句柄。

@@ -28,7 +28,7 @@ type ExtensionsApi = {
 function getExtensionsApi(): ExtensionsApi {
 	const api = (window as unknown as { piDesktop?: { extensions?: ExtensionsApi } })
 		.piDesktop?.extensions;
-	if (!api) throw new Error("PiDeck extensions API is not available");
+	if (!api) throw new Error("Telos extensions API is not available");
 	return api;
 }
 
@@ -74,7 +74,7 @@ export function ExtensionsTab(props: {
 	const [removingBuiltIn, setRemovingBuiltIn] = useState<string | null>(null);
 	const [togglingSource, setTogglingSource] = useState<string | null>(null);
 	// 白名单总开关（「禁用 -e 参数」）：true = 不注入 --no-extensions/-e，pi 默认加载全部扩展。
-	// 从 PiDeck settings 读取默认状态；切换写入后本地同步，供 RPC 下次启动生效。
+	// 从 Telos settings 读取默认状态；切换写入后本地同步，供 RPC 下次启动生效。
 	const [whitelistDisabled, setWhitelistDisabled] = useState(false);
 	const [togglingWhitelist, setTogglingWhitelist] = useState(false);
 
@@ -126,7 +126,7 @@ export function ExtensionsTab(props: {
 		}
 	};
 
-	/** 禁用/启用扩展：项目视图的全局继承行走项目覆盖，其余写 PiDeck settings 禁用列表。 */
+	/** 禁用/启用扩展：项目视图的全局继承行走项目覆盖，其余写 Telos settings 禁用列表。 */
 	const handleToggle = async (extension: PiExtensionSummary, nextEnabled?: boolean) => {
 		if (togglingSource) return;
 		const enabled = nextEnabled ?? extension.enabled === false;
@@ -166,7 +166,7 @@ export function ExtensionsTab(props: {
 	/**
 	 * 切换白名单总开关（「禁用 -e 参数」）：开启后 PiProcess 不再注入 --no-extensions/-e，
 	 * pi 默认加载全部扩展，禁用列表暂不生效——防御个别扩展的 -e 注入导致 RPC 启动失败。
-	 * 写入 PiDeck settings，下次 RPC 启动生效；列表本身不变化，无需刷新。
+	 * 写入 Telos settings，下次 RPC 启动生效；列表本身不变化，无需刷新。
 	 */
 	const handleToggleWhitelist = async () => {
 		if (togglingWhitelist) return;

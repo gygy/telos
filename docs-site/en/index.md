@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: PiDeck
+  name: Telos
   text: Desktop Workbench for pi AI Coding Agents
   tagline: Manage local pi coding assistant sessions, configs, Git, and terminal in a unified desktop workspace for Windows, macOS, and Linux.
   actions:
@@ -42,7 +42,7 @@ features:
 ---
 
 <figure class="home-showcase">
-  <img src="/images/overview.png" alt="PiDeck workspace and conversation UI">
+  <img src="/images/overview.png" alt="Telos workspace and conversation UI">
   <figcaption>Workspace, sessions, file drawer, Git branches, and tool calls — all in one desktop window.</figcaption>
 </figure>
 
@@ -64,7 +64,7 @@ features:
 
 ## Sponsor
 
-If PiDeck is useful to you, you can buy the author a coffee. Scan the WeChat Pay QR code below to tip. Thank you.
+If Telos is useful to you, you can buy the author a coffee. Scan the WeChat Pay QR code below to tip. Thank you.
 
 <p class="sponsor-block">
   <img class="sponsor-qr" src="/images/wechat_pay.png" alt="WeChat Pay tip QR code" />

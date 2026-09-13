@@ -4,7 +4,7 @@
 // beUI 官方实现（官方/定制双轨收敛后的唯一实现，2026-08）。
 // 保留官方新增能力：状态图标（spinner/check/x/ban）、ActionSwapRollText 换字动画、
 // 折叠与按状态自动开合、retry、meta/icon 扩展。
-// 另含 PiDeck 本地扩展（定制版同签名，调用方不变）：
+// 另含 Telos 本地扩展（定制版同签名，调用方不变）：
 // - `showHeader`：false 时隐藏折叠头部，内容恒展开（工具卡宿主已有自己的头部 chrome）；
 // - `copyClassName`：复制按钮追加类名（如工具卡内的 tool-card-copy 悬浮显隐）；
 // - 用户可见文案走 i18n（AGENTS.md 硬性要求）。
@@ -63,9 +63,9 @@ export interface ToolResultProps {
   onRetry?: () => void;
   className?: string;
   contentClassName?: string;
-  /** [PiDeck local] 隐藏折叠头部，内容恒展开（宿主自带头部 chrome 时用，如工具卡）。 */
+  /** [Telos local] 隐藏折叠头部，内容恒展开（宿主自带头部 chrome 时用，如工具卡）。 */
   showHeader?: boolean;
-  /** [PiDeck local] 复制按钮追加类名（如 tool-card-copy 的悬浮显隐规则）。 */
+  /** [Telos local] 复制按钮追加类名（如 tool-card-copy 的悬浮显隐规则）。 */
   copyClassName?: string;
 }
 
@@ -89,7 +89,7 @@ function getSwapKey(value: ReactNode, fallback: string) {
 }
 
 /**
- * Execution states use PiDeck semantic tokens. The user's accent identifies
+ * Execution states use Telos semantic tokens. The user's accent identifies
  * interactive selection, while success/error meaning must remain stable.
  */
 function getStatusClass(status: ToolResultStatus) {
@@ -163,7 +163,7 @@ export function ToolResultOutput({
       className={cn(
         // Tool output is a process log rather than source code: keep it in the
         // app's neutral color scale instead of beUI's fixed GitHub Shiki palette.
-        // Match PiDeck's prior custom result density: caption text with relaxed leading.
+        // Match Telos's prior custom result density: caption text with relaxed leading.
         "whitespace-pre-wrap break-words text-[length:var(--font-size-caption)]",
         "leading-[1.625] text-[color:var(--color-text-secondary)]",
         "[&_span]:text-[color:var(--color-text-secondary)]",

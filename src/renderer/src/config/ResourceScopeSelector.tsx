@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "../components/
 
 export type ResourceScope = "global" | "project";
 
-/** 作用域选择器可展示的项目条目（PiDeck 已加载项目；Chat 项目除外）。 */
+/** 作用域选择器可展示的项目条目（Telos 已加载项目；Chat 项目除外）。 */
 export type ResourceScopeProject = {
 	id: string;
 	name: string;
@@ -13,7 +13,7 @@ export type ResourceScopeProject = {
 
 type ResourceScopeSelectorProps = {
 	value: ResourceScope;
-	/** PiDeck 当前加载的全部项目（下拉展示；Chat 项目不提供项目作用域）。 */
+	/** Telos 当前加载的全部项目（下拉展示；Chat 项目不提供项目作用域）。 */
 	projects: ResourceScopeProject[];
 	/** 当前选中的项目 id（value === "project" 时生效）。 */
 	selectedProjectId?: string;
@@ -23,7 +23,7 @@ type ResourceScopeSelectorProps = {
 
 /**
  * Shared scope selector for resources managed by the Pi configuration pane.
- * 展示「全局」+ PiDeck 全部已加载项目（非 Chat），可在任意项目间切换；
+ * 展示「全局」+ Telos 全部已加载项目（非 Chat），可在任意项目间切换；
  * 父组件持有 value 与 selectedProjectId，切换资源 Tab 保持选择。
  */
 export function ResourceScopeSelector({ value, projects, selectedProjectId, disabled = false, onChange }: ResourceScopeSelectorProps) {

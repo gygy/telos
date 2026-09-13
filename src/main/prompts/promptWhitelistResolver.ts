@@ -26,7 +26,7 @@ import { resolveConfiguredPackageResources } from "../packageResourceResolver";
  *
  * 枚举与过滤规则对齐 pi 0.85 的 DefaultPackageManager.resolve() / collectFiles：
  *   1. ~/.pi/agent/prompts/*.md（全局，递归收集全部 .md，含 .d.md——与 pi 的 collectFiles
- *      /\.md$/ 一致，PiDeck 列表隐藏的 .d.md 在 pi 中同样会加载）
+ *      /\.md$/ 一致，Telos 列表隐藏的 .d.md 在 pi 中同样会加载）
  *   2. <cwd>/.pi/prompts/*.md（项目，trusted 后；注意：prompts 没有 .agents 目录，
  *      与 skills 不同——pi 只扫 .pi/prompts）
  *   3. user/project settings.json 的 prompts 数组：plain 条目 = 显式路径；
@@ -35,7 +35,7 @@ import { resolveConfiguredPackageResources } from "../packageResourceResolver";
  *      对象条目 { source, prompts, autoload } 的过滤语义（空数组 = 全禁，autoload:false = delta）
  *   5. ignore 规则（.gitignore/.ignore/.fdignore，逐目录前缀化）应用于自动发现目录
  *
- * 返回 null = 无禁用项，白名单关闭（pi 自动发现，兼容 PiDeck 未跟踪的手动安装）；
+ * 返回 null = 无禁用项，白名单关闭（pi 自动发现，兼容 Telos 未跟踪的手动安装）；
  * 返回数组（可能为空）= 白名单开启，调用方需同时传 --no-prompt-templates。
  *
  * Auto-discovered prompt directories are top-level only; explicit/package directories recurse.
@@ -140,14 +140,14 @@ export type PromptWhitelistResolverOptions = {
 	cwd: string;
 	/** False when the trust decision rejects project resources. */
 	includeProjectResources?: boolean;
-	/** PiDeck settings 中禁用的全局模板名（比较时小写）。 */
+	/** Telos settings 中禁用的全局模板名（比较时小写）。 */
 	disabledNames: string[];
 };
 
 /** Auto-discovered prompts are top-level files only in pi 0.85. */
 function collectAutoPromptDir(
 	dir: string,
-	isPiDeckEnabled: (promptFile: string) => boolean,
+	isTelosEnabled: (promptFile: string) => boolean,
 	addPath: (path: string) => void,
 	overridesBase: string,
 	overrides: string[],
@@ -165,7 +165,7 @@ function collectAutoPromptDir(
 		const fullPath = join(dir, entry.name);
 		if (!isFileEntry(entry, fullPath) || !entry.name.toLowerCase().endsWith(".md")) continue;
 		if (ig.ignores(toPosixPath(relative(dir, fullPath)))) continue;
-		if (isPiDeckEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
+		if (isTelosEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
 			addPath(fullPath);
 		}
 	}
@@ -178,7 +178,7 @@ function collectAutoPromptDir(
  */
 function collectPromptDir(
 	dir: string,
-	isPiDeckEnabled: (promptFile: string) => boolean,
+	isTelosEnabled: (promptFile: string) => boolean,
 	addPath: (path: string) => void,
 	overridesBase: string,
 	overrides: string[],
@@ -201,13 +201,13 @@ function collectPromptDir(
 
 		if (isDirEntry(entry, fullPath)) {
 			if (igRef.ignores(`${relPath}/`)) continue;
-			collectPromptDir(fullPath, isPiDeckEnabled, addPath, overridesBase, overrides, root, igRef);
+			collectPromptDir(fullPath, isTelosEnabled, addPath, overridesBase, overrides, root, igRef);
 			continue;
 		}
 		if (!isFileEntry(entry, fullPath)) continue;
 		if (!entry.name.toLowerCase().endsWith(".md")) continue;
 		if (igRef.ignores(relPath)) continue;
-		if (isPiDeckEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
+		if (isTelosEnabled(fullPath) && passesOverrides(fullPath, overridesBase, overrides)) {
 			addPath(fullPath);
 		}
 	}
@@ -222,7 +222,7 @@ function collectSettingsPrompts(
 	base: string,
 	plain: string[],
 	patterns: string[],
-	isPiDeckEnabled: (promptFile: string) => boolean,
+	isTelosEnabled: (promptFile: string) => boolean,
 	addPath: (path: string) => void,
 ): void {
 	const allFiles: string[] = [];
@@ -241,7 +241,7 @@ function collectSettingsPrompts(
 	}
 	const enabledSet = applyPatterns(allFiles, patterns, base);
 	for (const file of allFiles) {
-		if (enabledSet.has(file) && isPiDeckEnabled(file)) addPath(file);
+		if (enabledSet.has(file) && isTelosEnabled(file)) addPath(file);
 	}
 }
 

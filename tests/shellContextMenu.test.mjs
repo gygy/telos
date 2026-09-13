@@ -44,7 +44,7 @@ const {
   SHELL_MENU_KEYS,
 } = compile("src/main/integrations/shellContextMenu.ts");
 
-const EXE = "C:\\Program Files\\PiDeck\\PiDeck.exe";
+const EXE = "C:\\Program Files\\Telos\\Telos.exe";
 const FOLDER_KEY = SHELL_MENU_KEYS.folder;
 const BACKGROUND_KEY = SHELL_MENU_KEYS.background;
 const FOLDER_COMMAND = `${FOLDER_KEY}\\command`;
@@ -83,7 +83,7 @@ test("command 值带普通引号传给 reg.exe（不手动预转义），Icon �
   // reg.exe 解析还原一层后嵌套引号原样入库；手动预转义会残留字面 \" 导致 Explorer 解析失败。
   assert.equal(
     commandArgOf(FOLDER_COMMAND),
-    '"C:\\Program Files\\PiDeck\\PiDeck.exe" --open-project "%1"',
+    '"C:\\Program Files\\Telos\\Telos.exe" --open-project "%1"',
   );
   const iconCall = regCalls.find(
     (c) => c.cmd === "reg" && c.args[1] === FOLDER_KEY && c.args.includes("/v") && c.args.includes("Icon"),
@@ -103,12 +103,12 @@ test("dev 模式（带 app 路径）命令含 electron 与 app 目录两段参�
 
 test("菜单显示名写入文件夹键的默认值", async () => {
   regCalls = [];
-  await registerShellContextMenu(EXE, "", "用 PiDeck 打开");
+  await registerShellContextMenu(EXE, "", "用 Telos 打开");
   const call = regCalls.find(
     (c) => c.cmd === "reg" && c.args[1] === FOLDER_KEY && c.args.includes("/ve"),
   );
   assert.ok(call, "未找到 folder 默认值写入");
-  assert.equal(call.args[call.args.indexOf("/d") + 1], "用 PiDeck 打开");
+  assert.equal(call.args[call.args.indexOf("/d") + 1], "用 Telos 打开");
 });
 
 test("取消注册：删除两个 shell 键（reg delete /f）", async () => {

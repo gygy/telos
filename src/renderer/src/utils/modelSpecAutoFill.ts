@@ -45,7 +45,7 @@ export function isVisionModelId(modelId: string): boolean {
  * supportsReasoningEffort 联动：该 provider 任一模型存在非空档位映射且未显式
  * 关掉推理（reasoning !== false）时自动写 true——否则用户选了思考强度，pi 也
  * 不会真正发送 reasoning_effort 参数（pi 用 provider 级 compat 覆盖模型定义）。
- * 旧版本保存会无条件写 false，配置里已存的 false 是 PiDeck 自己写的陈旧值而非
+ * 旧版本保存会无条件写 false，配置里已存的 false 是 Telos 自己写的陈旧值而非
  * 用户意图，因此自动判定优先于已存在的 false；用户显式写的 true 始终保留。
  */
 export function deriveProviderCompat(provider: ProviderConfig): ProviderCompat {

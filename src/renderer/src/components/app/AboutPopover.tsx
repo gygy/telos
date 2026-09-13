@@ -20,7 +20,7 @@ interface AboutPopoverProps {
 }
 
 /**
- * 左上角品牌区「关于」弹框：点击 PiDeck 品牌弹出 MorphPopover，
+ * 左上角品牌区「关于」弹框：点击 Telos 品牌弹出 MorphPopover，
  * 展示 Logo、应用版本（等宽小字）、开发分支，以及 pi CLI / DSH 运行时 / pi-ai 目录
  * 版本、Electron/Chromium/Node 栈版本、打包/安装时间与官网/GitHub/发布链接。
  */
@@ -47,7 +47,7 @@ export function AboutPopover(props: AboutPopoverProps) {
           <div className="flex items-center gap-3">
             <TelosLogo className="size-10" title="Telos" />
             <div className="min-w-0 flex-1">
-              <div className="font-[PiDeckDepartureMono] text-lg font-normal uppercase leading-tight tracking-wide text-foreground">
+              <div className="font-[TelosDepartureMono] text-lg font-normal uppercase leading-tight tracking-wide text-foreground">
                 Telos
               </div>
               {/* 版本号用等宽小字：此前是带 ⓘ 图标的胶囊徽标，图标语义与「查看版本信息」

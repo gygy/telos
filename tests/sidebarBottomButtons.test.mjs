@@ -51,7 +51,7 @@ test("dock keeps the three actions and delegates the homepage link to AboutPopov
   assert.equal((dockActions.match(/variant="ghost"/g) || []).length, 3);
   // 官网入口已从 dock 迁入 AboutPopover（关于弹框），官方站点链接必须仍在
   const about = readFileSync("src/renderer/src/components/app/AboutPopover.tsx", "utf8");
-  assert.match(about, /WEBSITE_URL = "https:\/\/ayuayue\.github\.io\/PiDeck\/"/);
+  assert.match(about, /WEBSITE_URL = "https:\/\/ayuayue\.github\.io\/Telos\/"/);
   assert.match(about, /label=\{t\("about\.website"\)\}/);
 });
 

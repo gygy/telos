@@ -27,7 +27,7 @@ export type DshRuntimeManifest = {
 	schemaVersion: number;
 	/** runtime 版本（= dsh 版本，如 0.1.1-rc.2）；同时是解压目录名。 */
 	runtimeVersion: string;
-	/** 产出该 runtime 的 PiDeck 版本，便于排查「哪个 app 版本打的」。 */
+	/** 产出该 runtime 的 Telos 版本，便于排查「哪个 app 版本打的」。 */
 	builtByAppVersion: string;
 	/** 兼容的最低 app 版本（含）。 */
 	minAppVersion: string;

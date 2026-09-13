@@ -1,5 +1,5 @@
 /**
- * WebChatApp — PiDeck Web 服务 React 前端（A2）重构后的组合根。
+ * WebChatApp — Telos Web 服务 React 前端（A2）重构后的组合根。
  *
  * 数据层保持原有架构：
  * - useChat + DefaultChatTransport 消费 /api/chat 流式（AI SDK v7 UIMessageStream）

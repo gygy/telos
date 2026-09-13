@@ -143,7 +143,7 @@ export type AppSettings = {
 	closeToTray: boolean;
 	/**
 	 * 单实例模式：再次打开应用时复用已有窗口（托盘隐藏也会唤起）。
-	 * 默认 true；关闭后允许同时跑多个 PiDeck 进程。
+	 * 默认 true；关闭后允许同时跑多个 Telos 进程。
 	 */
 	singleInstance: boolean;
 	/** 会话结束时发送系统通知 */
@@ -191,7 +191,7 @@ export type AppSettings = {
 	/**
 	 * Electron Chromium 渲染进程沙箱（与 pi Agent 无关）。
 	 * false（默认）：关闭沙箱，兼容 Windows 安全软件/旧 GPU 驱动；
-	 * true：启用 Chromium 沙箱，需重启 PiDeck 后生效。
+	 * true：启用 Chromium 沙箱，需重启 Telos 后生效。
 	 */
 	electronChromiumSandbox: boolean;
 	/** 是否给 pi agent 子进程注入代理环境变量，不影响 desktop 自身网络请求 */
@@ -364,9 +364,9 @@ export type AppSettings = {
 	updateSourceAtomgitMigrated?: boolean;
 	/** 上次后台检查完成时间（毫秒时间戳）；缺省 = 从未检查。 */
 	updateLastCheckAt?: number;
-	/** 最近一次“已提示过”的 PiDeck 版本（弹窗关闭后写入，用于“每版本只弹一次”）；缺省 = 未提示过任何版本。 */
+	/** 最近一次“已提示过”的 Telos 版本（弹窗关闭后写入，用于“每版本只弹一次”）；缺省 = 未提示过任何版本。 */
 	updateNotifiedVersion?: string;
-	/** 用户跳过的 PiDeck 版本（该版本不再主动提示，手动检测仍可查看）；缺省 = 未跳过。 */
+	/** 用户跳过的 Telos 版本（该版本不再主动提示，手动检测仍可查看）；缺省 = 未跳过。 */
 	updateSkippedVersion?: string;
 	/** 最近一次“已提示过”的 Pi CLI 版本；缺省 = 未提示过。 */
 	updatePiNotifiedVersion?: string;
@@ -433,10 +433,10 @@ export type AppSettings = {
 	removedBuiltInExtensions: string[];
 
 	/**
-	 * 用户禁用的扩展列表（source 标识 + 作用域），存储于 PiDeck 自身设置（不写 pi settings）。
-	 * pi 0.82.x 不识别 settings.json 的 disabledExtensions，禁用只能靠 PiDeck 启动 RPC 时
+	 * 用户禁用的扩展列表（source 标识 + 作用域），存储于 Telos 自身设置（不写 pi settings）。
+	 * pi 0.82.x 不识别 settings.json 的 disabledExtensions，禁用只能靠 Telos 启动 RPC 时
 	 * 切「白名单模式」：--no-extensions + 逐条 -e 注入未禁用扩展实现（见 enabledExtensionResolver）。
-	 * 列表为空 = 白名单关闭，pi 自动发现全部扩展（兼容用户在 PiDeck 外手动安装的扩展）。
+	 * 列表为空 = 白名单关闭，pi 自动发现全部扩展（兼容用户在 Telos 外手动安装的扩展）。
 	 */
 	disabledExtensions: DisabledExtensionEntry[];
 
@@ -449,18 +449,18 @@ export type AppSettings = {
 
 	/**
 	 * 用户禁用的全局技能名列表（与 SkillManager.list 的 name 去重键一致，比较时小写），
-	 * 存储于 PiDeck 自身设置（不写 pi settings）。
+	 * 存储于 Telos 自身设置（不写 pi settings）。
 	 * pi 的 frontmatter `disable-model-invocation` 只阻止模型自动调用、技能仍被加载；
-	 * 完全禁用只能靠 PiDeck 启动 RPC 时切「白名单模式」：--no-skills + 逐条 --skill
+	 * 完全禁用只能靠 Telos 启动 RPC 时切「白名单模式」：--no-skills + 逐条 --skill
 	 * 注入未禁用技能（见 skillWhitelistResolver）。
-	 * 列表为空 = 白名单关闭，pi 自动发现全部技能（兼容用户在 PiDeck 外手动安装的技能）。
+	 * 列表为空 = 白名单关闭，pi 自动发现全部技能（兼容用户在 Telos 外手动安装的技能）。
 	 */
 	disabledSkills: string[];
 
 	/**
 	 * 用户禁用的全局提示词模板名列表（与 PromptManager.list 的 name 一致，比较时小写），
-	 * 存储于 PiDeck 自身设置（不写 pi settings）。
-	 * 完全禁用只能靠 PiDeck 启动 RPC 时切「白名单模式」：--no-prompt-templates +
+	 * 存储于 Telos 自身设置（不写 pi settings）。
+	 * 完全禁用只能靠 Telos 启动 RPC 时切「白名单模式」：--no-prompt-templates +
 	 * 逐条 --prompt-template 注入未禁用模板（见 promptWhitelistResolver）。
 	 * 列表为空 = 白名单关闭，pi 自动发现全部模板。
 	 */

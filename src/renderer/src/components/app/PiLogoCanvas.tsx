@@ -465,7 +465,7 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 			// 播放中不抢画布，等本轮结束后的 showStatic 会用新主题色
 			if (!busyRef.current) showStatic();
 		};
-		// PiDeck 主题/主题色切换会改 data-theme / data-accent
+		// Telos 主题/主题色切换会改 data-theme / data-accent
 		const observer = new MutationObserver(onTheme);
 		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
 
@@ -518,7 +518,7 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 	);
 }
 
-// ── 右侧「PiDeck」字标：与 logo 同一套 canvas 方块绘制 ──────────────
+// ── 右侧「Telos」字标：与 logo 同一套 canvas 方块绘制 ──────────────
 
 /**
  * 5×7 点阵（i 为 3×7）。笔画加粗：竖干双列 / 横画更满，小字号下仍够「重」。
@@ -654,7 +654,7 @@ function paintWordmark(canvas: HTMLCanvasElement, text: string, cellCss: number)
 	}
 }
 
-export type PiDeckWordmarkCanvasProps = {
+export type TelosWordmarkCanvasProps = {
 	/** 每个点阵格的 CSS 边长；与 logo 并排时建议 4~5 */
 	cellSize?: number;
 	text?: string;
@@ -662,12 +662,12 @@ export type PiDeckWordmarkCanvasProps = {
 };
 
 /**
- * 右侧 PiDeck 字标：与左侧 logo 同一套 bevel 方块 canvas 绘制。
+ * 右侧 Telos 字标：与左侧 logo 同一套 bevel 方块 canvas 绘制。
  * 主题切换时自动重绘 ink/white。
  */
-export function PiDeckWordmarkCanvas(props: PiDeckWordmarkCanvasProps) {
+export function TelosWordmarkCanvas(props: TelosWordmarkCanvasProps) {
 	const cellSize = props.cellSize ?? 5;
-	const text = props.text ?? "PiDeck";
+	const text = props.text ?? "Telos";
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 
 	const paint = useCallback(() => {

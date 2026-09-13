@@ -162,7 +162,7 @@ export function clampToWorkArea(
 export const DEFAULT_PET_FONT_STACK =
 	"-apple-system, BlinkMacSystemFont, \"Segoe UI Variable Text\", \"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"PingFang SC\", \"HarmonyOS Sans SC\", \"Hiragino Sans GB\", \"Noto Sans CJK SC\", sans-serif";
 
-/** 按 PiDeck 字体设置解析气泡字体栈（system/sans/serif 预设与 custom 用户字体） */
+/** 按 Telos 字体设置解析气泡字体栈（system/sans/serif 预设与 custom 用户字体） */
 export function petFontStack(fontBase: AppFontBaseMode, customFont: string): string {
 	switch (fontBase) {
 		case "sans":

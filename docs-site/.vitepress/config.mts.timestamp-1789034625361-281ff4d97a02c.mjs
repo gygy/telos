@@ -11,8 +11,8 @@ var config_default = defineConfig({
     root: {
       label: "\u4E2D\u6587",
       lang: "zh-CN",
-      title: "PiDeck - pi Agent \u684C\u9762\u5DE5\u4F5C\u53F0",
-      description: "PiDeck \u662F\u4E00\u6B3E\u5F00\u6E90\u684C\u9762\u5DE5\u4F5C\u53F0\uFF0C\u7528\u4E8E\u5728\u672C\u5730\u9879\u76EE\u6587\u4EF6\u5939\u4E2D\u7BA1\u7406\u591A\u4E2A pi AI \u7F16\u7801\u52A9\u624B\u3002\u652F\u6301\u4F1A\u8BDD\u5386\u53F2\u3001Git \u96C6\u6210\u3001\u5185\u7F6E\u7EC8\u7AEF\u548C\u53EF\u89C6\u5316\u914D\u7F6E\u7BA1\u7406\u3002",
+      title: "Telos - pi Agent \u684C\u9762\u5DE5\u4F5C\u53F0",
+      description: "Telos \u662F\u4E00\u6B3E\u5F00\u6E90\u684C\u9762\u5DE5\u4F5C\u53F0\uFF0C\u7528\u4E8E\u5728\u672C\u5730\u9879\u76EE\u6587\u4EF6\u5939\u4E2D\u7BA1\u7406\u591A\u4E2A pi AI \u7F16\u7801\u52A9\u624B\u3002\u652F\u6301\u4F1A\u8BDD\u5386\u53F2\u3001Git \u96C6\u6210\u3001\u5185\u7F6E\u7EC8\u7AEF\u548C\u53EF\u89C6\u5316\u914D\u7F6E\u7BA1\u7406\u3002",
       themeConfig: {
         nav: [
           { text: "\u9996\u9875", link: "/" },
@@ -70,8 +70,8 @@ var config_default = defineConfig({
       label: "English",
       lang: "en",
       link: "/en/",
-      title: "PiDeck - pi Agent Desktop Workbench",
-      description: "PiDeck is an open-source desktop workbench for managing multiple pi AI coding agents across local project folders. Features session history, Git integration, built-in terminal, and visual config management.",
+      title: "Telos - pi Agent Desktop Workbench",
+      description: "Telos is an open-source desktop workbench for managing multiple pi AI coding agents across local project folders. Features session history, Git integration, built-in terminal, and visual config management.",
       themeConfig: {
         nav: [
           { text: "Home", link: "/en/" },
@@ -129,7 +129,7 @@ var config_default = defineConfig({
   // ===== 共享主题配置 =====
   themeConfig: {
     logo: "/icon.svg",
-    siteTitle: "PiDeck",
+    siteTitle: "Telos",
     // 只保留内置图标（github）；AtomGit 无内置图标，作为「源码」下拉项出现在导航中，
     // 避免 socialLinks 里出现 no-icon 空白图标位。
     socialLinks: [
@@ -167,18 +167,18 @@ var config_default = defineConfig({
   head: [
     ["link", { rel: "icon", href: `${base}icon.svg` }],
     ["link", { rel: "canonical", href: `${siteOrigin}/` }],
-    ["meta", { name: "keywords", content: "PiDeck, pi, pi-agent, ai-coding-agent, desktop, electron, rpc, local-ai, developer-tools, coding-assistant, workspace, session-management, git, terminal, windows, macos, linux, open-source" }],
+    ["meta", { name: "keywords", content: "Telos, pi, pi-agent, ai-coding-agent, desktop, electron, rpc, local-ai, developer-tools, coding-assistant, workspace, session-management, git, terminal, windows, macos, linux, open-source" }],
     ["meta", { name: "author", content: "ayuayue" }],
     ["meta", { name: "robots", content: "index, follow" }],
-    ["meta", { property: "og:site_name", content: "PiDeck" }],
-    ["meta", { property: "og:title", content: "PiDeck - pi Agent Desktop Workbench" }],
+    ["meta", { property: "og:site_name", content: "Telos" }],
+    ["meta", { property: "og:title", content: "Telos - pi Agent Desktop Workbench" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:url", content: `${siteOrigin}/` }],
     ["meta", { property: "og:image", content: `${siteOrigin}/og-image.png` }],
     ["meta", { property: "og:image:width", content: "1200" }],
     ["meta", { property: "og:image:height", content: "630" }],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
-    ["meta", { name: "twitter:title", content: "PiDeck - pi Agent Desktop Workbench" }],
+    ["meta", { name: "twitter:title", content: "Telos - pi Agent Desktop Workbench" }],
     ["meta", { name: "twitter:description", content: "Manage multiple pi AI coding agents in local workspaces. Open-source desktop app with sessions, Git, terminal, and extensions." }],
     ["meta", { name: "twitter:image", content: `${siteOrigin}/og-image.png` }],
     [
@@ -187,7 +187,7 @@ var config_default = defineConfig({
       JSON.stringify({
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "PiDeck",
+        "name": "Telos",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows, macOS, Linux",
         "description": "Open-source desktop workbench for managing multiple pi AI coding agents across local project folders.",

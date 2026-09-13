@@ -8,7 +8,7 @@
  *
  * 一键安装（tokendanceInstaller）已把 X-App-URL 写进 provider 配置，但用户手动添加
  * tokendance provider（ModelsTab 手动加 / 配置文件手写）不会带，导致调用归因不到
- * PiDeck。此函数在 models.json 保存路径做规范化兜底：baseUrl 命中 tokendance.space
+ * Telos。此函数在 models.json 保存路径做规范化兜底：baseUrl 命中 tokendance.space
  * 的 provider 自动补 X-App-URL。
  *
  * 边界条件：

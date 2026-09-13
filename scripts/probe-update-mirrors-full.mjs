@@ -1,5 +1,5 @@
 /**
- * 完整下载 + sha512 校验（临时）：三个镜像并行下载 PiDeck-0.7.3-setup.exe，
+ * 完整下载 + sha512 校验（临时）：三个镜像并行下载 Telos-0.7.3-setup.exe，
  * 用 latest.yml 声明的 sha512（base64）校验整包，与 electron-updater 下载后校验一致。
  */
 import { spawn } from "node:child_process";
@@ -8,7 +8,7 @@ import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const SETUP = "PiDeck-0.7.3-setup.exe";
+const SETUP = "Telos-0.7.3-setup.exe";
 const MIRRORS = [
   { id: "ghfast", base: "https://ghfast.top/https://github.com/gygy/telos/releases/latest/download" },
   { id: "ghproxy-net", base: "https://ghproxy.net/https://github.com/gygy/telos/releases/latest/download" },

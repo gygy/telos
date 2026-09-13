@@ -1,6 +1,6 @@
 # DSH 原生能力对齐对照计划：插件配置热应用 + 本地/npm 插件安装
 
-> 目标：让 PiDeck 内嵌 DSH 在**插件**这一维度上达到官方 `dsh` / `dsh web` 的原生能力：
+> 目标：让 Telos 内嵌 DSH 在**插件**这一维度上达到官方 `dsh` / `dsh web` 的原生能力：
 > ① 用户 patch 层（插件配置）改动**即时生效**（官方 `patchReload: live`）；
 > ② 支持安装**自己写的本地插件**与**从 npm 装的第三方插件**（官方 `dsh plugin --profile <name> add`）。
 >
@@ -20,10 +20,10 @@
 
 内嵌 DSH 与官方 `dsh` 跑的是**同一棵插件树**，差距不在 host 能力，而在**部署形态**：
 
-| | 官方 | PiDeck 现状 |
+| | 官方 | Telos 现状 |
 |---|---|---|
 | profile 目录 | `$DSH_HOME/profiles/<name>/`（`package.json` + `cordis.patch.yml` + `cordis.yml`） | 无。组合文件在 `<runtime>/pideck-host/cordis.yml` |
-| 插件来源 | profile 的 npm 依赖（声明 `dsh.bundle` 的包自动进 `dsh.profile.bundles`） | 只有 PiDeck 自己 insert 的行 + `$DSH_HOME/cordis.patch.yml` 手写行 |
+| 插件来源 | profile 的 npm 依赖（声明 `dsh.bundle` 的包自动进 `dsh.profile.bundles`） | 只有 Telos 自己 insert 的行 + `$DSH_HOME/cordis.patch.yml` 手写行 |
 | 裸包名解析 | 从组合文件所在目录向上走：`profiles/<name>/node_modules` → `profiles/node_modules`（安装闭包镜像） | **单一锚点** `bareModuleBaseUrl = <runtime>`（`hostEntry.ts:327`）→ 树外插件包解析不到 |
 | 配置热应用 | `patchReload: live` + `watchUserPatches` | ❌ 未接；`hmr` 行显式 `disabled`（`hostEntry.ts:112`），home 层只在 boot 时读一次 |
 
@@ -50,7 +50,7 @@
 
 `cordis.yml`（空根 `[]`）由 launcher 每次 boot 前重写（`prepareProfile`），注释写明原因：
 "the whole composition is patch layers, and the vendored Loader's tree write-back … can bake composed rows into
-this file — which would duplicate every bundle insert on the next boot"。**PiDeck 现在也是逐字复刻这个做法**
+this file — which would duplicate every bundle insert on the next boot"。**Telos 现在也是逐字复刻这个做法**
 （`hostCompositionPath` + `if (!existsSync) writeFileSync("[]")`，但只在缺失时写，缺了"每次重写"这一层）。
 
 ### 2.2 bundle 与插件安装
@@ -79,7 +79,7 @@ this file — which would duplicate every bundle insert on the next boot"。**Pi
 于是 profile 目录下的 `cordis.yml` 里一个裸包名，能沿 Node 父级查找走到：
 `profiles/<name>/node_modules`（插件）→ `profiles/node_modules`（安装闭包镜像）→ 命中。
 
-PiDeck 现在走的是 `mountRootInclude` 的 `bareModuleBaseUrl` 分支（L1322-1343）——
+Telos 现在走的是 `mountRootInclude` 的 `bareModuleBaseUrl` 分支（L1322-1343）——
 **所有裸名都被强制丢给单一 runtime 锚点**，父级查找被跳过，这就是树外插件解析不到的根因。
 
 ### 2.4 `patchReload: live` 的官方接线
@@ -107,7 +107,7 @@ if (composed.profile.patchReload === "live" && ...) {
 `watchUserPatches`（app-boot L1109）= `hmr.registerConfig(file, async () => entry.update({ config: { ...includeConfig, patches: compose(loadOptionalPatches(file) ?? []) } }))`
 —— **事务性重应用 boot include**；坏补丁不会砸掉旧树（HMR 侧 `hmr/config-update-failed` 事件）。
 注意 `hmr` 行在 base 里默认 `disabled: true`（"Module reload is opt-in per profile"），CLI 是**运行时 `loader.create`** 挂上去的，
-所以 PiDeck 保留 `disabled: true` 并不妨碍 ② —— 只要照 CLI 的做法按需 create。
+所以 Telos 保留 `disabled: true` 并不妨碍 ② —— 只要照 CLI 的做法按需 create。
 
 ### 2.5 层序（优先级，低 → 高）
 
@@ -119,7 +119,7 @@ if (composed.profile.patchReload === "live" && ...) {
 
 ## 3. 现状与差距（parity 表）
 
-| # | 能力 | 官方 | PiDeck 现状 | 差距 | 本计划 |
+| # | 能力 | 官方 | Telos 现状 | 差距 | 本计划 |
 |---|---|---|---|---|---|
 | P1 | profile 目录（`dsh.profile.bundles`） | ✅ | ❌ 无 profile 概念 | 结构缺失 | Phase 2 |
 | P2 | 树外 npm 插件解析 | ✅ 两锚 + fallback 镜像 | ❌ 单锚点，解析不到 | **根因** | Phase 2 |
@@ -130,9 +130,9 @@ if (composed.profile.patchReload === "live" && ...) {
 | P7 | 动态 Cordis 插件（临时、按会话） | ✅ `cordis-host-runner` | ✅ 已复原（G13） | 无 | 保持 |
 | P8 | 模块级 HMR（改插件源码热替换） | ⚠️ 默认关，仅开发 | ❌ | 可选 | Phase 4 |
 | P9 | Client 半区插件 | ✅（浏览器端） | ❌ 无 client runtime | **硬边界** | 不做（§10） |
-| P10 | 运行时装完即生效 | ❌ 官方要下次 boot | ❌（改 patch 也要重启 host） | PiDeck 可超越 | Phase 1+3 |
+| P10 | 运行时装完即生效 | ❌ 官方要下次 boot | ❌（改 patch 也要重启 host） | Telos 可超越 | Phase 1+3 |
 
-> 说明：P5 + P4 组合之后，PiDeck 能做到「**装插件不重启 host、会话不断**」——这是官方 CLI 也给不了的体验
+> 说明：P5 + P4 组合之后，Telos 能做到「**装插件不重启 host、会话不断**」——这是官方 CLI 也给不了的体验
 > （官方 `dsh plugin add` 只改 profile 三件套，生效靠下次 boot）。
 
 ---
@@ -140,17 +140,17 @@ if (composed.profile.patchReload === "live" && ...) {
 ## 4. 目标架构
 
 ```
-$DSH_HOME/.pideck/profiles/              # PiDeck 私有 profiles 根（决策 D1）
+$DSH_HOME/.pideck/profiles/              # Telos 私有 profiles 根（决策 D1）
 ├── node_modules/                        # 安装闭包镜像：healProfilesModuleFallback 维护（symlink/junction）
 └── pideck-dsh/
     ├── package.json                     # dsh.profile.bundles（base + 用户插件 bundle）+ patchReload: "live"
     ├── pnpm-workspace.yaml              # initProfile 产物（hoisted）
     ├── cordis.yml                       # 空根，每次 boot 重写（官方语义）
-    ├── cordis.patch.yml                 # profile 用户层（PiDeck 插件管理 UI 写入）
+    ├── cordis.patch.yml                 # profile 用户层（Telos 插件管理 UI 写入）
     └── node_modules/                    # pnpm/npm 装的树外插件 + bundle 携带包链接
 
 $DSH_HOME/cordis.patch.yml               # home 层（与 dsh CLI/dsh web 共享；继续加载并纳入 watch）
-<PiDeck overlays>                        # 运行时动态行：桥插件（绝对路径）、禁用行、require.resolve 结果
+<Telos overlays>                        # 运行时动态行：桥插件（绝对路径）、禁用行、require.resolve 结果
 ```
 
 启动序列（`hostEntry.ts`，Phase 2 后）：
@@ -201,7 +201,7 @@ await enableLivePatchReload(ctx, { files: [profile.patchPath, join(dshHome, "cor
 |---|---|---|---|
 | **D1** | profiles 根位置 | (a) 私有 `<dshHome>/.pideck/profiles`；(b) 官方共享 `$DSH_HOME/profiles` | **(a)**。`$DSH_HOME` 默认就是用户真实 `~/.dsh`（与 dsh CLI 共享）。共享 profiles 根意味着两个安装世代争抢 `profiles/node_modules` 这一个 fallback 目录（`healProfilesModuleFallback` 按"当前安装世代"改写链接）→ 互相 heal 抖动。代价：失去 `dsh plugin --profile pideck-dsh` 的 CLI 互通（我们本来就要做自己的 UI，且 home 层仍共享） |
 | **D2** | 裸名解析 | (a) 去掉 `bareModuleBaseUrl`，靠 fallback 父级查找（官方语义）；(b) 保留单锚点 + 只支持绝对路径插件 | **(a)**，由 spike S1 把关。这是 npm 插件能解析的唯一正解；树外插件内部 `import "@deepseek-ai/cordis"` 也必须靠 `profiles/node_modules` 才能共享**同一份** cordis 实例（否则双实例 → Context 不互通、插件挂不上） |
-| **D3** | 层序变化 | (a) PiDeck overlay 最高（官方语义）；(b) 保持 home 在 overlay 之上（现状） | **(a)**。现状下用户 home 层能覆盖/禁用 PiDeck 的运行时代码行（`pideck-slash-bridge` 等），迁移后不能——**行为变化**，需在 CHANGELOG 写明，并提供设置级 kill switch 作为替代逃生口（`dshDisablePideckBridges` 类开关）。反向选择 (b) 会让"用户插件覆盖 PiDeck 桥"成为长期隐患 |
+| **D3** | 层序变化 | (a) Telos overlay 最高（官方语义）；(b) 保持 home 在 overlay 之上（现状） | **(a)**。现状下用户 home 层能覆盖/禁用 Telos 的运行时代码行（`pideck-slash-bridge` 等），迁移后不能——**行为变化**，需在 CHANGELOG 写明，并提供设置级 kill switch 作为替代逃生口（`dshDisablePideckBridges` 类开关）。反向选择 (b) 会让"用户插件覆盖 Telos 桥"成为长期隐患 |
 | **D4** | 包管理器 | (a) 依赖用户 pnpm（官方同款）；(b) 探测 pnpm → npm；(c) 只支持本地安装 | **(b)+本地兜底**。本地目录/单文件/tarball 安装不依赖任何包管理器（自己 junction/解包），registry 安装才需要 pnpm 或 npm；都没有时给明确引导（官方在 pnpm 缺失时也是 127 + 提示）。**不要把 pnpm 打进安装包** |
 | **D5** | 安装脚本执行 | (a) 默认 `--ignore-scripts`（安全）；(b) 允许（官方行为，需要构建的插件才能装） | **(a) + 显式「允许运行安装脚本」开关**。插件 host 半区本来就不是安全边界，但 postinstall 的供应链风险面更大；默认关、失败时给出可操作提示（对齐官方 `allowBuilds` 指引） |
 | **D6** | 「装完即生效」 | (a) 复用 P1 热应用；(b) 重启 host（会话不丢） | **(a) 优先、(b) 兜底**。热应用失败/插件需要重启时自动降级为重启 host 并提示 |
@@ -249,14 +249,14 @@ await enableLivePatchReload(ctx, { files: [profile.patchPath, join(dshHome, "cor
 | **S3**：Windows 上 `$DSH_HOME` 下建 junction 的权限/文件系统限制（OneDrive 同步目录、非 NTFS） | P0 spike 覆盖；失败则给可读错误 + 建议切换 DSH_HOME |
 | **S4**：用户机器无 pnpm/npm | D4 降级路径 + 引导文案；本地安装始终可用 |
 | fallback 目录被外部工具（用户自己的 dsh CLI）改写 | D1 私有 profiles 根隔离 |
-| profile 化后 boot 失败面变大（bundle 缺失 fail loud、坏插件阻断启动） | 复用官方 fail-loud 语义但**加 PiDeck 侧恢复路径**：坏 bundle 单独 disable 并提示（不整树起不来），补「坏插件不阻断启动」测试 |
+| profile 化后 boot 失败面变大（bundle 缺失 fail loud、坏插件阻断启动） | 复用官方 fail-loud 语义但**加 Telos 侧恢复路径**：坏 bundle 单独 disable 并提示（不整树起不来），补「坏插件不阻断启动」测试 |
 | runtime 与 app 桥代码版本错配 | 维持 `minAppVersion/maxAppVersion` 契约（`docs/dsh-runtime-optional-plan.md` §4） |
 
 ---
 
 ## 10. 明确不做（记录理由，防蔓延）
 
-- **Client 半区插件渲染**：需要 dsh client runtime + `dsh-client-ui-*` React 栈，PiDeck 有自己的渲染层；
+- **Client 半区插件渲染**：需要 dsh client runtime + `dsh-client-ui-*` React 栈，Telos 有自己的渲染层；
   内嵌官方前端已被 S6 §2.2 否决（绑定 dsh client runtime、无法服务 pi 会话）。装作支持比不支持更糟。
 - **插件市场/评分/自动更新**：超出「DSH 原生能力」范畴。原生只有 `dsh plugin add`，我们做到等价即达标。
 - **`dsh plugin` CLI 全量代理**：我们做自己的 UI（复用同一 profile 布局）；不做 argv 透传（徒增攻击面）。

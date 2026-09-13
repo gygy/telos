@@ -70,12 +70,12 @@ test("embedded tool result keeps formatted beUI output while the trigger remains
   );
   assert.match(toolResult, /showHeader \? "p-3" : "py-1"/);
   assert.match(toolResult, /showHeader \? "px-2 pb-1\.5" : "pt-1"/);
-  // Tool output follows PiDeck's semantic palette and historical UI-size scale, not Shiki's fixed GitHub colors.
+  // Tool output follows Telos's semantic palette and historical UI-size scale, not Shiki's fixed GitHub colors.
   assert.match(toolResult, /text-\[length:var\(--font-size-caption\)\]/);
   assert.match(toolResult, /leading-\[1\.625\]/);
   assert.match(toolResult, /text-\[color:var\(--color-text-secondary\)\]/);
   assert.match(toolResult, /\[&_span\]:text-\[color:var\(--color-text-secondary\)\]/);
-  // Standalone beUI ToolResult states use PiDeck semantics rather than fixed Tailwind hues.
+  // Standalone beUI ToolResult states use Telos semantics rather than fixed Tailwind hues.
   assert.match(toolResult, /if \(status === "running"\) return "text-info";/);
   assert.match(toolResult, /if \(status === "success"\) return "text-success";/);
   assert.match(toolResult, /if \(status === "error"\) return "text-danger";/);

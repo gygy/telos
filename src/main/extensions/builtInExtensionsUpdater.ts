@@ -1,5 +1,5 @@
 /**
- * PiDeck 内置扩展热更新器（扩展设置页的「内置扩展」更新入口）。
+ * Telos 内置扩展热更新器（扩展设置页的「内置扩展」更新入口）。
  *
  * 背景：内置扩展（resources/extensions/*.ts）随应用分发，RPC 启动时经 `-e <绝对路径>`
  * 注入 pi。打包态 resources 目录不可写（Program Files 权限 / 签名校验），扩展出 bug 只能
@@ -452,7 +452,7 @@ export class BuiltInExtensionsUpdater {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-extensions-updater" },
+				headers: { "user-agent": "Telos-extensions-updater" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = Buffer.from(await response.arrayBuffer());

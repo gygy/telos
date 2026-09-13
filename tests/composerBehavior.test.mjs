@@ -151,7 +151,7 @@ test("keeps normal composer submissions visible without hidden agent instruction
 	assert.equal(submission.agentMessage, undefined);
 });
 
-test("wraps plan composer submissions with the hidden PiDeck plan marker", () => {
+test("wraps plan composer submissions with the hidden Telos plan marker", () => {
 	const { buildComposerPromptSubmission, PI_DECK_PLAN_MODE_MARKER } = loadComposerBehaviorModule();
 
 	const submission = buildComposerPromptSubmission("Inspect first", "plan");
@@ -162,7 +162,7 @@ test("wraps plan composer submissions with the hidden PiDeck plan marker", () =>
 	assert.match(submission.agentMessage, /Plan:/);
 });
 
-test("wraps goal composer submissions with the hidden PiDeck goal marker", () => {
+test("wraps goal composer submissions with the hidden Telos goal marker", () => {
 	const { buildComposerPromptSubmission, PI_DECK_GOAL_MODE_MARKER } = loadComposerBehaviorModule();
 
 	const submission = buildComposerPromptSubmission("Ship the release", "goal");

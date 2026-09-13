@@ -903,7 +903,7 @@ test("load repairs legacy relative filePaths via the injected resolver", async (
       id: "rel-entry",
       projectId: "project-1",
       originKey: "pi:native:.pi/sessions/2026-08-08t10-47-19-239z_abc.jsonl",
-      title: "PiDeck agent",
+      title: "Telos agent",
       source: "pi",
       environment: "native",
       filePath: ".pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
@@ -916,14 +916,14 @@ test("load repairs legacy relative filePaths via the injected resolver", async (
     const catalog = new SessionCatalog(
       filePath,
       {},
-      absolutePathResolver("D:\\Project\\PiDeck"),
+      absolutePathResolver("D:\\Project\\Telos"),
     );
     await catalog.load();
 
     const [entry] = catalog.listEntries();
     assert.equal(
       entry.filePath,
-      "D:\\Project\\PiDeck\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
+      "D:\\Project\\Telos\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
     );
     // originKey 必须随路径重算，否则后续 mergeScanned 仍按旧 key 去重
     assert.match(entry.originKey, /d:\/project\/pideck\/\.pi\/sessions/);
@@ -943,12 +943,12 @@ test("attachRuntime absolutizes a relative pi sessionFile and folds the scanned 
     const catalog = new SessionCatalog(
       join(dir, "sessions.json"),
       {},
-      absolutePathResolver("D:\\Project\\PiDeck"),
+      absolutePathResolver("D:\\Project\\Telos"),
     );
     await catalog.load();
     const draft = await catalog.createDraft({
       projectId: "project-1",
-      title: "PiDeck agent",
+      title: "Telos agent",
       environment: "native",
     });
 
@@ -961,8 +961,8 @@ test("attachRuntime absolutizes a relative pi sessionFile and folds the scanned 
 
     // 后台扫描发现同一文件的绝对路径（修复前这里会产生第二条记录）
     const scanned = summary({
-      id: "D:\\Project\\PiDeck\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
-      filePath: "D:\\Project\\PiDeck\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
+      id: "D:\\Project\\Telos\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
+      filePath: "D:\\Project\\Telos\\.pi\\sessions\\2026-08-08T10-47-19-239Z_abc.jsonl",
       name: "从用户输入推断的会话名",
     });
     const records = await catalog.mergeScanned("project-1", [scanned]);
@@ -983,7 +983,7 @@ test("ensureRuntimeTarget absolutizes relative session paths", async () => {
     const catalog = new SessionCatalog(
       join(dir, "sessions.json"),
       {},
-      absolutePathResolver("D:\\Project\\PiDeck"),
+      absolutePathResolver("D:\\Project\\Telos"),
     );
     await catalog.load();
     const record = await catalog.ensureRuntimeTarget({
@@ -993,7 +993,7 @@ test("ensureRuntimeTarget absolutizes relative session paths", async () => {
       environment: "native",
       filePath: ".pi\\sessions\\copied.jsonl",
     });
-    assert.equal(record.filePath, "D:\\Project\\PiDeck\\.pi\\sessions\\copied.jsonl");
+    assert.equal(record.filePath, "D:\\Project\\Telos\\.pi\\sessions\\copied.jsonl");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

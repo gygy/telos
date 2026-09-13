@@ -19,7 +19,7 @@ test("isDshPluginNamespace：host 未来新注册的插件命名空间自动进�
 	assert.equal(isDshPluginNamespace("compaction"), true);
 });
 
-test("isDshPluginNamespace：PiDeck 独占管理的保留命名空间不属于插件区", () => {
+test("isDshPluginNamespace：Telos 独占管理的保留命名空间不属于插件区", () => {
 	assert.equal(isDshPluginNamespace("llm-deepseek"), false);
 	assert.equal(isDshPluginNamespace("llm-pi-ai"), false);
 	assert.equal(isDshPluginNamespace("permission"), false);

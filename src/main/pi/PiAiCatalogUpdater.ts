@@ -503,7 +503,7 @@ export class PiAiCatalogUpdater {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-catalog-updater" },
+				headers: { "user-agent": "Telos-catalog-updater" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = await response.arrayBuffer();

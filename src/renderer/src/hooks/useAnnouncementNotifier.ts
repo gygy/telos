@@ -59,7 +59,7 @@ function readAnnouncementBusyContext(): AnnouncementBusyContext {
 		agentBusy: isCurrentAgentBusy(),
 		// 任意 Radix 模态对话框打开（portal 渲染在 body 下）：toast 会压在弹窗上层
 		modalOpen: document.querySelector('[role="dialog"]') != null,
-		// 窗口失焦/最小化/托盘隐藏：用户不在看 PiDeck，不着急弹（hasFocus 在个别老内核可能缺失，防御一下）
+		// 窗口失焦/最小化/托盘隐藏：用户不在看 Telos，不着急弹（hasFocus 在个别老内核可能缺失，防御一下）
 		windowInactive:
 			typeof document.hasFocus === "function" ? !document.hasFocus() : false,
 	};

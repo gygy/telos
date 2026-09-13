@@ -3,7 +3,7 @@ import { Input } from "../../ui-shadcn/input";
 /**
  * ImTab — 外部链接配置选项卡
  *
- * 在 PiDeck 设置中集中管理外部 IM/Bot 连接（由 Pi 管理界面迁入）（当前支持飞书/Lark）。
+ * 在 Telos 设置中集中管理外部 IM/Bot 连接（由 Pi 管理界面迁入）（当前支持飞书/Lark）。
  * 样式统一使用配置页的设计 tokens。
  */
 

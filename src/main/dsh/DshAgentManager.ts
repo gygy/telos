@@ -67,7 +67,7 @@ const DSH_PROJECTION_KEYS = ["contextPressure", "contextBreakdown", "tokenUsage"
 
 /**
  * DSH 后端网关：实现 SessionAgentGateway，把 DSH host（DshHost）的会话/事件
- * 投影成 PiDeck 的 ChatMessage / AgentTab / runtime 状态，走统一 onOutput 通道
+ * 投影成 Telos 的 ChatMessage / AgentTab / runtime 状态，走统一 onOutput 通道
  * （agents:* 载荷）推给渲染层——渲染层无需区分后端。
  *
  * v1 范围（能力缺失显式声明，UI 按能力禁用入口）：
@@ -304,7 +304,7 @@ export class DshAgentManager implements SessionAgentGateway {
 			title: hostTitle ?? input.title ?? this.getUntitledTitle(),
 			status: "idle",
 			sessionId,
-			// PiDeck 会话身份（catalog SessionRecord.id）：渲染层侧栏 DSH agent ↔ 会话
+			// Telos 会话身份（catalog SessionRecord.id）：渲染层侧栏 DSH agent ↔ 会话
 			// 行配对的兜底键——automation 链路 attach 回写 dshSessionId 是异步的，
 			// 渲染层快照可能先于 attach 到达，只按 dshSessionId 配对会产生重复条目。
 			deckSessionId: input.deckSessionId,
@@ -668,7 +668,7 @@ export class DshAgentManager implements SessionAgentGateway {
 	}
 
 	/** 停掉全部活跃 DSH 会话（host 重启/目录切换前调用）。
-	 * 会话数据由 host 持久化在 $DSH_HOME，PiDeck 侧只丢运行时投影；
+	 * 会话数据由 host 持久化在 $DSH_HOME，Telos 侧只丢运行时投影；
 	 * catalog 保留 dshSessionId，重新打开会话时走 attach 路径恢复。 */
 	async stopAll(): Promise<void> {
 		const agentIds = [...this.runtimes.keys()];
@@ -1436,7 +1436,7 @@ export class DshAgentManager implements SessionAgentGateway {
 			// 不写入 runtime.thinkingLevel，否则后续换模型会误把它带过去。
 			return { accepted: true, thinkingLevel: level };
 		}
-		// 不在 PiDeck 侧预先拒绝运行中的回合：如果 host 支持动态切换，
+		// 不在 Telos 侧预先拒绝运行中的回合：如果 host 支持动态切换，
 		// 当前回合可以直接使用；如果 host 不支持，由 selectModel 返回 busy/error。
 		const previous = runtime.thinkingLevel;
 		runtime.thinkingLevel = level;
@@ -1632,7 +1632,7 @@ export class DshAgentManager implements SessionAgentGateway {
 	}
 
 	async sendUIResponse(agentId: string, requestId: string, response: SessionUiResponseInput["response"]): Promise<unknown> {
-		// DSH 审批/提问桥：把 PiDeck 的 Ask 应答转成 DSH client-response（回显 rpcId）。
+		// DSH 审批/提问桥：把 Telos 的 Ask 应答转成 DSH client-response（回显 rpcId）。
 		const frame = this.pendingResponses.get(requestId);
 		if (!frame) {
 			// 未知/已过期的请求：DSH 侧没有对应 server-request，直接 no-op。
@@ -2129,7 +2129,7 @@ export class DshAgentManager implements SessionAgentGateway {
 		// （$events）只剩审批/提问瀑布。ensureFollowPump 必须对每个 runtime 都执行：
 		// 之前放在共享 mux 的启动路径里，第二个会话 startMux 时 mux 已在跑、提前
 		// return 把 follow 泵整个吞掉——表现为新会话发送后 host 正常执行完整回合
-		// （journal 有 turn/end），但 PiDeck 收不到任何事件（无流式、无收口、无报错）。
+		// （journal 有 turn/end），但 Telos 收不到任何事件（无流式、无收口、无报错）。
 		// ensureFollowPump 按 agentId 幂等，重复调用无害。
 		this.ensureFollowPump(_runtime);
 		if (this.muxPump && this.muxAbort && !this.muxAbort.signal.aborted) return;

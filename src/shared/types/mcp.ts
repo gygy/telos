@@ -1,6 +1,6 @@
 /**
  * pi-mcp-adapter 配置契约（只描述 mcp.json，不复刻 adapter 运行时）。
- * 适配器按层合并 mcpServers；PiDeck 只读写 Pi 拥有的 `~/.pi/agent/mcp.json`，
+ * 适配器按层合并 mcpServers；Telos 只读写 Pi 拥有的 `~/.pi/agent/mcp.json`，
  * 其它层只读展示，避免改坏 Cursor/Claude 等宿主文件。
  */
 

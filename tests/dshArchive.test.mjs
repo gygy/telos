@@ -146,7 +146,7 @@ test("DshHost.listArchivedSessions：返回归档清单（id/cwd/archivedAt/标�
 			`{"type":"session/title","seq":1,"data":{"title":"归档B折叠标题"}}`,
 		].join("\n"), "utf8");
 		await host.archiveSession("session-b", "D:/other");
-		// 一个无 manifest 的目录（不属于 PiDeck 归档，应被跳过）
+		// 一个无 manifest 的目录（不属于 Telos 归档，应被跳过）
 		mkdirSync(join(home, ".pideck", "archive", "not-a-pideck-archive"), { recursive: true });
 
 		const listed = host.listArchivedSessions();
@@ -222,7 +222,7 @@ test("DshHost.deleteArchivedSession：删除归档目录并返回 true（走注�
 	}
 });
 
-test("DshHost.deleteArchivedSession：无 manifest 目录（非 PiDeck 归档）不删除并返回 false", async () => {
+test("DshHost.deleteArchivedSession：无 manifest 目录（非 Telos 归档）不删除并返回 false", async () => {
 	const home = mkdtempSync(join(tmpdir(), "pideck-dsh-delarchive-guard-"));
 	const trashed = [];
 	const host = new DshHost(
@@ -235,7 +235,7 @@ test("DshHost.deleteArchivedSession：无 manifest 目录（非 PiDeck 归档）
 		async (path) => { trashed.push(path); rmSync(path, { recursive: true, force: true }); },
 	);
 	try {
-		// 无 manifest 的目录不属于 PiDeck 归档，delete 必须拒绝（避免误删非归档数据）
+		// 无 manifest 的目录不属于 Telos 归档，delete 必须拒绝（避免误删非归档数据）
 		const archiveDir = join(home, ".pideck", "archive", "session-orphan-dir");
 		mkdirSync(archiveDir, { recursive: true });
 		writeFileSync(join(archiveDir, "other.data"), "not pideck archive");
