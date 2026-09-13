@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Environment for embedded pi TUI — align with agent-host so managed tools
  * (fd/rg under ~/.pi/agent/bin) are found and not re-downloaded every launch.
  */

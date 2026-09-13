@@ -1,4 +1,4 @@
-﻿import { cn } from "../lib/utils.ts";
+import { cn } from "../lib/utils.ts";
 
 /** Telos brand mark — same geometry as desktop app icon. */
 export function PixMark(props: { className?: string; title?: string }) {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Project trust E2E (view / chat mode).
  *
  * Telos does not show an interactive "Trust project?" modal in view mode.

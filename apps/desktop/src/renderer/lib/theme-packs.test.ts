@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import type { ThemeSkinRecord } from "@Telos/contracts";
 import {
   activeThemePack,

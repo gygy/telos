@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Standalone statement band — matches production marketing quote section:
  * max-w-4xl, py-28/36, text-3xl → sm:2.6rem, Instrument Serif italic accent.
  */

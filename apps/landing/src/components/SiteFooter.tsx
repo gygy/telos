@@ -1,4 +1,4 @@
-﻿import { Glass } from "./Glass.tsx";
+import { Glass } from "./Glass.tsx";
 import { PixMark } from "./PixMark.tsx";
 import { SkyCanvas } from "./SkyCanvas.tsx";
 

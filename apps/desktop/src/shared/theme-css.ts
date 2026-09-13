@@ -1,4 +1,4 @@
-﻿export const MAX_THEME_CUSTOM_CSS_LENGTH = 32 * 1024;
+export const MAX_THEME_CUSTOM_CSS_LENGTH = 32 * 1024;
 
 const SELECTOR_HOOKS = [
   ".app-shell",

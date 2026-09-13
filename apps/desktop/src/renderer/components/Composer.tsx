@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Conversation composer:
  * - Project picker above the card (icon + name)
  * - Textarea

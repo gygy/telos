@@ -1,4 +1,4 @@
-﻿import { compactUserMessageText } from "./composer-highlight.ts";
+import { compactUserMessageText } from "./composer-highlight.ts";
 
 /** Short label for a workspace path (directory name + optional parent). */
 export function workspaceLabel(path: string | undefined): { name: string; detail?: string } {

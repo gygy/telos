@@ -1,4 +1,4 @@
-﻿export function Why() {
+export function Why() {
   return (
     <section id="why" className="relative scroll-mt-24 overflow-hidden">
       <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-24 sm:py-32 lg:grid-cols-2 lg:gap-16">
@@ -35,7 +35,7 @@
           />
           <div className="overflow-hidden rounded-2xl border border-white/[0.10] shadow-[0_28px_56px_-18px_rgba(0,0,0,0.58)] ring-1 ring-inset ring-white/[0.05]">
             <img
-              src="/Telos-desktop.png"
+              src="/pix-desktop.png"
               alt="Telos desktop shell with sidebar navigation and composer"
               className="block h-auto w-full object-cover object-top"
               decoding="async"

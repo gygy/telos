@@ -1,4 +1,4 @@
-﻿import { IPC_PROTOCOL_VERSION } from "@pix/contracts";
+import { IPC_PROTOCOL_VERSION } from "@pix/contracts";
 import type {
   CatalogPackage,
   HostEvent,

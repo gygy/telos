@@ -1,4 +1,4 @@
-﻿# Managed runtimes (Node + Python)
+# Managed runtimes (Node + Python)
 
 WorkBuddy-style **managed runtimes**:
 

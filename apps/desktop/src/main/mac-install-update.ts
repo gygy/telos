@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unsigned macOS auto-update installer (Tauri-style).
  *
  * electron-updater on macOS normally hands the zip to Squirrel.Mac, which

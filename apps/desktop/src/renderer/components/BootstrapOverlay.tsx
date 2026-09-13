@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Full-window cold-start gate: logo + live pi / host bootstrap status.
  * Blocks interaction until App marks bootstrap ready.
  */

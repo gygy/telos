@@ -1,4 +1,4 @@
-﻿const faqs = [
+const faqs = [
   {
     q: "Is Telos free?",
     a: "Yes. Telos is open source. Download it, run it locally, and use your own pi agent configuration. There is no account wall for core desktop use.",

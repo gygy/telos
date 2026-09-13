@@ -1,4 +1,4 @@
-﻿appId: app.telos.desktop
+appId: app.telos.desktop
 productName: Telos
 # package.json name is @pix/desktop — override so AppImage/deb paths stay valid.
 executableName: Telos

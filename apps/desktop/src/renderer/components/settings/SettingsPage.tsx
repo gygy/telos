@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Codex / ChatGPT–style settings content column.
  * Large left-aligned title · section labels · grouped cards with rows.
  */

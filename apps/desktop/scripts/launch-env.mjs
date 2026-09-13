@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared launch environment for interactive / isolated desktop runs.
  * Used by launch.mjs and dev.mjs.
  */

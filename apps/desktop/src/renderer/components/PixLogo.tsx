@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Telos brand mark — matches apps/desktop/build/icon.svg (white plate + black π).
  * Used in sidebar, empty hero, and any in-app chrome. Keep geometry in sync with icon.svg.
  */

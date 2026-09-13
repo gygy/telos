@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PTY lifecycle for embedded pi TUI.
  *
  * Performance:

@@ -1,4 +1,4 @@
-﻿import { resolve } from "node:path";
+import { resolve } from "node:path";
 import { test, expect, startHost, conversationSessionButtons, sendPrompt } from "./fixtures.ts";
 
 test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {

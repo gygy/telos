@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smoke for after-pack.mjs app-update.yml generation.
  * Run: node apps/desktop/scripts/after-pack.test.mjs
  */

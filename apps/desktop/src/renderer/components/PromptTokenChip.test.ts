@@ -1,4 +1,4 @@
-﻿import { createElement } from "react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { PromptTokenChip, renderHighlightSpans, UserMessageText } from "./PromptTokenChip.tsx";

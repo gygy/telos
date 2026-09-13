@@ -1,4 +1,4 @@
-﻿import "./proxy-bootstrap.ts";
+import "./proxy-bootstrap.ts";
 import {
   createPixRuntime,
   extractToolSessionImages,

@@ -1,4 +1,4 @@
-﻿export function AlwaysRunning() {
+export function AlwaysRunning() {
   return (
     <section className="relative overflow-hidden px-6 py-24 sm:py-32">
       <div className="mx-auto grid w-full max-w-5xl items-center gap-12 lg:grid-cols-2 lg:gap-16">

@@ -1,4 +1,4 @@
-﻿import {
+import {
   IPC_PROTOCOL_VERSION,
   type ExtensionUiResponse,
   type CatalogPackage,

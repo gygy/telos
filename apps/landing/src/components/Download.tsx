@@ -1,4 +1,4 @@
-﻿import { Glass } from "./Glass.tsx";
+import { Glass } from "./Glass.tsx";
 
 const DOWNLOAD_HREF = "#download";
 const REPO_HREF = "#";
