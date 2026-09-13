@@ -19,6 +19,13 @@ extraResources:
     to: icon.png
   - from: build/icon.icns
     to: icon.icns
+  # Managed runtimes (WorkBuddy-style): ship compressed archives only.
+  # First launch extracts into userData/runtimes + npm-prefix + python-venv.
+  # Built by scripts/fetch-runtimes.mjs → runtimes/current/archives/*.tar.gz
+  - from: runtimes/current/archives
+    to: runtimes/archives
+  - from: runtimes/current/manifest.json
+    to: runtimes/manifest.json
 directories:
   output: release/app
   buildResources: build
