@@ -1,4 +1,4 @@
-import {
+﻿import {
   IPC_PROTOCOL_VERSION,
   type ExtensionUiResponse,
   type CatalogPackage,
@@ -34,6 +34,11 @@ import {
   type UpsertCustomProviderInput,
   isHostEvent,
 } from "@pix/contracts";
+import {
+  AGENT_HOST_SERVICE_NAME,
+  PRODUCT_DOCUMENTS_DIR,
+  PRODUCT_NAME,
+} from "../shared/brand.ts";
 import {
   app,
   BrowserWindow,
@@ -656,12 +661,12 @@ function isLinkedWorktreeDirectory(dir: string): boolean {
 }
 
 function pixWorktreesBaseDir(): string {
-  return join(app.getPath("documents"), "Pix", "worktrees");
+  return join(app.getPath("documents"), PRODUCT_DOCUMENTS_DIR, "worktrees");
 }
 
 /**
  * All linked worktrees Pix manages: under the configured root and/or
- * Documents/Pix/worktrees[/<repo>]/… — not limited to the currently open project.
+ * Documents/Telos/worktrees[/<repo>]/… — not limited to the currently open project.
  */
 async function listAllManagedWorktrees(): Promise<GitWorktreeInfo[]> {
   const prefs = loadDesktopPrefs();
@@ -760,7 +765,7 @@ function repoFolderName(repoCwd: string): string {
 }
 
 function defaultWorktreeRootForRepo(repoCwd: string): string {
-  return join(app.getPath("documents"), "Pix", "worktrees", repoFolderName(repoCwd));
+  return join(app.getPath("documents"), PRODUCT_DOCUMENTS_DIR, "worktrees", repoFolderName(repoCwd));
 }
 
 function resolveWorktreeRoot(repoCwd: string, configured?: string): string {
@@ -1806,7 +1811,7 @@ interface DesktopPrefs {
   window?: WindowBoundsPrefs;
   /** Whole-app renderer scale as a percentage. */
   appScale?: number;
-  /** Absolute root for new git worktrees; empty/undefined = Documents/Pix/worktrees/<repo>. */
+  /** Absolute root for new git worktrees; empty/undefined = Documents/Telos/worktrees/<repo>. */
   worktreeRoot?: string;
   /** When false, disable auto-prune. Default / unset = enabled (recommended). */
   worktreeAutoDelete?: boolean;
@@ -1900,18 +1905,18 @@ function isEphemeralWorkspacePath(path: string): boolean {
 }
 
 /**
- * Auto scratch from ensureDefault: …/Pix/YYYY-MM-DD[ -N].
+ * Auto scratch from ensureDefault: …/Telos/YYYY-MM-DD[ -N].
  * Not a user project — must not land in recent/last or the sidebar 项目 list.
  */
 function isAutoDefaultWorkspacePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return /\/Pix\/\d{4}-\d{2}-\d{2}(-\d+)?$/i.test(normalized);
+  return /\/Telos\/\d{4}-\d{2}-\d{2}(-\d+)?$/i.test(normalized);
 }
 
-/** Pure-conversation home: …/Pix/conversations[/…] — never a sidebar project. */
+/** Pure-conversation home: …/Telos/conversations[/…] — never a sidebar project. */
 function isConversationWorkspacePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return /\/Pix\/conversations(?:\/|$)/i.test(normalized);
+  return /\/Telos\/conversations(?:\/|$)/i.test(normalized);
 }
 
 function isNonProjectWorkspacePath(path: string): boolean {
@@ -1942,11 +1947,11 @@ function localDateFolderName(date = new Date()): string {
 }
 
 /**
- * Default project root: Documents/Pix/<YYYY-MM-DD>.
+ * Default project root: Documents/Telos/<YYYY-MM-DD>.
  * Reuses today's folder when it already exists as a directory.
  */
 function ensureDefaultWorkspacePath(): string {
-  const root = join(app.getPath("documents"), "Pix");
+  const root = join(app.getPath("documents"), PRODUCT_DOCUMENTS_DIR);
   mkdirSync(root, { recursive: true });
   const base = localDateFolderName();
   const path = join(root, base);
@@ -1968,10 +1973,10 @@ function ensureDefaultWorkspacePath(): string {
 
 /**
  * Global「新建会话」home — pure conversations, never listed as a project.
- * Documents/Pix/conversations
+ * Documents/Telos/conversations
  */
 function ensureConversationWorkspacePath(): string {
-  const path = join(app.getPath("documents"), "Pix", "conversations");
+  const path = join(app.getPath("documents"), PRODUCT_DOCUMENTS_DIR, "conversations");
   mkdirSync(path, { recursive: true });
   return path;
 }
@@ -2072,7 +2077,7 @@ function rememberWorkspace(cwd: string): void {
     return normalizeRecentPathKey(item) !== key;
   });
   // Fixture / temp / auto date folders must not become the cold-start resume target
-  // or pollute the sidebar 项目 list (e.g. Documents/Pix/2026-07-21).
+  // or pollute the sidebar 项目 list (e.g. Documents/Telos/2026-07-21).
   if (isNonProjectWorkspacePath(cwd)) {
     const last = durableWorkspacePath(prefs.lastWorkspace) ?? cleaned[0];
     const next: DesktopPrefs = {
@@ -2922,7 +2927,7 @@ class HostSupervisor {
     // Pi home state (packages/resources/settings) must work without a user project.
     // Prefer supervisor workspace (set by openPath / start options) over PIX_WORKSPACE
     // so e2e/product can switch projects even when PIX_WORKSPACE is set for fixtures.
-    // Fallback: PIX_WORKSPACE → last durable project → Documents/Pix/YYYY-MM-DD scratch.
+    // Fallback: PIX_WORKSPACE → last durable project → Documents/Telos/YYYY-MM-DD scratch.
     const cwd =
       this.#workspaceCwd ??
       process.env.PIX_WORKSPACE ??
@@ -4039,7 +4044,7 @@ class HostSupervisor {
     const hostEntry = resolveAgentHostEntry(currentDirectory);
     const child = utilityProcess.fork(hostEntry, [], {
       env: sanitizeUtilityProcessEnv(env),
-      serviceName: "Pix Agent Host",
+      serviceName: AGENT_HOST_SERVICE_NAME,
       stdio: "pipe",
     });
     const host: ActiveHost = {
@@ -4423,17 +4428,17 @@ function applyDockIcon(iconPath: string | undefined): void {
  * About panel needs an explicit iconPath or macOS falls back to Electron's icon.
  */
 function applyAppBranding(): void {
-  app.setName("Pix");
+  app.setName(PRODUCT_NAME);
   applyWindowsAppUserModelId();
   const iconPath = resolveAppIconPath();
   applyDockIcon(iconPath);
   if (iconPath) {
     try {
       app.setAboutPanelOptions({
-        applicationName: "Pix",
+        applicationName: PRODUCT_NAME,
         applicationVersion: app.getVersion(),
         version: app.getVersion(),
-        copyright: "Pix",
+        copyright: PRODUCT_NAME,
         iconPath,
       });
     } catch (error) {
@@ -4506,7 +4511,7 @@ async function createWindow(): Promise<void> {
       : {}),
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
-    title: "Pix",
+    title: PRODUCT_NAME,
     show: false,
     ...(iconPath ? { icon: iconPath } : {}),
     // macOS: traffic lights in the sidebar titlebar + real sidebar vibrancy (true glass).
@@ -4569,7 +4574,7 @@ async function createWindow(): Promise<void> {
 // Identity early (before ready). Full branding (About icon/Dock) re-applied in whenReady.
 // On Windows this must run before the first window, or the shell keeps the wrong taskbar icon.
 applyWindowsAppUserModelId();
-app.setName("Pix");
+app.setName(PRODUCT_NAME);
 
 function openSystemNotificationSettings(): void {
   if (process.platform === "darwin") {
@@ -4636,7 +4641,7 @@ function noteOsNotificationFailure(error: unknown): void {
   const hint =
     process.platform === "darwin"
       ? " macOS blocked desktop notifications (permission denied or unsigned Electron in dev). " +
-        "Enable notifications for Electron/Pix in System Settings → Notifications, " +
+        "Enable notifications for Electron/Telos in System Settings → Notifications, " +
         "or use a packaged/signed build. Further failures are quiet for 5 minutes."
       : " Desktop notifications failed; further failures are quiet for 5 minutes.";
   console.warn(`[pix] notification failed: ${detail}.${hint}`);
@@ -4867,7 +4872,7 @@ void app
     ipcMain.handle("pix:themes:import-pick", async () => {
       if (!mainWindow) return undefined;
       const result = await dialog.showOpenDialog(mainWindow, {
-        title: "Import Pix theme skin",
+        title: "Import Telos theme skin",
         properties: ["openDirectory"],
       });
       if (result.canceled || !result.filePaths[0]) return undefined;
@@ -4876,7 +4881,7 @@ void app
     ipcMain.handle("pix:themes:export-pick", async (_event, id: unknown) => {
       if (!mainWindow) return {};
       const result = await dialog.showOpenDialog(mainWindow, {
-        title: "Export Pix theme skin",
+        title: "Export Telos theme skin",
         properties: ["openDirectory", "createDirectory"],
       });
       if (result.canceled || !result.filePaths[0]) return {};
@@ -5014,7 +5019,7 @@ void app
       }
       const entry = listPiConfigFiles(agentDir).find((f) => f.id === id);
       if (!entry) throw new Error(`Unknown config id: ${id}`);
-      if (!entry.openable) throw new Error("This file cannot be opened from Pix (sensitive).");
+      if (!entry.openable) throw new Error("This file cannot be opened from Telos (sensitive).");
       if (!entry.exists) throw new Error(`Config path does not exist: ${entry.path}`);
       const error = await shell.openPath(entry.path);
       if (error) throw new Error(error);
@@ -5626,13 +5631,13 @@ void app
             }),
           );
         } catch (error) {
-          console.warn("Pix auto-resume skipped", error);
+          console.warn("Telos auto-resume skipped", error);
         }
       }
     }
   })
   .catch((error: unknown) => {
-    console.error("Pix failed to initialize", error);
+    console.error("Telos failed to initialize", error);
     app.exit(1);
   });
 

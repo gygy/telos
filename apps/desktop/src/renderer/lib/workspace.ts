@@ -1,4 +1,4 @@
-import { compactUserMessageText } from "./composer-highlight.ts";
+﻿import { compactUserMessageText } from "./composer-highlight.ts";
 
 /** Short label for a workspace path (directory name + optional parent). */
 export function workspaceLabel(path: string | undefined): { name: string; detail?: string } {
@@ -39,9 +39,9 @@ export function isEphemeralWorkspacePath(path: string): boolean {
 }
 
 /**
- * Auto scratch folders from ensureDefault: Documents/Pix/YYYY-MM-DD[ -N].
+ * Auto scratch folders from ensureDefault: Documents/Telos/YYYY-MM-DD[ -N].
  * Used as a host cwd when no project is open — not a real user project for the rail.
- * Does not match Documents/Pix/worktrees/...
+ * Does not match Documents/Telos/worktrees/...
  */
 export function isAutoDefaultWorkspacePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -49,7 +49,7 @@ export function isAutoDefaultWorkspacePath(path: string): boolean {
 }
 
 /**
- * Pure-conversation home: Documents/Pix/conversations[/…].
+ * Pure-conversation home: Documents/Telos/conversations[/…].
  * Global「新建会话」uses this cwd — never shown as a project in the rail.
  */
 export function isConversationWorkspacePath(path: string): boolean {

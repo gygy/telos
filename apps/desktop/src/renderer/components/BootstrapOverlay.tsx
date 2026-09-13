@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Full-window cold-start gate: logo + live pi / host bootstrap status.
  * Blocks interaction until App marks bootstrap ready.
  */
@@ -22,7 +22,7 @@ export function BootstrapOverlay(props: {
     >
       <div className="bootstrap-overlay-inner">
         <div className="bootstrap-logo-wrap" aria-hidden>
-          <PixLogo className="bootstrap-logo" title="Pix" />
+          <PixLogo className="bootstrap-logo" title="Telos" />
         </div>
         <div className="bootstrap-brand">Pix</div>
         <div className="bootstrap-status" data-testid="bootstrap-status">

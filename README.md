@@ -1,10 +1,17 @@
-# Pix
+# Telos
 
-Pix is a desktop shell for the [pi](https://pi.dev) coding agent: a Codex-style UI that keeps configuration, packages, sessions, and tools on the native pi side (`~/.pi/agent`).
+Telos 是基于 [Pix](https://github.com/num-scope/pix) 桌面壳定制的**智能编程助手**（底层仍对接 [pi](https://pi.dev) coding agent：`~/.pi/agent`）。
+
+上游 Pix 镜像（`G:\gitea\pix` / Gitea `sheng/pix`）为**只读**；本仓库定时拉取 Pix 源码树并保留 Telos 产品覆盖层。同步说明见 [TELOS-UPSTREAM.md](./TELOS-UPSTREAM.md)。
+
+```powershell
+.\scripts\sync-from-pix.ps1          # 拉取并合并上游
+.\scripts\sync-from-pix.ps1 -FetchOnly
+```
 
 ## Screenshots
 
-Pix desktop shell — sidebar, session workspace, and composer:
+（继承 Pix 桌面壳：侧栏、会话工作区、输入区）
 
 ![Pix desktop](./assets/screenshots/pix-desktop.png)
 
@@ -24,8 +31,6 @@ pnpm electron:install
 
 ## Develop
 
-Apps have **independent** `dev` / `build` entry points at the repo root:
-
 | App                          | Dev                | Build                | Notes                                  |
 | ---------------------------- | ------------------ | -------------------- | -------------------------------------- |
 | **Desktop** (`apps/desktop`) | `pnpm dev:desktop` | `pnpm build:desktop` | `pnpm dev` is an alias for desktop     |
@@ -39,117 +44,59 @@ pnpm dev:desktop   # or: pnpm dev
 pnpm build:desktop # compile only (no Electron launch)
 ```
 
-Builds renderer / preload / main / agent-host, then launches Electron. Restart after source changes.
+Product launch uses your real `HOME` and the same agent dir as the CLI (`~/.pi/agent` / `PI_CODING_AGENT_DIR`). Models, API keys, settings, packages, and tools match interactive `pi`.
 
-Product launch uses your real `HOME` and the same agent dir as the CLI (`~/.pi/agent` / `PI_CODING_AGENT_DIR`). Models, API keys, settings, packages, and tools match interactive `pi`. The last workspace is restored from desktop prefs; no temp workspace is created on every start.
-
-Optional isolated launch (temp home + fixture workspace + fake model):
+Optional isolated launch:
 
 ```bash
 PIX_ISOLATED=1 pnpm dev:desktop
 ```
 
-Browser-only chat timeline preview (no Electron), for iterating on session content rendering:
+Browser-only chat timeline preview:
 
 ```bash
 pnpm demo:session-content
 # → http://127.0.0.1:4177/session-content-demo.html
 ```
 
-Re-run after renderer changes. Do not open the built HTML via `file://`.
-
 ### Landing page
 
 ```bash
-pnpm dev:landing      # http://localhost:5174
-pnpm build:landing    # static site → apps/landing/dist
-pnpm preview:landing  # serve the production build
+pnpm dev:landing
+pnpm build:landing
+pnpm preview:landing
 ```
 
 ## Validate
 
 ```bash
-pnpm check        # lint + types + format (same as Ubuntu CI)
-pnpm check:types  # lint + types only
-pnpm fmt          # auto-fix formatting
+pnpm check
+pnpm check:types
+pnpm fmt
 pnpm test
-pnpm build        # all workspace packages (desktop + landing + libs)
+pnpm build
 ```
 
 ## Package (desktop)
 
 ```bash
-pnpm package   # platform installers + electron-updater feeds for this OS
+pnpm package
 ```
 
-Output: `apps/desktop/release/app/` (unsigned in CI — no code-signing certs yet).
+Output: `apps/desktop/release/app/`（产品名 **Telos**）。
 
-### GitHub Release assets
+## Remotes
 
-Each tagged release publishes only what installers and **electron-updater** need:
+| Remote | Purpose |
+|--------|---------|
+| `origin` | Telos（可推送） |
+| `pix` | 本地只读上游 `G:/gitea/pix` |
+| `pix-gitea` | Gitea 只读上游 |
 
-| Asset                                       | Role                                        |
-| ------------------------------------------- | ------------------------------------------- |
-| `Pix-*-win-x64.exe`                         | Windows install (NSIS)                      |
-| `latest.yml`                                | Windows update feed                         |
-| `Pix-*-mac-arm64.dmg` / `Pix-*-mac-x64.dmg` | macOS manual install                        |
-| `Pix-*-mac-arm64.zip` / `Pix-*-mac-x64.zip` | macOS **auto-update** payload               |
-| `latest-mac.yml`                            | macOS update feed (lists both zips)         |
-| `Pix-*-linux-*.AppImage`                    | Linux run / update                          |
-| `Pix-*-linux-*.deb`                         | Linux manual install (optional convenience) |
-| `latest-linux.yml`                          | Linux update feed                           |
-| `*.blockmap`                                | Differential download maps (when generated) |
+推送 Telos 变更：
 
-CI **fails** if any required feed or mac zip is missing (`scripts/release-assets.mjs`). Blockmaps are kept when present so updates can download only changed ranges.
-
-## CI & Release
-
-| Workflow    | File                            | When                      | What                                                           |
-| ----------- | ------------------------------- | ------------------------- | -------------------------------------------------------------- |
-| **CI**      | `.github/workflows/ci.yml`      | PR + push to `main`       | Ubuntu: install → lint/types/format → tests → build            |
-| **Release** | `.github/workflows/release.yml` | push `v*` tag (or manual) | multi-platform installers + updater feeds → **GitHub Release** |
-
-### Versioning
-
-Product version lives only in `apps/desktop/package.json` (what electron-builder ships).
-Root and `packages/*` stay at `0.0.0` — they are private workspace packages.
-
-```bash
-pnpm version:set 0.1.0
+```powershell
+.\scripts\git-sync.ps1 -Message "your message"
 ```
 
-### Cut a release
-
-```bash
-pnpm version:set 0.1.0
-git add apps/desktop/package.json
-git commit -m "chore: release v0.1.0"
-git tag v0.1.0
-git push origin main --tags
-```
-
-Tag must match desktop version (`v` + semver). That builds unsigned installers plus the three electron-updater feeds (`latest.yml` / `latest-mac.yml` / `latest-linux.yml`) and mac zip archives, then attaches them to the GitHub Release. Packaged apps check GitHub Releases once on launch (sidebar shows download / restart when an update is ready). Manual **workflow_dispatch** only uploads Actions artifacts (no Release). Daily CI is Ubuntu-only for lint/types/tests/build; multi-OS packaging stays on Release. Packaging sets `CSC_IDENTITY_AUTO_DISCOVERY=false` (unsigned).
-
-> **macOS note:** first open of an unsigned download may need `xattr -cr /Applications/Pix.app` (Gatekeeper quarantine). Auto-update does **not** require an Apple Developer ID — Pix verifies the release zip (`sha512` via electron-updater) and replaces the `.app` itself (same model as Tauri updater + minisign). Optional `CSC_LINK` / `CSC_KEY_PASSWORD` still improve Gatekeeper UX and notifications when present.
-
-## Architecture
-
-```text
-React Renderer → Preload → Electron Main → utilityProcess Agent Host → pi SDK
-```
-
-- Renderer has no Node.js access.
-- Main supervises the Agent Host but does not execute pi tools or extensions.
-- Agent Host uses the public `@earendil-works/pi-coding-agent` SDK.
-- Electron `userData` is only for desktop chrome prefs — never a second agent config layer.
-- A fresh pi home receives no Pix packages, resources, or custom settings.
-- `utilityProcess` provides crash isolation, not a security sandbox.
-- Extension portable UI (select/confirm/status/widgets/…) and TUI-only degraded surface: see [`packages/agent-runtime/EXTENSION_UI.md`](./packages/agent-runtime/EXTENSION_UI.md).
-
-## License
-
-See [LICENSE](./LICENSE).
-
-## Community Outreach
-
-[LinuxDo](https://linux.do)
+Never push to `pix` / `pix-gitea`.

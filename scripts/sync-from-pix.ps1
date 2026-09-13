@@ -1,5 +1,7 @@
-# Sync read-only Pix upstream into Telos.
-# Pix is never pushed to. Prefer local mirror G:\gitea\pix; fall back to Gitea mirror.
+# Sync read-only Pix source into Telos (file-tree checkout + overlay restore).
+# Telos and Pix do not share commit ancestry (parallel mirror history), so this
+# script replaces the tracked tree from pix/main, then restores Telos overlays.
+# Never pushes to Pix.
 param(
     [ValidateSet("local", "gitea", "auto")]
     [string]$Source = "auto",
@@ -18,6 +20,27 @@ $SshKey = if ($env:GIT_SSH_KEY) { $env:GIT_SSH_KEY } else { Join-Path $env:USERP
 if (-not $env:GIT_SSH_COMMAND) {
     $env:GIT_SSH_COMMAND = "ssh -p 8022 -i `"$SshKey`" -o IdentitiesOnly=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new"
 }
+
+# Paths Telos owns — restored after pix tree checkout. Extend when you add product deltas.
+$TelosOverlays = @(
+    "scripts/sync-from-pix.ps1",
+    "scripts/git-sync.ps1",
+    "TELOS-UPSTREAM.md",
+    "README.md",
+    "package.json",
+    "apps/desktop/electron-builder.yml",
+    "apps/desktop/package.json",
+    "apps/desktop/src/shared/brand.ts",
+    "apps/desktop/src/main/index.ts",
+    "apps/desktop/src/renderer/lib/i18n.ts",
+    "apps/desktop/src/renderer/lib/workspace.ts",
+    "apps/desktop/src/renderer/lib/workspace.test.ts",
+    "apps/desktop/src/renderer/components/PixLogo.tsx",
+    "apps/desktop/src/renderer/components/BootstrapOverlay.tsx",
+    "apps/desktop/src/renderer/components/settings/SettingsPage.tsx",
+    "apps/desktop/src/renderer/session-content-demo.html",
+    "apps/landing/src/components/PixMark.tsx"
+)
 
 function Get-GitExe {
     foreach ($c in @("git", "$env:ProgramFiles\Git\cmd\git.exe")) {
@@ -39,17 +62,13 @@ function Invoke-Git {
 }
 
 function Ensure-ReadOnlyRemote {
-    param(
-        [string]$Name,
-        [string]$FetchUrl
-    )
+    param([string]$Name, [string]$FetchUrl)
     $existing = & $git @GitConfig remote
     if ($existing -notcontains $Name) {
         Invoke-Git remote add $Name $FetchUrl
     } else {
         Invoke-Git remote set-url $Name $FetchUrl
     }
-    # Never allow push to Pix mirrors
     Invoke-Git remote set-url --push $Name "DISABLED_READ_ONLY"
 }
 
@@ -72,36 +91,76 @@ if ($Source -eq "local" -or ($Source -eq "auto" -and (Test-Path (Join-Path $Loca
 
 Write-Host "Fetching read-only upstream: $remote"
 Invoke-Git fetch $remote --tags
-
 $upstream = "$remote/main"
-$ahead = & $git @GitConfig rev-list --count "HEAD..$upstream"
-$behind = & $git @GitConfig rev-list --count "$upstream..HEAD"
-Write-Host "Pix tip: $(& $git @GitConfig rev-parse --short $upstream)  |  commits to merge: $ahead  |  Telos-only commits: $behind"
+$tip = & $git @GitConfig rev-parse --short $upstream
+Write-Host "Pix tip: $tip"
 
 if ($FetchOnly) {
     Write-Host "Fetch-only complete."
     exit 0
 }
 
-if ([int]$ahead -eq 0) {
-    Write-Host "Already up to date with $upstream"
+$stampFile = Join-Path $Root ".pix-sync-revision"
+$prev = if (Test-Path $stampFile) { (Get-Content $stampFile -Raw).Trim() } else { "" }
+$fullTip = & $git @GitConfig rev-parse $upstream
+if ($prev -eq $fullTip) {
+    Write-Host "Already synced to $tip"
     exit 0
 }
 
-$msg = "chore: sync pix upstream $($(& $git @GitConfig rev-parse --short $upstream))"
-if ($NoCommit) {
-    Invoke-Git merge $upstream --no-commit --no-ff
-    Write-Host "Merged $upstream with --no-commit. Resolve conflicts, then commit."
-} else {
-    Invoke-Git -c user.name=sheng -c user.email=sheng@local merge $upstream -m $msg
-    Write-Host "Merged $upstream into Telos."
+$backup = Join-Path ([System.IO.Path]::GetTempPath()) ("telos-overlay-" + [guid]::NewGuid().ToString("n"))
+New-Item -ItemType Directory -Path $backup | Out-Null
+try {
+    foreach ($rel in $TelosOverlays) {
+        $src = Join-Path $Root $rel
+        if (Test-Path $src) {
+            $dest = Join-Path $backup $rel
+            $destDir = Split-Path $dest -Parent
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item -LiteralPath $src -Destination $dest -Force
+        }
+    }
+
+    Write-Host "Checking out tree from $upstream ..."
+    Invoke-Git checkout $upstream -- .
+
+    foreach ($rel in $TelosOverlays) {
+        $saved = Join-Path $backup $rel
+        if (Test-Path $saved) {
+            $dest = Join-Path $Root $rel
+            $destDir = Split-Path $dest -Parent
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item -LiteralPath $saved -Destination $dest -Force
+            Invoke-Git add -- $rel
+        }
+    }
+
+    Set-Content -Path $stampFile -Value $fullTip -Encoding ascii
+    Invoke-Git add -- .pix-sync-revision
+
+    $pending = & $git @GitConfig status --porcelain
+    if (-not $pending) {
+        Write-Host "Tree already matches overlays + pix@$tip"
+        exit 0
+    }
+
+    $msg = "chore: sync pix@$tip into telos"
+    if ($NoCommit) {
+        Write-Host "Synced pix@$tip with overlays restored (not committed). Review then commit."
+    } else {
+        Invoke-Git -c user.name=sheng -c user.email=sheng@local commit -m $msg
+        Write-Host "Committed: $msg"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host @"
 
 Next:
-  1. Resolve any conflicts (prefer keeping Telos brand/product overlays).
-  2. pnpm install && pnpm check
-  3. Push Telos only:  .\scripts\git-sync.ps1 -Message "chore: sync pix"
-  Never push to pix / pix-gitea (push URL is DISABLED_READ_ONLY).
+  1. pnpm install && pnpm check
+  2. Push Telos only: .\scripts\git-sync.ps1 -Message "chore: sync pix"
+  Never push to pix / pix-gitea.
+  Overlay list: scripts/sync-from-pix.ps1 (`$TelosOverlays)
 "@

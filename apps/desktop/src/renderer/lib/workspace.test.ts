@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+﻿import { describe, expect, it } from "vite-plus/test";
 import {
   belongsInConversationsSection,
   filterRecentWorkspaces,
@@ -78,30 +78,30 @@ describe("workspace helpers", () => {
     expect(prependRecentPath(["/Users/me/a"], "/tmp/pix-e2e-x/workspace")).toEqual(["/Users/me/a"]);
   });
 
-  it("treats Documents/Pix date folders and conversation home as non-projects", () => {
-    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Pix/2026-07-21")).toBe(true);
-    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Pix/2026-07-21-2")).toBe(true);
-    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Pix/worktrees/repo")).toBe(false);
+  it("treats Documents/Telos date folders and conversation home as non-projects", () => {
+    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/2026-07-21")).toBe(true);
+    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/2026-07-21-2")).toBe(true);
+    expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/worktrees/repo")).toBe(false);
     expect(isAutoDefaultWorkspacePath("/Users/me/code/pix")).toBe(false);
-    expect(isConversationWorkspacePath("/Users/me/Documents/Pix/conversations")).toBe(true);
-    expect(isConversationWorkspacePath("/Users/me/Documents/Pix/conversations/x")).toBe(true);
-    expect(isNonProjectWorkspacePath("/Users/me/Documents/Pix/conversations")).toBe(true);
+    expect(isConversationWorkspacePath("/Users/me/Documents/Telos/conversations")).toBe(true);
+    expect(isConversationWorkspacePath("/Users/me/Documents/Telos/conversations/x")).toBe(true);
+    expect(isNonProjectWorkspacePath("/Users/me/Documents/Telos/conversations")).toBe(true);
     expect(isNonProjectWorkspacePath("/Users/me/code/pix")).toBe(false);
     expect(
       filterRecentWorkspaces(
         [
           "/Users/me/code/pix",
-          "/Users/me/Documents/Pix/2026-07-21",
-          "/Users/me/Documents/Pix/conversations",
+          "/Users/me/Documents/Telos/2026-07-21",
+          "/Users/me/Documents/Telos/conversations",
           "/Users/me/code/other",
         ],
         { max: 5 },
       ),
     ).toEqual(["/Users/me/code/pix", "/Users/me/code/other"]);
-    expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Pix/2026-07-21")).toEqual([
+    expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Telos/2026-07-21")).toEqual([
       "/Users/me/a",
     ]);
-    expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Pix/conversations")).toEqual([
+    expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Telos/conversations")).toEqual([
       "/Users/me/a",
     ]);
   });
@@ -117,7 +117,7 @@ describe("workspace helpers", () => {
     expect(
       mergeRecentWithOpenProject(
         ["/Users/me/code/pix"],
-        "/Users/me/Documents/Pix/conversations",
+        "/Users/me/Documents/Telos/conversations",
         12,
       ),
     ).toEqual(["/Users/me/code/pix"]);
@@ -129,10 +129,10 @@ describe("workspace helpers", () => {
         { id: "proj-1", cwd: "/Users/me/code/pix" },
         { id: "proj-2", cwd: "/Users/me/code/pix" },
         // Leaked conversation row under a project key must not join projectThreadIds.
-        { id: "conv-leaked", cwd: "/Users/me/Documents/Pix/conversations" },
+        { id: "conv-leaked", cwd: "/Users/me/Documents/Telos/conversations" },
       ],
-      "/Users/me/Documents/Pix/conversations": [
-        { id: "conv-1", cwd: "/Users/me/Documents/Pix/conversations" },
+      "/Users/me/Documents/Telos/conversations": [
+        { id: "conv-1", cwd: "/Users/me/Documents/Telos/conversations" },
       ],
     };
     const projectIds = projectThreadIdsFromCwdMap(byCwd);
@@ -149,14 +149,14 @@ describe("workspace helpers", () => {
     ).toBe(false);
     expect(
       belongsInConversationsSection(
-        { id: "conv-1", cwd: "/Users/me/Documents/Pix/conversations" },
+        { id: "conv-1", cwd: "/Users/me/Documents/Telos/conversations" },
         { projectThreadIds: projectIds },
       ),
     ).toBe(true);
     // Conversation cwd wins even if the id was also written into a project map.
     expect(
       belongsInConversationsSection(
-        { id: "conv-leaked", cwd: "/Users/me/Documents/Pix/conversations" },
+        { id: "conv-leaked", cwd: "/Users/me/Documents/Telos/conversations" },
         { projectThreadIds: new Set(["conv-leaked", "proj-1"]) },
       ),
     ).toBe(true);
@@ -170,7 +170,7 @@ describe("workspace helpers", () => {
     const rows = [
       { id: "a", cwd: "/Users/me/code/pix" },
       { id: "b", cwd: "/Users/me/code/other" },
-      { id: "c", cwd: "/Users/me/Documents/Pix/conversations" },
+      { id: "c", cwd: "/Users/me/Documents/Telos/conversations" },
       { id: "live", cwd: "" },
     ];
     expect(threadsForWorkspaceBucket(rows, "/Users/me/code/pix").map((r) => r.id)).toEqual([
@@ -178,7 +178,7 @@ describe("workspace helpers", () => {
       "live",
     ]);
     expect(
-      threadsForWorkspaceBucket(rows, "/Users/me/Documents/Pix/conversations").map((r) => r.id),
+      threadsForWorkspaceBucket(rows, "/Users/me/Documents/Telos/conversations").map((r) => r.id),
     ).toEqual(["c", "live"]);
   });
 });

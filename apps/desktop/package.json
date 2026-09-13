@@ -2,9 +2,9 @@
   "name": "@pix/desktop",
   "version": "0.7.7",
   "private": true,
-  "description": "Desktop shell for the pi coding agent",
-  "homepage": "https://github.com/num-scope/pix",
-  "author": "num-scope <noreply@users.noreply.github.com>",
+  "description": "Telos intelligent programming assistant (Pix-based desktop shell for pi)",
+  "homepage": "ssh://git@192.168.80.3:8022/sheng/telos.git",
+  "author": "sheng <sheng@local>",
   "type": "module",
   "main": "dist/main/main.mjs",
   "scripts": {
