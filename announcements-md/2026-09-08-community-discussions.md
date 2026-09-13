@@ -8,7 +8,7 @@ effectiveUntil: 2099-12-31T00:00:00+08:00
 ---
 PiDeck 的 **GitHub Discussions 讨论板块**已开启，欢迎来社区交流：
 
-**https://github.com/ayuayue/PiDeck/discussions**
+**https://github.com/gygy/telos/discussions**
 
 在这里可以：
 

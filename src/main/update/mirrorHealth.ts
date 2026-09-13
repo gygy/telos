@@ -32,9 +32,9 @@ export const SLOW_THRESHOLD_KBPS = 300;
 /** latest.yml `url:` 里允许作为探测文件名的字符（basename，禁止路径穿越）。 */
 const PROBE_FILE_NAME_RE = /^[A-Za-z0-9._+-]+$/;
 /** 写死版本会在发版后立刻 404；yml 解析失败时仍按 NSIS 命名约定回退。 */
-const PROBE_FILE_FALLBACK_PREFIX = "PiDeck-";
+const PROBE_FILE_FALLBACK_PREFIX = "Telos-";
 const PROBE_FILE_FALLBACK_SUFFIX = "-setup.exe";
-const PROBE_FILE_LAST_RESORT = "PiDeck-setup.exe";
+const PROBE_FILE_LAST_RESORT = "Telos-setup.exe";
 
 /**
  * 从 generic provider 的 latest.yml 取出探测用的安装包文件名。

@@ -1119,7 +1119,7 @@ EPISODES["EP06"] = [
     <h2>系列到这里结束了</h2>
     <p class="body">PiDeck 免费开源。觉得有用，欢迎去 GitHub 点个 Star。</p>
     <div class="cards cols-2" style="margin-top:28px">
-      <div class="card"><div class="k">GitHub</div><div class="t">github.com/ayuayue/PiDeck</div><div class="d">源码 · Releases · Issue</div></div>
+      <div class="card"><div class="k">GitHub</div><div class="t">github.com/gygy/telos</div><div class="d">源码 · Releases · Issue</div></div>
       <div class="card"><div class="k">QQ 群</div><div class="t">1026218644</div><div class="d">交流使用心得与反馈</div></div>
     </div>
     <p class="lead" style="margin-top:36px">我是曹阿宇，感谢收看。我们下个系列见。</p>

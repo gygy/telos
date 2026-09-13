@@ -75,5 +75,5 @@ PiDeck tries PowerShell, cmd, and sh in order. If none are available, the termin
 ### Still stuck?
 
 - Check the [Troubleshooting guide](/en/guide/troubleshooting) for symptom-based paths
-- Browse [GitHub Issues](https://github.com/ayuayue/PiDeck/issues)
+- Browse [GitHub Issues](https://github.com/gygy/telos/issues)
 - Join the **QQ group: 1026218644**

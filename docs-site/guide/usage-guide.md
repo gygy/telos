@@ -45,7 +45,7 @@ pi --version
 
 访问 PiDeck 的 GitHub Releases 页面：
 
-[https://github.com/ayuayue/PiDeck/releases](https://github.com/ayuayue/PiDeck/releases)
+[https://github.com/gygy/telos/releases](https://github.com/gygy/telos/releases)
 
 找到最新版本，根据你的操作系统选择：
 

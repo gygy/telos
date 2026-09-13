@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: 下载最新版本
-      link: https://github.com/ayuayue/PiDeck/releases
+      link: https://github.com/gygy/telos/releases
     - theme: alt
       text: 快速开始
       link: /guide/getting-started
@@ -16,9 +16,9 @@ hero:
       text: 源码仓库
       items:
         - text: GitHub 仓库（海外）
-          link: https://github.com/ayuayue/PiDeck
+          link: https://github.com/gygy/telos
         - text: AtomGit 仓库（国内镜像）
-          link: https://atomgit.com/ayuayue/PiDeck
+          link: https://github.com/gygy/telos
 
 features:
   - title: 多项目工作区

@@ -205,4 +205,4 @@ export function ChangelogDialog(props: {
  * 主进程返回的 pageUrl 始终可用，此常量只用于 IPC 本身抛错的极端场景。
  */
 const DEFAULT_PAGE_URL =
-	"https://atomgit.com/ayuayue/PiDeck/blob/main/CHANGELOG.zh-CN.md";
+	"https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md";

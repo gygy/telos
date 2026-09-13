@@ -17,7 +17,8 @@ if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.include
 
 const out = path.join(__dirname, '..', 'build');
 const iconsDir = path.join(out, 'icons');
-const iconContentRatio = 0.875;
+// Near full-bleed: Yandex-style taskbar weight (old 0.875 looked ~12% too small).
+const iconContentRatio = 1;
 const pngSizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
 const icnsSources = [
   [16, 'icp4'],
@@ -41,8 +42,8 @@ async function renderPng(size, target) {
     .png()
     .toBuffer();
 
-  // Dock/Finder 会优先使用 icns 内的小尺寸图；如果小尺寸直接铺满画布，
-  // 视觉上会比系统应用图标大一圈。所有平台图标都统一保留 6.25% 留白。
+  // Full-bleed render: Telos circle already leaves only tiny transparent corners.
+  // Extra shrink made Windows taskbar marks look smaller than Yandex Browser.
   await sharp({
     create: {
       width: size,

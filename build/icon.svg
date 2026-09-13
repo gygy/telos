@@ -1,22 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos brand mark — Pix-style π on a circular plate.
-  - Circle plate (not rounded square)
-  - Refined π: tucked stems, optical centering, short right leg
-  - Glyph color: Yandex red #FC3F1D
+  Telos brand mark — circular plate + Yandex-red π.
+  Sized for Windows taskbar parity with Yandex Browser:
+  - circle nearly fills the 1024 canvas (minimal transparent corners)
+  - π glyph is large and bold within the plate
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-mark">
-  <!-- Inscribed circle; transparent corners for modern OS icons -->
-  <circle cx="512" cy="512" r="472" fill="#FFFFFF"/>
-  <!-- Soft inner rim so the plate reads on light wallpapers -->
-  <circle cx="512" cy="512" r="472" fill="none" stroke="#F0F0F0" stroke-width="8"/>
+  <!-- Near full-bleed circle (matches Yandex taskbar visual weight) -->
+  <circle cx="512" cy="512" r="508" fill="#FFFFFF"/>
 
   <g fill="#FC3F1D" id="telos-pi">
-    <!-- crossbar: slight overhang, optically lifted -->
-    <rect x="248" y="292" width="528" height="100" rx="50"/>
-    <!-- left stem: tucks into crossbar; stem≈gap for small sizes -->
-    <rect x="312" y="342" width="96" height="392" rx="48"/>
-    <!-- right stem: shorter, same width, same tuck -->
-    <rect x="556" y="342" width="96" height="308" rx="48"/>
+    <!-- Larger π: thicker bars, fills ~72% of plate diameter -->
+    <rect x="188" y="262" width="648" height="124" rx="62"/>
+    <rect x="256" y="324" width="124" height="468" rx="62"/>
+    <rect x="564" y="324" width="124" height="368" rx="62"/>
   </g>
 </svg>

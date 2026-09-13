@@ -38,8 +38,8 @@ export const UPDATER_PARTITION_NAME = "electron-updater";
  * AtomGit 资产 browser_download_url 会 302 到 gitcode.com，两个 host 都拦。
  */
 export const ATOMGIT_DOWNLOAD_PATH_PREFIXES: readonly string[] = [
-  "https://atomgit.com/ayuayue/PiDeck/releases/download/",
-  "https://gitcode.com/ayuayue/PiDeck/releases/download/",
+  "https://github.com/gygy/telos/releases/download/",
+  "https://github.com/gygy/telos/releases/download/",
 ];
 
 /**

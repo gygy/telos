@@ -229,7 +229,7 @@ Core design principle: **one agent session = one pi RPC process**, keeping sessi
 
 Prebuilt packages for **Windows**, **macOS**, and **Linux** are published on GitHub Releases:
 
-👉 **[GitHub Releases](https://github.com/ayuayue/PiDeck/releases)**
+👉 **[GitHub Releases](https://github.com/gygy/telos/releases)**
 
 > PiDeck requires the `pi` CLI to be installed separately and available in your system `PATH`.
 
@@ -250,7 +250,7 @@ pi --mode rpc
 ## 🧰 Quick Start (from Source)
 
 ```bash
-git clone https://github.com/ayuayue/PiDeck.git
+git clone https://github.com/gygy/telos.git
 cd PiDeck
 npm install
 npm run make-icon
@@ -285,7 +285,7 @@ A: The app sends an anonymous, low-frequency `app_heartbeat` usage statistic by 
 
 **Q: How do I report issues?**
 
-A: Join the QQ group at the bottom of this page, or file an issue on [GitHub Issues](https://github.com/ayuayue/PiDeck/issues); you can export logs from Settings when troubleshooting.
+A: Join the QQ group at the bottom of this page, or file an issue on [GitHub Issues](https://github.com/gygy/telos/issues); you can export logs from Settings when troubleshooting.
 
 ---
 

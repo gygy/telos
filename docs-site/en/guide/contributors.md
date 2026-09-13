@@ -41,9 +41,9 @@ PiDeck welcomes contributions of all kinds:
 
 ### Getting Started
 
-1. Fork the [repository](https://github.com/ayuayue/PiDeck)
+1. Fork the [repository](https://github.com/gygy/telos)
 2. Create a feature branch
 3. Make your changes
 4. Submit a Pull Request
 
-Please read the [contributing guidelines](https://github.com/ayuayue/PiDeck/blob/main/CONTRIBUTING.md) before starting.
+Please read the [contributing guidelines](https://github.com/gygy/telos/blob/main/CONTRIBUTING.md) before starting.

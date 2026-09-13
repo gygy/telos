@@ -78,11 +78,11 @@ function sourceBaseUrls(
 	branch: string,
 	mirrorHost?: string | null,
 ): { catalog: string; manifest: string }[] {
-	const rawCatalog = `https://raw.githubusercontent.com/ayuayue/PiDeck/${branch}/resources/${PI_AI_CATALOG_FILE_NAME}`;
-	const rawManifest = `https://raw.githubusercontent.com/ayuayue/PiDeck/${branch}/resources/${PI_AI_CATALOG_MANIFEST_FILE_NAME}`;
+	const rawCatalog = `https://raw.githubusercontent.com/gygy/telos/${branch}/resources/${PI_AI_CATALOG_FILE_NAME}`;
+	const rawManifest = `https://raw.githubusercontent.com/gygy/telos/${branch}/resources/${PI_AI_CATALOG_MANIFEST_FILE_NAME}`;
 	const sources: { catalog: string; manifest: string }[] = [];
 	if (mirrorHost) {
-		const atomgitPrefix = `${mirrorHost}/ayuayue/PiDeck/raw/${branch}/resources`;
+		const atomgitPrefix = `${mirrorHost}/gygy/telos/raw/${branch}/resources`;
 		sources.push({
 			catalog: `${atomgitPrefix}/${PI_AI_CATALOG_FILE_NAME}`,
 			manifest: `${atomgitPrefix}/${PI_AI_CATALOG_MANIFEST_FILE_NAME}`,

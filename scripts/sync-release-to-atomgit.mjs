@@ -63,8 +63,8 @@ const targetTags = (getArg('--tags', '') || getArg('--tag', ''))
   .split(',')
   .map((t) => t.trim())
   .filter(Boolean);
-const ghRepo = getArg('--gh-repo', 'ayuayue/PiDeck');
-const atomgitRepo = getArg('--atomgit-repo', 'ayuayue/PiDeck');
+const ghRepo = getArg('--gh-repo', 'gygy/telos');
+const atomgitRepo = getArg('--atomgit-repo', 'gygy/telos');
 const atomgitApiBase = getArg('--api-base', 'https://api.atomgit.com/api/v5');
 const token = process.env.ATOMGIT_TOKEN || getArg('--token', '');
 // 强制重建开关：同名 Release 在 AtomGit 已存在时先删除再全量重传（同版本号重建产物重发版场景）
