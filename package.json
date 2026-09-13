@@ -203,13 +203,14 @@
       ],
       "artifactName": "${productName}-${version}-win.${ext}"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "artifactName": "${productName}-${version}-setup.${ext}"
-    },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Telos",
+    "artifactName": "${productName}-${version}-setup.${ext}"
+  },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
     },

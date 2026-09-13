@@ -5873,15 +5873,12 @@ export class AgentManager {
 
 	/**
 	 * 生成带会话跳转参数的 Windows toast XML。
-	 * 使用 activationType="protocol" + pideck:// 协议 URL：点击通知时 Windows 通过
-	 * 注册表协议关联唤起应用（不依赖 ToastActivatorCLSID / 快捷方式匹配，更可靠），
-	 * 被唤起实例的 argv 携带协议 URL，主实例据此识别要跳转的会话。
-	 * sessionId 缺省时 launch 回退为 pideck:// 根地址（点击仅聚焦窗口）。
+	 * 使用 activationType="protocol" + telos:// 协议 URL。
 	 */
 	private buildToastXml(title: string, body: string, sessionId?: string): string {
 		const esc = (s: string) =>
 			s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-		const launch = sessionId ? `pideck://session/${sessionId}` : "pideck://";
+		const launch = sessionId ? `telos://session/${sessionId}` : "telos://";
 		return `<toast activationType="protocol" launch="${launch}">
   <visual>
     <binding template="ToastGeneric">

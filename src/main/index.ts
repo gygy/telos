@@ -130,22 +130,21 @@ if (!electronChromiumSandboxEnabled) {
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=384");
 
 // Windows 系统通知必须设置 AppUserModelID，否则通知不显示、点击事件不触发。
-// dev 与正式版使用不同 AppID，避免通知中心归属混淆（与 dev userData 隔离思路一致）。
+// Telos 使用独立 AUMID，避免与已安装的 PiDeck（com.ayuayue.pi-desktop）共用任务栏图标/名称。
 if (process.platform === "win32") {
+	const packagedAppId = "app.telos.desktop";
 	const devAppId =
 		devUserDataDirName === DEFAULT_DEV_USER_DATA_NAME
-			? "com.ayuayue.pi-desktop-dev"
-			: `com.ayuayue.pi-desktop-dev.${sanitizeDevBranchSegment(devGitBranch ?? "detached")}`;
-	app.setAppUserModelId(isDevBuild ? devAppId : "com.ayuayue.pi-desktop");
+			? "app.telos.desktop.dev"
+			: `app.telos.desktop.dev.${sanitizeDevBranchSegment(devGitBranch ?? "detached")}`;
+	app.setAppUserModelId(isDevBuild ? devAppId : packagedAppId);
 }
+app.setName("Telos");
 
-// 注册 pideck:// 自定义协议：系统通知点击（toast activationType="protocol"）通过该协议唤起应用，
-// 唤起实例的 argv 携带 pideck://session/<id> URL，主进程据此跳转对应会话。
-// 仅 packaged 应用注册：dev 模式跑的是 electron 二进制，注册会把协议关联劫持到 electron.exe，
-// 覆盖已安装正式版的关联；dev 模式下通知点击依赖 Electron 原生 click 事件聚焦即可。
-// 安装包内 electron-builder 的 protocols 配置也会在安装时写入注册表，此处是运行时兜底。
+// 注册 telos:// 自定义协议：系统通知点击通过该协议唤起应用。
+// 仅 packaged 应用注册：dev 模式勿劫持正式版关联。
 if (app.isPackaged) {
-	app.setAsDefaultProtocolClient("pideck");
+	app.setAsDefaultProtocolClient("telos");
 }
 
 // 按「应用版本」隔离的单实例：同版本复用窗口，不同版本可并行。
@@ -1337,7 +1336,7 @@ function setupTray() {
 	// iconPath 由 electron-vite 的 ?asset 后缀自动解析，打包后也能正确定位
 	const icon = nativeImage.createFromPath(iconPath);
 	tray = new Tray(icon.resize({ width: 16, height: 16 }));
-	tray.setToolTip("PiDeck");
+	tray.setToolTip("Telos");
 	// C12：退出清理登记（before-quit 统一 runAll）
 	quitCleanup.register("tray", () => {
 		tray?.destroy();
@@ -1597,8 +1596,8 @@ async function createWindow() {
 		minHeight: 640,
 		// 多 worktree 并行 dev：标题带分支名，任务栏/Alt-Tab 一眼区分窗口
 		title: isolateDevByGitBranch && !isSharedDevBranch(devGitBranch)
-			? `PiDeck · ${devGitBranch}`
-			: "PiDeck",
+			? `Telos · ${devGitBranch}`
+			: "Telos",
 		icon: iconPath,
 		frame: windowOptions.frame,
 		titleBarStyle: windowOptions.titleBarStyle,
