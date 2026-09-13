@@ -2,8 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const sharp = require('sharp');
 const { Icns, IcnsImage } = require('@fiahfy/icns');
-const pngToIcoModule = require('png-to-ico');
-const pngToIco = pngToIcoModule.default ?? pngToIcoModule;
 
 // 打包标必须是矢量 Telos 圆标 + π（与 LogoMark / TelosLogo / 启动画面同源）。
 // 嵌 PNG 的旧稿会在小尺寸糊；改品牌几何时同步更新下面门禁。
@@ -17,9 +15,15 @@ if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.include
 
 const out = path.join(__dirname, '..', 'build');
 const iconsDir = path.join(out, 'icons');
-// Near full-bleed: Yandex-style taskbar weight (old 0.875 looked ~12% too small).
-const iconContentRatio = 1;
-const pngSizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
+
+/**
+ * Windows 尺寸对齐本机 Yandex Browser 的 ICO 清单：
+ *   12, 16, 20, 24, 32, 48, 64, 128, 256（全 PNG 压缩）
+ * 本机实测（100% DPI）：托盘 SM_CXSMICON=16，桌面 IconSize=48，任务栏常用 24/32。
+ * 另保留 40（125%×32）、512/1024 供 Linux/mac 与应用内。
+ */
+const winIcoSizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+const pngSizes = [12, 16, 20, 24, 32, 40, 48, 64, 128, 256, 512, 1024];
 const icnsSources = [
   [16, 'icp4'],
   [32, 'icp5'],
@@ -34,33 +38,68 @@ const icnsSources = [
   [1024, 'ic10'],
 ];
 
-async function renderPng(size, target) {
-  let innerSize = Math.max(1, Math.round(size * iconContentRatio));
-  if (innerSize > 1) innerSize -= innerSize % 2;
-  const icon = await sharp(Buffer.from(svg))
-    .resize(innerSize, innerSize)
-    .png()
+/**
+ * 渲染单尺寸 PNG。
+ * 小尺寸（≤32）先 4× 矢量再 Lanczos 下落 + 轻度锐化，避免直接缩到 16px 时 π 发糊
+ * （对照：Yandex 托盘 16×16 为手调 PNG，softEdge 可控；Telos 旧链路是 512→16 运行时缩放）。
+ */
+async function renderPngBuffer(size) {
+  const svgBuf = Buffer.from(svg);
+  if (size <= 32) {
+    const hi = size * 4;
+    const hiPng = await sharp(svgBuf)
+      .resize(hi, hi, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .png()
+      .toBuffer();
+    return sharp(hiPng)
+      .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .sharpen({ sigma: size <= 16 ? 0.85 : 0.55 })
+      .png({ compressionLevel: 9, adaptiveFiltering: true })
+      .toBuffer();
+  }
+  return sharp(svgBuf)
+    .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toBuffer();
+}
 
-  // Full-bleed render: Telos circle already leaves only tiny transparent corners.
-  // Extra shrink made Windows taskbar marks look smaller than Yandex Browser.
-  await sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
-  })
-    .composite([
-      {
-        input: icon,
-        left: Math.floor((size - innerSize) / 2),
-        top: Math.floor((size - innerSize) / 2),
-      },
-    ])
-    .png()
-    .toFile(target);
+async function renderPng(size, target) {
+  const buf = await renderPngBuffer(size);
+  await fs.promises.writeFile(target, buf);
+  return buf;
+}
+
+/**
+ * 写入 PNG 压缩的 .ico（与 Yandex / Chromium 一致）。
+ * png-to-ico 会把条目落成 32bpp BMP，小图标体积大且托盘/任务栏观感发软。
+ */
+function writePngIco(entries, target) {
+  // entries: { size, png: Buffer }[]
+  const count = entries.length;
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type = icon
+  header.writeUInt16LE(count, 4);
+
+  const dir = Buffer.alloc(16 * count);
+  const bodies = [];
+  let offset = 6 + 16 * count;
+  for (let i = 0; i < count; i++) {
+    const { size, png } = entries[i];
+    const w = size >= 256 ? 0 : size;
+    const h = size >= 256 ? 0 : size;
+    dir[i * 16] = w;
+    dir[i * 16 + 1] = h;
+    dir[i * 16 + 2] = 0; // color count
+    dir[i * 16 + 3] = 0; // reserved
+    dir.writeUInt16LE(1, i * 16 + 4); // planes
+    dir.writeUInt16LE(32, i * 16 + 6); // bit count
+    dir.writeUInt32LE(png.length, i * 16 + 8);
+    dir.writeUInt32LE(offset, i * 16 + 12);
+    bodies.push(png);
+    offset += png.length;
+  }
+  fs.writeFileSync(target, Buffer.concat([header, dir, ...bodies]));
 }
 
 async function writeIcns(target) {
@@ -82,26 +121,53 @@ async function main() {
   fs.mkdirSync(iconsDir, { recursive: true });
   fs.writeFileSync(path.join(out, 'icon.svg'), svg);
 
-  // electron-builder 在 Linux 下会从 build/icons 读取多尺寸 PNG；
-  // Windows 安装包需要 .ico，macOS 需要 .icns。显式生成这些格式，
-  // 避免只存在 SVG 时各平台回退到默认 Electron 图标。
-  await Promise.all(
-    pngSizes.map(size => renderPng(size, path.join(iconsDir, `${size}x${size}.png`))),
-  );
+  const pngBySize = new Map();
+  for (const size of pngSizes) {
+    const buf = await renderPng(size, path.join(iconsDir, `${size}x${size}.png`));
+    pngBySize.set(size, buf);
+  }
 
   await fs.promises.copyFile(path.join(iconsDir, '512x512.png'), path.join(out, 'icon.png'));
-  const ico = await pngToIco([16, 24, 32, 48, 64, 128, 256].map(size => path.join(iconsDir, `${size}x${size}.png`)));
-  await fs.promises.writeFile(path.join(out, 'icon.ico'), ico);
+
+  writePngIco(
+    winIcoSizes.map((size) => ({ size, png: pngBySize.get(size) })),
+    path.join(out, 'icon.ico'),
+  );
   await writeIcns(path.join(out, 'icon.icns'));
 
-  // 应用内侧栏/空态用同一枚正式标；不要直接拷系统 512（含 Dock 留白），按 SVG 铺满导出。
+  // 应用内侧栏/空态用同一枚正式标
   const rendererMark = path.join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'brand-mark.png');
   await sharp(Buffer.from(svg)).resize(256, 256).png().toFile(rendererMark);
 
-  console.log('wrote build/icon.svg, build/icon.png, build/icon.ico, build/icon.icns, build/icons/*.png and src/renderer/src/assets/brand-mark.png');
+  // 自检：ICO 必须全是 PNG 条目，且覆盖 Yandex 关键尺寸
+  const ico = fs.readFileSync(path.join(out, 'icon.ico'));
+  const count = ico.readUInt16LE(4);
+  const kinds = [];
+  for (let i = 0; i < count; i++) {
+    const o = 6 + i * 16;
+    const size = ico[o] === 0 ? 256 : ico[o];
+    const bytes = ico.readUInt32LE(o + 8);
+    const off = ico.readUInt32LE(o + 12);
+    const isPng = ico[off] === 0x89 && ico[off + 1] === 0x50;
+    kinds.push({ size, isPng, bytes });
+  }
+  if (kinds.some((k) => !k.isPng)) {
+    throw new Error('icon.ico must embed PNG images (Yandex-style), found BMP entries');
+  }
+  for (const need of [16, 20, 24, 32, 48, 256]) {
+    if (!kinds.some((k) => k.size === need)) {
+      throw new Error(`icon.ico missing required size ${need}x${need}`);
+    }
+  }
+
+  console.log(
+    'wrote build/icon.svg, build/icon.png, build/icon.ico (PNG:',
+    kinds.map((k) => k.size).join('/'),
+    '), build/icon.icns, build/icons/*.png and src/renderer/src/assets/brand-mark.png',
+  );
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

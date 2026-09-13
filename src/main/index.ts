@@ -10,6 +10,7 @@ import {
 	protocol,
 	safeStorage,
 	session,
+	screen,
 	shell,
 	Tray,
 	Notification,
@@ -51,8 +52,28 @@ import { resolvePackagedUserDataDir } from "./portableUserData";
 import { extractFocusTargetFromArgv } from "./utils/focusTarget";
 import type { Project, StartupWindowMode } from "../shared/types";
 // 使用 ?asset 后缀导入图标，electron-vite 会在构建时将其复制到输出目录并提供正确的运行时路径
-// 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题
-import iconPath from "../../build/icon.png?asset";
+// 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题。
+// Windows 窗口/任务栏/桌面快捷方式优先用多尺寸 PNG-ICO（对齐 Yandex）；PNG 作回退与其它平台。
+import iconPngPath from "../../build/icon.png?asset";
+import iconIcoPath from "../../build/icon.ico?asset";
+import trayIcon16Path from "../../build/icons/16x16.png?asset";
+import trayIcon20Path from "../../build/icons/20x20.png?asset";
+import trayIcon24Path from "../../build/icons/24x24.png?asset";
+import trayIcon32Path from "../../build/icons/32x32.png?asset";
+
+/** 窗口与快捷方式图标：Windows 用 ICO，其它平台用 PNG。 */
+const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
+
+/**
+ * 托盘图标：按 DPI 选专用小尺寸 PNG，禁止把 512 图 resize 到 16（会发糊）。
+ * 本机 100% DPI → 16；125%→20；150%→24；≥200%→32（与 Yandex ICO 档位一致）。
+ */
+function resolveTrayNativeImage(): Electron.NativeImage {
+	const scale = screen.getPrimaryDisplay().scaleFactor;
+	const trayPath =
+		scale >= 2 ? trayIcon32Path : scale >= 1.5 ? trayIcon24Path : scale >= 1.25 ? trayIcon20Path : trayIcon16Path;
+	return nativeImage.createFromPath(trayPath);
+}
 
 // 构建标记：npm run dist:win:dev 打包时由 vite define 注入 true（构建期替换，非运行时环境变量）。
 declare const __PIDECK_DEV_BUILD__: boolean;
@@ -1333,9 +1354,8 @@ function handleVersionFocusRequest(payload?: FocusPayload) {
 focusExistingWindow = handleVersionFocusRequest;
 
 function setupTray() {
-	// iconPath 由 electron-vite 的 ?asset 后缀自动解析，打包后也能正确定位
-	const icon = nativeImage.createFromPath(iconPath);
-	tray = new Tray(icon.resize({ width: 16, height: 16 }));
+	// 专用小尺寸 PNG（make-icon 锐化导出），不要对大图 resize——那是托盘发糊的主因。
+	tray = new Tray(resolveTrayNativeImage());
 	tray.setToolTip("Telos");
 	// C12：退出清理登记（before-quit 统一 runAll）
 	quitCleanup.register("tray", () => {
