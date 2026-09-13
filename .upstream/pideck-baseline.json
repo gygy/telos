@@ -1,0 +1,22 @@
+{
+  "upstream": "pideck-github",
+  "github": {
+    "remote": "https://github.com/ayuayue/PiDeck.git",
+    "owner": "ayuayue",
+    "repo": "PiDeck",
+    "branch": "main"
+  },
+  "localMirror": "G:/gitea/pideck-github",
+  "giteaMirror": "ssh://git@192.168.80.3:8022/sheng/pideck-github.git",
+  "baseline": {
+    "commit": "4ab3beea370e83cb79d52aa314537c277b4c4f55",
+    "short": "4ab3beea",
+    "subject": "chore: update star history [skip ci]",
+    "author": "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+    "authoredAt": "2026-09-13T03:36:27Z",
+    "committedAt": "2026-09-13T03:36:27Z",
+    "recordedAt": "2026-09-13T12:35:00Z",
+    "note": "Telos 首次从 pideck-github 导入时的 GitHub main 尖端。后续同步以该 commit 为起点做增量对比与可选合入。"
+  },
+  "readOnly": true
+}

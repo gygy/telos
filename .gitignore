@@ -1,0 +1,94 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+# electron-vite 构建时生成的临时配置（时间戳后缀，非源码）
+electron.vite.config.*.mjs
+# DSH runtime 产物（.gitkeep 是占位，必须保留：extraResources 的源目录不能缺失）
+# 注意用 ** 匹配二级目录（dsh-runtime/manifest.json），单层 * 会漏。
+dist-runtime/**/*.tgz
+dist-runtime/**/*.json
+# 打包/构建产物目录：通用规则，release- 后缀的验证/开发/快速构建目录
+# （release-dev、release-verify、release-fresh-* 等）一律忽略，防止再误提交
+# win-unpacked 二进制（历史教训见 d8d5711b）。仓库无以 release 开头的源码目录，
+# 该通配不会误伤；若未来需要提交 release-notes 之类的文件目录再显式取反。
+release*/
+docs-site/.vitepress/cache/
+docs-site/.vitepress/dist/
+*.asar
+
+# Electron/Vite
+.vite/
+.cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Local artifacts
+*.local
+*.tgz
+packages/dsh-tool-pwsh-persistent/lib/
+packages/dsh-tool-pwsh-persistent/node_modules/
+# 本地下载/导入的临时文件不参与版本发布，避免把用户机器上的产物打进 tag。
+downloads/
+
+.pi-lens
+.pi/
+.pi-subagents/
+.workbuddy/
+.zcode/
+
+# Trellis 本地工作流资产（初始化于本机，不随仓库分发）
+.trellis/
+.agents/
+
+# Local collaboration notes are machine/user-specific and must never be committed or proposed for a PR.
+docs/PiDeck-协作说明.md
+
+# Cloned source for reference
+opencode-source/
+nul
+
+
+*.tsbuildinfo
+test-results/
+playwright-report/
+.tmp/
+.beui-inspect
+beui-todo-list.tmp.json
+
+# DSH 排查临时目录（测试日志/会话 jsonl/脚本）
+.dsh-tmp/
+
+# 临时编辑/测试脚本
+scratch-edit-samples/
+scripts/tmp-*
+# beUI 官方源码提取的临时对比目录（不应提交）
+.beui-official/
+
+# DSH host 组合文件（dev 回退到项目 node_modules 时的落盘目录）
+pideck-host/
