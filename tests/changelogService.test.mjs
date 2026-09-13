@@ -252,10 +252,10 @@ test("changelogPageUrl points at the AtomGit blob page for the fallback link", (
 	const service = new ChangelogService({ branch: "main" });
 	assert.equal(
 		service.changelogPageUrl("zh"),
-		"https://atomgit.com/ayuayue/PiDeck/blob/main/CHANGELOG.zh-CN.md",
+		"https://atomgit.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md",
 	);
 	assert.equal(
 		service.changelogPageUrl("en"),
-		"https://atomgit.com/ayuayue/PiDeck/blob/main/CHANGELOG.md",
+		"https://atomgit.com/gygy/telos/blob/main/CHANGELOG.md",
 	);
 });

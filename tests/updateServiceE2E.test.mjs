@@ -536,7 +536,7 @@ test("switching update source rebuilds the generic feed URL immediately", async 
 	service.applyUpdateSource();
 	assert.equal(
 		updater.feedUrl,
-		"https://atomgit.com/ayuayue/PiDeck/releases/download/latest",
+		"https://atomgit.com/gygy/telos/releases/download/latest",
 	);
 
 	// 回到官方源：重置 feed，恢复原生 GitHub provider
@@ -553,7 +553,7 @@ test("atomgit source is applied as generic feed URL on start", async (t) => {
 	service.start({ startDelayMs: 0, intervalMs: 60_000 });
 	assert.equal(
 		updater.feedUrl,
-		"https://atomgit.com/ayuayue/PiDeck/releases/download/latest",
+		"https://atomgit.com/gygy/telos/releases/download/latest",
 	);
 });
 
@@ -567,5 +567,5 @@ test("manual delivery uses latestReleaseUrl from the configured atomgit source p
 	await settings.update({ updateSource: "atomgit" });
 	await service.checkNow();
 	// macOS manual 检查：AtomGit 源 URL 传进检查器（GitHub 源时为 undefined）
-	assert.equal(receivedUrl, "https://atomgit.com/ayuayue/PiDeck/releases/latest");
+	assert.equal(receivedUrl, "https://atomgit.com/gygy/telos/releases/latest");
 });

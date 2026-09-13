@@ -25,7 +25,7 @@
 
 ## What is Telos
 
-**Telos** is an open-source desktop workbench for pi and DSH that manages pi Agent sessions across local project folders, with import support for local Codex and Claude sessions so you can browse and restore them in one place. Built with Electron + TypeScript, it provides multi-project workspace management, AI session history, Git integration, built-in terminal, visual config management, and plugin extensions — so local AI coding assistants stay consistent, traceable, and configurable across projects.
+**Telos** is an open-source desktop workbench for pi and DSH that manages pi Agent sessions across local project folders, with import support for local Codex and Claude sessions so you can browse and restore them in one place. It is based on upstream [PiDeck](https://github.com/ayuayue/PiDeck). Built with Electron + TypeScript, it provides multi-project workspace management, AI session history, Git integration, built-in terminal, visual config management, and plugin extensions — so local AI coding assistants stay consistent, traceable, and configurable across projects.
 
 **Who it's for:** Developers who want to manage multiple local-project AI coding assistant sessions from a desktop app, review session history and Git status in one place, and configure pi through visual editors instead of raw JSON files.
 
@@ -35,8 +35,8 @@
 
 ## 📑 Table of Contents
 
-- [Telos](#pideck)
-  - [What is Telos](#what-is-pideck)
+- [Telos](#telos)
+  - [What is Telos](#what-is-telos)
   - [📑 Table of Contents](#-table-of-contents)
   - [✨ Highlights](#-highlights)
   - [📋 Changelog](#-changelog)

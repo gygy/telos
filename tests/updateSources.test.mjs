@@ -67,14 +67,14 @@ test("updateSourceFeedUrl: github 源返回 null（走内置 app-update.yml 通�
 test("updateSourceFeedUrl: atomgit 源生成 AtomGit generic feed baseUrl", () => {
 	assert.equal(
 		updateSourceFeedUrl("atomgit"),
-		"https://atomgit.com/ayuayue/PiDeck/releases/download/latest",
+		"https://atomgit.com/gygy/telos/releases/download/latest",
 	);
 });
 
 test("updateSourceLatestReleaseUrl: macOS manual 检查的 AtomGit release 页面 URL", () => {
 	assert.equal(
 		updateSourceLatestReleaseUrl("atomgit"),
-		"https://atomgit.com/ayuayue/PiDeck/releases/latest",
+		"https://atomgit.com/gygy/telos/releases/latest",
 	);
 	assert.equal(updateSourceLatestReleaseUrl("github"), null);
 });
