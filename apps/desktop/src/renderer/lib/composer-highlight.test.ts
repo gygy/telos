@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+﻿import { describe, expect, it } from "vite-plus/test";
 import {
   addComposerRef,
   chipRangeAtCaret,
@@ -46,15 +46,15 @@ describe("tokenizeComposerHighlight", () => {
   });
 
   it("classifies packages, prompts, and extensions from catalogs", () => {
-    const spans = tokenizeComposerHighlight("/review then @npm:pix-tools and /ext-ui", {
+    const spans = tokenizeComposerHighlight("/review then @npm:Telos-tools and /ext-ui", {
       promptNames: ["review"],
       extensionNames: ["ext-ui"],
-      packageSources: ["npm:pix-tools"],
+      packageSources: ["npm:Telos-tools"],
     });
     expect(spans).toEqual([
       { kind: "prompt", text: "/review", label: "review" },
       { kind: "text", text: " then " },
-      { kind: "package", text: "@npm:pix-tools", label: "pix-tools" },
+      { kind: "package", text: "@npm:Telos-tools", label: "Telos-tools" },
       { kind: "text", text: " and " },
       { kind: "extension", text: "/ext-ui", label: "ext-ui" },
     ]);
@@ -135,7 +135,7 @@ describe("composer ref chips", () => {
   it("title-cases skill and package names for the chip face", () => {
     expect(composerRefDisplayLabel("skill:open-kimi-ppt")).toBe("Open Kimi Ppt");
     expect(composerRefDisplayLabel("/skill:review")).toBe("Review");
-    expect(composerRefDisplayLabel("@npm:pix-tools")).toBe("Pix Tools");
+    expect(composerRefDisplayLabel("@npm:Telos-tools")).toBe("Telos Tools");
   });
 
   it("treats skills, prompts, and extensions as chip refs — not builtins", () => {
@@ -149,17 +149,17 @@ describe("composer ref chips", () => {
       serializeComposerRefs(
         [
           { kind: "skill", raw: "/skill:review", label: "Review" },
-          { kind: "package", raw: "@npm:pix-tools", label: "Pix Tools" },
+          { kind: "package", raw: "@npm:Telos-tools", label: "Telos Tools" },
         ],
-        "Review 对比几个插件 Pix Tools",
+        "Review 对比几个插件 Telos Tools",
       ),
-    ).toBe("/skill:review 对比几个插件 @npm:pix-tools");
+    ).toBe("/skill:review 对比几个插件 @npm:Telos-tools");
   });
 
   it("keeps sent refs in the sentence instead of peeling them out", () => {
-    const spans = userMessageHighlightSpans("对比几个插件 @npm:pix-tools");
+    const spans = userMessageHighlightSpans("对比几个插件 @npm:Telos-tools");
     expect(spans.map((item) => item.kind)).toEqual(["text", "package"]);
-    expect(spans.map((item) => item.text).join("")).toBe("对比几个插件 @npm:pix-tools");
+    expect(spans.map((item) => item.text).join("")).toBe("对比几个插件 @npm:Telos-tools");
   });
 
   it("paints picked display names in the composer overlay", () => {
@@ -193,11 +193,11 @@ describe("composer ref chips", () => {
       rangeStart: 0,
       rangeEnd: skillText.length,
     });
-    const plugin = { kind: "package" as const, raw: "@npm:pix-tools", label: "Pix Tools" };
+    const plugin = { kind: "package" as const, raw: "@npm:Telos-tools", label: "Telos Tools" };
     const pluginText = composerChipInsertText(plugin.label).trimEnd();
     expect(detectChipTrigger(pluginText, pluginText.length, [plugin])).toEqual({
       kind: "mention",
-      query: "npm:pix-tools",
+      query: "npm:Telos-tools",
       rangeStart: 0,
       rangeEnd: pluginText.length,
     });

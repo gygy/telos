@@ -1,11 +1,11 @@
-const faqs = [
+﻿const faqs = [
   {
-    q: "Is Pix free?",
-    a: "Yes. Pix is open source. Download it, run it locally, and use your own pi agent configuration. There is no account wall for core desktop use.",
+    q: "Is Telos free?",
+    a: "Yes. Telos is open source. Download it, run it locally, and use your own pi agent configuration. There is no account wall for core desktop use.",
   },
   {
     q: "Which agent does it work with?",
-    a: "Pix is a better desktop app for the pi coding agent. Configuration, packages, sessions, and tools stay on the native pi side (~/.pi/agent).",
+    a: "Telos is a better desktop app for the pi coding agent. Configuration, packages, sessions, and tools stay on the native pi side (~/.pi/agent).",
   },
   {
     q: "Is it just a chat UI?",
@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: "Does it replace pi?",
-    a: "No. Pix is a desktop app for pi, not a fork. Models, API keys, settings, packages, and tools match interactive pi — not a parallel agent runtime with its own secrets store.",
+    a: "No. Telos is a desktop app for pi, not a fork. Models, API keys, settings, packages, and tools match interactive pi — not a parallel agent runtime with its own secrets store.",
   },
   {
     q: "Which platforms are supported?",

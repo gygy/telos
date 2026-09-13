@@ -1,10 +1,10 @@
-export function Why() {
+﻿export function Why() {
   return (
     <section id="why" className="relative scroll-mt-24 overflow-hidden">
       <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-24 sm:py-32 lg:grid-cols-2 lg:gap-16">
         <div>
           <div data-reveal="" style={{ ["--reveal-delay" as string]: "0ms" }}>
-            <p className="font-mono text-xs tracking-wide text-muted-foreground/70">Why Pix</p>
+            <p className="font-mono text-xs tracking-wide text-muted-foreground/70">Why Telos</p>
             <p className="mt-4 text-balance text-2xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
               Built for pi — not a fork of it.
             </p>
@@ -15,7 +15,7 @@ export function Why() {
             className="mt-8 space-y-6 text-lg leading-relaxed text-muted-foreground"
           >
             <p>
-              Coding agents improve fastest as CLIs. Pix is a better desktop app for the pi agent:
+              Coding agents improve fastest as CLIs. Telos is a better desktop app for the pi agent:
               sessions, projects, composer, and terminal mode — while configuration stays on the
               native agent side.
             </p>
@@ -35,8 +35,8 @@ export function Why() {
           />
           <div className="overflow-hidden rounded-2xl border border-white/[0.10] shadow-[0_28px_56px_-18px_rgba(0,0,0,0.58)] ring-1 ring-inset ring-white/[0.05]">
             <img
-              src="/pix-desktop.png"
-              alt="Pix desktop shell with sidebar navigation and composer"
+              src="/Telos-desktop.png"
+              alt="Telos desktop shell with sidebar navigation and composer"
               className="block h-auto w-full object-cover object-top"
               decoding="async"
             />

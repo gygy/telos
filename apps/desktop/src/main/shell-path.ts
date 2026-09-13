@@ -1,6 +1,6 @@
-/**
+﻿/**
  * GUI-launched Electron (Dock / Finder / Start Menu) inherits a minimal PATH.
- * Dev launches from a shell keep full PATH — that is why packaged Pix fails to
+ * Dev launches from a shell keep full PATH — that is why packaged Telos fails to
  * find `pi` / `node` / `npm` and falls into slow npm install / tool re-download.
  *
  * Pure, sync helpers: scan well-known user bin dirs and prepend them.

@@ -45,7 +45,7 @@ export function isEphemeralWorkspacePath(path: string): boolean {
  */
 export function isAutoDefaultWorkspacePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return /\/Pix\/\d{4}-\d{2}-\d{2}(-\d+)?$/i.test(normalized);
+  return /\/Telos\/\d{4}-\d{2}-\d{2}(-\d+)?$/i.test(normalized);
 }
 
 /**
@@ -54,7 +54,7 @@ export function isAutoDefaultWorkspacePath(path: string): boolean {
  */
 export function isConversationWorkspacePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return /\/Pix\/conversations(?:\/|$)/i.test(normalized);
+  return /\/Telos\/conversations(?:\/|$)/i.test(normalized);
 }
 
 /** Paths that must never appear as projects in the sidebar recent/current rail. */

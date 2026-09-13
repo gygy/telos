@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ThemeLibrarySnapshot,
   ThemeSkinColors,
   ThemeSkinConfig,
@@ -477,7 +477,7 @@ function parseImageName(raw: unknown): string | undefined {
   return image;
 }
 
-/** Parse a portable Pix skin or a compatible Dream Skin theme.json document. */
+/** Parse a portable Telos skin or a compatible Dream Skin theme.json document. */
 export function parseThemePack(raw: unknown): ThemePack {
   if (!isRecord(raw)) throw new Error("Theme pack must be an object");
   if (hasOwn(raw, "version") && raw.version !== 1)

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vite-plus/test";
-import type { ThemeSkinRecord } from "@pix/contracts";
+﻿import { beforeEach, describe, expect, it } from "vite-plus/test";
+import type { ThemeSkinRecord } from "@Telos/contracts";
 import {
   activeThemePack,
   applyThemeSelection,
@@ -88,7 +88,7 @@ describe("theme-packs", () => {
     });
   });
 
-  it("maps a Dream Skin-style theme document into a native Pix skin", () => {
+  it("maps a Dream Skin-style theme document into a native Telos skin", () => {
     const pack = parseThemePackJson(
       JSON.stringify({
         schemaVersion: 1,
@@ -110,7 +110,7 @@ describe("theme-packs", () => {
     expect(resolveThemeVariant(pack, "light")).toEqual({});
   });
 
-  it("keeps Pix's original light/dark token packs compatible", () => {
+  it("keeps Telos's original light/dark token packs compatible", () => {
     const pack = parseThemePackJson(
       '{"meta":{"name":"Dual"},"light":{"tokens":{"primary":"#0f766e"}},"dark":{"tokens":{"primary":"#f1ae80"}}}',
     );
@@ -171,7 +171,7 @@ describe("theme-packs", () => {
     expect(() => parseThemePackJson('{"background":"url(https://example.com/skin.png)"}')).toThrow(
       "background",
     );
-    expect(() => parseThemePackJson('{"tokens":{"--not-a-pix-token":"#fff"}}')).toThrow(
+    expect(() => parseThemePackJson('{"tokens":{"--not-a-Telos-token":"#fff"}}')).toThrow(
       "Unsupported theme token",
     );
     expect(() =>
@@ -194,12 +194,12 @@ describe("theme-packs", () => {
     });
     expect(loadThemeSelection()).toEqual({ id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" });
 
-    storage.set("pix.theme.selection.v2", JSON.stringify({ presetId: "lagoon" }));
+    storage.set("Telos.theme.selection.v2", JSON.stringify({ presetId: "lagoon" }));
     expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
 
-    storage.set("pix.theme.selection.v2", JSON.stringify({ id: "classic-light" }));
+    storage.set("Telos.theme.selection.v2", JSON.stringify({ id: "classic-light" }));
     expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
-    storage.set("pix.theme.selection.v2", JSON.stringify({ presetId: "classic-dark" }));
+    storage.set("Telos.theme.selection.v2", JSON.stringify({ presetId: "classic-dark" }));
     expect(loadThemeSelection()).toEqual(DEFAULT_THEME_SELECTION);
   });
 
@@ -208,7 +208,7 @@ describe("theme-packs", () => {
       id: "skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-      backgroundUrl: "pix-theme://skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/background?v=1",
+      backgroundUrl: "Telos-theme://skin-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/background?v=1",
       config: {
         schemaVersion: 1,
         name: "Glass room",
@@ -225,7 +225,7 @@ describe("theme-packs", () => {
     expect(dataset.themeSkinActive).toBe("true");
     expect(dataset.themeSkinSidebarTranslucent).toBe("false");
     expect(dataset.themeSkinSidebarGlass).toBe("true");
-    expect(styles.get("--skin-wallpaper-image")).toContain("pix-theme://");
+    expect(styles.get("--skin-wallpaper-image")).toContain("Telos-theme://");
     expect(styles.get("--skin-blur")).toBe("24px");
     expect(styles.get("--primary")).toBe("#4fd1c5");
     expect(dataset.themeSkinDensity).toBe("compact");

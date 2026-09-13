@@ -1,4 +1,4 @@
-# Managed runtimes (Node + Python)
+﻿# Managed runtimes (Node + Python)
 
 WorkBuddy-style **managed runtimes**:
 
@@ -42,7 +42,7 @@ Contents/Resources/runtimes/
 ### After first launch (userData)
 
 ```text
-~/Library/Application Support/Pix/runtimes/   # mac example
+~/Library/Application Support/Telos/runtimes/   # mac example
   node/
   python/
   npm-prefix/          # NPM_CONFIG_PREFIX

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+﻿import { describe, expect, it, vi } from "vite-plus/test";
 import {
   buildAppUpdateStatus,
   createAutoUpdateController,
@@ -139,8 +139,8 @@ describe("createAutoUpdateController", () => {
     const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const dir = mkdtempSync(join(tmpdir(), "pix-mac-update-test-"));
-    const zipPath = join(dir, "Pix-0.5.2-mac-arm64.zip");
+    const dir = mkdtempSync(join(tmpdir(), "Telos-mac-update-test-"));
+    const zipPath = join(dir, "Telos-0.5.2-mac-arm64.zip");
     writeFileSync(zipPath, "zip");
 
     const listeners = new Map<string, Array<(...args: unknown[]) => void>>();

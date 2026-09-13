@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unsigned macOS auto-update installer (Tauri-style).
  *
  * electron-updater on macOS normally hands the zip to Squirrel.Mac, which
@@ -14,9 +14,9 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 export type MacInstallUpdateOptions = {
-  /** Path to the downloaded electron-updater zip (Pix-*.zip). */
+  /** Path to the downloaded electron-updater zip (Telos-*.zip). */
   zipPath: string;
-  /** Absolute path to the running app bundle (.../Pix.app). */
+  /** Absolute path to the running app bundle (.../Telos.app). */
   appBundlePath: string;
   /** Optional shell runner for tests. */
   run?: (cmd: string, args: string[]) => Promise<void>;
@@ -24,7 +24,7 @@ export type MacInstallUpdateOptions = {
 
 /**
  * Resolve the .app bundle from the main executable path.
- * `/Applications/Pix.app/Contents/MacOS/Pix` → `/Applications/Pix.app`
+ * `/Applications/Telos.app/Contents/MacOS/Telos` → `/Applications/Telos.app`
  */
 export function resolveMacAppBundlePath(execPath: string): string {
   return resolve(execPath, "../../..");
@@ -41,7 +41,7 @@ export function isAppBundlePath(path: string): boolean {
 
 /**
  * Locate a single `.app` under extractDir (root or one level deep).
- * electron-builder zip layout is `Pix.app/...` at the archive root.
+ * electron-builder zip layout is `Telos.app/...` at the archive root.
  */
 export function findAppBundleInDir(extractDir: string): string | null {
   if (isAppBundlePath(extractDir)) return extractDir;

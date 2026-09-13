@@ -1,4 +1,4 @@
-import { Glass } from "./Glass.tsx";
+﻿import { Glass } from "./Glass.tsx";
 import { PixMark } from "./PixMark.tsx";
 import { SkyCanvas } from "./SkyCanvas.tsx";
 
@@ -24,7 +24,7 @@ export function SiteFooter() {
             <div className="max-w-xs">
               <div className="flex items-center gap-2.5">
                 <PixMark className="size-7" />
-                <span className="text-[15px] font-semibold tracking-tight">Pix</span>
+                <span className="text-[15px] font-semibold tracking-tight">Telos</span>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 A better desktop app for the pi agent. Built for Windows, macOS, and Linux.
@@ -37,7 +37,7 @@ export function SiteFooter() {
                   Features
                 </a>
                 <a href="#why" className={footLink}>
-                  Why Pix
+                  Why Telos
                 </a>
                 <a href="#download" className={footLink}>
                   Download
@@ -57,7 +57,7 @@ export function SiteFooter() {
                   pi coding agent
                 </a>
                 <a
-                  href="https://github.com/num-scope/pix"
+                  href="#"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={footLink}
@@ -65,7 +65,7 @@ export function SiteFooter() {
                   GitHub
                 </a>
                 <a
-                  href="https://github.com/num-scope/pix/releases"
+                  href="#download"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={footLink}
@@ -76,7 +76,7 @@ export function SiteFooter() {
               <div className="flex flex-col gap-2.5">
                 <span className="text-sm font-semibold text-foreground">Legal</span>
                 <a
-                  href="https://github.com/num-scope/pix/blob/main/LICENSE"
+                  href="#"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={footLink}
@@ -88,7 +88,7 @@ export function SiteFooter() {
           </div>
           <div className="border-t border-border/60">
             <div className="flex w-full flex-col gap-2 px-6 py-4 text-sm text-muted-foreground/60 sm:flex-row sm:items-center sm:justify-between sm:py-5">
-              <span>© Pix · for the pi agent</span>
+              <span>© Telos · for the pi agent</span>
               <span className="inline-flex items-center gap-1.5">Win · macOS · Linux</span>
             </div>
           </div>

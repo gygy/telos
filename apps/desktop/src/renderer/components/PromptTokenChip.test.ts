@@ -1,4 +1,4 @@
-import { createElement } from "react";
+﻿import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { PromptTokenChip, renderHighlightSpans, UserMessageText } from "./PromptTokenChip.tsx";
@@ -64,12 +64,12 @@ describe("PromptTokenChip overlay", () => {
   it("renders sent tokens inline with the sentence, not as a chip row", () => {
     const html = renderToStaticMarkup(
       createElement(UserMessageText, {
-        text: "对比几个插件 @npm:pix-tools",
+        text: "对比几个插件 @npm:Telos-tools",
         locale: "zh",
       }),
     );
     expect(html).toContain("对比几个插件");
-    expect(html).toContain('class="prompt-token-chip-label">Pix Tools<');
+    expect(html).toContain('class="prompt-token-chip-label">Telos Tools<');
     expect(html).not.toContain("user-message-refs");
     expect(html).not.toContain("composer-ref-chip-remove");
   });

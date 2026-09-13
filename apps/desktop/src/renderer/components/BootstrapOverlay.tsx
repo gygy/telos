@@ -24,7 +24,7 @@ export function BootstrapOverlay(props: {
         <div className="bootstrap-logo-wrap" aria-hidden>
           <PixLogo className="bootstrap-logo" title="Telos" />
         </div>
-        <div className="bootstrap-brand">Pix</div>
+        <div className="bootstrap-brand">Telos</div>
         <div className="bootstrap-status" data-testid="bootstrap-status">
           {props.status}
         </div>

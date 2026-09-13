@@ -1,4 +1,4 @@
-appId: app.telos.desktop
+﻿appId: app.telos.desktop
 productName: Telos
 # package.json name is @pix/desktop — override so AppImage/deb paths stay valid.
 executableName: Telos
@@ -72,7 +72,7 @@ linux:
     - deb
   category: Development
   synopsis: Telos intelligent coding assistant
-  description: Telos is an intelligent programming assistant based on the Pix desktop shell for the pi coding agent.
+  description: Telos is an intelligent programming assistant desktop shell for the pi coding agent.
 # node-pty's spawn-helper must live outside asar and remain executable.
 # Missing +x → terminal mode: "posix_spawnp failed".
 asarUnpack:

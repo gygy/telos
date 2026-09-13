@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+﻿import { describe, expect, it } from "vite-plus/test";
 import {
   buildPiTuiArgs,
   normalizeSessionKey,
@@ -8,7 +8,7 @@ import {
 
 describe("pi-tui-session", () => {
   it("builds pi --session args from the real session file path", () => {
-    const file = "C:\\Users\\me\\Pix\\conversations\\s1.jsonl";
+    const file = "C:\\Users\\me\\Telos\\conversations\\s1.jsonl";
     expect(buildPiTuiArgs(file)).toEqual(["--session", file]);
     expect(() => buildPiTuiArgs("  ")).toThrow(/sessionFile/i);
   });

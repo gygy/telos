@@ -1,7 +1,7 @@
-import { Glass } from "./Glass.tsx";
+﻿import { Glass } from "./Glass.tsx";
 import { PixMark } from "./PixMark.tsx";
 
-const DOWNLOAD_HREF = "https://github.com/num-scope/pix/releases/latest";
+const DOWNLOAD_HREF = "#download";
 
 const navLink =
   "rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted/40 hover:text-foreground";
@@ -16,21 +16,21 @@ export function SiteHeader() {
         <div className="relative z-10 flex h-full items-center gap-3 px-3 sm:gap-4 sm:px-4">
           <a
             href="/"
-            aria-label="Pix — home"
+            aria-label="Telos — home"
             className="flex shrink-0 items-center gap-2.5 text-foreground transition-opacity duration-150 hover:opacity-80"
           >
             <PixMark className="size-7" />
-            <span className="text-[15px] font-semibold tracking-tight">Pix</span>
+            <span className="text-[15px] font-semibold tracking-tight">Telos</span>
           </a>
           <nav className="ml-auto hidden items-center gap-0.5 sm:flex">
             <a href="#features" className={navLink}>
               Features
             </a>
             <a href="#why" className={navLink}>
-              Why Pix
+              Why Telos
             </a>
             <a
-              href="https://github.com/num-scope/pix"
+              href="#"
               target="_blank"
               rel="noopener noreferrer"
               className={navLink}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Environment for embedded pi TUI — align with agent-host so managed tools
  * (fd/rg under ~/.pi/agent/bin) are found and not re-downloaded every launch.
  */
@@ -37,7 +37,7 @@ function expandTilde(path: string, env: NodeJS.ProcessEnv): string {
  * Build env for `pi --session` PTY:
  * - stable PI_CODING_AGENT_DIR (shared with host / previous TUI runs)
  * - prepend managed bin + common tool locations so getToolPath finds fd/rg
- * - GUI-minimal PATH is augmented like the rest of packaged Pix
+ * - GUI-minimal PATH is augmented like the rest of packaged Telos
  */
 export function buildPiTuiEnv(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
   // Bundled Node/Python bins first so TUI tools resolve without a system install.

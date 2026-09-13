@@ -1,4 +1,4 @@
-import { IPC_PROTOCOL_VERSION } from "@pix/contracts";
+﻿import { IPC_PROTOCOL_VERSION } from "@pix/contracts";
 import type {
   CatalogPackage,
   HostEvent,
@@ -800,7 +800,7 @@ function App() {
   }
 
   /**
-   * Prefetch pure-conversation sessions (Documents/Pix/conversations) so the
+   * Prefetch pure-conversation sessions (Documents/Telos/conversations) so the
    * 对话 rail stays populated even while a project host is active.
    */
   async function refreshConversationSessions() {
@@ -2422,7 +2422,7 @@ function App() {
   /**
    * Unscoped「新建会话」(no selected project, or 对话 section header):
    * Pure conversation — NOT bound to any project.
-   * Host cwd = Documents/Pix/conversations (hidden from 项目 rail / recent).
+   * Host cwd = Documents/Telos/conversations (hidden from 项目 rail / recent).
    * A selected project or its row action uses newThreadForProject instead.
    *
    * Lifecycle (clear/start/create) runs as one main-process exclusive op so rapid

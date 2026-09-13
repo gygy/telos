@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Standalone statement band — matches production marketing quote section:
  * max-w-4xl, py-28/36, text-3xl → sm:2.6rem, Instrument Serif italic accent.
  */
@@ -11,7 +11,7 @@ export function PurposeQuote() {
           <span className="font-display text-[1.1em] italic text-muted-foreground">
             On purpose.
           </span>{" "}
-          Your agent already lives in the code. Pix stays focused on the conversation.
+          Your agent already lives in the code. Telos stays focused on the conversation.
         </p>
       </div>
     </section>

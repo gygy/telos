@@ -1,4 +1,4 @@
-import "./proxy-bootstrap.ts";
+﻿import "./proxy-bootstrap.ts";
 import {
   createPixRuntime,
   extractToolSessionImages,
@@ -28,7 +28,7 @@ interface ElectronParentPort {
 }
 
 const parentPort = (process as NodeJS.Process & { parentPort?: ElectronParentPort }).parentPort;
-if (!parentPort) throw new Error("Pix Agent Host must run as an Electron utility process");
+if (!parentPort) throw new Error("Telos Agent Host must run as an Electron utility process");
 
 function logHostFatal(kind: string, error: unknown): void {
   const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);

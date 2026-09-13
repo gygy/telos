@@ -1,9 +1,9 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 @import "tw-animate-css";
 
 /*
  * Tokens lifted from OpenCowork dark theme (main.css :root / .dark).
- * Structure: shadcn-style semantic colors + Pix product chrome.
+ * Structure: shadcn-style semantic colors + Telos product chrome.
  * Not copying OpenCowork trademarks — only visual system.
  */
 

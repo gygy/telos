@@ -533,7 +533,7 @@ type ArchivedSessionRow = {
   title: string;
   cwd: string;
   projectName: string;
-  /** Pure conversation home (Pix/conversations) — not a project group. */
+  /** Pure conversation home (Telos/conversations) — not a project group. */
   isConversation: boolean;
   archivedAt?: string;
 };
@@ -1300,7 +1300,7 @@ function WorktreeSection(
   const refreshLinkedWorktrees = useCallback(async () => {
     setListLoading(true);
     try {
-      // All Pix-managed linked worktrees across projects (not only the open cwd).
+      // All Telos-managed linked worktrees across projects (not only the open cwd).
       const items = await window.pix.workspace.listManagedWorktrees();
       setLinkedWorktrees(items.filter((w) => !w.main && !w.bare));
     } catch {
@@ -4666,7 +4666,7 @@ function ModelsSection(
   );
 }
 
-/** pi HTTP_IDLE_TIMEOUT_CHOICES + Pix longer presets (ms → i18n). */
+/** pi HTTP_IDLE_TIMEOUT_CHOICES + Telos longer presets (ms → i18n). */
 const HTTP_IDLE_TIMEOUT_PRESETS: ReadonlyArray<{ ms: number; labelKey: MessageKey }> = [
   { ms: 30_000, labelKey: "piSettings.httpIdle30s" },
   { ms: 60_000, labelKey: "piSettings.httpIdle1m" },
@@ -4741,7 +4741,7 @@ function piViewToDraft(view: PiSettingsView): PiDraft {
     followUpMode: view.followUpMode ?? "all",
     doubleEscapeAction: view.doubleEscapeAction ?? "fork",
     treeFilterMode: view.treeFilterMode ?? "default",
-    // Pix product default: 60 minutes (pi upstream default is 5 minutes / 300000).
+    // Telos product default: 60 minutes (pi upstream default is 5 minutes / 300000).
     httpIdleTimeoutMs: view.httpIdleTimeoutMs ?? 3_600_000,
     enableInstallTelemetry: view.enableInstallTelemetry === true,
     enableAnalytics: view.enableAnalytics === true,

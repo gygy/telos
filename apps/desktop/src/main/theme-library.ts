@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -242,7 +242,7 @@ function safeImageName(value: unknown): string | undefined {
   return name;
 }
 
-/** Convert both Pix's original packs and Dream Skin-style theme.json files into safe storage data. */
+/** Convert both Telos's original packs and Dream Skin-style theme.json files into safe storage data. */
 export function normalizeThemeSkinConfig(raw: unknown): ThemeSkinConfig {
   if (!isRecord(raw)) throw new Error("Theme configuration must be an object");
   if (raw.version !== undefined && raw.version !== 1) {

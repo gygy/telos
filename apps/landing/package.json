@@ -1,8 +1,8 @@
-{
-  "name": "@pix/landing",
+﻿{
+  "name": "@Telos/landing",
   "version": "0.0.0",
   "private": true,
-  "description": "Pix product landing page",
+  "description": "Telos product landing page",
   "type": "module",
   "scripts": {
     "dev": "vp dev --config vite.config.ts",

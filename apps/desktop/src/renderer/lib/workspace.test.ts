@@ -17,7 +17,7 @@ import {
 
 describe("workspace helpers", () => {
   it("labels paths for the sidebar chip", () => {
-    expect(workspaceLabel("/Users/me/code/pix")).toEqual({ name: "pix", detail: "code" });
+    expect(workspaceLabel("/Users/me/code/Telos")).toEqual({ name: "Telos", detail: "code" });
     expect(workspaceLabel(undefined).name).toBe("");
   });
 
@@ -63,41 +63,41 @@ describe("workspace helpers", () => {
   });
 
   it("filters e2e/tmp workspaces and current cwd from recent list", () => {
-    expect(isEphemeralWorkspacePath("/var/folders/xx/T/pix-e2e-abc/workspace")).toBe(true);
-    expect(isEphemeralWorkspacePath("/Users/me/code/pix")).toBe(false);
+    expect(isEphemeralWorkspacePath("/var/folders/xx/T/Telos-e2e-abc/workspace")).toBe(true);
+    expect(isEphemeralWorkspacePath("/Users/me/code/Telos")).toBe(false);
     const paths = [
-      "/Users/me/code/pix",
-      "/var/folders/xx/T/pix-e2e-abc/workspace",
+      "/Users/me/code/Telos",
+      "/var/folders/xx/T/Telos-e2e-abc/workspace",
       "/Users/me/code/other",
-      "/Users/me/code/pix",
-      "/tmp/pix-fake-xyz/workspace",
+      "/Users/me/code/Telos",
+      "/tmp/Telos-fake-xyz/workspace",
     ];
-    expect(filterRecentWorkspaces(paths, { current: "/Users/me/code/pix", max: 5 })).toEqual([
+    expect(filterRecentWorkspaces(paths, { current: "/Users/me/code/Telos", max: 5 })).toEqual([
       "/Users/me/code/other",
     ]);
-    expect(prependRecentPath(["/Users/me/a"], "/tmp/pix-e2e-x/workspace")).toEqual(["/Users/me/a"]);
+    expect(prependRecentPath(["/Users/me/a"], "/tmp/Telos-e2e-x/workspace")).toEqual(["/Users/me/a"]);
   });
 
   it("treats Documents/Telos date folders and conversation home as non-projects", () => {
     expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/2026-07-21")).toBe(true);
     expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/2026-07-21-2")).toBe(true);
     expect(isAutoDefaultWorkspacePath("/Users/me/Documents/Telos/worktrees/repo")).toBe(false);
-    expect(isAutoDefaultWorkspacePath("/Users/me/code/pix")).toBe(false);
+    expect(isAutoDefaultWorkspacePath("/Users/me/code/Telos")).toBe(false);
     expect(isConversationWorkspacePath("/Users/me/Documents/Telos/conversations")).toBe(true);
     expect(isConversationWorkspacePath("/Users/me/Documents/Telos/conversations/x")).toBe(true);
     expect(isNonProjectWorkspacePath("/Users/me/Documents/Telos/conversations")).toBe(true);
-    expect(isNonProjectWorkspacePath("/Users/me/code/pix")).toBe(false);
+    expect(isNonProjectWorkspacePath("/Users/me/code/Telos")).toBe(false);
     expect(
       filterRecentWorkspaces(
         [
-          "/Users/me/code/pix",
+          "/Users/me/code/Telos",
           "/Users/me/Documents/Telos/2026-07-21",
           "/Users/me/Documents/Telos/conversations",
           "/Users/me/code/other",
         ],
         { max: 5 },
       ),
-    ).toEqual(["/Users/me/code/pix", "/Users/me/code/other"]);
+    ).toEqual(["/Users/me/code/Telos", "/Users/me/code/other"]);
     expect(prependRecentPath(["/Users/me/a"], "/Users/me/Documents/Telos/2026-07-21")).toEqual([
       "/Users/me/a",
     ]);
@@ -107,27 +107,27 @@ describe("workspace helpers", () => {
   });
 
   it("keeps the open project on recent so selection clear cannot empty projectKeys", () => {
-    expect(mergeRecentWithOpenProject(["/Users/me/code/other"], "/Users/me/code/pix", 12)).toEqual([
-      "/Users/me/code/pix",
+    expect(mergeRecentWithOpenProject(["/Users/me/code/other"], "/Users/me/code/Telos", 12)).toEqual([
+      "/Users/me/code/Telos",
       "/Users/me/code/other",
     ]);
-    expect(mergeRecentWithOpenProject(["/Users/me/code/pix"], "/Users/me/code/pix", 12)).toEqual([
-      "/Users/me/code/pix",
+    expect(mergeRecentWithOpenProject(["/Users/me/code/Telos"], "/Users/me/code/Telos", 12)).toEqual([
+      "/Users/me/code/Telos",
     ]);
     expect(
       mergeRecentWithOpenProject(
-        ["/Users/me/code/pix"],
+        ["/Users/me/code/Telos"],
         "/Users/me/Documents/Telos/conversations",
         12,
       ),
-    ).toEqual(["/Users/me/code/pix"]);
+    ).toEqual(["/Users/me/code/Telos"]);
   });
 
   it("never classifies project-bound sessions into the 对话 section", () => {
     const byCwd = {
-      "/Users/me/code/pix": [
-        { id: "proj-1", cwd: "/Users/me/code/pix" },
-        { id: "proj-2", cwd: "/Users/me/code/pix" },
+      "/Users/me/code/Telos": [
+        { id: "proj-1", cwd: "/Users/me/code/Telos" },
+        { id: "proj-2", cwd: "/Users/me/code/Telos" },
         // Leaked conversation row under a project key must not join projectThreadIds.
         { id: "conv-leaked", cwd: "/Users/me/Documents/Telos/conversations" },
       ],
@@ -143,7 +143,7 @@ describe("workspace helpers", () => {
     // Even if projectKeys is empty (selection/recent race), cwd type decides.
     expect(
       belongsInConversationsSection(
-        { id: "proj-1", cwd: "/Users/me/code/pix" },
+        { id: "proj-1", cwd: "/Users/me/code/Telos" },
         { projectThreadIds: new Set() },
       ),
     ).toBe(false);
@@ -168,12 +168,12 @@ describe("workspace helpers", () => {
 
   it("filters host list rows into the correct workspace bucket", () => {
     const rows = [
-      { id: "a", cwd: "/Users/me/code/pix" },
+      { id: "a", cwd: "/Users/me/code/Telos" },
       { id: "b", cwd: "/Users/me/code/other" },
       { id: "c", cwd: "/Users/me/Documents/Telos/conversations" },
       { id: "live", cwd: "" },
     ];
-    expect(threadsForWorkspaceBucket(rows, "/Users/me/code/pix").map((r) => r.id)).toEqual([
+    expect(threadsForWorkspaceBucket(rows, "/Users/me/code/Telos").map((r) => r.id)).toEqual([
       "a",
       "live",
     ]);

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+﻿import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -11,17 +11,17 @@ import {
 
 describe("resolveMacAppBundlePath", () => {
   it("walks up from Contents/MacOS/executable", () => {
-    expect(resolveMacAppBundlePath("/Applications/Pix.app/Contents/MacOS/Pix")).toBe(
-      "/Applications/Pix.app",
+    expect(resolveMacAppBundlePath("/Applications/Telos.app/Contents/MacOS/Telos")).toBe(
+      "/Applications/Telos.app",
     );
   });
 });
 
 describe("findAppBundleInDir", () => {
   it("finds a root-level .app", () => {
-    const dir = mkdtempSync(join(tmpdir(), "pix-find-app-"));
+    const dir = mkdtempSync(join(tmpdir(), "Telos-find-app-"));
     try {
-      const app = join(dir, "Pix.app");
+      const app = join(dir, "Telos.app");
       mkdirSync(join(app, "Contents"), { recursive: true });
       expect(isAppBundlePath(app)).toBe(true);
       expect(findAppBundleInDir(dir)).toBe(app);
@@ -31,10 +31,10 @@ describe("findAppBundleInDir", () => {
   });
 
   it("finds a nested .app one level down", () => {
-    const dir = mkdtempSync(join(tmpdir(), "pix-find-app-nested-"));
+    const dir = mkdtempSync(join(tmpdir(), "Telos-find-app-nested-"));
     try {
       const wrap = join(dir, "wrap");
-      const app = join(wrap, "Pix.app");
+      const app = join(wrap, "Telos.app");
       mkdirSync(join(app, "Contents"), { recursive: true });
       expect(findAppBundleInDir(dir)).toBe(app);
     } finally {
@@ -45,14 +45,14 @@ describe("findAppBundleInDir", () => {
 
 describe("installMacUpdateFromZip", () => {
   it("swaps the app bundle via ditto extract + rename", async () => {
-    const root = mkdtempSync(join(tmpdir(), "pix-mac-install-"));
+    const root = mkdtempSync(join(tmpdir(), "Telos-mac-install-"));
     try {
       const zipPath = join(root, "update.zip");
       writeFileSync(zipPath, "fake-zip");
 
-      const currentApp = join(root, "Pix.app");
+      const currentApp = join(root, "Telos.app");
       mkdirSync(join(currentApp, "Contents", "MacOS"), { recursive: true });
-      writeFileSync(join(currentApp, "Contents", "MacOS", "Pix"), "old");
+      writeFileSync(join(currentApp, "Contents", "MacOS", "Telos"), "old");
 
       const extractStaging = join(root, "extract-staging");
       mkdirSync(extractStaging, { recursive: true });
@@ -66,9 +66,9 @@ describe("installMacUpdateFromZip", () => {
           if (cmd === "ditto") {
             // ditto -x -k zip extractDir — simulate extract of new app into extractDir
             const dest = args[3]!;
-            const newApp = join(dest, "Pix.app");
+            const newApp = join(dest, "Telos.app");
             mkdirSync(join(newApp, "Contents", "MacOS"), { recursive: true });
-            writeFileSync(join(newApp, "Contents", "MacOS", "Pix"), "new");
+            writeFileSync(join(newApp, "Contents", "MacOS", "Telos"), "new");
             return;
           }
         },
@@ -76,8 +76,8 @@ describe("installMacUpdateFromZip", () => {
 
       expect(commands.some((c) => c.cmd === "ditto")).toBe(true);
       expect(commands.some((c) => c.cmd === "xattr" && c.args.includes("-cr"))).toBe(true);
-      expect(existsSync(join(currentApp, "Contents", "MacOS", "Pix"))).toBe(true);
-      expect(readFileSync(join(currentApp, "Contents", "MacOS", "Pix"), "utf8")).toBe("new");
+      expect(existsSync(join(currentApp, "Contents", "MacOS", "Telos"))).toBe(true);
+      expect(readFileSync(join(currentApp, "Contents", "MacOS", "Telos"), "utf8")).toBe("new");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -86,8 +86,8 @@ describe("installMacUpdateFromZip", () => {
   it("rejects missing zip", async () => {
     await expect(
       installMacUpdateFromZip({
-        zipPath: "/tmp/pix-missing-update.zip",
-        appBundlePath: "/Applications/Pix.app",
+        zipPath: "/tmp/Telos-missing-update.zip",
+        appBundlePath: "/Applications/Telos.app",
         run: async () => undefined,
       }),
     ).rejects.toThrow(/not found/i);

@@ -1,4 +1,4 @@
-export const MAX_THEME_CUSTOM_CSS_LENGTH = 32 * 1024;
+﻿export const MAX_THEME_CUSTOM_CSS_LENGTH = 32 * 1024;
 
 const SELECTOR_HOOKS = [
   ".app-shell",
@@ -136,7 +136,7 @@ function safeSelector(value: string): string {
     fail("document root selectors are not allowed");
   }
   if (!SELECTOR_HOOKS.some((hook) => selector.includes(hook))) {
-    fail("selector must target a Pix theme surface");
+    fail("selector must target a Telos theme surface");
   }
   return selector;
 }

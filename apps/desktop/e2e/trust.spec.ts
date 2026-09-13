@@ -1,7 +1,7 @@
-/**
+﻿/**
  * Project trust E2E (view / chat mode).
  *
- * Pix does not show an interactive "Trust project?" modal in view mode.
+ * Telos does not show an interactive "Trust project?" modal in view mode.
  * `defaultProjectTrust` only affects auto-trust when a project has trust-gated
  * resources (e.g. `.pi/settings.json`) and no trust.json entry yet:
  *   - always → projectTrusted true
@@ -18,7 +18,7 @@ type DefaultTrust = "ask" | "always" | "never";
 async function setDefaultProjectTrust(page: Page, value: DefaultTrust): Promise<void> {
   const result = await page.evaluate(async (trust) => {
     try {
-      const patched = await window.pix.settings.patch({ defaultProjectTrust: trust });
+      const patched = await window.Telos.settings.patch({ defaultProjectTrust: trust });
       return { ok: true as const, value: patched.settings.defaultProjectTrust };
     } catch (error) {
       return {
@@ -43,7 +43,7 @@ async function openProject(
 }> {
   const result = await page.evaluate(async (path) => {
     try {
-      const snap = await window.pix.workspace.openPath(path, { resumeRecent: false });
+      const snap = await window.Telos.workspace.openPath(path, { resumeRecent: false });
       return {
         ok: true as const,
         cwd: snap.cwd,
@@ -79,7 +79,7 @@ async function hostSnapshotTrust(page: Page): Promise<{
   fallback: string | undefined;
 }> {
   return page.evaluate(async () => {
-    const snap = await window.pix.host.snapshot();
+    const snap = await window.Telos.host.snapshot();
     return {
       projectTrusted: snap.projectTrusted,
       required: snap.trust?.required,
@@ -97,11 +97,11 @@ async function createGatedProject(root: string, name: string): Promise<string> {
 }
 
 test.describe("Project trust (view mode)", () => {
-  test("always auto-trusts projects that have .pi config", async ({ page, pix }) => {
+  test("always auto-trusts projects that have .pi config", async ({ page, Telos }) => {
     await startHost(page);
     await setDefaultProjectTrust(page, "always");
 
-    const gated = await createGatedProject(pix.root, "trust-always-gated");
+    const gated = await createGatedProject(Telos.root, "trust-always-gated");
     const opened = await openProject(page, gated);
 
     expect(opened.cwd.replace(/\\/g, "/")).toBe(gated.replace(/\\/g, "/"));
@@ -114,11 +114,11 @@ test.describe("Project trust (view mode)", () => {
     });
   });
 
-  test("never keeps gated projects untrusted until toggled", async ({ page, pix }) => {
+  test("never keeps gated projects untrusted until toggled", async ({ page, Telos }) => {
     await startHost(page);
     await setDefaultProjectTrust(page, "never");
 
-    const gated = await createGatedProject(pix.root, "trust-never-gated");
+    const gated = await createGatedProject(Telos.root, "trust-never-gated");
     const opened = await openProject(page, gated);
 
     expect(opened.trustRequired).toBe(true);
@@ -130,7 +130,7 @@ test.describe("Project trust (view mode)", () => {
 
     // Manual trust via IPC (same path as settings / full-access mapping).
     await page.evaluate(async () => {
-      await window.pix.trust.set(true);
+      await window.Telos.trust.set(true);
     });
     await expect
       .poll(async () => (await hostSnapshotTrust(page)).projectTrusted, { timeout: 15_000 })
@@ -140,7 +140,7 @@ test.describe("Project trust (view mode)", () => {
     });
 
     await page.evaluate(async () => {
-      await window.pix.trust.set(false);
+      await window.Telos.trust.set(false);
     });
     await expect
       .poll(async () => (await hostSnapshotTrust(page)).projectTrusted, { timeout: 15_000 })
@@ -150,11 +150,11 @@ test.describe("Project trust (view mode)", () => {
     });
   });
 
-  test("ask shows trust dialog and Trust persists for gated projects", async ({ page, pix }) => {
+  test("ask shows trust dialog and Trust persists for gated projects", async ({ page, Telos }) => {
     await startHost(page);
     await setDefaultProjectTrust(page, "ask");
 
-    const gated = await createGatedProject(pix.root, "trust-ask-gated");
+    const gated = await createGatedProject(Telos.root, "trust-ask-gated");
     const opened = await openProject(page, gated);
 
     expect(opened.trustRequired).toBe(true);
@@ -184,12 +184,12 @@ test.describe("Project trust (view mode)", () => {
 
   test("ask dialog Later dismisses without trusting; never does not show dialog", async ({
     page,
-    pix,
+    Telos,
   }) => {
     await startHost(page);
     await setDefaultProjectTrust(page, "ask");
 
-    const gatedLater = await createGatedProject(pix.root, "trust-ask-later");
+    const gatedLater = await createGatedProject(Telos.root, "trust-ask-later");
     await openProject(page, gatedLater);
     await expect(page.getByTestId("project-trust-dialog")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("project-trust-dialog-later").click();
@@ -200,7 +200,7 @@ test.describe("Project trust (view mode)", () => {
 
     // never → no dialog for a different gated project
     await setDefaultProjectTrust(page, "never");
-    const gatedNever = await createGatedProject(pix.root, "trust-never-no-dialog");
+    const gatedNever = await createGatedProject(Telos.root, "trust-never-no-dialog");
     await openProject(page, gatedNever);
     await expect
       .poll(async () => (await hostSnapshotTrust(page)).projectTrusted, { timeout: 15_000 })
@@ -212,11 +212,11 @@ test.describe("Project trust (view mode)", () => {
   // On Windows, temp paths live under the real user profile; pi walks parents for
   // `.agents/skills`, so E2E cannot reliably assert trustRequired=false for temp dirs.
 
-  test("developer trust-toggle flips chip for a gated untrusted project", async ({ page, pix }) => {
+  test("developer trust-toggle flips chip for a gated untrusted project", async ({ page, Telos }) => {
     await startHost(page);
     await setDefaultProjectTrust(page, "never");
 
-    const gated = await createGatedProject(pix.root, "trust-toggle-gated");
+    const gated = await createGatedProject(Telos.root, "trust-toggle-gated");
     await openProject(page, gated);
     await expect(page.getByTestId("trust-chip")).toContainText(/untrusted|未信任/i, {
       timeout: 15_000,

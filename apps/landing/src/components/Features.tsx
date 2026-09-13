@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { SkyCanvas } from "./SkyCanvas.tsx";
 
 type Feature = {
@@ -89,7 +89,7 @@ const features: Feature[] = [
   },
   {
     title: "Native pi, not a fork.",
-    body: "Models, API keys, settings, packages, and tools live where pi expects them. Pix is a desktop app for the agent — not a parallel config universe.",
+    body: "Models, API keys, settings, packages, and tools live where pi expects them. Telos is a desktop app for the agent — not a parallel config universe.",
     delay: "180ms",
     icon: (
       <svg

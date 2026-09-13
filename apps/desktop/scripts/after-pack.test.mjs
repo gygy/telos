@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smoke for after-pack.mjs app-update.yml generation.
  * Run: node apps/desktop/scripts/after-pack.test.mjs
  */
@@ -37,7 +37,7 @@ function assert(condition, message) {
   const root = mkdtempSync(join(tmpdir(), "pix-after-pack-"));
   try {
     const appOutDir = join(root, "mac-arm64");
-    const resources = join(appOutDir, "Pix.app", "Contents", "Resources");
+    const resources = join(appOutDir, "Telos.app", "Contents", "Resources");
     mkdirSync(resources, { recursive: true });
     writeFileSync(join(resources, "app.asar"), "placeholder");
 
@@ -54,7 +54,7 @@ function assert(condition, message) {
           },
         },
         appInfo: {
-          productFilename: "Pix",
+          productFilename: "Telos",
           name: "@pix/desktop",
           updaterCacheDirName: "@pixdesktop-updater",
         },
@@ -90,7 +90,7 @@ function assert(condition, message) {
           },
         },
         appInfo: {
-          productFilename: "Pix",
+          productFilename: "Telos",
           updaterCacheDirName: "@pixdesktop-updater",
         },
       },

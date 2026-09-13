@@ -1,8 +1,8 @@
-import { resolve } from "node:path";
+﻿import { resolve } from "node:path";
 import { test, expect, startHost, conversationSessionButtons, sendPrompt } from "./fixtures.ts";
 
 test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
-  test("conversation content renders safe interactive rich content", async ({ page, pix }) => {
+  test("conversation content renders safe interactive rich content", async ({ page, Telos }) => {
     await startHost(page);
     await page.evaluate(() => {
       Object.defineProperty(navigator, "clipboard", {
@@ -14,7 +14,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
         },
       });
     });
-    await pix.app.evaluate(({ shell }) => {
+    await Telos.app.evaluate(({ shell }) => {
       const state = globalThis as typeof globalThis & {
         __openedFile?: string;
         __openedExternal?: string;
@@ -114,7 +114,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       await fileLink.click();
       await expect
         .poll(async () => {
-          const opened = await pix.app.evaluate(
+          const opened = await Telos.app.evaluate(
             () => (globalThis as typeof globalThis & { __openedFile?: string }).__openedFile,
           );
           return (opened ?? "").replace(/\\/g, "/");
@@ -127,7 +127,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       await externalLink.click({ force: true });
       await expect
         .poll(() =>
-          pix.app.evaluate(
+          Telos.app.evaluate(
             () =>
               (globalThis as typeof globalThis & { __openedExternal?: string }).__openedExternal,
           ),
@@ -146,7 +146,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     }
 
     await expect(timeline.locator("script, iframe, [data-unsafe-html]")).toHaveCount(0);
-    await expect(timeline.locator(".pix-md > style")).toHaveCount(0);
+    await expect(timeline.locator(".Telos-md > style")).toHaveCount(0);
     expect(
       await page.evaluate(
         () => (window as Window & { __pixUnsafeScript?: boolean }).__pixUnsafeScript,
@@ -204,7 +204,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       .poll(async () => page.getByTestId("timeline").innerText(), { timeout: 30_000 })
       .toMatch(/read|Tool/i);
     await expect(page.getByTestId("event-log").first()).toContainText("tool.");
-    await expect(page.getByTestId("runtime-snapshot").first()).toContainText('"id": "pix-fake"');
+    await expect(page.getByTestId("runtime-snapshot").first()).toContainText('"id": "Telos-fake"');
     await expect(page.getByTestId("event-log").first()).toContainText("message.delta");
     // Process block is optional chrome; tool activity is already asserted via timeline text + events.
     const process = page.getByTestId("timeline-process").last();
@@ -281,15 +281,15 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
   test("attachments render typed cards from picker through the sent timeline", async ({
     page,
-    pix,
+    Telos,
   }) => {
     await startHost(page);
-    await pix.app.evaluate(({ dialog }, paths) => {
+    await Telos.app.evaluate(({ dialog }, paths) => {
       Object.defineProperty(dialog, "showOpenDialog", {
         configurable: true,
         value: async () => ({ canceled: false, filePaths: paths }),
       });
-    }, pix.attachmentPaths);
+    }, Telos.attachmentPaths);
 
     await page.getByTestId("composer-attach").click();
     await expect(page.getByTestId("composer-attach-menu")).toBeVisible();
@@ -347,9 +347,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("image-preview-dialog")).toBeHidden();
     }
-    const request = JSON.stringify(pix.fakeModel.requests.at(-1) ?? {});
+    const request = JSON.stringify(Telos.fakeModel.requests.at(-1) ?? {});
     // Prefer path segments — Windows path separators and prompt wrapping may vary.
-    for (const path of pix.attachmentPaths) {
+    for (const path of Telos.attachmentPaths) {
       const base = path.split(/[/\\]/).pop() ?? path;
       expect(request.includes(path) || request.includes(base)).toBe(true);
     }
@@ -374,7 +374,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     // Project-bound new session remains on each project row action.
     const projectPath = resolve(import.meta.dirname, "..");
     await page.evaluate(async (path) => {
-      await window.pix.workspace.openPath(path, { resumeRecent: false });
+      await window.Telos.workspace.openPath(path, { resumeRecent: false });
     }, projectPath);
     const trustDialog = page.getByTestId("project-trust-dialog");
     if (await trustDialog.isVisible().catch(() => false)) {
@@ -477,7 +477,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(page.getByTestId("resources-page")).toContainText(/Resources|资源/i);
   });
 
-  test("palette, theme toggle, and fork thread", async ({ page, pix }) => {
+  test("palette, theme toggle, and fork thread", async ({ page, Telos }) => {
     await startHost(page);
     await sendPrompt(page, "fork base message");
 
@@ -500,7 +500,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     const defaultCard = page.getByTestId("appearance-theme-skin-default");
     await defaultCard.click();
     await expect(defaultCard).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "default");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme-skin", "default");
     await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-translucent", "true");
     await expect(page.getByTestId("sidebar")).toHaveAttribute("data-sidebar-glass", "false");
     await expect(page.getByTestId("skin-wallpaper")).toBeHidden();
@@ -524,9 +524,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     await page.getByTestId("appearance-theme").click();
     await page.getByRole("option", { name: /Light|浅色/ }).click();
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme", "light");
     await expect
-      .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
+      .poll(() => Telos.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("light");
     await expect.poll(async () => (await sidebarMaterial()).alpha).toBe(1);
     await expect.poll(async () => (await sidebarMaterial()).backdrop).toBe("none");
@@ -546,10 +546,10 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       /zhang-ruonan/,
     );
     await zhangRuonanCard.click();
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme", "light");
     await expect
-      .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
+      .poll(() => Telos.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("light");
     await expect
       .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--primary")))
@@ -600,7 +600,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await page.getByTestId("appearance-theme-skin-new").click();
     await expect(page.getByTestId("appearance-theme-skin-studio")).toBeVisible();
     await expect(page.getByTestId("appearance-theme-skin-sidebar-translucent")).toHaveCount(0);
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme-skin", "zhang-ruonan");
     const studio = page.getByTestId("appearance-theme-skin-studio");
     await expect
       .poll(() =>
@@ -660,7 +660,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       35,
     );
     await expect(
-      page.getByText(/规则已限制在 Pix 主题表面|Rules are scoped to Pix theme surfaces/),
+      page.getByText(/规则已限制在 Telos 主题表面|Rules are scoped to Telos theme surfaces/),
     ).toHaveCount(0);
     await page.keyboard.press("Escape");
     await customCssEditor.fill(".composer-card { border-radius: 27px; background: ; }");
@@ -683,20 +683,20 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       )
       .toContain("blob:");
     await expect
-      .poll(() => page.locator("#pix-theme-custom-css").textContent())
+      .poll(() => page.locator("#Telos-theme-custom-css").textContent())
       .toContain('html[data-theme-skin-active="true"] .composer-card');
     await expect(page.getByTestId("appearance-theme-skin-tab-file")).toHaveCount(0);
     await expect(page.getByTestId("appearance-theme-skin-file-preview")).toHaveCount(0);
     await page.getByTestId("appearance-theme-skin-save").click();
     await expect(page.getByTestId("appearance-theme-skin-studio")).toBeHidden();
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", /^skin-/);
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme-skin", /^skin-/);
     await expect
       .poll(() =>
         page.evaluate(() =>
           document.documentElement.style.getPropertyValue("--skin-wallpaper-image"),
         ),
       )
-      .toContain("pix-theme://");
+      .toContain("Telos-theme://");
     await expect
       .poll(() =>
         themeTrack.evaluate((element) => {
@@ -719,9 +719,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     // Returning from a custom wallpaper skin removes every skin-owned runtime effect.
     await defaultCard.click();
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme-skin", "default");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme-skin", "default");
     await expect(page.getByTestId("skin-wallpaper")).toBeHidden();
-    await expect(page.locator("#pix-theme-custom-css")).toHaveCount(0);
+    await expect(page.locator("#Telos-theme-custom-css")).toHaveCount(0);
     await expect
       .poll(() =>
         page.evaluate(() => ({
@@ -744,9 +744,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     await page.getByTestId("appearance-theme").click();
     await page.getByRole("option", { name: /Dark|深色/ }).click();
-    await expect(page.getByTestId("pix-app")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByTestId("Telos-app")).toHaveAttribute("data-theme", "dark");
     await expect
-      .poll(() => pix.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
+      .poll(() => Telos.app.evaluate(({ nativeTheme }) => nativeTheme.themeSource))
       .toBe("dark");
     await expect.poll(async () => (await sidebarMaterial()).backdrop).toContain("blur");
     await page.getByTestId("settings-back").click();
@@ -802,7 +802,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
       .getByTestId("model-select-label")
       .innerText()
       .catch(async () => page.getByTestId("model-select").inputValue());
-    expect(modelLabel.toLowerCase()).toMatch(/pix-fake|fake/);
+    expect(modelLabel.toLowerCase()).toMatch(/Telos-fake|fake/);
 
     const thinkingOptions = await page
       .getByTestId("composer-dock")
@@ -823,12 +823,12 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
     // openPath via IPC — pull snapshot from API (renderer probe may lag host.ready).
     await page.evaluate(async (path) => {
-      await window.pix.workspace.openPath(path, { resumeRecent: true });
+      await window.Telos.workspace.openPath(path, { resumeRecent: true });
     }, cwd!);
     await expect
       .poll(
         async () => {
-          const snap = await page.evaluate(async () => window.pix.host.snapshot());
+          const snap = await page.evaluate(async () => window.Telos.host.snapshot());
           return (
             snap.sessionFile === sessionFile || snap.sessionId === sessionId || snap.cwd === cwd
           );
@@ -843,7 +843,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await mkdir(otherCwd, { recursive: true });
     const openResult = await page.evaluate(async (path) => {
       try {
-        const snap = await window.pix.workspace.openPath(path, { resumeRecent: false });
+        const snap = await window.Telos.workspace.openPath(path, { resumeRecent: false });
         return { ok: true as const, cwd: snap.cwd, sessionFile: snap.sessionFile ?? null };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
@@ -875,16 +875,16 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     const other = join(dirname(cwd!), "recent-ws-b");
     await mkdir(other, { recursive: true });
     await page.evaluate(async (path) => {
-      await window.pix.workspace.openPath(path, { resumeRecent: false });
+      await window.Telos.workspace.openPath(path, { resumeRecent: false });
     }, other);
     await expect(page.getByTestId("host-status").first()).toContainText(
       /Agent Host ready|Agent settled/,
       { timeout: 30_000 },
     );
 
-    const recent = await page.evaluate(async () => window.pix.workspace.listRecent());
+    const recent = await page.evaluate(async () => window.Telos.workspace.listRecent());
     expect(recent).not.toContain(other);
-    expect(recent.every((path) => !/pix-e2e-|\/var\/folders\//i.test(path))).toBe(true);
+    expect(recent.every((path) => !/Telos-e2e-|\/var\/folders\//i.test(path))).toBe(true);
     await expect(
       page.locator(`[data-testid="recent-workspace-item"][data-path="${other}"]`),
     ).toHaveCount(0);
@@ -899,13 +899,13 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(page.getByTestId("settings-models")).toBeVisible();
     await expect(page.getByTestId("models-custom")).toBeVisible();
     await expect(page.getByTestId("models-builtin")).toBeVisible();
-    const providerToggle = page.getByTestId("models-custom-group-custom:pix-fake-toggle");
+    const providerToggle = page.getByTestId("models-custom-group-custom:Telos-fake-toggle");
     await expect(providerToggle).toHaveAttribute("aria-expanded", "false");
     await providerToggle.click();
     await expect(providerToggle).toHaveAttribute("aria-expanded", "true");
-    const providerRow = page.getByTestId("provider-row-pix-fake");
+    const providerRow = page.getByTestId("provider-row-Telos-fake");
     await expect(providerRow).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("provider-configured-pix-fake")).toContainText(
+    await expect(page.getByTestId("provider-configured-Telos-fake")).toContainText(
       /configured|missing|已配置|未配置/i,
     );
     const body = await providerRow.innerText();
@@ -944,11 +944,11 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await suggestions.getByTestId("models-custom-model-option").first().click();
     await expect(modelIdInput).not.toHaveValue("");
     await expect(suggestions).toBeHidden();
-    await customDialog.getByTestId("models-custom-api-key").fill("pix-e2e-key");
+    await customDialog.getByTestId("models-custom-api-key").fill("Telos-e2e-key");
     const authHeader = customDialog.getByTestId("models-custom-auth-header");
     await expect(authHeader).toBeChecked();
     await authHeader.uncheck();
-    await customDialog.getByTestId("models-custom-api-key").fill("pix-e2e-key-2");
+    await customDialog.getByTestId("models-custom-api-key").fill("Telos-e2e-key-2");
     await expect(authHeader).not.toBeChecked();
     await customDialog.getByTestId("models-custom-cancel").click();
 
@@ -958,7 +958,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(page.getByTestId("usage-card-zai")).toContainText("GLM Coding Max");
     await expect(page.getByTestId("usage-limit-zai-0")).toContainText(/26%|74%/);
     await expect(page.getByTestId("usage-limit-zai-1")).toContainText(/63%|37%/);
-    await expect(page.getByTestId("usage-card-pix-fake")).toHaveCount(0);
+    await expect(page.getByTestId("usage-card-Telos-fake")).toHaveCount(0);
     await expect(page.getByTestId("settings-usage")).not.toContainText("test-key");
     await expect(page.getByTestId("settings-usage")).not.toContainText(
       /此处展示通过 Auth|Shows Auth\/OAuth plan limits/i,
@@ -967,9 +967,9 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
 
   test("settings: OAuth login completes in-app and refreshes auth status", async ({
     page,
-    pix,
+    Telos,
   }) => {
-    await pix.app.evaluate(({ shell }) => {
+    await Telos.app.evaluate(({ shell }) => {
       const state = globalThis as typeof globalThis & { __oauthUrl?: string };
       Object.defineProperty(shell, "openExternal", {
         configurable: true,
@@ -1001,10 +1001,10 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     const dialog = page.getByTestId("provider-oauth-dialog");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Device code login" }).click();
-    await expect(page.getByTestId("provider-oauth-device-code")).toContainText("PIX-E2E");
+    await expect(page.getByTestId("provider-oauth-device-code")).toContainText("Telos-E2E");
     await expect
       .poll(() =>
-        pix.app.evaluate(
+        Telos.app.evaluate(
           () => (globalThis as typeof globalThis & { __oauthUrl?: string }).__oauthUrl,
         ),
       )
@@ -1086,7 +1086,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     async function assertComposerAlignedToMain(opts?: { collapsed?: boolean }) {
       const main = await page.getByTestId("shell-main").boundingBox();
       const dock = await page.getByTestId("composer-dock").boundingBox();
-      const app = await page.getByTestId("pix-app").boundingBox();
+      const app = await page.getByTestId("Telos-app").boundingBox();
       expect(main).toBeTruthy();
       expect(dock).toBeTruthy();
       expect(app).toBeTruthy();
@@ -1177,11 +1177,11 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
   }) => {
     // Keep geometry assertions independent of Electron's throttled animation clock.
     await page.addStyleTag({
-      content: ".pix-scroll-thumb::before { transition: none !important; }",
+      content: ".Telos-scroll-thumb::before { transition: none !important; }",
     });
     const scrollId = await page.evaluate(() => {
       const host = document.createElement("div");
-      host.className = "pix-scroll";
+      host.className = "Telos-scroll";
       host.dataset.testid = "overlay-scroll-probe";
       Object.assign(host.style, {
         position: "fixed",
@@ -1202,7 +1202,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     expect(scrollId).toBeTruthy();
 
     const host = page.getByTestId("overlay-scroll-probe");
-    const thumb = page.locator(`.pix-scroll-thumb[data-for="${scrollId}"]`);
+    const thumb = page.locator(`.Telos-scroll-thumb[data-for="${scrollId}"]`);
     await expect(thumb).toHaveAttribute("data-visible", "true");
     await expect
       .poll(() => thumb.evaluate((el) => getComputedStyle(el, "::before").width))
@@ -1249,7 +1249,7 @@ test.describe("Desktop shell Playwright E2E (macOS Electron)", () => {
     await expect(page.getByTestId("host-status").first()).toContainText("Agent Host exited", {
       timeout: 15_000,
     });
-    await expect(page.getByTestId("pix-app")).toBeVisible();
+    await expect(page.getByTestId("Telos-app")).toBeVisible();
     await expect(page.getByTestId("start-host")).toBeEnabled();
 
     await page.getByTestId("start-host").click({ force: true });

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -31,9 +31,9 @@ async function createLocalGitFixture(root: string) {
   const remote = join(root, "git-remote.git");
   await mkdir(repo, { recursive: true });
   await git(repo, "init", "-b", "main");
-  await git(repo, "config", "user.name", "Pix E2E");
-  await git(repo, "config", "user.email", "pix-e2e@example.invalid");
-  await writeFile(join(repo, "README.md"), "# Pix Git E2E\n");
+  await git(repo, "config", "user.name", "Telos E2E");
+  await git(repo, "config", "user.email", "Telos-e2e@example.invalid");
+  await writeFile(join(repo, "README.md"), "# Telos Git E2E\n");
   await git(repo, "add", "README.md");
   await git(repo, "commit", "-m", "test: initial fixture");
   await git(root, "clone", "--bare", repo, remote);
@@ -43,18 +43,18 @@ async function createLocalGitFixture(root: string) {
 }
 
 test.describe("Desktop Git E2E", () => {
-  test("manages isolated local branches, remotes, status, and worktrees", async ({ page, pix }) => {
-    const { repo, remote } = await createLocalGitFixture(pix.root);
-    const worktreeRoot = join(pix.root, "managed-worktrees");
+  test("manages isolated local branches, remotes, status, and worktrees", async ({ page, Telos }) => {
+    const { repo, remote } = await createLocalGitFixture(Telos.root);
+    const worktreeRoot = join(Telos.root, "managed-worktrees");
 
     await startHost(page);
     const initial = await page.evaluate(async (cwd) => {
-      await window.pix.workspace.openPath(cwd, { resumeRecent: false });
+      await window.Telos.workspace.openPath(cwd, { resumeRecent: false });
       const [context, branches, prefs] = await Promise.all([
-        window.pix.workspace.getGitContext(cwd),
-        window.pix.workspace.listGitBranches(cwd),
-        window.pix.workspace.setGitPrefs({
-          branchPrefix: "pix/",
+        window.Telos.workspace.getGitContext(cwd),
+        window.Telos.workspace.listGitBranches(cwd),
+        window.Telos.workspace.setGitPrefs({
+          branchPrefix: "Telos/",
           pullMode: "squash",
           forcePush: true,
           draftPr: true,
@@ -75,7 +75,7 @@ test.describe("Desktop Git E2E", () => {
       expect.arrayContaining([expect.objectContaining({ name: "main", current: true })]),
     );
     expect(initial.prefs).toMatchObject({
-      branchPrefix: "pix/",
+      branchPrefix: "Telos/",
       pullMode: "squash",
       forcePush: true,
       draftPr: true,
@@ -84,61 +84,61 @@ test.describe("Desktop Git E2E", () => {
     });
 
     const branch = await page.evaluate(async (cwd) => {
-      await window.pix.workspace.createGitBranch("release", { checkout: false, cwd });
-      const afterCreate = await window.pix.workspace.getGitContext(cwd);
-      const checkedOut = await window.pix.workspace.checkoutGitBranch("pix/release", cwd);
-      const branches = await window.pix.workspace.listGitBranches(cwd);
+      await window.Telos.workspace.createGitBranch("release", { checkout: false, cwd });
+      const afterCreate = await window.Telos.workspace.getGitContext(cwd);
+      const checkedOut = await window.Telos.workspace.checkoutGitBranch("Telos/release", cwd);
+      const branches = await window.Telos.workspace.listGitBranches(cwd);
       return { afterCreate, checkedOut, branches };
     }, repo);
     expect(branch.afterCreate.branch).toBe("main");
-    expect(branch.checkedOut.branch).toBe("pix/release");
+    expect(branch.checkedOut.branch).toBe("Telos/release");
     expect(branch.branches).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "pix/release", current: true })]),
+      expect.arrayContaining([expect.objectContaining({ name: "Telos/release", current: true })]),
     );
 
     await writeFile(join(repo, "local-change.txt"), "first local change\n");
     const afterCommit = await page.evaluate(async (cwd) => {
-      const before = await window.pix.workspace.gitStatus(cwd);
-      const committed = await window.pix.workspace.gitCommit("test: commit through Pix", cwd);
-      const pushed = await window.pix.workspace.gitPush(cwd);
+      const before = await window.Telos.workspace.gitStatus(cwd);
+      const committed = await window.Telos.workspace.gitCommit("test: commit through Telos", cwd);
+      const pushed = await window.Telos.workspace.gitPush(cwd);
       return { before, committed, pushed };
     }, repo);
-    expect(afterCommit.before).toMatchObject({ clean: false, branch: "pix/release" });
+    expect(afterCommit.before).toMatchObject({ clean: false, branch: "Telos/release" });
     expect(afterCommit.before.changes).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "local-change.txt", status: "??" })]),
     );
     expect(afterCommit.committed.clean).toBe(true);
-    expect(afterCommit.pushed).toMatchObject({ clean: true, upstream: "origin/pix/release" });
+    expect(afterCommit.pushed).toMatchObject({ clean: true, upstream: "origin/Telos/release" });
     await expect
-      .poll(() => git(repo, "--git-dir", remote, "rev-parse", "refs/heads/pix/release"))
+      .poll(() => git(repo, "--git-dir", remote, "rev-parse", "refs/heads/Telos/release"))
       .toMatch(/^[0-9a-f]{40}$/);
 
-    const clone = join(pix.root, "remote-writer");
-    await git(pix.root, "clone", "--branch", "pix/release", remote, clone);
-    await git(clone, "config", "user.name", "Pix Remote E2E");
-    await git(clone, "config", "user.email", "pix-remote@example.invalid");
+    const clone = join(Telos.root, "remote-writer");
+    await git(Telos.root, "clone", "--branch", "Telos/release", remote, clone);
+    await git(clone, "config", "user.name", "Telos Remote E2E");
+    await git(clone, "config", "user.email", "Telos-remote@example.invalid");
     await writeFile(join(clone, "remote-change.txt"), "change from local bare remote\n");
     await git(clone, "add", "remote-change.txt");
     await git(clone, "commit", "-m", "test: remote change");
-    await git(clone, "push", "origin", "pix/release");
+    await git(clone, "push", "origin", "Telos/release");
 
     const pulled = await page.evaluate(async (cwd) => {
-      await window.pix.workspace.setGitPrefs({ pullMode: "merge", forcePush: false });
-      return window.pix.workspace.gitPull(cwd);
+      await window.Telos.workspace.setGitPrefs({ pullMode: "merge", forcePush: false });
+      return window.Telos.workspace.gitPull(cwd);
     }, repo);
-    expect(pulled).toMatchObject({ clean: true, branch: "pix/release", ahead: 1, behind: 0 });
+    expect(pulled).toMatchObject({ clean: true, branch: "Telos/release", ahead: 1, behind: 0 });
     expect(await exists(join(repo, "remote-change.txt"))).toBe(true);
 
-    await writeFile(join(repo, "combined-change.txt"), "commit and push from Pix\n");
+    await writeFile(join(repo, "combined-change.txt"), "commit and push from Telos\n");
     const combined = await page.evaluate(async (cwd) => {
-      const generated = await window.pix.workspace.gitGenerateCommitMessage(cwd);
-      const result = await window.pix.workspace.gitCommitAndPush(generated, cwd);
+      const generated = await window.Telos.workspace.gitGenerateCommitMessage(cwd);
+      const result = await window.Telos.workspace.gitCommitAndPush(generated, cwd);
       return { generated, result };
     }, repo);
-    expect(combined.generated).toContain("Pix fake model response");
-    expect(combined.result).toMatchObject({ clean: true, upstream: "origin/pix/release" });
+    expect(combined.generated).toContain("Telos fake model response");
+    expect(combined.result).toMatchObject({ clean: true, upstream: "origin/Telos/release" });
 
-    await pix.app.evaluate(({ shell }) => {
+    await Telos.app.evaluate(({ shell }) => {
       const state = globalThis as typeof globalThis & { __pixGitPrUrl?: string };
       Object.defineProperty(shell, "openExternal", {
         configurable: true,
@@ -147,46 +147,46 @@ test.describe("Desktop Git E2E", () => {
         },
       });
     });
-    await git(repo, "remote", "set-url", "origin", "git@github.com:pix/e2e.git");
+    await git(repo, "remote", "set-url", "origin", "git@github.com:Telos/e2e.git");
     await page.evaluate(async (cwd) => {
-      await window.pix.workspace.openCreatePullRequest(cwd);
+      await window.Telos.workspace.openCreatePullRequest(cwd);
     }, repo);
-    const pullRequestUrl = await pix.app.evaluate(
+    const pullRequestUrl = await Telos.app.evaluate(
       () => (globalThis as typeof globalThis & { __pixGitPrUrl?: string }).__pixGitPrUrl,
     );
     expect(pullRequestUrl).toBe(
-      "https://github.com/pix/e2e/compare/pix%2Frelease?expand=1&draft=true",
+      "https://github.com/Telos/e2e/compare/Telos%2Frelease?expand=1&draft=true",
     );
 
     const worktrees = await page.evaluate(
       async ({ cwd, root }) => {
-        const prefs = await window.pix.workspace.setWorktreePrefs({
+        const prefs = await window.Telos.workspace.setWorktreePrefs({
           rootConfigured: root,
           autoDelete: false,
           autoDeleteLimit: 1,
         });
-        const first = await window.pix.workspace.createGitWorktree({
+        const first = await window.Telos.workspace.createGitWorktree({
           cwd,
           name: "first-worktree",
           newBranch: "first-worktree",
         });
-        const listed = await window.pix.workspace.listGitWorktrees(cwd);
-        const managed = await window.pix.workspace.listManagedWorktrees();
+        const listed = await window.Telos.workspace.listGitWorktrees(cwd);
+        const managed = await window.Telos.workspace.listManagedWorktrees();
         let mainRemovalError = "";
         try {
-          await window.pix.workspace.removeGitWorktree(cwd, cwd);
+          await window.Telos.workspace.removeGitWorktree(cwd, cwd);
         } catch (error) {
           mainRemovalError = error instanceof Error ? error.message : String(error);
         }
-        await window.pix.workspace.setWorktreePrefs({ autoDelete: true, autoDeleteLimit: 1 });
-        const second = await window.pix.workspace.createGitWorktree({
+        await window.Telos.workspace.setWorktreePrefs({ autoDelete: true, autoDeleteLimit: 1 });
+        const second = await window.Telos.workspace.createGitWorktree({
           cwd,
           name: "second-worktree",
           newBranch: "second-worktree",
-          branch: "pix/release",
+          branch: "Telos/release",
         });
-        const afterPrune = await window.pix.workspace.listManagedWorktrees();
-        const removed = await window.pix.workspace.removeGitWorktree(second.path, cwd);
+        const afterPrune = await window.Telos.workspace.listManagedWorktrees();
+        const removed = await window.Telos.workspace.removeGitWorktree(second.path, cwd);
         return { prefs, first, second, listed, managed, mainRemovalError, afterPrune, removed };
       },
       { cwd: repo, root: worktreeRoot },
@@ -198,7 +198,7 @@ test.describe("Desktop Git E2E", () => {
       autoDeleteLimit: 1,
     });
     expect(worktrees.first.context).toMatchObject({
-      branch: "pix/first-worktree",
+      branch: "Telos/first-worktree",
       isMainWorktree: false,
       worktreePath: worktrees.first.path,
     });
@@ -208,14 +208,14 @@ test.describe("Desktop Git E2E", () => {
         (worktree) =>
           normalizeMacPathAlias(worktree.path) === repo &&
           worktree.main === true &&
-          worktree.branch === "pix/release",
+          worktree.branch === "Telos/release",
       ),
     ).toBe(true);
     expect(
       worktrees.listed.some(
         (worktree) =>
           normalizeMacPathAlias(worktree.path) === worktrees.first.path &&
-          worktree.branch === "pix/first-worktree",
+          worktree.branch === "Telos/first-worktree",
       ),
     ).toBe(true);
     expect(

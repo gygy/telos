@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PTY lifecycle for embedded pi TUI.
  *
  * Performance:
@@ -496,7 +496,7 @@ export type PiPtyLaunch = {
  *
  * Packaged builtin CLI is asar-unpacked onto a real filesystem path so **system Node**
  * can run it. Spawning `process.execPath` + `ELECTRON_RUN_AS_NODE` also works for asar,
- * but on macOS Launch Services treats that as a second Pix launch (Dock bounce); force-
+ * but on macOS Launch Services treats that as a second Telos launch (Dock bounce); force-
  * quitting the bounced icon kills the PTY and drops terminal mode. Prefer system Node.
  */
 export function resolvePiPtyLaunch(
@@ -631,7 +631,7 @@ function resolveSystemNodeExecutable(env: Record<string, string>): string | unde
 
 function isElectronBinaryPath(filePath: string): boolean {
   const base = filePath.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
-  // Packaged app binary (Pix / Pix.exe) or electron dev binary — not usable as
+  // Packaged app binary (Telos / Telos.exe) or electron dev binary — not usable as
   // system node without ELECTRON_RUN_AS_NODE.
   return base === "electron" || base === "electron.exe" || base === "pix" || base === "pix.exe";
 }
@@ -696,7 +696,7 @@ export async function createNodePtySpawn(): Promise<PtySpawnFn> {
       ensureNodePtySpawnHelperExecutable();
       throw new Error(
         /posix_spawnp|spawn/i.test(detail)
-          ? `${detail} (node-pty spawn-helper may lack execute permission; Pix tried to restore it. file=${file})`
+          ? `${detail} (node-pty spawn-helper may lack execute permission; Telos tried to restore it. file=${file})`
           : detail,
       );
     }

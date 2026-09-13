@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared launch environment for interactive / isolated desktop runs.
  * Used by launch.mjs and dev.mjs.
  */
@@ -35,7 +35,7 @@ export async function prepareLaunchEnv(options = {}) {
     }
     return {
       environment,
-      label: "Pix product launch (visual pi — real HOME + ~/.pi/agent)",
+      label: "Telos product launch (visual pi — real HOME + ~/.pi/agent)",
       cleanup: async () => {},
     };
   }
@@ -51,7 +51,7 @@ export async function prepareLaunchEnv(options = {}) {
     mkdir(workspace, { recursive: true }),
   ]);
   const toolPath = join(workspace, "fixture.txt");
-  await writeFile(toolPath, "Pix isolated launch fixture\n");
+  await writeFile(toolPath, "Telos isolated launch fixture\n");
 
   const fakeModel = new FakeOpenAiServer({ toolPath });
   await fakeModel.start();
@@ -66,7 +66,7 @@ export async function prepareLaunchEnv(options = {}) {
           models: [
             {
               id: "pix-fake",
-              name: "Pix Fake Model",
+              name: "Telos Fake Model",
               reasoning: false,
               input: ["text"],
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -97,10 +97,10 @@ export async function prepareLaunchEnv(options = {}) {
 
   return {
     environment,
-    label: `Pix isolated home: ${root}`,
+    label: `Telos isolated home: ${root}`,
     cleanup: async () => {
       await fakeModel.stop();
-      if (process.env.PIX_KEEP_HOME === "1") console.log(`Kept Pix home: ${root}`);
+      if (process.env.PIX_KEEP_HOME === "1") console.log(`Kept Telos home: ${root}`);
       else await rm(root, { recursive: true, force: true });
     },
   };

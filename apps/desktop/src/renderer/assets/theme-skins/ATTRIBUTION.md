@@ -1,6 +1,6 @@
-# Bundled theme artwork
+﻿# Bundled theme artwork
 
-The JPEG files in this directory are bundled with Pix and do not require a network connection at runtime
+The JPEG files in this directory are bundled with Telos and do not require a network connection at runtime
 
 ## miku-stage.jpg
 

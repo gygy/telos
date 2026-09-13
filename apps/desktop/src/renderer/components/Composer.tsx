@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Conversation composer:
  * - Project picker above the card (icon + name)
  * - Textarea
@@ -26,7 +26,7 @@ import type {
   PackageSummary,
   QueuedMessages,
   SlashCommandSummary,
-} from "@pix/contracts";
+} from "@Telos/contracts";
 import {
   ArrowUp,
   Box,
@@ -120,7 +120,7 @@ import { workspaceLabel } from "../lib/workspace.ts";
 import { useShellStore } from "../store/shell-store.ts";
 
 export type { AccessMode, AccessVisibility };
-/** @deprecated Use ServiceTierId — legacy Pix labels mapped to OpenAI service_tier. */
+/** @deprecated Use ServiceTierId — legacy Telos labels mapped to OpenAI service_tier. */
 export type SpeedMode = ServiceTierId;
 
 export interface ComposerModelOption {
@@ -681,7 +681,7 @@ export function Composer(props: ComposerProps) {
       return;
     }
     try {
-      const info = await window.pix.workspace.getGitContext(cwd);
+      const info = await window.Telos.workspace.getGitContext(cwd);
       setGitContext(info ?? {});
     } catch {
       setGitContext({});
@@ -694,7 +694,7 @@ export function Composer(props: ComposerProps) {
       setGitContext({});
       return;
     }
-    void window.pix.workspace
+    void window.Telos.workspace
       .getGitContext(props.workspacePath)
       .then((info) => {
         if (!cancelled) setGitContext(info ?? {});
@@ -712,7 +712,7 @@ export function Composer(props: ComposerProps) {
     let cancelled = false;
     setBranchesLoading(true);
 
-    void window.pix.workspace
+    void window.Telos.workspace
       .listGitBranches(props.workspacePath)
       .then((list) => {
         if (!cancelled) setBranches(list ?? []);
@@ -875,7 +875,7 @@ export function Composer(props: ComposerProps) {
     const q = resourceQuery ?? "";
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      void window.pix.workspace
+      void window.Telos.workspace
         .searchPaths(q, {
           ...(props.workspacePath ? { cwd: props.workspacePath } : {}),
           limit: 24,
@@ -1164,7 +1164,7 @@ export function Composer(props: ComposerProps) {
       }
     }
     try {
-      const rows = await window.pix.workspace.searchPaths(token.query, {
+      const rows = await window.Telos.workspace.searchPaths(token.query, {
         ...(props.workspacePath ? { cwd: props.workspacePath } : {}),
         limit: 8,
       });
@@ -1330,7 +1330,7 @@ export function Composer(props: ComposerProps) {
     event.preventDefault();
     try {
       // Prefer system clipboard image via main (handles OS paste reliably).
-      const saved = await window.pix.workspace.saveClipboardImage();
+      const saved = await window.Telos.workspace.saveClipboardImage();
       if (saved) {
         props.onAddAttachments?.([saved]);
         return;
@@ -1342,7 +1342,7 @@ export function Composer(props: ComposerProps) {
         if (!file) continue;
         const buffer = new Uint8Array(await file.arrayBuffer());
         const ext = file.type.includes("jpeg") || file.type.includes("jpg") ? "jpg" : "png";
-        const path = await window.pix.workspace.saveClipboardImage({
+        const path = await window.Telos.workspace.saveClipboardImage({
           bytes: Array.from(buffer),
           ext,
         });
@@ -1361,7 +1361,7 @@ export function Composer(props: ComposerProps) {
     event.stopPropagation();
     const paths: string[] = [];
     for (const file of files) {
-      const filePath = window.pix.workspace.pathForFile(file);
+      const filePath = window.Telos.workspace.pathForFile(file);
       if (typeof filePath === "string" && filePath) paths.push(filePath);
     }
     if (paths.length) props.onAddAttachments?.(paths);
@@ -1391,7 +1391,7 @@ export function Composer(props: ComposerProps) {
     setGitBusy(true);
 
     try {
-      const next = await window.pix.workspace.checkoutGitBranch(name, props.workspacePath);
+      const next = await window.Telos.workspace.checkoutGitBranch(name, props.workspacePath);
       setGitContext(next);
       closeMenu();
     } catch (error) {
@@ -1407,7 +1407,7 @@ export function Composer(props: ComposerProps) {
     setGitBusy(true);
 
     try {
-      const next = await window.pix.workspace.createGitBranch(name, {
+      const next = await window.Telos.workspace.createGitBranch(name, {
         checkout: true,
         cwd: props.workspacePath,
       });
@@ -2027,7 +2027,7 @@ export function Composer(props: ComposerProps) {
             className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--text-subtle)]"
           />
         </div>
-        <div className="pix-scroll max-h-[220px] overscroll-contain p-1.5 pt-0.5">
+        <div className="Telos-scroll max-h-[220px] overscroll-contain p-1.5 pt-0.5">
           {filteredProjects.length === 0 ? (
             <p className="px-3 py-3 text-[12px] text-[var(--text-subtle)]">
               {tr("composer.project.empty")}
@@ -2185,7 +2185,7 @@ export function Composer(props: ComposerProps) {
             className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--text-subtle)] disabled:opacity-50"
           />
         </div>
-        <div className="pix-scroll max-h-[260px] overscroll-contain p-1.5 pt-0.5">
+        <div className="Telos-scroll max-h-[260px] overscroll-contain p-1.5 pt-0.5">
           {branchesLoading ? (
             <p className="px-3 py-3 text-[12px] text-[var(--text-subtle)]">
               {tr("composer.branch.loading")}
@@ -2280,7 +2280,7 @@ export function Composer(props: ComposerProps) {
         minWidth={220}
         className="flex w-[min(15rem,calc(100vw-2rem))] flex-col !overflow-hidden !py-0"
       >
-        <div className="pix-scroll min-h-0 flex-1 overscroll-contain max-h-[min(320px,calc(100vh-14rem))]">
+        <div className="Telos-scroll min-h-0 flex-1 overscroll-contain max-h-[min(320px,calc(100vh-14rem))]">
           {modelGroups.length === 0 ? (
             <p className="px-2.5 py-1.5 text-left text-[13px] text-[var(--text-subtle)]">
               {tr("composer.model.none")}

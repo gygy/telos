@@ -1,6 +1,6 @@
 ﻿import { cn } from "../lib/utils.ts";
 
-/** Pix brand mark — same geometry as desktop app icon. */
+/** Telos brand mark — same geometry as desktop app icon. */
 export function PixMark(props: { className?: string; title?: string }) {
   return (
     <svg

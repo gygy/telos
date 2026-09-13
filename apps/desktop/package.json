@@ -1,8 +1,8 @@
-{
+﻿{
   "name": "@pix/desktop",
   "version": "0.7.7",
   "private": true,
-  "description": "Telos intelligent programming assistant (Pix-based desktop shell for pi)",
+  "description": "Telos intelligent programming assistant (desktop shell for the pi coding agent)",
   "homepage": "ssh://git@192.168.80.3:8022/sheng/telos.git",
   "author": "sheng <sheng@local>",
   "type": "module",

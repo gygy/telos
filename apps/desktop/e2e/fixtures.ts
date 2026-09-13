@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+﻿import { test as base, expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
 import { createRequire } from "node:module";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -55,7 +55,7 @@ async function launchPixApp(): Promise<LaunchedPix> {
     mkdir(workspace, { recursive: true }),
   ]);
   await Promise.all([
-    writeFile(toolPath, "Pix Playwright E2E fixture\n"),
+    writeFile(toolPath, "Telos Playwright E2E fixture\n"),
     ...attachmentPaths.map((path) =>
       path.endsWith("photo.png")
         ? writeFile(
@@ -107,7 +107,7 @@ async function launchPixApp(): Promise<LaunchedPix> {
           models: [
             {
               id: "pix-fake",
-              name: "Pix Fake Model",
+              name: "Telos Fake Model",
               reasoning: false,
               input: ["text"],
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

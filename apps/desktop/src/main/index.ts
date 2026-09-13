@@ -36,6 +36,7 @@
 } from "@pix/contracts";
 import {
   AGENT_HOST_SERVICE_NAME,
+  APP_ID,
   PRODUCT_DOCUMENTS_DIR,
   PRODUCT_NAME,
 } from "../shared/brand.ts";
@@ -665,7 +666,7 @@ function pixWorktreesBaseDir(): string {
 }
 
 /**
- * All linked worktrees Pix manages: under the configured root and/or
+ * All linked worktrees Telos manages: under the configured root and/or
  * Documents/Telos/worktrees[/<repo>]/… — not limited to the currently open project.
  */
 async function listAllManagedWorktrees(): Promise<GitWorktreeInfo[]> {
@@ -4372,13 +4373,13 @@ function resolveAppIconPath(): string | undefined {
 }
 
 /** Windows AppUserModelID — must match electron-builder appId for packaged installs. */
-const WINDOWS_APP_USER_MODEL_ID = "dev.pix.app";
+const WINDOWS_APP_USER_MODEL_ID = APP_ID;
 /** Separate AUMID for unpackaged `electron .` so Start Menu Electron.lnk cannot steal the taskbar icon. */
-const WINDOWS_DEV_APP_USER_MODEL_ID = "dev.pix.app.dev";
+const WINDOWS_DEV_APP_USER_MODEL_ID = `${APP_ID}.dev`;
 
 function applyWindowsAppUserModelId(): void {
   if (process.platform !== "win32") return;
-  // Packaged Pix and dev Electron must NOT share an AUMID: Windows groups by AUMID and
+  // Packaged Telos and dev Electron must NOT share an AUMID: Windows groups by AUMID and
   // will show the Electron atom icon from Programs\Electron.lnk for the installed app.
   app.setAppUserModelId(app.isPackaged ? WINDOWS_APP_USER_MODEL_ID : WINDOWS_DEV_APP_USER_MODEL_ID);
 }
@@ -4396,7 +4397,7 @@ function applyWindowsAppUserModelId(): void {
  *
  * Packaged: leave CFBundleIconFile / electron-builder `mac.icon` alone —
  * that is the supported path and matches other Mac apps.
- * Dev: Electron has no Pix .icns; set a square unmasked image only.
+ * Dev: Electron has no Telos .icns; set a square unmasked image only.
  */
 function applyDockIcon(iconPath: string | undefined): void {
   if (process.platform !== "darwin" || !app.dock) return;
