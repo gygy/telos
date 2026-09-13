@@ -6,11 +6,16 @@ const { Icns, IcnsImage } = require('@fiahfy/icns');
 // 打包标必须是矢量 Telos 圆标 + π（与 LogoMark / TelosLogo / 启动画面同源）。
 // 嵌 PNG 的旧稿会在小尺寸糊；改品牌几何时同步更新下面门禁。
 const svg = fs.readFileSync(path.join(__dirname, '..', 'build', 'icon.svg'), 'utf8');
-if (svg.includes('data:image/png')) {
-  throw new Error('build/icon.svg must stay a vector mark; do not embed a PNG');
+const traySvgPath = path.join(__dirname, '..', 'build', 'icon-tray.svg');
+const traySvg = fs.readFileSync(traySvgPath, 'utf8');
+if (svg.includes('data:image/png') || traySvg.includes('data:image/png')) {
+  throw new Error('build/icon.svg and icon-tray.svg must stay vector marks; do not embed a PNG');
 }
 if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<circle')) {
   throw new Error('build/icon.svg must keep the Telos circular red-π mark (telos-mark + #FC3F1D)');
+}
+if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D')) {
+  throw new Error('build/icon-tray.svg must keep the inverted tray mark (red plate + white π)');
 }
 
 const out = path.join(__dirname, '..', 'build');
@@ -24,6 +29,8 @@ const iconsDir = path.join(out, 'icons');
  */
 const winIcoSizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 const pngSizes = [12, 16, 20, 24, 32, 40, 48, 64, 128, 256, 512, 1024];
+/** 通知区专用：与 Yandex 档位一致（16@100% / 20@125% / 24@150% / 32@200%）。 */
+const traySizes = [16, 20, 24, 32];
 const icnsSources = [
   [16, 'icp4'],
   [32, 'icp5'],
@@ -41,10 +48,10 @@ const icnsSources = [
 /**
  * 渲染单尺寸 PNG。
  * 小尺寸（≤32）先 4× 矢量再 Lanczos 下落 + 轻度锐化，避免直接缩到 16px 时 π 发糊
- * （对照：Yandex 托盘 16×16 为手调 PNG，softEdge 可控；Telos 旧链路是 512→16 运行时缩放）。
+ * （对照：Yandex 托盘 16×16 为手调 PNG；Telos 旧链路是 512→16 运行时缩放）。
  */
-async function renderPngBuffer(size) {
-  const svgBuf = Buffer.from(svg);
+async function renderPngBuffer(size, svgSource) {
+  const svgBuf = Buffer.from(svgSource);
   if (size <= 32) {
     const hi = size * 4;
     const hiPng = await sharp(svgBuf)
@@ -63,8 +70,8 @@ async function renderPngBuffer(size) {
     .toBuffer();
 }
 
-async function renderPng(size, target) {
-  const buf = await renderPngBuffer(size);
+async function renderPng(size, target, svgSource = svg) {
+  const buf = await renderPngBuffer(size, svgSource);
   await fs.promises.writeFile(target, buf);
   return buf;
 }
@@ -120,11 +127,17 @@ async function writeIcns(target) {
 async function main() {
   fs.mkdirSync(iconsDir, { recursive: true });
   fs.writeFileSync(path.join(out, 'icon.svg'), svg);
+  fs.writeFileSync(traySvgPath, traySvg);
 
   const pngBySize = new Map();
   for (const size of pngSizes) {
     const buf = await renderPng(size, path.join(iconsDir, `${size}x${size}.png`));
     pngBySize.set(size, buf);
+  }
+
+  // 通知区：红底白 π，浅色托盘上整圆可见（对齐 Yandex 实心圆盘视觉重量）。
+  for (const size of traySizes) {
+    await renderPng(size, path.join(iconsDir, `tray-${size}x${size}.png`), traySvg);
   }
 
   await fs.promises.copyFile(path.join(iconsDir, '512x512.png'), path.join(out, 'icon.png'));
@@ -159,11 +172,16 @@ async function main() {
       throw new Error(`icon.ico missing required size ${need}x${need}`);
     }
   }
+  for (const size of traySizes) {
+    if (!fs.existsSync(path.join(iconsDir, `tray-${size}x${size}.png`))) {
+      throw new Error(`missing tray icon tray-${size}x${size}.png`);
+    }
+  }
 
   console.log(
-    'wrote build/icon.svg, build/icon.png, build/icon.ico (PNG:',
+    'wrote build/icon.svg, icon-tray.svg, icon.png, icon.ico (PNG:',
     kinds.map((k) => k.size).join('/'),
-    '), build/icon.icns, build/icons/*.png and src/renderer/src/assets/brand-mark.png',
+    '), icon.icns, icons/*.png, icons/tray-*.png and brand-mark.png',
   );
 }
 

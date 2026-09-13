@@ -56,17 +56,19 @@ import type { Project, StartupWindowMode } from "../shared/types";
 // Windows 窗口/任务栏/桌面快捷方式优先用多尺寸 PNG-ICO（对齐 Yandex）；PNG 作回退与其它平台。
 import iconPngPath from "../../build/icon.png?asset";
 import iconIcoPath from "../../build/icon.ico?asset";
-import trayIcon16Path from "../../build/icons/16x16.png?asset";
-import trayIcon20Path from "../../build/icons/20x20.png?asset";
-import trayIcon24Path from "../../build/icons/24x24.png?asset";
-import trayIcon32Path from "../../build/icons/32x32.png?asset";
+import trayIcon16Path from "../../build/icons/tray-16x16.png?asset";
+import trayIcon20Path from "../../build/icons/tray-20x20.png?asset";
+import trayIcon24Path from "../../build/icons/tray-24x24.png?asset";
+import trayIcon32Path from "../../build/icons/tray-32x32.png?asset";
 
 /** 窗口与快捷方式图标：Windows 用 ICO，其它平台用 PNG。 */
 const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
 
 /**
- * 托盘图标：按 DPI 选专用小尺寸 PNG，禁止把 512 图 resize 到 16（会发糊）。
- * 本机 100% DPI → 16；125%→20；150%→24；≥200%→32（与 Yandex ICO 档位一致）。
+ * 托盘图标：用红底白 π 专用图（icons/tray-*），不要用白底品牌标。
+ * 本机浅色通知区上白底圆几乎看不见，只剩红 π（visibleOnLight≈0.23），
+ * Yandex 实心深色圆盘约 0.48；反色后整圆可读，视觉大小才对齐。
+ * 按 DPI 选档：16@100% / 20@125% / 24@150% / 32@≥200%。
  */
 function resolveTrayNativeImage(): Electron.NativeImage {
 	const scale = screen.getPrimaryDisplay().scaleFactor;
