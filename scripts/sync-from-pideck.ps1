@@ -38,7 +38,19 @@ $TelosOverlays = @(
     ".upstream/pideck-baseline.json",
     "README.md",
     "package.json",
-    "src/renderer/src/App.tsx"
+    "src/renderer/src/App.tsx",
+    "src/renderer/src/components/app/TelosLogo.tsx",
+    "src/renderer/src/components/app/LogoMark.tsx",
+    "src/renderer/src/components/app/AppParts.tsx",
+    "src/renderer/src/components/app/AboutPopover.tsx",
+    "src/renderer/src/components/app/brandMark.ts",
+    "src/renderer/src/web/WebBrandLockup.tsx",
+    "src/renderer/src/i18n/rendererCopy.zh-CN.ts",
+    "src/renderer/src/i18n/rendererCopy.en-US.ts",
+    "src/renderer/index.html",
+    "src/renderer/src/styles/foundation.css",
+    "build/icon.svg",
+    "scripts/make-icon.js"
 )
 
 function Get-GitExe {
@@ -123,7 +135,7 @@ Write-Host "Upstream tip: $tip"
 
 $baseline = Read-Baseline
 $baseCommit = [string]$baseline.baseline.commit
-Write-Host "Baseline: $($baseline.baseline.short) — $($baseline.baseline.subject)"
+Write-Host "Baseline: $($baseline.baseline.short) 鈥?$($baseline.baseline.subject)"
 
 if ($FetchOnly) {
     Write-Host "Fetch-only complete."
@@ -231,4 +243,4 @@ finally {
     Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "Push Telos only via .\scripts\git-sync.ps1 — never push pideck remotes."
+Write-Host "Push Telos only via .\scripts\git-sync.ps1 鈥?never push pideck remotes."

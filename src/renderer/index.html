@@ -54,26 +54,25 @@
         height: 88px;
         display: grid;
         place-items: center;
-        border-radius: 22px;
-        /* 与 LogoMark / 任务栏一致的黑底 π 标 */
-        background: linear-gradient(145deg, #1c1c1e, #000000);
+        border-radius: 50%;
+        /* Telos：圆形白底 + 雅红 π（SVG 自带圆板） */
+        background: transparent;
         box-shadow:
-          0 1px 0 rgba(255, 255, 255, 0.18) inset,
-          0 14px 32px rgba(15, 23, 42, 0.28),
-          0 2px 8px rgba(15, 23, 42, 0.08);
+          0 14px 32px rgba(15, 23, 42, 0.18),
+          0 2px 8px rgba(15, 23, 42, 0.06);
       }
       .boot-logo::after {
         content: "";
         position: absolute;
         inset: -10px;
-        border-radius: 28px;
-        border: 1px solid rgba(15, 23, 42, 0.14);
+        border-radius: 50%;
+        border: 1px solid rgba(252, 63, 29, 0.22);
         animation: boot-ring 1.8s ease-out infinite;
         pointer-events: none;
       }
       .boot-logo svg {
-        width: 48px;
-        height: 48px;
+        width: 100%;
+        height: 100%;
       }
 
       .boot-title {
@@ -181,20 +180,18 @@
     <div id="boot-overlay">
       <div class="boot-brand">
         <div class="boot-logo">
-          <svg viewBox="140 140 520 520" aria-hidden="true">
-            <defs>
-              <linearGradient id="boot-logo-silver" x1="0.2" y1="0" x2="0.8" y2="1">
-                <stop stop-color="#ffffff"/>
-                <stop offset="0.5" stop-color="#f4f4f5"/>
-                <stop offset="1" stop-color="#a7a8ab"/>
-              </linearGradient>
-            </defs>
-            <path fill="url(#boot-logo-silver)" fill-rule="evenodd" d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"/>
-            <path fill="url(#boot-logo-silver)" d="M517.36 400H634.72V634.72H517.36Z"/>
+          <svg viewBox="0 0 1024 1024" aria-hidden="true" id="telos-mark">
+            <circle cx="512" cy="512" r="472" fill="#FFFFFF"/>
+            <circle cx="512" cy="512" r="472" fill="none" stroke="#F0F0F0" stroke-width="8"/>
+            <g fill="#FC3F1D">
+              <rect x="248" y="292" width="528" height="100" rx="50"/>
+              <rect x="312" y="342" width="96" height="392" rx="48"/>
+              <rect x="556" y="342" width="96" height="308" rx="48"/>
+            </g>
           </svg>
         </div>
-        <strong class="boot-title">PiDeck</strong>
-        <span class="boot-subtitle">正在启动工作台…</span>
+        <strong class="boot-title">Telos</strong>
+        <span class="boot-subtitle">正在启动智能编程助手…</span>
       </div>
       <div class="boot-progress" aria-hidden="true">
         <div class="boot-progress-bar"></div>

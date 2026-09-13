@@ -841,8 +841,8 @@ select:focus-visible {
   height: 120px;
   display: grid;
   place-items: center;
-  /* 启动标用铺满 SVG，避免 PNG 圆角透明边漏白 */
-  border-radius: 26px;
+  /* Telos：圆形白底 π 标 */
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-inverse);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
