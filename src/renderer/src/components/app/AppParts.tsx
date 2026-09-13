@@ -29,6 +29,7 @@ export type { WorkspaceDrawerPanel as DrawerPanel } from "../../hooks/useWorkspa
 
 // Re-exports from leaf modules (A12 migration in progress)
 import { PiLogoCanvas } from "./PiLogoCanvas";
+import { TelosLogo } from "./TelosLogo";
 import { TextShimmer } from "../motion/text-shimmer";
 import { Label } from "../../components/ui-shadcn/label";
 export { WorktreeCreateDialog } from "../sidebar/SidebarComponents";
@@ -484,19 +485,19 @@ export function BrandLockup(props: { replayToken?: number } = {}) {
 	useEffect(() => {
 		void loadDevBranch().then(setBranch);
 	}, []);
-	const brandTitle = branch ? `PiDeck · ${branch}` : "PiDeck";
-	// macOS 窗口左上角已有原生交通灯，π logo + 字标挤在同一行视觉过重；
+	const brandTitle = branch ? `Telos · ${branch}` : "Telos";
+	// macOS 窗口左上角已有原生交通灯，logo + 字标挤在同一行视觉过重；
 	// darwin 平台只保留字标（品牌语义仍由 aria-label 承载），其余平台维持原样。
 	const showLogo = detectRendererPlatform() !== "darwin";
 	return (
 		<div className="brand-lockup flex h-full min-w-0 items-center gap-2" aria-label={brandTitle} title={branch ? brandTitle : undefined}>
-			{showLogo && <PiLogoCanvas size={18} autoPlay playOnClick replayToken={props.replayToken} />}
+			{showLogo && <TelosLogo className="size-[18px]" title="Telos" />}
 			<span className="flex min-w-0 flex-col justify-center gap-1">
 				<TextShimmer
 					as="span"
 					className="brand-wordmark truncate text-[18px] font-[PiDeckDepartureMono] font-bold uppercase leading-none"
 				>
-					PiDeck
+					Telos
 				</TextShimmer>
 				{branch && <span className="truncate text-[13px] font-medium leading-none text-muted-foreground">{branch}</span>}
 			</span>

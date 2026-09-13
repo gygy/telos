@@ -39,6 +39,7 @@ import { type SidebarActions } from "./components/sidebar/SidebarContent";
 import { AppSidebar } from "./components/sidebar/AppSidebar";
 import { AppBootstrap } from "./components/app/AppBootstrap";
 import { SettingsFeatureRoot } from "./components/app/SettingsFeatureRoot";
+import { TelosLogo } from "./components/app/TelosLogo";
 import { AutomationModal } from "./components/automation/AutomationModal";
 import { useRename } from "./hooks/useRename";
 import { useProjectRuntimeCapabilities } from "./hooks/useRuntimeCapabilities";
@@ -224,23 +225,8 @@ export function App() {
   if (missingElectronPreload) {
     return (
       <div className="boot-screen root-loading">
-        {/* 与 EmptyState / index.html 启动标同一套 π path */}
         <div className="boot-logo root-loading-logo" aria-hidden="true">
-          <svg viewBox="140 140 520 520" width="48" height="48">
-            <defs>
-              <linearGradient id="root-loading-logo-silver" x1="0.2" y1="0" x2="0.8" y2="1">
-                <stop stopColor="#ffffff" />
-                <stop offset="0.5" stopColor="#f4f4f5" />
-                <stop offset="1" stopColor="#a7a8ab" />
-              </linearGradient>
-            </defs>
-            <path
-              fill="url(#root-loading-logo-silver)"
-              fillRule="evenodd"
-              d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-            />
-            <path fill="url(#root-loading-logo-silver)" d="M517.36 400H634.72V634.72H517.36Z" />
-          </svg>
+          <TelosLogo className="size-12" title="Telos" />
         </div>
         <strong className="text-[40px] font-bold tracking-[0.06em]">Telos</strong>
         <span>{t("app.preloadMissing")}</span>

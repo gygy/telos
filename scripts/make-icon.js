@@ -5,14 +5,14 @@ const { Icns, IcnsImage } = require('@fiahfy/icns');
 const pngToIcoModule = require('png-to-ico');
 const pngToIco = pngToIcoModule.default ?? pngToIcoModule;
 
-// 打包标必须是矢量 pi 字标（与 LogoMark / 启动画面同源，对齐 main 分支品牌）。
-// 嵌 PNG 的旧稿会在小尺寸糊、圆角漏白；若改回跳蛛等其它品牌标，必须同步更新下面这道几何门禁。
+// 打包标必须是矢量 Telos 圆标 + π（与 LogoMark / TelosLogo / 启动画面同源）。
+// 嵌 PNG 的旧稿会在小尺寸糊；改品牌几何时同步更新下面门禁。
 const svg = fs.readFileSync(path.join(__dirname, '..', 'build', 'icon.svg'), 'utf8');
 if (svg.includes('data:image/png')) {
   throw new Error('build/icon.svg must stay a vector mark; do not embed a PNG');
 }
-if (!svg.includes('165.29 165.29')) {
-  throw new Error('build/icon.svg must keep the Pi lettermark geometry');
+if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<circle')) {
+  throw new Error('build/icon.svg must keep the Telos circular red-π mark (telos-mark + #FC3F1D)');
 }
 
 const out = path.join(__dirname, '..', 'build');

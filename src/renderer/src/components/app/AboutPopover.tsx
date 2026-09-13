@@ -5,12 +5,12 @@ import { desktopApi } from "../../desktopApi";
 import { formatI18nDateTime, t } from "../../i18n";
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "../motion/popover-morph";
 import { AnimatedBadge } from "../motion/animated-badge";
-import { PiLogoCanvas } from "./PiLogoCanvas";
+import { TelosLogo } from "./TelosLogo";
 import { Button } from "../ui-shadcn/button";
 import { ChangelogDialog } from "./settings/ChangelogDialog";
 
 /** 官网主页：品牌常量入口，与 launchRoutes 保持一致，强制系统浏览器打开。 */
-const WEBSITE_URL = "https://ayuayue.github.io/PiDeck/";
+const WEBSITE_URL = "https://github.com/ayuayue/PiDeck";
 
 interface AboutPopoverProps {
   /** 应用/pi/DSH/pi-ai 版本与时间信息，由 App 从主进程 AppInfo IPC 拉取后传入。 */
@@ -45,10 +45,10 @@ export function AboutPopover(props: AboutPopoverProps) {
       <MorphPopoverContent side="bottom" align="start" sideOffset={10} radius={16} className="w-72 overflow-hidden">
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center gap-3">
-            <PiLogoCanvas size={40} autoPlay />
+            <TelosLogo className="size-10" title="Telos" />
             <div className="min-w-0 flex-1">
               <div className="font-[PiDeckDepartureMono] text-lg font-normal uppercase leading-tight tracking-wide text-foreground">
-                PiDeck
+                Telos
               </div>
               {/* 版本号用等宽小字：此前是带 ⓘ 图标的胶囊徽标，图标语义与「查看版本信息」
                   重复，胶囊边框在 40px logo 旁显得笨重；改为纯文本与弹框内版本行同源观感 */}
