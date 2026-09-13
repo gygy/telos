@@ -65,9 +65,9 @@ import trayIcon32Path from "../../build/icons/tray-32x32.png?asset";
 const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
 
 /**
- * 托盘图标：用红底白 π 专用图（icons/tray-*），不要用白底品牌标。
- * 本机浅色通知区上白底圆几乎看不见，只剩红 π（visibleOnLight≈0.23），
- * Yandex 实心深色圆盘约 0.48；反色后整圆可读，视觉大小才对齐。
+ * 托盘图标：白底红 π + 细深色描边（icons/tray-*），与品牌色一致。
+ * 纯白圆在浅色通知区会融进背景，只剩红 π（看起来比 Yandex 小）；
+ * 描边后外径对齐 Yandex（16px 约 15/16 画布），整圆可读。
  * 按 DPI 选档：16@100% / 20@125% / 24@150% / 32@≥200%。
  */
 function resolveTrayNativeImage(): Electron.NativeImage {

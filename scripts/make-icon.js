@@ -135,9 +135,31 @@ async function main() {
     pngBySize.set(size, buf);
   }
 
-  // 通知区：红底白 π，浅色托盘上整圆可见（对齐 Yandex 实心圆盘视觉重量）。
+  // 通知区：白底红 π + 深色描边；外径按本机 Yandex 各档实测 contentRatio 合成。
+  const trayRatioBySize = {
+    16: 0.938, // Yandex 15/16
+    20: 0.85, // Yandex 17/20
+    24: 0.875, // Yandex 21/24
+    32: 0.938, // Yandex 30/32
+  };
   for (const size of traySizes) {
-    await renderPng(size, path.join(iconsDir, `tray-${size}x${size}.png`), traySvg);
+    const ratio = trayRatioBySize[size] ?? 0.938;
+    const disc = Math.max(1, Math.round(size * ratio));
+    const discPng = await renderPngBuffer(disc, traySvg);
+    const left = Math.floor((size - disc) / 2);
+    const top = Math.floor((size - disc) / 2);
+    const buf = await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .composite([{ input: discPng, left, top }])
+      .png({ compressionLevel: 9, adaptiveFiltering: true })
+      .toBuffer();
+    await fs.promises.writeFile(path.join(iconsDir, `tray-${size}x${size}.png`), buf);
   }
 
   await fs.promises.copyFile(path.join(iconsDir, '512x512.png'), path.join(out, 'icon.png'));

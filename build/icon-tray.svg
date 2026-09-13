@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos tray mark - inverted for Windows notification area (light background).
-  Brand mark (icon.svg) is white plate + red pi; on a light tray the white plate
-  disappears and only the red pi remains (~23% fill). Yandex uses a dark filled
-  disc (~48% visible-on-light fill). This tray variant uses Yandex-red plate +
-  white pi so the whole disc reads at SM_CXSMICON (16 at 100% DPI).
+  Telos tray mark - white plate + red pi (brand colors).
+  make-icon composites this disc at Yandex ratio (~0.938 of the tray canvas).
+  Dark rim keeps the white plate readable on a light Windows notification area.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-tray-mark">
-  <circle cx="512" cy="512" r="508" fill="#FC3F1D"/>
-  <g fill="#FFFFFF" id="telos-tray-pi">
-    <rect x="188" y="262" width="648" height="124" rx="62"/>
-    <rect x="256" y="324" width="124" height="468" rx="62"/>
-    <rect x="564" y="324" width="124" height="368" rx="62"/>
+  <circle cx="512" cy="512" r="500" fill="#FFFFFF"/>
+  <circle cx="512" cy="512" r="500" fill="none" stroke="#2B2B2B" stroke-width="40"/>
+  <g fill="#FC3F1D" id="telos-tray-pi">
+    <rect x="200" y="274" width="624" height="120" rx="60"/>
+    <rect x="268" y="334" width="120" height="448" rx="60"/>
+    <rect x="556" y="334" width="120" height="352" rx="60"/>
   </g>
 </svg>
