@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos tray mark - white plate + red pi (brand colors).
-  make-icon composites this disc at Yandex ratio (~0.938 of the tray canvas).
-  Dark rim keeps the white plate readable on a light Windows notification area.
+  Telos tray mark - white plate + red pi, no dark rim.
+  Reference: Yandex browser.exe 16px (transparent corners, no black stroke) and
+  resources/*.ico (messenger/sxs fill their slot without a dark border ring).
+  make-icon composites this disc at Yandex-measured content ratios per size.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-tray-mark">
-  <circle cx="512" cy="512" r="500" fill="#FFFFFF"/>
-  <circle cx="512" cy="512" r="500" fill="none" stroke="#2B2B2B" stroke-width="40"/>
+  <circle cx="512" cy="512" r="508" fill="#FFFFFF"/>
   <g fill="#FC3F1D" id="telos-tray-pi">
-    <rect x="200" y="274" width="624" height="120" rx="60"/>
-    <rect x="268" y="334" width="120" height="448" rx="60"/>
-    <rect x="556" y="334" width="120" height="352" rx="60"/>
+    <rect x="188" y="262" width="648" height="124" rx="62"/>
+    <rect x="256" y="324" width="124" height="468" rx="62"/>
+    <rect x="564" y="324" width="124" height="368" rx="62"/>
   </g>
 </svg>

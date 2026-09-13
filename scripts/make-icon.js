@@ -135,7 +135,8 @@ async function main() {
     pngBySize.set(size, buf);
   }
 
-  // 通知区：白底红 π + 深色描边；外径按本机 Yandex 各档实测 contentRatio 合成。
+  // 通知区：白底红 π、无黑边。外径按本机 Yandex browser.exe 各档 contentRatio 合成
+  //（参考 Application/.../resources 与 browser 主图标：透明四角、无深色描边环）。
   const trayRatioBySize = {
     16: 0.938, // Yandex 15/16
     20: 0.85, // Yandex 17/20
