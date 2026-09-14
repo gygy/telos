@@ -10,18 +10,18 @@ description: 生成图片。当用户想让 AI 生成图片、插画、海报、
 当用户说「帮我画一张图」「生成一张海报」「做一个 logo」等请求时，用本技能
 直接调用生图 API 出图。生成的图片保存为本地文件，交给用户在项目里使用。
 
-生图供应商配置与「会话 LLM」完全分离：生图用的是 PiDeck 的 `imagegen.json`
+生图供应商配置与「会话 LLM」完全分离：生图用的是 Telos 的 `imagegen.json`
 （或用户直接提供的 baseUrl / apiKey / 模型），不碰 AI 对话用的模型配置。
 
 ## 第一步：确定模型与凭据
 
 生图请求最少需要三样：**baseUrl + apiKey + 模型 id**。按优先级取：
 
-1. **读 PiDeck 生图配置**（如果用户在用 PiDeck）：
+1. **读 Telos 生图配置**（如果用户在用 Telos）：
 
    | 平台 | 配置路径 |
    |------|----------|
-   | Windows 安装版 | `%APPDATA%\pi-desktop\imagegen.json`（即 `C:\Users\<用户>\AppData\Roaming\pi-desktop\imagegen.json`） |
+   | Windows 安装版 | `%APPDATA%\pi-desktop\imagegen.json`（即 `C:\Users\<用户>\AppData\Roaming\pi-desktop\imagegen.json`；历史数据目录名仍为 `pi-desktop`） |
    | Windows 便携版 | `<exe 同目录>\data\imagegen.json` |
    | macOS | `~/Library/Application Support/pi-desktop/imagegen.json` |
    | Linux | `~/.config/pi-desktop/imagegen.json` |
@@ -50,7 +50,7 @@ description: 生成图片。当用户想让 AI 生成图片、插画、海报、
    - **默认用 `activeProviderId` + `activeModel`**：用户上次选的，通常是想要的。
    - 模型必须在该供应商的 `models[]` 里；如果有多个模型，**让用户确认用哪个**（用户会指定）。
 
-2. **读不到配置 / 用户不在 PiDeck 里**：询问用户三样东西——
+2. **读不到配置 / 用户不在 Telos 里**：询问用户三样东西——
    `baseUrl`、`apiKey`、`模型 id`。并顺手问是否需要参考图（图生图）。
 
 ## 第二步：确定是否有参考图
@@ -61,7 +61,7 @@ description: 生成图片。当用户想让 AI 生成图片、插画、海报、
 - **若供应商 `referenceMode` 是 `none`**：该供应商不支持图生图，直接告诉用户
   「这个供应商没开启参考图能力」，不要硬发图。
 
-参考图约束（与 PiDeck 一致）：≤ 4 张，支持 png/jpeg/webp。
+参考图约束（与 Telos 一致）：≤ 4 张，支持 png/jpeg/webp。
 
 ## 第三步：拼端点 URL
 

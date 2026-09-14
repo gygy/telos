@@ -212,13 +212,20 @@ export class SkillManager {
 	}
 
 	/**
-	 * 安装内置的「环境诊断」技能模板（resources/skills/pideck-doctor/SKILL.md）。
-	 * 用户在问题反馈页生成诊断报告后，可让 pi 直接读报告分析排障（/skill:pideck-doctor）。
+	 * 安装内置的「环境诊断」技能模板（resources/skills/telos-doctor/SKILL.md）。
+	 * 用户在问题反馈页生成诊断报告后，可让 pi 直接读报告分析排障（/skill:telos-doctor）。
 	 */
+	async installTelosDoctorTemplate(): Promise<
+		{ success: true; path: string } | { success: false; error: string }
+	> {
+		return this.installTemplate("telos-doctor");
+	}
+
+	/** @deprecated 兼容旧调用名；请改用 installTelosDoctorTemplate */
 	async installPideckDoctorTemplate(): Promise<
 		{ success: true; path: string } | { success: false; error: string }
 	> {
-		return this.installTemplate("pideck-doctor");
+		return this.installTelosDoctorTemplate();
 	}
 
 	private async scanLocation(location: PiSkillLocation): Promise<PiSkillSummary[]> {

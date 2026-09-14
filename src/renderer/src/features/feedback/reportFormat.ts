@@ -237,7 +237,7 @@ export function formatAiPrompt(
 			);
 		}
 		lines.push(
-			`提示：排查 Telos 自身问题时，可让 pi 使用全局技能 /skill:pideck-doctor 读取诊断报告与故障模式库。`,
+			`提示：排查 Telos 自身问题时，可让 pi 使用全局技能 /skill:telos-doctor 读取诊断报告与故障模式库。`,
 		);
 	}
 	lines.push("");
