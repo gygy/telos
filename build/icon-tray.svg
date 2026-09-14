@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos tray mark — same face as build/icon.svg (Yandex g136 white squircle).
-  Kept as a separate file so tray PNG generation stays explicit; geometry must stay in sync.
+  Telos tray mark — same circular face as build/icon.svg (Yandex g101).
+  Slight overfill (r>512) keeps mid-edges solid at 16px without turning into a squircle.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-tray-mark">
-  <rect x="0" y="0" width="1024" height="1024" rx="268" fill="#FFFFFF"/>
-  <rect x="6" y="6" width="1012" height="1012" rx="262" fill="none" stroke="#E7E7E7" stroke-width="10"/>
+  <circle cx="512" cy="512" r="520" fill="#FFFFFF"/>
+  <circle cx="512" cy="512" r="506" fill="none" stroke="#F0F0F0" stroke-width="12"/>
   <g fill="#FC3F1D" id="telos-tray-pi">
-    <rect x="140" y="220" width="744" height="148" rx="74"/>
-    <rect x="210" y="290" width="156" height="530" rx="78"/>
-    <rect x="550" y="290" width="156" height="430" rx="78"/>
+    <rect x="150" y="230" width="724" height="148" rx="74"/>
+    <rect x="220" y="300" width="156" height="520" rx="78"/>
+    <rect x="560" y="300" width="156" height="420" rx="78"/>
   </g>
 </svg>

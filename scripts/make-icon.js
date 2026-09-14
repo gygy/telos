@@ -3,23 +3,22 @@ const path = require('node:path');
 const sharp = require('sharp');
 const { Icns, IcnsImage } = require('@fiahfy/icns');
 
-// 打包标必须是矢量 Telos 白底圆角方 + π（与 LogoMark / TelosLogo / 启动画面同源）。
-// 对齐本机 Yandex browser.exe 图标组 136（任务栏/通知区白底标），不是内接正圆。
-// 嵌 PNG 的旧稿会在小尺寸糊；改品牌几何时同步更新下面门禁。
+// 打包标必须是矢量 Telos 正圆白底 + π（与 LogoMark / TelosLogo / 启动画面同源）。
+// 对齐本机 Yandex browser.exe 图标组 101（任务栏清晰正圆），禁止圆角方/squircle。
 const svg = fs.readFileSync(path.join(__dirname, '..', 'build', 'icon.svg'), 'utf8');
 const traySvgPath = path.join(__dirname, '..', 'build', 'icon-tray.svg');
 const traySvg = fs.readFileSync(traySvgPath, 'utf8');
 if (svg.includes('data:image/png') || traySvg.includes('data:image/png')) {
   throw new Error('build/icon.svg and icon-tray.svg must stay vector marks; do not embed a PNG');
 }
-if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<rect') || !svg.includes('rx="268"')) {
-  throw new Error('build/icon.svg must keep Yandex-g136 squircle + red π (telos-mark, rx=268, #FC3F1D)');
+if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<circle') || svg.includes('rx="268"')) {
+  throw new Error('build/icon.svg must keep Yandex-g101 circle + red π (telos-mark, <circle>, #FC3F1D)');
 }
-if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D') || !traySvg.includes('#E7E7E7')) {
-  throw new Error('build/icon-tray.svg must keep white squircle + red π + soft #E7 rim');
+if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D') || !traySvg.includes('#F0F0F0') || !traySvg.includes('<circle')) {
+  throw new Error('build/icon-tray.svg must keep white circle + red π + soft #F0 rim');
 }
-if (!svg.includes('#E7E7E7')) {
-  throw new Error('build/icon.svg must keep soft #E7E7E7 rim (Yandex g136 style, no dark border)');
+if (!svg.includes('#F0F0F0')) {
+  throw new Error('build/icon.svg must keep soft #F0F0F0 rim (Yandex g101 style, no dark border)');
 }
 
 const out = path.join(__dirname, '..', 'build');
@@ -51,7 +50,7 @@ const icnsSources = [
 
 /**
  * 渲染品牌 PNG（任务栏 / 安装界面 / 快捷方式 ICO）。
- * Yandex g136 圆角方软边：小尺寸轻锐化，避免过锐造成假黑边。
+ * Yandex g101 正圆软边：小尺寸轻锐化，避免过锐造成假黑边。
  */
 async function renderPngBuffer(size, svgSource = svg) {
   const svgBuf = Buffer.from(svgSource);
@@ -74,7 +73,7 @@ async function renderPngBuffer(size, svgSource = svg) {
 }
 
 /**
- * 渲染托盘 PNG：与品牌同几何（Yandex g136 squircle）。
+ * 渲染托盘 PNG：正圆白底（对齐 Yandex g101），轻锐化避免假黑边。
  */
 async function renderTrayPngBuffer(size) {
   const svgBuf = Buffer.from(traySvg);
@@ -161,7 +160,7 @@ async function main() {
     pngBySize.set(size, buf);
   }
 
-  // 通知区与任务栏同一张 Yandex g136 白底圆角方面孔（仅输出档位不同）。
+  // 通知区：正圆白底红 π（与任务栏同一面孔；略过填仅用于小尺寸贴边）。
   for (const size of traySizes) {
     const buf = await renderTrayPngBuffer(size);
     await fs.promises.writeFile(path.join(iconsDir, `tray-${size}x${size}.png`), buf);
