@@ -3,7 +3,8 @@ const path = require('node:path');
 const sharp = require('sharp');
 const { Icns, IcnsImage } = require('@fiahfy/icns');
 
-// 打包标必须是矢量 Telos 圆标 + π（与 LogoMark / TelosLogo / 启动画面同源）。
+// 打包标必须是矢量 Telos 白底圆角方 + π（与 LogoMark / TelosLogo / 启动画面同源）。
+// 对齐本机 Yandex browser.exe 图标组 136（任务栏/通知区白底标），不是内接正圆。
 // 嵌 PNG 的旧稿会在小尺寸糊；改品牌几何时同步更新下面门禁。
 const svg = fs.readFileSync(path.join(__dirname, '..', 'build', 'icon.svg'), 'utf8');
 const traySvgPath = path.join(__dirname, '..', 'build', 'icon-tray.svg');
@@ -11,14 +12,14 @@ const traySvg = fs.readFileSync(traySvgPath, 'utf8');
 if (svg.includes('data:image/png') || traySvg.includes('data:image/png')) {
   throw new Error('build/icon.svg and icon-tray.svg must stay vector marks; do not embed a PNG');
 }
-if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<circle')) {
-  throw new Error('build/icon.svg must keep the Telos circular red-π mark (telos-mark + #FC3F1D)');
+if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<rect') || !svg.includes('rx="268"')) {
+  throw new Error('build/icon.svg must keep Yandex-g136 squircle + red π (telos-mark, rx=268, #FC3F1D)');
 }
-if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D') || !traySvg.includes('#F0F0F0')) {
-  throw new Error('build/icon-tray.svg must keep white plate + red π + soft #F0 rim');
+if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D') || !traySvg.includes('#E7E7E7')) {
+  throw new Error('build/icon-tray.svg must keep white squircle + red π + soft #E7 rim');
 }
-if (!svg.includes('#F0F0F0')) {
-  throw new Error('build/icon.svg must keep soft #F0F0F0 rim (Yandex g101 style, no dark border)');
+if (!svg.includes('#E7E7E7')) {
+  throw new Error('build/icon.svg must keep soft #E7E7E7 rim (Yandex g136 style, no dark border)');
 }
 
 const out = path.join(__dirname, '..', 'build');
@@ -50,7 +51,7 @@ const icnsSources = [
 
 /**
  * 渲染品牌 PNG（任务栏 / 安装界面 / 快捷方式 ICO）。
- * 正圆软边：小尺寸轻锐化，避免过锐造成假黑边。
+ * Yandex g136 圆角方软边：小尺寸轻锐化，避免过锐造成假黑边。
  */
 async function renderPngBuffer(size, svgSource = svg) {
   const svgBuf = Buffer.from(svgSource);
@@ -73,7 +74,7 @@ async function renderPngBuffer(size, svgSource = svg) {
 }
 
 /**
- * 渲染托盘 PNG：全铺白底（对齐 Yandex g101/g136 opaqueFill~0.95+），轻锐化避免假黑边。
+ * 渲染托盘 PNG：与品牌同几何（Yandex g136 squircle）。
  */
 async function renderTrayPngBuffer(size) {
   const svgBuf = Buffer.from(traySvg);
@@ -160,8 +161,7 @@ async function main() {
     pngBySize.set(size, buf);
   }
 
-  // 通知区：全铺白底红 π + 浅灰软边（对齐 Yandex browser.exe 图标组 101/136）。
-  // 不再按 0.85~0.938 内缩——那是暗色蓝标组的比例，白底组是 contentRatio=1，缩了就会比 Yandex 小一圈。
+  // 通知区与任务栏同一张 Yandex g136 白底圆角方面孔（仅输出档位不同）。
   for (const size of traySizes) {
     const buf = await renderTrayPngBuffer(size);
     await fs.promises.writeFile(path.join(iconsDir, `tray-${size}x${size}.png`), buf);
@@ -237,17 +237,24 @@ async function main() {
     };
   }
   const brand256 = await opaqueFillOf(path.join(iconsDir, '256x256.png'));
+  const brand32 = await opaqueFillOf(path.join(iconsDir, '32x32.png'));
   const tray16 = await opaqueFillOf(path.join(iconsDir, 'tray-16x16.png'));
-  if (brand256.opaqueFill < 0.76 || brand256.opaqueFill > 0.86) {
+  // Yandex g136：256≈0.942 / 32≈0.961 / 16≈0.984；内接正圆只有 ~0.79
+  if (brand256.opaqueFill < 0.92 || brand256.opaqueFill > 0.97) {
     throw new Error(
-      `brand 256 opaqueFill=${brand256.opaqueFill.toFixed(3)} expected ~0.79 (Yandex g101 circle)`,
+      `brand 256 opaqueFill=${brand256.opaqueFill.toFixed(3)} expected ~0.94 (Yandex g136 squircle)`,
+    );
+  }
+  if (brand32.opaqueFill < 0.94) {
+    throw new Error(
+      `brand 32 opaqueFill=${brand32.opaqueFill.toFixed(3)} expected ≥0.94 (taskbar parity with Yandex)`,
     );
   }
   if (brand256.darkRim > 0 || tray16.darkRim > 0) {
     throw new Error('icon rim must stay light; darkRim pixels found');
   }
   if (brand256.topMid[3] < 200) {
-    throw new Error('brand circle must touch mid-edges (topMid alpha too low)');
+    throw new Error('brand plate must touch mid-edges (topMid alpha too low)');
   }
   if (tray16.opaqueFill < 0.95) {
     throw new Error(`tray 16 opaqueFill=${tray16.opaqueFill.toFixed(3)} expected ≥0.95 (Yandex g136)`);
@@ -258,6 +265,7 @@ async function main() {
     kinds.map((k) => k.size).join('/'),
     '), icon.icns, icons/*.png, icons/tray-*.png and brand-mark.png',
     `\n  brand256 opaqueFill=${brand256.opaqueFill.toFixed(3)} topMid=${brand256.topMid.join(',')}`,
+    `\n  brand32 opaqueFill=${brand32.opaqueFill.toFixed(3)}`,
     `\n  tray16 opaqueFill=${tray16.opaqueFill.toFixed(3)} topMid=${tray16.topMid.join(',')}`,
   );
 }

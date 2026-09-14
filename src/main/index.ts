@@ -65,8 +65,8 @@ import trayIcon32Path from "../../build/icons/tray-32x32.png?asset";
 const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
 
 /**
- * 托盘图标：近全铺白底红 π + #F0 软边（icons/tray-*），对齐 Yandex g136。
- * 任务栏/安装包走 icon.ico（正圆 g101 风格）。禁止深色描边。
+ * 托盘图标：与任务栏同一张 Yandex g136 白底圆角方 + 红 π（icons/tray-*）。
+ * 禁止深色描边；禁止退回内接正圆（opaque≈0.79 会明显小于 Yandex）。
  * DPI：16@100% / 20@125% / 24@150% / 32@≥200%。
  */
 function resolveTrayNativeImage(): Electron.NativeImage {

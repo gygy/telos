@@ -1,15 +1,14 @@
 /**
- * Telos brand mark — matches build/icon.svg (white circle + Yandex-red π).
- * Geometry aligned with Yandex g101: full-touch circle + soft #F0 rim, no dark border.
+ * Telos brand mark — matches build/icon.svg (Yandex g136 white squircle + red π).
  */
 import { cn } from "../../lib/utils";
 
 /**
  * Source art is 1024×1024.
- * - circle r 512 @ (512,512) + stroke #F0F0F0 width 12 @ r 506
- * - crossbar (188,262) 648×124 rx62
- * - left stem (256,324) 124×468 rx62
- * - right stem (564,324) 124×368 rx62
+ * - rounded square rx 268 + soft #E7 rim
+ * - crossbar (140,220) 744×148 rx74
+ * - left stem (210,290) 156×530 rx78
+ * - right stem (550,290) 156×430 rx78
  */
 export function TelosLogo(props: { className?: string; title?: string }) {
 	return (
@@ -22,12 +21,21 @@ export function TelosLogo(props: { className?: string; title?: string }) {
 			aria-label={props.title ?? "Telos"}
 		>
 			<title>{props.title ?? "Telos"}</title>
-			<circle cx="512" cy="512" r="512" fill="#FFFFFF" />
-			<circle cx="512" cy="512" r="506" fill="none" stroke="#F0F0F0" strokeWidth={12} />
+			<rect x="0" y="0" width="1024" height="1024" rx="268" fill="#FFFFFF" />
+			<rect
+				x="6"
+				y="6"
+				width="1012"
+				height="1012"
+				rx="262"
+				fill="none"
+				stroke="#E7E7E7"
+				strokeWidth={10}
+			/>
 			<g fill="#FC3F1D">
-				<rect x="188" y="262" width="648" height="124" rx="62" />
-				<rect x="256" y="324" width="124" height="468" rx="62" />
-				<rect x="564" y="324" width="124" height="368" rx="62" />
+				<rect x="140" y="220" width="744" height="148" rx="74" />
+				<rect x="210" y="290" width="156" height="530" rx="78" />
+				<rect x="550" y="290" width="156" height="430" rx="78" />
 			</g>
 		</svg>
 	);

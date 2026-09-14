@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos brand mark — circular white plate + Yandex-red π.
-  Matches Yandex browser.exe icon group 101 (taskbar / installer / shortcuts):
-  - true circle touching mid-edges (opaqueFill ~0.79 at 256), NOT overfilled squircle
-  - soft LIGHT gray rim (#F0F0F0) at the perimeter — never dark/black stroke
-  - transparent corners only
+  Telos brand mark — match Yandex browser.exe icon group 136 (taskbar + tray white face):
+  - white ROUNDED SQUARE (squircle), NOT an inscribed circle
+    (g136 @256 opaque≈0.942 / firstDiag≈19; inscribed circle only ≈0.79 looks smaller)
+  - soft LIGHT gray rim (#E7E7E7), never dark/black
+  - bold red π sized like Yandex Y glyph (~0.67+ of canvas)
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-mark">
-  <!-- r=512: mid-sides are solid; corners stay transparent → reads as a circle -->
-  <circle cx="512" cy="512" r="512" fill="#FFFFFF"/>
-  <!-- ~12px soft rim @1024 ≈ Yandex g101's 3px #F0 band @256 -->
-  <circle cx="512" cy="512" r="506" fill="none" stroke="#F0F0F0" stroke-width="12"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="268" fill="#FFFFFF"/>
+  <rect x="6" y="6" width="1012" height="1012" rx="262" fill="none" stroke="#E7E7E7" stroke-width="10"/>
   <g fill="#FC3F1D" id="telos-pi">
-    <rect x="188" y="262" width="648" height="124" rx="62"/>
-    <rect x="256" y="324" width="124" height="468" rx="62"/>
-    <rect x="564" y="324" width="124" height="368" rx="62"/>
+    <rect x="140" y="220" width="744" height="148" rx="74"/>
+    <rect x="210" y="290" width="156" height="530" rx="78"/>
+    <rect x="550" y="290" width="156" height="430" rx="78"/>
   </g>
 </svg>
