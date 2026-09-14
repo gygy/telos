@@ -43,7 +43,7 @@ export function atomGitFeedUrl(): string {
   return `${atomGitReleasesBase()}/releases/download/latest`;
 }
 
-/** 镜像/非官方更新源清单：保留 AtomGit 作为国内加速源（第一首选）；github 走原生链路。 */
+/** 镜像/非官方更新源清单：AtomGit 为可选国内镜像；默认官方通道走 github（不在此清单）。 */
 export const UPDATE_SOURCE_MIRRORS: ReadonlyArray<{ id: UpdateSourceId; host: string }> = [
   { id: "atomgit", host: ATOMGIT_HOST },
 ];
