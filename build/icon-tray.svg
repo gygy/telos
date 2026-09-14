@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos tray mark - white plate + red pi, no dark rim.
-  Reference: Yandex browser.exe 16px (transparent corners, no black stroke) and
-  resources/*.ico (messenger/sxs fill their slot without a dark border ring).
-  make-icon composites this disc at Yandex-measured content ratios per size.
+  Telos tray mark - match Yandex browser.exe icon group 136 (light notification style):
+  - Near-full canvas fill (Yandex 16px opaqueFill ~0.98; inscribed circle only ~0.79 looks smaller)
+  - Soft LIGHT gray rim only (#E8E8E8), never dark/black
+  - White plate + red pi
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-tray-mark">
-  <circle cx="512" cy="512" r="508" fill="#FFFFFF"/>
+  <!-- r>512 so mid-edges are solid white and fill approaches Yandex ~0.98 after clip -->
+  <circle cx="512" cy="512" r="620" fill="#FFFFFF"/>
+  <circle cx="512" cy="512" r="500" fill="none" stroke="#E8E8E8" stroke-width="14"/>
   <g fill="#FC3F1D" id="telos-tray-pi">
-    <rect x="188" y="262" width="648" height="124" rx="62"/>
-    <rect x="256" y="324" width="124" height="468" rx="62"/>
-    <rect x="564" y="324" width="124" height="368" rx="62"/>
+    <rect x="200" y="274" width="624" height="120" rx="60"/>
+    <rect x="268" y="324" width="120" height="448" rx="60"/>
+    <rect x="556" y="324" width="120" height="352" rx="60"/>
   </g>
 </svg>

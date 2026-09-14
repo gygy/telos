@@ -46,11 +46,10 @@ const icnsSources = [
 ];
 
 /**
- * 渲染单尺寸 PNG。
- * 小尺寸（≤32）先 4× 矢量再 Lanczos 下落 + 轻度锐化，避免直接缩到 16px 时 π 发糊
- * （对照：Yandex 托盘 16×16 为手调 PNG；Telos 旧链路是 512→16 运行时缩放）。
+ * 渲染品牌 PNG（任务栏/桌面 ICO）。
+ * 小尺寸先 4× 再 Lanczos 下落 + 锐化。
  */
-async function renderPngBuffer(size, svgSource) {
+async function renderPngBuffer(size, svgSource = svg) {
   const svgBuf = Buffer.from(svgSource);
   if (size <= 32) {
     const hi = size * 4;
@@ -61,6 +60,29 @@ async function renderPngBuffer(size, svgSource) {
     return sharp(hiPng)
       .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
       .sharpen({ sigma: size <= 16 ? 0.85 : 0.55 })
+      .png({ compressionLevel: 9, adaptiveFiltering: true })
+      .toBuffer();
+  }
+  return sharp(svgBuf)
+    .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer();
+}
+
+/**
+ * 渲染托盘 PNG：全铺白底（对齐 Yandex g101/g136 opaqueFill~0.95+），轻锐化避免假黑边。
+ */
+async function renderTrayPngBuffer(size) {
+  const svgBuf = Buffer.from(traySvg);
+  if (size <= 32) {
+    const hi = size * 4;
+    const hiPng = await sharp(svgBuf)
+      .resize(hi, hi, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .png()
+      .toBuffer();
+    return sharp(hiPng)
+      .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+      .sharpen({ sigma: 0.35 })
       .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
   }
@@ -135,31 +157,10 @@ async function main() {
     pngBySize.set(size, buf);
   }
 
-  // 通知区：白底红 π、无黑边。外径按本机 Yandex browser.exe 各档 contentRatio 合成
-  //（参考 Application/.../resources 与 browser 主图标：透明四角、无深色描边环）。
-  const trayRatioBySize = {
-    16: 0.938, // Yandex 15/16
-    20: 0.85, // Yandex 17/20
-    24: 0.875, // Yandex 21/24
-    32: 0.938, // Yandex 30/32
-  };
+  // 通知区：全铺白底红 π + 浅灰软边（对齐 Yandex browser.exe 图标组 101/136）。
+  // 不再按 0.85~0.938 内缩——那是暗色蓝标组的比例，白底组是 contentRatio=1，缩了就会比 Yandex 小一圈。
   for (const size of traySizes) {
-    const ratio = trayRatioBySize[size] ?? 0.938;
-    const disc = Math.max(1, Math.round(size * ratio));
-    const discPng = await renderPngBuffer(disc, traySvg);
-    const left = Math.floor((size - disc) / 2);
-    const top = Math.floor((size - disc) / 2);
-    const buf = await sharp({
-      create: {
-        width: size,
-        height: size,
-        channels: 4,
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      },
-    })
-      .composite([{ input: discPng, left, top }])
-      .png({ compressionLevel: 9, adaptiveFiltering: true })
-      .toBuffer();
+    const buf = await renderTrayPngBuffer(size);
     await fs.promises.writeFile(path.join(iconsDir, `tray-${size}x${size}.png`), buf);
   }
 

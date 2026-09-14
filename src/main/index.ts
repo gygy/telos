@@ -65,9 +65,9 @@ import trayIcon32Path from "../../build/icons/tray-32x32.png?asset";
 const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
 
 /**
- * 托盘图标：白底红 π、无黑边（icons/tray-*）。
- * 对照 Yandex browser 主图标与 resources 下 ico：透明四角、无深色描边环；
- * 外径按 Yandex 实测 contentRatio 合成。DPI：16@100% / 20@125% / 24@150% / 32@≥200%。
+ * 托盘图标：全铺白底红 π + 浅灰软边（icons/tray-*），对齐 Yandex 浅色托盘标（browser.exe 组 101/136）。
+ * 禁止深色描边；禁止再按暗色蓝标的 0.85~0.938 内缩（会明显小于 Yandex）。
+ * DPI：16@100% / 20@125% / 24@150% / 32@≥200%。
  */
 function resolveTrayNativeImage(): Electron.NativeImage {
 	const scale = screen.getPrimaryDisplay().scaleFactor;
