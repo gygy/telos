@@ -225,8 +225,8 @@ Gitmoji 对应关系：
 
   // ── 更新检测：检查永远自动；自动下载默认开启（v0.7.4 起取代 disableUpdateCheck）──
   autoDownloadUpdates: true,
-  // 更新源：默认国内 AtomGit 源（第一首选）；用户可切 GitHub 官方源（见 updateSources.ts）
-  updateSource: "atomgit",
+  // 更新源：默认 GitHub 官方 Release（见 updateSources.ts）；AtomGit 仅作可选镜像
+  updateSource: "github",
   // 自定义镜像前缀（保留向下兼容字段），空串 = 未填
   customUpdateSourceUrl: "",
 
@@ -257,29 +257,38 @@ Gitmoji 对应关系：
 };
 
 /**
- * updateSource 一次性迁移（v0.7.5 默认源 github → atomgit）：
+ * updateSource 一次性迁移（默认源 atomgit → github）：
  *
- * 背景：v0.7.5 把更新源默认值从 "github" 改为 "atomgit"（国内加速源第一首选），
- * 但设置对象是整体持久化的——旧用户 settings.json 里已写死 "github"，
- * spread 合并后仍会盖掉新默认值，永远享受不到 AtomGit 镜像。
+ * 背景：v0.7.5 曾把默认源切到 AtomGit，但 AtomGit 上 `gygy/telos` Release
+ * 对匿名下载返回 403，检查更新失败。现改回 GitHub 官方 Release 为唯一可靠默认源。
  *
  * 规则（一次性，尊重用户后续选择）：
- * - 已迁移过（标记位 true）→ 不再改动，用户显式保存的 "github" 永远生效；
- * - 从未持久化过更新源（旧字段缺省，新装用户）→ 直接用新默认 atomgit，无需迁移；
- * - 持久化过 "github" 且未迁移 → 补迁移为 "atomgit" 并写标记，此后用户改回 github 不再干预。
+ * - 已迁移过（标记位 true）→ 不再改动，用户若再显式选回 atomgit 永远生效；
+ * - 当前仍是 "atomgit"（含被旧迁移强制切过去的用户）→ 改回 "github" 并写标记；
+ * - 已是 github / 缺字段 → 只写标记（缺字段走新默认 github），避免反复扫描。
  *
- * 纯函数直接改传入对象并返回是否发生了迁移：SettingsStore 依赖 electron，
- * node --test 无法直接 import 该模块，抽成纯函数才能做行为级单测。
+ * 纯函数直接改传入对象并返回是否需要落盘。
  */
-export function migrateUpdateSourceToAtomgit(settings: {
+export function migrateUpdateSourceToGithubDefault(settings: {
+  updateSource?: unknown;
+  updateSourceGithubDefaultMigrated?: unknown;
+}): boolean {
+  if (settings.updateSourceGithubDefaultMigrated === true) return false;
+  settings.updateSourceGithubDefaultMigrated = true;
+  if (settings.updateSource === "atomgit") {
+    settings.updateSource = "github";
+    return true;
+  }
+  // 非 atomgit：仍需落盘标记，防止下次启动重复判断
+  return true;
+}
+
+/** @deprecated 已由 migrateUpdateSourceToGithubDefault 取代；保留导出名以免外部脚本误用时报缺符号。 */
+export function migrateUpdateSourceToAtomgit(_settings: {
   updateSource?: unknown;
   updateSourceAtomgitMigrated?: unknown;
 }): boolean {
-  if (settings.updateSourceAtomgitMigrated === true) return false;
-  if (settings.updateSource !== "github") return false;
-  settings.updateSource = "atomgit";
-  settings.updateSourceAtomgitMigrated = true;
-  return true;
+  return false;
 }
 
 export class SettingsStore {
@@ -314,9 +323,8 @@ export class SettingsStore {
       if (persistedMonoFont === "commit-mono") {
         this.settings.fontFamilyMono = "system-mono";
       }
-      // 兼容迁移：更新源默认 github → atomgit（一次性，写标记后尊重用户显式选择）。
-      if (migrateUpdateSourceToAtomgit(this.settings)) {
-        // 迁移后立即落盘：防止后续任一次保存把未迁移状态写回（与宽度迁移同策略）
+      // 兼容迁移：更新源默认 atomgit → github（一次性；AtomGit 匿名下载 403 根治）。
+      if (migrateUpdateSourceToGithubDefault(this.settings)) {
         void this.save().catch(() => undefined);
       }
       // 忙碌时投递行为来自旧 JSON 时可能是任意值；回落默认，避免发送链路带着坏语义。
@@ -428,7 +436,7 @@ export class SettingsStore {
     if ("autoSessionTitle" in safePatch && typeof safePatch.autoSessionTitle !== "boolean") {
       delete safePatch.autoSessionTitle;
     }
-    // 更新源 id 归一化（只允许已知枚举：atomgit 第一首选，github 官方；其余历史值回退 atomgit）。
+    // 更新源 id 归一化（只允许已知枚举：github 默认，atomgit 可选；其余历史值由调用方丢弃，保留当前设置）。
     if ("updateSource" in safePatch) {
       const candidate = safePatch.updateSource;
       const known =

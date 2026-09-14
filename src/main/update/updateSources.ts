@@ -17,10 +17,10 @@ import {
 
 export { normalizeCustomMirrorHost }; // 再导出，供调用点单一来源
 
-/** 校验设置里的更新源 id 是否已知；未知值回退 atomgit。 */
+/** 校验设置里的更新源 id 是否已知；未知值回退 github。 */
 export function normalizeUpdateSource(source: unknown): UpdateSourceId {
-  const id = typeof source === "string" ? (source as UpdateSourceId) : "atomgit";
-  return id === "atomgit" || id === "github" ? id : "atomgit";
+  const id = typeof source === "string" ? (source as UpdateSourceId) : "github";
+  return id === "atomgit" || id === "github" ? id : "github";
 }
 
 /** 镜像展示信息（设置页下拉/列表用）：id + 显示名 labelKey + 完整 feed URL。 */
@@ -33,17 +33,17 @@ export type UpdateSourceOption = {
 };
 
 /**
- * 更新源下拉选项（atomgit 第一首选，github 官方次选）。
+ * 更新源下拉选项（github 默认首选，atomgit 可选镜像）。
  */
 export function updateSourceOptions(): UpdateSourceOption[] {
   const options: UpdateSourceOption[] = [
+    { id: "github", labelKey: "github", host: null, feedUrl: null },
     {
       id: "atomgit",
       labelKey: "atomgit",
       host: ATOMGIT_HOST,
       feedUrl: buildCustomSourceFeedUrl(ATOMGIT_HOST),
     },
-    { id: "github", labelKey: "github", host: null, feedUrl: null },
   ];
   return options;
 }

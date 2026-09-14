@@ -40,7 +40,7 @@ export type WorkspaceContentOpenMode = "split" | "maximize";
 export type SessionTabOpenMode = "preview" | "permanent";
 export type AppFontSizeMode = "compact" | "default" | "medium" | "large" | "xlarge";
 
-/** 更新源：atomgit = 国内 AtomGit 源（默认首选）；github = 官方 GitHub Release。 */
+/** 更新源：github = 官方 GitHub Release（默认）；atomgit = 可选国内镜像。 */
 export type UpdateSourceId =
 	| "atomgit"
 	| "github";
@@ -348,18 +348,22 @@ export type AppSettings = {
 	 */
 	autoDownloadUpdates: boolean;
 	/**
-	 * 更新源："github" 走 GitHub Release 官方源（app-update.yml 原生链路）；
-	 * 其余为国内镜像前缀代理（generic provider 拼 releases/latest/download）；
+	 * 更新源："github" 走 GitHub Release 官方源（app-update.yml 原生链路，默认）；
+	 * "atomgit" 为可选国内镜像（generic provider）；
 	 * "custom" 用 customUpdateSourceUrl 的镜像前缀。
-	 * 默认 "atomgit"（v0.7.5 起，国内加速源为第一首选）。
+	 * 默认 "github"。
 	 */
 	updateSource: UpdateSourceId;
 	/** updateSource="custom" 时的镜像前缀（如 https://mirror.example.com），拼接规则见 updateSources.ts。 */
 	customUpdateSourceUrl: string;
 	/**
-	 * updateSource 一次性迁移标记：v0.7.5 将默认源从 github 切为 atomgit 时，
-	 * 对已持久化过 "github" 的旧用户补一次迁移到 atomgit；置 true 后永不重复迁移，
-	 * 用户后续显式改回 github 会被尊重。缺省 = 未迁移（仅旧 settings.json 会出现）。
+	 * updateSource 一次性迁移标记：默认源从 atomgit 改回 github 时，
+	 * 对仍停在 "atomgit" 的用户补一次迁回；置 true 后永不重复迁移，
+	 * 尊重用户此后显式再选 AtomGit。缺省 = 未迁移。
+	 */
+	updateSourceGithubDefaultMigrated?: boolean;
+	/**
+	 * @deprecated v0.7.5 曾用此标记把 github 迁到 atomgit；现已停用，保留仅兼容旧 JSON。
 	 */
 	updateSourceAtomgitMigrated?: boolean;
 	/** 上次后台检查完成时间（毫秒时间戳）；缺省 = 从未检查。 */

@@ -42,7 +42,7 @@ export function UpdateSourceSetting(props: {
   updateDraft: (patch: Partial<AppSettings>) => void;
 }) {
   const { draft, updateDraft } = props;
-  const source: UpdateSourceId = draft.updateSource ?? "atomgit";
+  const source: UpdateSourceId = draft.updateSource ?? "github";
 
   // 镜像体检结果（按更新源 id 索引；null 表示尚未完成首次探测）
   const [mirrorHealth, setMirrorHealth] = useState<Record<string, MirrorHealthResult> | null>(null);
@@ -113,7 +113,9 @@ export function UpdateSourceSetting(props: {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {/* AtomGit 第一首选 */}
+            {/* GitHub 官方默认 */}
+            <SelectItem value="github">{t("settings.updateSourceGithub")}</SelectItem>
+            {/* AtomGit 可选镜像 */}
             {UPDATE_SOURCE_MIRRORS.map((mirror) => (
               <SelectItem key={mirror.id} value={mirror.id}>
                 <span className="flex items-center gap-2">
@@ -125,8 +127,6 @@ export function UpdateSourceSetting(props: {
                 </span>
               </SelectItem>
             ))}
-            {/* GitHub 官方 */}
-            <SelectItem value="github">{t("settings.updateSourceGithub")}</SelectItem>
           </SelectContent>
         </Select>
       </SettingRow>

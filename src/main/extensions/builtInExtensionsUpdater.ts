@@ -118,7 +118,7 @@ export class BuiltInExtensionsUpdater {
 		this.maxManifestBytes = options.maxManifestBytes ?? 256 * 1024;
 		this.maxFileBytes = options.maxFileBytes ?? 2 * 1024 * 1024;
 		this.branch = options.branch ?? BUILT_IN_EXTENSIONS_UPDATE_DEFAULT_BRANCH;
-		this.source = options.source ?? (() => "atomgit");
+		this.source = options.source ?? (() => "github");
 	}
 
 	/** 覆盖层目录绝对路径（无论是否存在）。 */
