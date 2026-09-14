@@ -238,25 +238,22 @@ async function main() {
   const brand256 = await opaqueFillOf(path.join(iconsDir, '256x256.png'));
   const brand32 = await opaqueFillOf(path.join(iconsDir, '32x32.png'));
   const tray16 = await opaqueFillOf(path.join(iconsDir, 'tray-16x16.png'));
-  // Yandex g136：256≈0.942 / 32≈0.961 / 16≈0.984；内接正圆只有 ~0.79
-  if (brand256.opaqueFill < 0.92 || brand256.opaqueFill > 0.97) {
+  // Yandex g101 正圆：256≈0.79；圆角方会到 ~0.94（任务栏会看成方）
+  if (brand256.opaqueFill < 0.76 || brand256.opaqueFill > 0.86) {
     throw new Error(
-      `brand 256 opaqueFill=${brand256.opaqueFill.toFixed(3)} expected ~0.94 (Yandex g136 squircle)`,
+      `brand 256 opaqueFill=${brand256.opaqueFill.toFixed(3)} expected ~0.79 (Yandex g101 circle)`,
     );
   }
-  if (brand32.opaqueFill < 0.94) {
+  if (brand32.opaqueFill > 0.9) {
     throw new Error(
-      `brand 32 opaqueFill=${brand32.opaqueFill.toFixed(3)} expected ≥0.94 (taskbar parity with Yandex)`,
+      `brand 32 opaqueFill=${brand32.opaqueFill.toFixed(3)} too high — looks like squircle, not circle`,
     );
   }
   if (brand256.darkRim > 0 || tray16.darkRim > 0) {
     throw new Error('icon rim must stay light; darkRim pixels found');
   }
   if (brand256.topMid[3] < 200) {
-    throw new Error('brand plate must touch mid-edges (topMid alpha too low)');
-  }
-  if (tray16.opaqueFill < 0.95) {
-    throw new Error(`tray 16 opaqueFill=${tray16.opaqueFill.toFixed(3)} expected ≥0.95 (Yandex g136)`);
+    throw new Error('brand circle must touch mid-edges (topMid alpha too low)');
   }
 
   console.log(
