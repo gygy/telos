@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Telos brand mark — circular plate + Yandex-red π.
-  Sized for Windows taskbar parity with Yandex Browser:
-  - circle nearly fills the 1024 canvas (minimal transparent corners)
-  - π glyph is large and bold within the plate
+  Telos brand mark — circular white plate + Yandex-red π.
+  Matches Yandex browser.exe icon group 101 (taskbar / installer / shortcuts):
+  - true circle touching mid-edges (opaqueFill ~0.79 at 256), NOT overfilled squircle
+  - soft LIGHT gray rim (#F0F0F0) at the perimeter — never dark/black stroke
+  - transparent corners only
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" id="telos-mark">
-  <!-- Near full-bleed circle (matches Yandex taskbar visual weight) -->
-  <circle cx="512" cy="512" r="508" fill="#FFFFFF"/>
-
+  <!-- r=512: mid-sides are solid; corners stay transparent → reads as a circle -->
+  <circle cx="512" cy="512" r="512" fill="#FFFFFF"/>
+  <!-- ~12px soft rim @1024 ≈ Yandex g101's 3px #F0 band @256 -->
+  <circle cx="512" cy="512" r="506" fill="none" stroke="#F0F0F0" stroke-width="12"/>
   <g fill="#FC3F1D" id="telos-pi">
-    <!-- Larger π: thicker bars, fills ~72% of plate diameter -->
     <rect x="188" y="262" width="648" height="124" rx="62"/>
     <rect x="256" y="324" width="124" height="468" rx="62"/>
     <rect x="564" y="324" width="124" height="368" rx="62"/>

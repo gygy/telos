@@ -14,8 +14,11 @@ if (svg.includes('data:image/png') || traySvg.includes('data:image/png')) {
 if (!svg.includes('id="telos-mark"') || !svg.includes('#FC3F1D') || !svg.includes('<circle')) {
   throw new Error('build/icon.svg must keep the Telos circular red-π mark (telos-mark + #FC3F1D)');
 }
-if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D')) {
-  throw new Error('build/icon-tray.svg must keep the inverted tray mark (red plate + white π)');
+if (!traySvg.includes('id="telos-tray-mark"') || !traySvg.includes('#FC3F1D') || !traySvg.includes('#F0F0F0')) {
+  throw new Error('build/icon-tray.svg must keep white plate + red π + soft #F0 rim');
+}
+if (!svg.includes('#F0F0F0')) {
+  throw new Error('build/icon.svg must keep soft #F0F0F0 rim (Yandex g101 style, no dark border)');
 }
 
 const out = path.join(__dirname, '..', 'build');
@@ -46,8 +49,8 @@ const icnsSources = [
 ];
 
 /**
- * 渲染品牌 PNG（任务栏/桌面 ICO）。
- * 小尺寸先 4× 再 Lanczos 下落 + 锐化。
+ * 渲染品牌 PNG（任务栏 / 安装界面 / 快捷方式 ICO）。
+ * 正圆软边：小尺寸轻锐化，避免过锐造成假黑边。
  */
 async function renderPngBuffer(size, svgSource = svg) {
   const svgBuf = Buffer.from(svgSource);
@@ -59,7 +62,7 @@ async function renderPngBuffer(size, svgSource = svg) {
       .toBuffer();
     return sharp(hiPng)
       .resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-      .sharpen({ sigma: size <= 16 ? 0.85 : 0.55 })
+      .sharpen({ sigma: 0.35 })
       .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
   }
@@ -202,10 +205,60 @@ async function main() {
     }
   }
 
+  // 与 Yandex g101 / g136 对齐的不透明占比门禁（防止又缩回内接空隙圆）
+  async function opaqueFillOf(file) {
+    const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let opaque = 0;
+    let darkRim = 0;
+    const w = info.width;
+    const h = info.height;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        if (a <= 16) continue;
+        opaque += 1;
+        const cx = (w - 1) / 2;
+        const cy = (h - 1) / 2;
+        const dist = Math.hypot(x - cx, y - cy);
+        const R = Math.max(w, h) / 2;
+        if (dist > R * 0.82 && r + g + b < 120 && a > 200) darkRim += 1;
+      }
+    }
+    const mid = Math.floor(w / 2);
+    const ti = mid * 4;
+    return {
+      opaqueFill: opaque / (w * h),
+      darkRim,
+      topMid: [data[ti], data[ti + 1], data[ti + 2], data[ti + 3]],
+    };
+  }
+  const brand256 = await opaqueFillOf(path.join(iconsDir, '256x256.png'));
+  const tray16 = await opaqueFillOf(path.join(iconsDir, 'tray-16x16.png'));
+  if (brand256.opaqueFill < 0.76 || brand256.opaqueFill > 0.86) {
+    throw new Error(
+      `brand 256 opaqueFill=${brand256.opaqueFill.toFixed(3)} expected ~0.79 (Yandex g101 circle)`,
+    );
+  }
+  if (brand256.darkRim > 0 || tray16.darkRim > 0) {
+    throw new Error('icon rim must stay light; darkRim pixels found');
+  }
+  if (brand256.topMid[3] < 200) {
+    throw new Error('brand circle must touch mid-edges (topMid alpha too low)');
+  }
+  if (tray16.opaqueFill < 0.95) {
+    throw new Error(`tray 16 opaqueFill=${tray16.opaqueFill.toFixed(3)} expected ≥0.95 (Yandex g136)`);
+  }
+
   console.log(
     'wrote build/icon.svg, icon-tray.svg, icon.png, icon.ico (PNG:',
     kinds.map((k) => k.size).join('/'),
     '), icon.icns, icons/*.png, icons/tray-*.png and brand-mark.png',
+    `\n  brand256 opaqueFill=${brand256.opaqueFill.toFixed(3)} topMid=${brand256.topMid.join(',')}`,
+    `\n  tray16 opaqueFill=${tray16.opaqueFill.toFixed(3)} topMid=${tray16.topMid.join(',')}`,
   );
 }
 
