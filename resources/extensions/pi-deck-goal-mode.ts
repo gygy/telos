@@ -1,5 +1,5 @@
-/**
- * PiDeck Goal Mode Extension
+﻿/**
+ * Telos Goal Mode Extension
  *
  * 为 composer「目标模式」提供 pi 侧实现（DSH 走 host ctx.goals，不走本扩展）：
  * - renderer 在 agentMessage 里加入隐藏标记，input 钩子识别后进入目标态；
@@ -49,7 +49,7 @@ function detectTerminal(text: string): { phase: "complete" } | { phase: "blocked
 	return undefined;
 }
 
-export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
+export default function TelosGoalModeExtension(pi: ExtensionAPI): void {
 	let state: GoalModeState = {
 		enabled: false,
 		phase: "paused",
@@ -82,7 +82,7 @@ export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
 		continuing = false;
 		updateWidget(ctx);
 		persistState();
-		if (notify) ctx.ui.notify("PiDeck 目标模式已暂停。切回目标模式后会从当前进度继续。", "info");
+		if (notify) ctx.ui.notify("Telos 目标模式已暂停。切回目标模式后会从当前进度继续。", "info");
 	}
 
 	function setActive(ctx: ExtensionContext, objective?: string): void {
@@ -113,7 +113,7 @@ export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
 		continuing = false;
 		updateWidget(ctx);
 		persistState();
-		ctx.ui.notify("PiDeck 目标已完成。", "info");
+		ctx.ui.notify("Telos 目标已完成。", "info");
 	}
 
 	function setBlocked(ctx: ExtensionContext, reason: string): void {
@@ -121,7 +121,7 @@ export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
 		continuing = false;
 		updateWidget(ctx);
 		persistState();
-		ctx.ui.notify(`PiDeck 目标已阻塞：${reason}`, "warning");
+		ctx.ui.notify(`Telos 目标已阻塞：${reason}`, "warning");
 	}
 
 	/**
@@ -141,7 +141,7 @@ export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
 	}
 
 	pi.registerCommand("goal", {
-		description: "切换 PiDeck 目标模式（围绕一个目标自动连续推进）",
+		description: "切换 Telos 目标模式（围绕一个目标自动连续推进）",
 		handler: async (args, ctx) => {
 			const raw = String(args ?? "").trim();
 			const normalized = raw.toLowerCase();
@@ -160,7 +160,7 @@ export default function piDeckGoalModeExtension(pi: ExtensionAPI): void {
 				continuing = false;
 				updateWidget(ctx);
 				persistState();
-				ctx.ui.notify("PiDeck 目标已清除。", "info");
+				ctx.ui.notify("Telos 目标已清除。", "info");
 				return;
 			}
 			if (["resume", "on", "enable"].includes(normalized)) {

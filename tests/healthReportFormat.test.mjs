@@ -124,14 +124,14 @@ test("formatAiPrompt embeds project context when provided", () => {
     projectName: "Telos",
     agentsMd: "## 架构规则\n- 禁止 any\n- 用 Jotai\n",
     agentsMdTruncated: false,
-    skills: ["pideck-doctor", "git-helper"],
+    skills: ["telos-doctor", "git-helper"],
   };
   const out = formatAiPrompt(makeReport(), CONTEXT, projectContext);
   assert.ok(out.includes("## 项目上下文（Telos）"), "should include project context section");
   assert.ok(out.includes("项目地址（源码仓库）：https://github.com/gygy/telos"), "should point at the GitHub repo (local source is usually absent)");
   assert.ok(out.includes("- 禁止 any"), "should embed AGENTS.md content");
-  assert.ok(out.includes("pideck-doctor"), "should list project skills");
-  assert.ok(out.includes("/skill:pideck-doctor"), "should hint at the diagnostic skill");
+  assert.ok(out.includes("telos-doctor"), "should list project skills");
+  assert.ok(out.includes("/skill:telos-doctor"), "should hint at the diagnostic skill");
 });
 
 test("formatAiPrompt marks truncated AGENTS.md and omits empty project context", () => {

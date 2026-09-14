@@ -5,9 +5,9 @@ DSH 的持久 PowerShell 工具。每个 agent 复用一个常驻 `pwsh`（`node
 与官方 `@deepseek-ai/dsh-tool-bash-persistent` 同类，但**不依赖 `ctx.terminals`**。无沙箱。
 官方 rc.8 的 `@deepseek-ai/dsh-tool-pwsh-persistent` 走 `ctx.terminals`、工具名是 `pwsh`（会和一次性沙箱 pwsh 冲突），本插件仍用独立工具名 `pwsh_persistent`。
 
-## 不要装进 PiDeck 仓库
+## 不要装进 Telos 仓库
 
-PiDeck 已经通过 `file:packages/dsh-tool-pwsh-persistent` 挂好了。开一个 DSH 会话即可，模型侧出现 `pwsh_persistent`。
+Telos 已经通过 `file:packages/dsh-tool-pwsh-persistent` 挂好了。开一个 DSH 会话即可，模型侧出现 `pwsh_persistent`。
 
 也不要在任意目录执行 `npm install ./xxx.tgz` 再 `dsh plugin add dsh-tool-pwsh-persistent`：后者会去 **npm 仓库**拉同名包，本地 tgz 必然 404。
 

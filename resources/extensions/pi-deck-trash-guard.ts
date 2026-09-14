@@ -1,5 +1,5 @@
-/**
- * PiDeck Trash Guard Extension（回收站守卫）
+﻿/**
+ * Telos Trash Guard Extension（回收站守卫）
  *
  * 拦截 bash 工具调用中的删除类命令（rm / unlink / rmdir / del / rd / erase /
  * Remove-Item 等），在原命令执行前把每个目标复制一份送进系统回收站，然后
@@ -14,14 +14,14 @@
  *
  * 设计约束：
  * - 本文件自包含：只依赖 @earendil-works/pi-coding-agent（仅类型）与 node
- *   内置模块，不 import PiDeck 源码（扩展在 pi 进程内加载）。
+ *   内置模块，不 import Telos 源码（扩展在 pi 进程内加载）。
  * - 副本先落到 os.tmpdir() 暂存目录再送回收站：这样原文件所在卷与回收站
  *   卷解耦（跨卷回收站语义由暂存区所在卷承担），且原文件在备份期间不动。
  * - 永不阻断 agent：任何内部错误只记 stderr 后放行；找不到目标/目标过大
  *   也直接放行（删除不被守卫，行为与未装本扩展一致）。
  * - 备份上限：单文件 100MB、单次调用累计 500MB、目录深 24 层，防止
  *   `rm -rf node_modules` 之类把回收站/暂存盘撑爆。超限目标跳过并告警。
- * - 开关：PIDECK_TRASH_GUARD=off|0|false 关闭；未设置或其它值默认开启。
+ * - 开关：Telos_TRASH_GUARD=off|0|false 关闭；未设置或其它值默认开启。
  *
  * 已知边界（解析层面刻意不做，避免误伤）：
  * - 不解析 `find -delete` / `git clean` / `xargs rm` / 变量展开等间接删除，
@@ -492,7 +492,7 @@ async function backupTarget(target: string, currentTotal: number): Promise<boole
 		return false;
 	}
 	// 暂存区：tmpdir()/pi-deck-trash-guard/<batch>/，按序号命名避免重名
-	const batchDir = process.env.PIDECK_TRASH_GUARD_STAGING_DIR || join(tmpdir(), STAGING_ROOT);
+	const batchDir = process.env.Telos_TRASH_GUARD_STAGING_DIR || join(tmpdir(), STAGING_ROOT);
 	const staged = join(batchDir, `${Date.now()}-${++stagingSeq}-${basename(target)}`);
 	try {
 		mkdirSync(batchDir, { recursive: true });
@@ -515,8 +515,8 @@ async function backupTarget(target: string, currentTotal: number): Promise<boole
 // ── 入口 ──
 
 export default async function trashGuardExtension(pi: ExtensionAPI) {
-	// 旧版 PiDeck / 独立 CLI 也会加载：默认开启，显式环境变量关闭
-	if (!isGuardEnabled(process.env.PIDECK_TRASH_GUARD)) {
+	// 旧版 Telos / 独立 CLI 也会加载：默认开启，显式环境变量关闭
+	if (!isGuardEnabled(process.env.Telos_TRASH_GUARD)) {
 		return;
 	}
 

@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
  * Electron 应用 fixture：默认启动构建产物（out/main/index.js）；设置
  * PIDEK_E2E_EXECUTABLE_PATH 时改为启动已打包的 Electron 可执行文件。
  * 用临时数据目录隔离 userData（Windows 走 APPDATA，Linux 走 XDG_CONFIG_HOME，
- * macOS 走 HOME），避免 E2E 污染开发者本机的 PiDeck 数据。
+ * macOS 走 HOME），避免 E2E 污染开发者本机的 Telos 数据。
  *
  * 注意：不要传 ELECTRON_RENDERER_URL，那样会指向不存在的 dev server；
  * 打包产物自带 renderer 资源。

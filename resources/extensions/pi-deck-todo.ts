@@ -1,5 +1,5 @@
-/**
- * PiDeck Todo Extension
+﻿/**
+ * Telos Todo Extension
  *
  * This extension owns a branch-scoped, durable current work plan. A plan changes
  * only through an explicit tool action: `replace` starts a new plan, `restore`
@@ -20,7 +20,7 @@
  *
  * The widget stays line-based for the existing pi RPC transport; its first
  * machine-readable line carries the active plan identity and is ignored only by
- * PiDeck's own todo-widget parser. It therefore participates in the renderer's
+ * Telos's own todo-widget parser. It therefore participates in the renderer's
  * dismiss fingerprint even if two plans have identical visible task text.
  *
  * `context` 不再注入任何每轮提醒。历史上提醒曾以「删旧追新」浮动尾注入（冻结
@@ -72,7 +72,7 @@ const OWN_EXTENSION_FILE = "pi-deck-todo.ts";
 // 旧版「每轮临时提醒」的类型。已停止生产；context 保留防御性剥离，防止降级/
 // 历史进程混入的同类消息进入出站请求。
 const TODO_CONTEXT_ENTRY_TYPE = "pi-deck-todo-context";
-// This is a private PiDeck widget-line contract, not user-facing text. Keep it first in the array.
+// This is a private Telos widget-line contract, not user-facing text. Keep it first in the array.
 const PLAN_METADATA_PREFIX = "[[pid:todo-plan:";
 const PLAN_METADATA_SUFFIX = "]]";
 
@@ -109,7 +109,7 @@ function nonEmptyString(value: unknown): string | undefined {
 	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-export default function piDeckTodoExtension(pi: ExtensionAPI): void {
+export default function TelosTodoExtension(pi: ExtensionAPI): void {
 	// 内存单一真源：只读恢复（decode）与每次成功变更（reducer）都在这里。
 	let state: TodoState = emptyTodoState();
 	// A third-party `todo` tool owns the name once it replaces ours. Stop publishing widget/reminders.
@@ -326,7 +326,7 @@ export default function piDeckTodoExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			if (command === "collapse" || command === "expand") {
-				ctx.ui.notify("待办计划可在 PiDeck 输入框上方展开或折叠。", "info");
+				ctx.ui.notify("待办计划可在 Telos 输入框上方展开或折叠。", "info");
 				return;
 			}
 			if (!state.activePlan) {

@@ -1,5 +1,5 @@
-/**
- * PiDeck Ask Question Extension
+﻿/**
+ * Telos Ask Question Extension
  *
  * 注册 ask_question 工具，让 LLM 可以向用户提问并从桌面端 UI 获取回答。
  * 使用 pi RPC Extension UI Protocol（ctx.ui.select/input/editor）实现用户交互，
@@ -78,7 +78,7 @@ interface AskCtx {
  * RPC only supports one dialog at a time. Batch questions travel in an input
  * envelope, which the desktop expands into its single composer-adjacent form.
  */
-export const BATCH_ASK_ENVELOPE_KEY = "__piDeckBatchAsk";
+export const BATCH_ASK_ENVELOPE_KEY = "__TelosBatchAsk";
 
 // allowOther 追加项的固定文案；选中后触发 ctx.ui.input 收集自定义答案
 const OTHER_LABEL = "✎ 自行输入...";
@@ -285,7 +285,7 @@ async function askOne(q: NormalizedQuestion, ctx: AskCtx): Promise<Answer> {
 						? opts.find((option) => option.isOther)
 						: undefined);
 				if (!chosen) {
-					// PiDeck's inline custom field returns text directly instead of opening
+					// Telos's inline custom field returns text directly instead of opening
 					// a second RPC dialog. Preserve that answer when custom input is allowed.
 					return q.allowOther !== false
 						? { id: q.id, type: q.type, value: selected, label: selected, wasCustom: true }
@@ -330,7 +330,7 @@ async function askBatch(
 		review,
 		questions,
 	});
-	const raw = await ctx.ui.input(envelope, "__piDeckBatchAsk__");
+	const raw = await ctx.ui.input(envelope, "__TelosBatchAsk__");
 	if (typeof raw !== "string" || !raw.trim()) return { answers: [], cancelled: true };
 	try {
 		const parsed = JSON.parse(raw) as { cancelled?: boolean; answers?: Answer[] };
@@ -351,11 +351,11 @@ async function askBatch(
 }
 
 export default function (pi: ExtensionAPI) {
-	// 飞书绑定会话（PiDeck spawn 时注入 PIDECK_FEISHU_LINKED=1，见 PiProcess.ts）：
+	// 飞书绑定会话（Telos spawn 时注入 Telos_FEISHU_LINKED=1，见 PiProcess.ts）：
 	// 飞书端交互卡片体验差（按钮 4/行、最多 20 选项、文本 18 字符截断），
 	// 因此注册「禁用提示版」——agent 调用时得到明确指引把问题直接写进回复，
 	// 用户以飞书消息作答，而不是静默丢失提问能力。
-	const feishuLinked = process.env.PIDECK_FEISHU_LINKED === "1";
+	const feishuLinked = process.env.Telos_FEISHU_LINKED === "1";
 
 	pi.registerTool({
 		name: "ask_question",

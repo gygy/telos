@@ -1,12 +1,12 @@
-/**
- * PiDeck Security Gate Extension
+﻿/**
+ * Telos Security Gate Extension
  *
- * 安全门执行器：按桌面端写入的策略快照（PIDECK_SECURITY_CONFIG 指向的 JSON）
+ * 安全门执行器：按桌面端写入的策略快照（Telos_SECURITY_CONFIG 指向的 JSON）
  * 在 tool_call 事件上执行拦截/确认。
  *
  * 设计约束：
  * - 本文件必须自包含：只能依赖 @earendil-works/pi-coding-agent 与 node 内置模块，
- *   不允许 import PiDeck 源码（扩展在 pi 进程内加载，不共享打包产物）。
+ *   不允许 import Telos 源码（扩展在 pi 进程内加载，不共享打包产物）。
  * - 与主进程的契约 = 策略快照 schema（src/shared/types/security.ts 的
  *   SecurityPolicySnapshot）。schemaVersion 不匹配时本扩展保守降级：fail-safe 放行
  *   还是拒绝由配置语义决定——enabled=false 放行；快照不可读时放行并记日志。
@@ -316,11 +316,11 @@ function buildSecurityHint(level: SecurityLevelConfig): string | undefined {
 // ── 入口 ──
 
 export default async function securityGateExtension(pi: ExtensionAPI) {
-	snapshotPath = process.env.PIDECK_SECURITY_CONFIG ?? "";
-	sessionId = process.env.PIDECK_SESSION_ID ?? "";
+	snapshotPath = process.env.Telos_SECURITY_CONFIG ?? "";
+	sessionId = process.env.Telos_SESSION_ID ?? "";
 
 	if (!snapshotPath) {
-		// 桌面端未注入配置路径（旧版本 PiDeck / 独立 CLI 运行）：完全放行
+		// 桌面端未注入配置路径（旧版本 Telos / 独立 CLI 运行）：完全放行
 		return;
 	}
 

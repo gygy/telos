@@ -4,7 +4,7 @@
 
 Persistent PowerShell tool for DSH.
 
-**Do not `npm install` the tarball into the PiDeck repo**, and **do not** `dsh plugin add dsh-tool-pwsh-persistent` (that hits the npm registry → 404).
+**Do not `npm install` the tarball into the Telos repo**, and **do not** `dsh plugin add dsh-tool-pwsh-persistent` (that hits the npm registry → 404).
 
 ## Testers (dsh-web / official CLI)
 

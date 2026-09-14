@@ -1,5 +1,5 @@
-/**
- * PiDeck 的轻量会话标题扩展。
+﻿/**
+ * Telos 的轻量会话标题扩展。
  *
  * 标题请求只在首轮 agent_settled 后异步发起，使用独立的最小 Context；
  * 即使主轮被中断，也根据首条 user 意图生成标题，不修改主 agent 的 prompt、消息、工具或 session transcript。
@@ -334,15 +334,15 @@ async function requestTitle(
 		if (response.stopReason === "error" || response.stopReason === "aborted") return undefined;
 		return cleanTitle(extractText(response.content));
 	} catch {
-		// 标题是非关键的旁路请求：认证失败、超时、取消或模型异常都回落到 PiDeck 原有标题。
+		// 标题是非关键的旁路请求：认证失败、超时、取消或模型异常都回落到 Telos 原有标题。
 		return undefined;
 	}
 }
 
-/** PiDeck 内置扩展入口。 */
-export default function piDeckSessionTitle(pi: ExtensionAPI): void {
-	// PiDeck 总是显式注入 0/1；未由 PiDeck 启动时默认开启，便于直接调试扩展。
-	const enabled = process.env.PIDECK_AUTO_SESSION_TITLE !== "0";
+/** Telos 内置扩展入口。 */
+export default function TelosSessionTitle(pi: ExtensionAPI): void {
+	// Telos 总是显式注入 0/1；未由 Telos 启动时默认开启，便于直接调试扩展。
+	const enabled = process.env.Telos_AUTO_SESSION_TITLE !== "0";
 	let sessionId: string | undefined;
 	let runtimeGeneration = 0;
 	let eligible = false;

@@ -1,11 +1,11 @@
-/**
- * PiDeck Request Size Recovery Extension
+﻿/**
+ * Telos Request Size Recovery Extension
  *
  * 背景：会话历史（完整请求体）超过中转网关的字节上限（如 nginx
  * client_max_body_size）时，网关通常返回 413，也可能通过 400 或自定义错误
  * 文案报告同一问题。此时后续请求与当前模型发起的压缩请求都可能失败。
  *
- * 方案（与上游维护者建议一致，见 ayuayue/PiDeck#185）：识别明确的请求体
+ * 方案（与上游维护者建议一致，见 ayuayue/Telos#185）：识别明确的请求体
  * 大小超限错误后弹确认框，
  * 用户同意则「用指定模型压缩」——临时切换到请求上限更大的模型执行压缩
  * （AgentSession.compact 的摘要请求走当前会话模型），完成后自动切回原模型。
@@ -164,7 +164,7 @@ export function buildRecoveryModelOptions(
 const OFFER_COOLDOWN_MS = 10 * 60 * 1000;
 
 /**
- * PiDeck 内置扩展：请求体大小超限恢复（用指定模型压缩）。
+ * Telos 内置扩展：请求体大小超限恢复（用指定模型压缩）。
  *
  * 挂载 `message_end` 事件，只处理 assistant + stopReason=error + 明确的请求体超限错误。
  * 流程：confirm → select 候选 → setModel（临时）→ ctx.compact（摘要请求

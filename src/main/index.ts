@@ -3265,13 +3265,13 @@ app.whenReady().then(async () => {
 			void appLogger?.warn("skill", "Image-gen skill template auto-install failed", { error: result.error });
 		}
 	});
-	// 环境诊断技能启动时自动落到用户全局技能目录，用户可 /skill:pideck-doctor 让 pi 读诊断报告排障。
+	// 环境诊断技能启动时自动落到用户全局技能目录，用户可 /skill:telos-doctor 让 pi 读诊断报告排障。
 	// fire-and-forget，失败不阻塞启动。
-	void skillManager.installPideckDoctorTemplate().then((result) => {
+	void skillManager.installTelosDoctorTemplate().then((result) => {
 		if (result.success) {
-			void appLogger?.info("skill", "Pideck-doctor skill template auto-installed", { path: result.path });
+			void appLogger?.info("skill", "Telos-doctor skill template auto-installed", { path: result.path });
 		} else {
-			void appLogger?.warn("skill", "Pideck-doctor skill template auto-install failed", { error: result.error });
+			void appLogger?.warn("skill", "Telos-doctor skill template auto-install failed", { error: result.error });
 		}
 	});
 	extensionManager = new ExtensionManager(

@@ -221,13 +221,6 @@ export class SkillManager {
 		return this.installTemplate("telos-doctor");
 	}
 
-	/** @deprecated 兼容旧调用名；请改用 installTelosDoctorTemplate */
-	async installPideckDoctorTemplate(): Promise<
-		{ success: true; path: string } | { success: false; error: string }
-	> {
-		return this.installTelosDoctorTemplate();
-	}
-
 	private async scanLocation(location: PiSkillLocation): Promise<PiSkillSummary[]> {
 		await mkdir(location.path, { recursive: true });
 		const entries = await readdir(location.path, { withFileTypes: true }).catch(() => []);

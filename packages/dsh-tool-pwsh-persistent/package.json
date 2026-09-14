@@ -4,7 +4,7 @@
   "description": "DSH persistent PowerShell tool: reuse one owner-scoped pwsh session via node-pty (Windows-first, no ctx.terminals).",
   "type": "module",
   "license": "MIT",
-  "author": "PiDeck contributors",
+  "author": "Telos contributors",
   "keywords": [
     "dsh",
     "dsh-plugin",

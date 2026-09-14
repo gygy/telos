@@ -1,4 +1,4 @@
-# PiDeck 视频制作工作流依赖
+﻿# Telos 视频制作工作流依赖
 edge-tts>=6.1.0
 playwright>=1.40.0
 

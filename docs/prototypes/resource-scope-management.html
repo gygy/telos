@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
@@ -410,7 +410,7 @@
     };
 
     const projects = [
-      { id: "pideck", name: "Telos", path: "F:\\Telos", live: true },
+      { id: "Telos", name: "Telos", path: "F:\\Telos", live: true },
       { id: "proma", name: "Proma", path: "F:\\Proma", live: true },
       { id: "web-lab", name: "web-lab", path: "D:\\work\\web-lab", live: false }
     ];
@@ -423,7 +423,7 @@
       ],
       skills: [
         { id: "council", name: "council-mode", source: "~/.pi/agent/skills/council-mode", detail: "召集多个顾问交叉评审决策", note: "Pi 全局技能", enabled: true },
-        { id: "doctor", name: "pideck-doctor", source: "~/.pi/agent/skills/pideck-doctor", detail: "诊断 Telos 环境与运行问题", note: "Pi 全局技能", enabled: true },
+        { id: "doctor", name: "telos-doctor", source: "~/.pi/agent/skills/telos-doctor", detail: "诊断 Telos 环境与运行问题", note: "Pi 全局技能", enabled: true },
         { id: "image", name: "image-gen", source: "~/.pi/agent/skills/image-gen", detail: "生成图片与视觉素材", note: "Pi 全局技能", enabled: true },
         { id: "usage", name: "usage-probe", source: "~/.agents/skills/usage-probe", detail: "扩展供应商用量查询能力", note: "Agents 全局技能", enabled: false }
       ],
@@ -440,7 +440,7 @@
     };
 
     const projectRows = {
-      pideck: {
+      Telos: {
         extensions: [
           { id: "request-recovery", name: "pi-deck-request-size-recovery", source: ".pi/extensions/request-size-recovery.ts", path: "F:\\Telos\\.pi\\extensions\\request-size-recovery.ts", enabled: true },
           { id: "release-guard", name: "release-guard", source: ".pi/extensions/release-guard.ts", path: "F:\\Telos\\.pi\\extensions\\release-guard.ts", enabled: true }
@@ -459,12 +459,12 @@
     };
 
     const projectDisabled = {
-      pideck: { extensions: new Set(["web-access"]), skills: new Set(), prompts: new Set(["commit"]), mcp: new Set() },
+      Telos: { extensions: new Set(["web-access"]), skills: new Set(), prompts: new Set(["commit"]), mcp: new Set() },
       proma: { extensions: new Set(["subagents"]), skills: new Set(["image"]), prompts: new Set(), mcp: new Set(["filesystem"]) },
       "web-lab": { extensions: new Set(), skills: new Set(), prompts: new Set(), mcp: new Set() }
     };
 
-    const state = { resource: "extensions", scope: "pideck", filter: "all", query: "", scopeOpen: false, rowMenu: null, pendingRemoval: null };
+    const state = { resource: "extensions", scope: "Telos", filter: "all", query: "", scopeOpen: false, rowMenu: null, pendingRemoval: null };
     const $ = (selector) => document.querySelector(selector);
     const $$ = (selector) => [...document.querySelectorAll(selector)];
     const icon = (id, className = "") => `<svg${className ? ` class="${className}"` : ""}><use href="#${id}"/></svg>`;

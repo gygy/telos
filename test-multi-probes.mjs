@@ -1,4 +1,4 @@
-import { loadTsCommonJs } from "./tests/helpers/loadTsCommonJs.mjs";
+﻿import { loadTsCommonJs } from "./tests/helpers/loadTsCommonJs.mjs";
 
 const userUsageProbes = loadTsCommonJs("src/main/config/userUsageProbes.ts");
 
@@ -100,4 +100,4 @@ console.log("1. 系统会按顺序尝试每个探针");
 console.log("2. 第一个成功匹配的探针被使用");
 console.log("3. 现在配置包含了三种可能的响应结构");
 console.log("4. 这样应该能覆盖大多数情况");
-console.log("\n下一步：打开 PiDeck 查看 ai88 和 ai88-gpt 的用量显示");
+console.log("\n下一步：打开 Telos 查看 ai88 和 ai88-gpt 的用量显示");

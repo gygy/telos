@@ -1,5 +1,5 @@
-/**
- * PiDeck Retry Transient Extension（文件名沿用 pi-deck-retry-no-body，保持向后兼容）
+﻿/**
+ * Telos Retry Transient Extension（文件名沿用 pi-deck-retry-no-body，保持向后兼容）
  *
  * 背景：中转网关（如 thetoken）偶发返回瞬态故障，但错误文案落在 pi 的重试名单之外，
  * 导致会话直接失败停止。pi 的 `isRetryableAssistantError` 只按 `errorMessage` 文本
@@ -21,7 +21,7 @@
  *   - 最大次数：settings.retry.maxRetries 上限，超出后发 auto_retry_end{success:false}
  *   - 可中止：重试 sleep 期间可被 abort 取消
  *   - 不污染会话：_prepareRetry 会从 agent state 移除 error 消息再重发
- *   - UI 事件：auto_retry_start/end 原生触发，PiDeck 气泡显示「重试中」无需额外处理
+ *   - UI 事件：auto_retry_start/end 原生触发，Telos 气泡显示「重试中」无需额外处理
  *
  * 为什么不直接改状态码为 503：那会篡改事实、丢失「网关报的是 400」这一诊断
  * 信息。追加说明词既保留原文又诚实表达「这是连接层瞬态故障，正在重试」。
@@ -250,7 +250,7 @@ export function makeRetryableErrorMessage(errorMessage: string, api?: string): s
 // ---------------------------------------------------------------------------
 
 /**
- * PiDeck 内置扩展：让「空响应」类错误复用 pi 的内置重试机制。
+ * Telos 内置扩展：让「空响应」类错误复用 pi 的内置重试机制。
  *
  * 挂载到 `message_end` 事件，只处理 assistant + stopReason=error + 空响应。
  * 通过返回 `{ message }` 原地替换 finalized message（agent-session 的

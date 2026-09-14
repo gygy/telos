@@ -1,6 +1,6 @@
-# PiDeck 视频制作工作流
+﻿# Telos 视频制作工作流
 
-本目录是一套**可复用**的「文案 → HTML 幻灯片 → TTS 旁白 → 成片」流水线，用于 PiDeck 上手系列（及后续同类教程视频）。
+本目录是一套**可复用**的「文案 → HTML 幻灯片 → TTS 旁白 → 成片」流水线，用于 Telos 上手系列（及后续同类教程视频）。
 
 > **Git 只提交流程与文案源，不提交 PPT 成片 / 分片 / 截图缓存。**  
 > 生成物已被 `video-series/.gitignore` 与根目录 `.gitignore` 忽略。
@@ -53,7 +53,7 @@
   decks/generate_decks.py     → decks/EP0X/slides + index.html
   pipeline/render_one_slide.py→ 单页预览 MP4
   pipeline/render_episode.py  → pipeline/EP0X/EP0X-full.mp4
-  pipeline/concat_series.py   → pipeline/PiDeck-full-series.mp4
+  pipeline/concat_series.py   → pipeline/Telos-full-series.mp4
 ```
 
 | 脚本 | 是否通用 | 说明 |
@@ -104,7 +104,7 @@ python video-series/decks/generate_decks.py
 # 4) 单页试跑（可选，验证音色与排版）
 python video-series/pipeline/render_one_slide.py ^
   --slide video-series/decks/EP02/slides/01-cover.html ^
-  --text "PiDeck 上手系列第二集。安装与环境检测。"
+  --text "Telos 上手系列第二集。安装与环境检测。"
 
 # 5) 渲染整集
 python video-series/pipeline/render_episode.py --ep EP02
@@ -116,7 +116,7 @@ python video-series/pipeline/concat_series.py
 输出：
 
 - 单集：`video-series/pipeline/EP0X/EP0X-full.mp4`
-- 合集：`video-series/pipeline/PiDeck-full-series.mp4`
+- 合集：`video-series/pipeline/Telos-full-series.mp4`
 
 ---
 
@@ -148,7 +148,7 @@ python video-series/pipeline/render_one_slide.py \
 
 ## 7. 后续系列怎么复用
 
-### 方案 A：继续做 PiDeck 新一集
+### 方案 A：继续做 Telos 新一集
 
 1. 在 `generate_decks.py` 增加 `EPISODES["EP07"] = [...]`
 2. 在 `render_episode.py` 增加 `EPISODE_SCRIPTS["EP07"] = [...]`

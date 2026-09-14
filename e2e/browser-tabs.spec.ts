@@ -26,7 +26,7 @@ async function openBrowserPanel(window: import("@playwright/test").Page) {
 test("closing a non-last browser tab removes it and keeps the drawer open", async ({ window }) => {
 	await openBrowserPanel(window);
 
-	// 初始一个 tab（PiDeck 默认页），X 按钮数量即 tab 数
+	// 初始一个 tab（Telos 默认页），X 按钮数量即 tab 数
 	const closeButtons = window.locator(".browser-tab-close");
 	await expect(closeButtons).toHaveCount(1);
 

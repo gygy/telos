@@ -1,6 +1,6 @@
 # Contributors
 
-Thanks to everyone who has contributed to PiDeck!
+Thanks to everyone who has contributed to Telos!
 
 <!-- Ordered by first contribution -->
 
@@ -26,7 +26,7 @@ And everyone who filed issues, shared feedback, and helped spread the word.
 
 ## 💖 Special Support
 
-- **微时佬友** ([@weishiair](https://github.com/weishiair)) — Provides the Grok model service used for PiDeck development 🎉
+- **微时佬友** ([@weishiair](https://github.com/weishiair)) — Provides the Grok model service used for Telos development 🎉
 
 ---
 

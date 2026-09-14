@@ -1,5 +1,5 @@
-/**
- * PiDeck NUL Redirect Fix Extension
+﻿/**
+ * Telos NUL Redirect Fix Extension
  *
  * Windows 上 Git Bash (MSYS2) 不把 `nul` 当作空设备，`> nul` 会创建一个名为 `nul`
  * 的真实文件。这个文件在 Windows 上是保留设备名，`ls` 看不到、编辑器打不开、
@@ -139,7 +139,7 @@ export function normalizeNulRedirects(command: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * PiDeck 内置扩展：在 bash 工具执行前改写 `> nul` 为 `> /dev/null`。
+ * Telos 内置扩展：在 bash 工具执行前改写 `> nul` 为 `> /dev/null`。
  *
  * 挂载到 `tool_call` 事件，仅处理内置 bash 工具。
  * 改写发生后通过 ctx.ui.setStatus 显示短暂提示（非阻塞，不干扰会话流）。

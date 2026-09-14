@@ -1,6 +1,6 @@
 # 贡献者
 
-感谢所有为 PiDeck 做出贡献的人！
+感谢所有为 Telos 做出贡献的人！
 
 <!-- 按首次贡献时间排序 -->
 
@@ -26,7 +26,7 @@
 
 ## 💖 特别支持
 
-- **微时佬友** ([@weishiair](https://github.com/weishiair)) — 提供 Grok 模型服务，用于 PiDeck 的软件开发 🎉
+- **微时佬友** ([@weishiair](https://github.com/weishiair)) — 提供 Grok 模型服务，用于 Telos 的软件开发 🎉
 
 ---
 

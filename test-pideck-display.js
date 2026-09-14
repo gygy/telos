@@ -1,9 +1,9 @@
-// 测试 PiDeck 用量查询的实际显示逻辑
+﻿// 测试 Telos 用量查询的实际显示逻辑
 import { loadTsCommonJs } from "./tests/helpers/loadTsCommonJs.mjs";
 
 const providerUsageProbe = loadTsCommonJs("src/main/config/providerUsageProbe.ts");
 
-console.log('=== 测试 PiDeck 用量查询显示 ===\n');
+console.log('=== 测试 Telos 用量查询显示 ===\n');
 
 // 当前配置的两种探针
 const ai88Probes = [

@@ -1,5 +1,5 @@
-/**
- * PiDeck Vision Bridge Extension
+﻿/**
+ * Telos Vision Bridge Extension
  *
  * 给 DeepSeek 等无视觉模型"装上眼睛"：
  * - 用户粘贴/上传的图片：input 事件里直接转成文字描述（否则 pi 会在 provider 层
@@ -11,10 +11,10 @@
  *   搜索临时文件；payload 阶段只处理无法提前改写的历史内容。
  *
  * 设计要点：
- * - 自包含单文件：脱离 PiDeck 也能用（复制到 ~/.pi/agent/extensions/ 或 `pi -e` 加载），
+ * - 自包含单文件：脱离 Telos 也能用（复制到 ~/.pi/agent/extensions/ 或 `pi -e` 加载），
  *   只依赖 pi 扩展 API 与 Node 内置模块。
  * - 配置外挂：读取 ~/.pi/agent/pi-deck-vision.json（与 pi 的 models.json/auth.json 同级），
- *   可用 PIDECK_VISION_CONFIG_DIR 环境变量覆盖目录（PiDeck 注入 / 测试用）。
+ *   可用 Telos_VISION_CONFIG_DIR 环境变量覆盖目录（Telos 注入 / 测试用）。
  * - 复用已配置供应商：apiKey/baseUrl 优先从 pi 的模型注册表解析
  *   （ctx.modelRegistry.getProviderAuth），不重复填 key；配置文件里也可显式指定。
  * - 能力优先：当前会话模型明确支持 image 时完全放行原图；只有不支持图片时才启用视觉桥。
@@ -36,7 +36,7 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 
 /** 配置文件：~/.pi/agent/pi-deck-vision.json */
 const CONFIG_FILE_NAME = "pi-deck-vision.json";
-/** 运行日志文件（与配置同目录），PiDeck 设置页读取做诊断；绝不写 apiKey */
+/** 运行日志文件（与配置同目录），Telos 设置页读取做诊断；绝不写 apiKey */
 const LOG_FILE_NAME = "pi-deck-vision.log";
 /** 结构化转换事件文件（JSONL）：会话渲染层据此展示「请求详情」（模型/耗时/每张图结果）。 */
 const EVENT_FILE_NAME = "pi-deck-vision-events.jsonl";
@@ -302,9 +302,9 @@ export async function loadVisionBridgeConfig(
 	}
 }
 
-/** 配置文件目录：PIDECK_VISION_CONFIG_DIR 覆盖 → ~/.pi/agent */
+/** 配置文件目录：Telos_VISION_CONFIG_DIR 覆盖 → ~/.pi/agent */
 export function resolveConfigDir(): string {
-	const override = process.env.PIDECK_VISION_CONFIG_DIR;
+	const override = process.env.Telos_VISION_CONFIG_DIR;
 	if (override && override.trim()) return override.trim();
 	return join(homedir(), ".pi", "agent");
 }

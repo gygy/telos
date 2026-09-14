@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 /**
  * DSH 安全与 plan 模式端到端验证（真实 DSH host + host 侧 slash 命令桥）：
- * 1. 权限预设：底栏安全位显示 DSH 预设（而非 PiDeck 内置安全），切换 read-only
+ * 1. 权限预设：底栏安全位显示 DSH 预设（而非 Telos 内置安全），切换 read-only
  *    → host /permission 命令执行 → runtime state 反映（permission/preset 事件折叠）；
  * 2. plan 模式：模式选择器「计划」→ /plan 命令 → 下一条消息的步骤生效
  *    （plan/mode 事件）→ runtime state planModeActive=true → 底栏模式按钮变「计划」；

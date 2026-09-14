@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 整集批量渲染：每页 HTML → 截图 → Edge-TTS → 单页 MP4 → concat 成完整视频
 
@@ -26,13 +26,13 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP01": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第一集。PiDeck 是什么？为什么你需要它。",
+            "Telos 上手系列第一集。Telos 是什么？为什么你需要它。",
         ),
         (
             "02-hook.html",
             "如果你已经在用 pi、Cursor 或者 Claude Code 写代码，"
             "你一定会遇到一个问题——切换项目、管理会话、回看历史，全靠命令行，非常痛苦。"
-            "今天我要介绍的工具，叫 PiDeck。",
+            "今天我要介绍的工具，叫 Telos。",
         ),
         (
             "03-pain.html",
@@ -43,9 +43,9 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         ),
         (
             "04-what.html",
-            "PiDeck 是一个桌面工作台，专门用来管理你的 pi Agent 会话。"
+            "Telos 是一个桌面工作台，专门用来管理你的 pi Agent 会话。"
             "简单说，它在 pi 前面套了一个 Electron 壳，但你完全不需要管底层发生了什么。"
-            "你只需要理解一件事：PiDeck 等于一个统一的地方，管理你所有项目的 AI 对话。"
+            "你只需要理解一件事：Telos 等于一个统一的地方，管理你所有项目的 AI 对话。"
             "来看一下真实界面。左侧是你的项目列表，中间是对话区，右侧是文件树和会话历史。",
         ),
         (
@@ -57,23 +57,23 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         ),
         (
             "06-features.html",
-            "PiDeck 支持多项目工作区、对话与上下文管理、Git 集成、内置终端、"
+            "Telos 支持多项目工作区、对话与上下文管理、Git 集成、内置终端、"
             "配置图形编辑器，以及中文提示词精选库。"
             "内置的 Prompt 商店有四千多中文提示词，一键就能导入。",
         ),
         (
             "07-compare.html",
-            "简单总结一下。裸 pi CLI 的能力，PiDeck 全部保留。"
-            "PiDeck 加的是图形化、多项目管理、会话可视化和 Git 集成。"
-            "你可以把 PiDeck 理解为 pi 的 GUI 层。它不会限制你使用 pi 的任何功能。",
+            "简单总结一下。裸 pi CLI 的能力，Telos 全部保留。"
+            "Telos 加的是图形化、多项目管理、会话可视化和 Git 集成。"
+            "你可以把 Telos 理解为 pi 的 GUI 层。它不会限制你使用 pi 的任何功能。",
         ),
         (
             "08-audience.html",
-            "那 PiDeck 适合谁呢？"
+            "那 Telos 适合谁呢？"
             "第一，如果你已经用 pi CLI 但觉得终端管理太麻烦，你是目标用户。"
-            "第二，如果你之前用 Cursor 或 Windsurf，想找更轻量灵活的方案，PiDeck 值得试试。"
-            "第三，如果你是团队开发，多项目切换是常态，PiDeck 的多项目隔离会省很多心。"
-            "第四，如果你还在观望 AI 编程工具，PiDeck 是很好的起点，因为它免费开源，没有厂商锁定。",
+            "第二，如果你之前用 Cursor 或 Windsurf，想找更轻量灵活的方案，Telos 值得试试。"
+            "第三，如果你是团队开发，多项目切换是常态，Telos 的多项目隔离会省很多心。"
+            "第四，如果你还在观望 AI 编程工具，Telos 是很好的起点，因为它免费开源，没有厂商锁定。",
         ),
         (
             "09-outro.html",
@@ -86,13 +86,13 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP02": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第二集。安装与环境检测。"
-            "装好 Node、pi、PiDeck，打开后先完成 pi 环境检测，再谈项目与对话。",
+            "Telos 上手系列第二集。安装与环境检测。"
+            "装好 Node、pi、Telos，打开后先完成 pi 环境检测，再谈项目与对话。",
         ),
         (
             "02-order.html",
             "正确安装顺序很重要。第一步安装 Node.js 二十或更高版本。"
-            "第二步安装 pi 命令行。第三步再安装并打开 PiDeck，去做环境检测或自定义路径。"
+            "第二步安装 pi 命令行。第三步再安装并打开 Telos，去做环境检测或自定义路径。"
             "记住：先把 pi 配通，再添加项目、启动 Agent。",
         ),
         (
@@ -102,14 +102,14 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
             "装完后，在终端执行 node --version 和 pi --version 确认一下。",
         ),
         (
-            "04-pideck.html",
-            "然后去 GitHub Releases 下载对应系统的 PiDeck 安装包。"
+            "04-Telos.html",
+            "然后去 GitHub Releases 下载对应系统的 Telos 安装包。"
             "Windows 下 exe，Mac 下 dmg，Linux 下 AppImage。"
-            "安装完成后打开 PiDeck。首次打开时，会先做 pi 环境检测，这是最关键的一步。",
+            "安装完成后打开 Telos。首次打开时，会先做 pi 环境检测，这是最关键的一步。",
         ),
         (
             "05-env-check.html",
-            "来看 pi 环境检测界面。PiDeck 会自动在系统路径和常见路径里查找 pi。"
+            "来看 pi 环境检测界面。Telos 会自动在系统路径和常见路径里查找 pi。"
             "如果检测不到，会给出安装指引，你也可以手动指定 pi 的可执行文件路径。"
             "用过 nvm、pnpm 或 mise 的朋友，经常需要手动粘贴路径。",
         ),
@@ -121,7 +121,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         ),
         (
             "07-checklist.html",
-            "本集结束前确认四件事：Node.js 已安装，pi 已安装，PiDeck 已打开，"
+            "本集结束前确认四件事：Node.js 已安装，pi 已安装，Telos 已打开，"
             "环境检测通过或者已经自定义了 pi 路径。"
             "pi 连上了，下一集我们再配置模型与认证。",
         ),
@@ -135,7 +135,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP03": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第三集。配置模型与认证。"
+            "Telos 上手系列第三集。配置模型与认证。"
             "pi 通了还不够，还要告诉它用哪家模型、Key 怎么填。配好再开项目。",
         ),
         (
@@ -167,7 +167,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         (
             "06-zen-videos.html",
             "如果你想用 OpenCode Zen 的免费模型，可以先看我之前的 B 站演示视频："
-            "如何在 PiDeck 中使用 OpenCode Zen 的免费模型。"
+            "如何在 Telos 中使用 OpenCode Zen 的免费模型。"
             "链接在幻灯片上，建议收藏，配模型时对照操作。",
         ),
         (
@@ -187,7 +187,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP04": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第四集。添加项目与第一次对话。"
+            "Telos 上手系列第四集。添加项目与第一次对话。"
             "pi 已通，模型已配。现在加本地项目、启动 Agent，发出第一条消息。",
         ),
         (
@@ -211,7 +211,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         ),
         (
             "05-flow.html",
-            "把前四集串起来：装 Node、装 pi、装 PiDeck；"
+            "把前四集串起来：装 Node、装 pi、装 Telos；"
             "环境检测或自定义路径；配置 Models 或 Auth 并保存；"
             "左侧加号添加项目；启动 Agent，底部选模型，发送消息。",
         ),
@@ -231,7 +231,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP05": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第五集。对话进阶。"
+            "Telos 上手系列第五集。对话进阶。"
             "会发消息只是起点。这一集讲艾特引用、斜线命令、Shell，以及一套更稳的提问方式。",
         ),
         (
@@ -279,7 +279,7 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
     "EP06": [
         (
             "01-cover.html",
-            "PiDeck 上手系列第六集，也是收官集。进阶功能总览。"
+            "Telos 上手系列第六集，也是收官集。进阶功能总览。"
             "如果只用对话，大概只用了三成能力。这一集快速过完多项目、Git、终端、历史和设置。",
         ),
         (
@@ -307,18 +307,18 @@ EPISODE_SCRIPTS: dict[str, list[tuple[str, str]]] = {
         ),
         (
             "06-compare.html",
-            "和裸 pi 命令行比：PiDeck 保留全部原生能力，"
+            "和裸 pi 命令行比：Telos 保留全部原生能力，"
             "并补上多项目图形管理、会话历史可视化、Git 和终端面板，以及配置图形编辑器。",
         ),
         (
             "07-recap.html",
             "六集回顾：第一集是什么；第二集安装检测；第三集模型认证；"
             "第四集首个项目；第五集对话进阶；第六集进阶功能。"
-            "到这里，PiDeck 的核心用法你已经全部掌握了。",
+            "到这里，Telos 的核心用法你已经全部掌握了。",
         ),
         (
             "08-outro.html",
-            "系列到这里结束了。PiDeck 免费开源，觉得有用欢迎去 GitHub 点个 Star。"
+            "系列到这里结束了。Telos 免费开源，觉得有用欢迎去 GitHub 点个 Star。"
             "也可以加入 QQ 交流群交流反馈。"
             "我是曹阿宇，感谢收看。我们下个系列见。",
         ),

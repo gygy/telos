@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 单页演示管线：HTML 幻灯片 → 截图 → Edge-TTS → ffmpeg 合成 MP4
 
@@ -22,7 +22,7 @@ DEFAULT_SLIDE = ROOT.parent / "decks" / "EP01" / "slides" / "02-hook.html"
 DEFAULT_TEXT = (
     "如果你已经在用 pi、Cursor 或者 Claude Code 写代码，"
     "你一定会遇到一个问题——切换项目、管理会话、回看历史，全靠命令行，非常痛苦。"
-    "今天我要介绍的工具，叫 PiDeck。"
+    "今天我要介绍的工具，叫 Telos。"
 )
 VOICE = "zh-CN-YunxiNeural"
 RATE = "-10%"

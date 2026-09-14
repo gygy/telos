@@ -1,4 +1,4 @@
-# PiDeck 上手系列 · 发布文案
+﻿# Telos 上手系列 · 发布文案
 
 > 可直接复制到 B 站 / 小红书 / 抖音 / YouTube。  
 > 作者署名：**caoayu（曹阿宇）**
@@ -21,7 +21,7 @@ LinuxDO 友链：https://linux.do
 QQ 群：1026218644
 
 【说明】
-PiDeck 是 pi 的桌面工作台（非 pi 分支），开源免费。
+Telos 是 pi 的桌面工作台（非 pi 分支），开源免费。
 系列作者：caoayu
 ```
 
@@ -37,30 +37,30 @@ QQ 群：1026218644
 
 ## 二、系列总片（完整合集）
 
-**文件：** `video-series/pipeline/PiDeck-full-series.mp4`（约 16 分钟）
+**文件：** `video-series/pipeline/Telos-full-series.mp4`（约 16 分钟）
 
 ### 标题（B 站）
 
 ```
-【PiDeck 上手全系列】从安装到对话：本地 AI 编程工作台完整教程｜caoayu
+【Telos 上手全系列】从安装到对话：本地 AI 编程工作台完整教程｜caoayu
 ```
 
 ### 备选标题
 
 ```
-PiDeck 全流程教学：安装 · 配模型 · 加项目 · 高效对话
-用桌面工作台管理 pi Agent：PiDeck 上手合集
+Telos 全流程教学：安装 · 配模型 · 加项目 · 高效对话
+用桌面工作台管理 pi Agent：Telos 上手合集
 ```
 
 ### 简介
 
 ```
-PiDeck 是一个开源的本地 AI 编程工作台，用来统一管理多个项目的 pi Agent 会话。
+Telos 是一个开源的本地 AI 编程工作台，用来统一管理多个项目的 pi Agent 会话。
 本合集从「是什么」讲到安装、环境检测、模型配置、第一次对话和进阶功能，跟着做就能跑通。
 
 目录：
-EP01  PiDeck 是什么？为什么你需要它
-EP02  安装与环境检测（Node / pi / PiDeck）
+EP01  Telos 是什么？为什么你需要它
+EP02  安装与环境检测（Node / pi / Telos）
 EP03  配置模型与认证（Models vs Auth）
 EP04  添加项目与第一次对话
 EP05  对话进阶（@ 引用 / 斜线命令 / Shell）
@@ -70,43 +70,43 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #AI编程 #pi #Cursor #开发者工具 #效率工具
+#Telos #AI编程 #pi #Cursor #开发者工具 #效率工具
 ```
 
 ### 标签
 
 ```
-PiDeck,AI编程,pi,Cursor,Claude Code,开发者工具,效率工具,本地Agent,开源
+Telos,AI编程,pi,Cursor,Claude Code,开发者工具,效率工具,本地Agent,开源
 ```
 
 ---
 
 ## 三、分集标题与简介
 
-### EP01 · PiDeck 是什么
+### EP01 · Telos 是什么
 
 **标题**
 
 ```
-【PiDeck EP01】PiDeck 是什么？为什么你需要它｜本地 AI 编程工作台
+【Telos EP01】Telos 是什么？为什么你需要它｜本地 AI 编程工作台
 ```
 
 **简介**
 
 ```
 如果你已经在用 pi、Cursor 或 Claude Code，多项目、多会话、回看历史全靠命令行会很痛苦。
-这一集讲清楚：PiDeck 是什么、解决什么问题、适合谁用。
+这一集讲清楚：Telos 是什么、解决什么问题、适合谁用。
 
-下一集：安装 Node、pi、PiDeck，并完成环境检测。
+下一集：安装 Node、pi、Telos，并完成环境检测。
 
 GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #AI编程 #pi #开发者工具
+#Telos #AI编程 #pi #开发者工具
 ```
 
-**封面大字建议：** `PiDeck 是什么` / `为什么需要它`
+**封面大字建议：** `Telos 是什么` / `为什么需要它`
 
 ---
 
@@ -115,13 +115,13 @@ QQ 群：1026218644
 **标题**
 
 ```
-【PiDeck EP02】安装 Node / pi / PiDeck，并完成环境检测｜手把手
+【Telos EP02】安装 Node / pi / Telos，并完成环境检测｜手把手
 ```
 
 **简介**
 
 ```
-正确顺序：Node.js → pi CLI → PiDeck。
+正确顺序：Node.js → pi CLI → Telos。
 打开后先做 pi 环境检测；检测不到可按指引安装，或在设置里自定义 pi 路径。
 
 官方入口：
@@ -134,7 +134,7 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #安装教程 #Nodejs #AI编程
+#Telos #安装教程 #Nodejs #AI编程
 ```
 
 **封面大字建议：** `安装 + 环境检测`
@@ -146,7 +146,7 @@ QQ 群：1026218644
 **标题**
 
 ```
-【PiDeck EP03】配置模型与认证：Models 和 Auth 有什么区别｜底部切换模型
+【Telos EP03】配置模型与认证：Models 和 Auth 有什么区别｜底部切换模型
 ```
 
 **简介**
@@ -166,7 +166,7 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #模型配置 #APIKey #OpenCode #DeepSeek
+#Telos #模型配置 #APIKey #OpenCode #DeepSeek
 ```
 
 **封面大字建议：** `Models vs Auth`
@@ -178,7 +178,7 @@ QQ 群：1026218644
 **标题**
 
 ```
-【PiDeck EP04】添加本地项目、启动 Agent、发出第一条消息｜完整闭环
+【Telos EP04】添加本地项目、启动 Agent、发出第一条消息｜完整闭环
 ```
 
 **简介**
@@ -196,7 +196,7 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #第一次对话 #AI编程助手
+#Telos #第一次对话 #AI编程助手
 ```
 
 **封面大字建议：** `第一次对话`
@@ -208,7 +208,7 @@ QQ 群：1026218644
 **标题**
 
 ```
-【PiDeck EP05】对话进阶：@ 文件引用、斜线命令、Shell 工作流
+【Telos EP05】对话进阶：@ 文件引用、斜线命令、Shell 工作流
 ```
 
 **简介**
@@ -227,7 +227,7 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #AI编程 #效率技巧 #Shell
+#Telos #AI编程 #效率技巧 #Shell
 ```
 
 **封面大字建议：** `@ / ! 高效对话`
@@ -239,7 +239,7 @@ QQ 群：1026218644
 **标题**
 
 ```
-【PiDeck EP06】进阶功能：多项目、Git、终端、会话历史与设置｜收官
+【Telos EP06】进阶功能：多项目、Git、终端、会话历史与设置｜收官
 ```
 
 **简介**
@@ -259,7 +259,7 @@ GitHub：https://github.com/gygy/telos
 下载：https://github.com/gygy/telos/releases
 QQ 群：1026218644
 
-#PiDeck #Git #终端 #开源项目
+#Telos #Git #终端 #开源项目
 ```
 
 **封面大字建议：** `进阶功能总览`
@@ -270,9 +270,9 @@ QQ 群：1026218644
 
 | 集 | 短标题 |
 |----|--------|
-| 合集 | PiDeck 上手全流程，一集看完 |
-| EP01 | PiDeck 是什么？为什么要装 |
-| EP02 | 安装 Node/pi/PiDeck 手把手 |
+| 合集 | Telos 上手全流程，一集看完 |
+| EP01 | Telos 是什么？为什么要装 |
+| EP02 | 安装 Node/pi/Telos 手把手 |
 | EP03 | Models 和 Auth 别配混了 |
 | EP04 | 加项目发第一条 AI 消息 |
 | EP05 | @文件 /命令 !Shell 这样用 |
@@ -284,7 +284,7 @@ QQ 群：1026218644
 
 | 内容 | 路径 |
 |------|------|
-| 合集 | `video-series/pipeline/PiDeck-full-series.mp4` |
+| 合集 | `video-series/pipeline/Telos-full-series.mp4` |
 | EP01 | `video-series/pipeline/EP01/EP01-full.mp4` |
 | EP02 | `video-series/pipeline/EP02/EP02-full.mp4` |
 | EP03 | `video-series/pipeline/EP03/EP03-full.mp4` |

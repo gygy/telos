@@ -1,7 +1,7 @@
-/**
- * PiDeck Plan Mode Extension
+﻿/**
+ * Telos Plan Mode Extension
  *
- * 为 PiDeck 桌面输入框提供“Plan”发送模式：用户可见消息保持原文，
+ * 为 Telos 桌面输入框提供“Plan”发送模式：用户可见消息保持原文，
  * renderer 会在 agentMessage 中加入隐藏标记，本扩展在 pi input 事件里识别后
  * 临时切换为只读工具集，并要求 agent 输出 `Plan:` 编号计划。
  *
@@ -169,7 +169,7 @@ function uniqueToolNames(toolNames: string[]): string[] {
 	return [...new Set(toolNames)];
 }
 
-export default function piDeckPlanModeExtension(pi: ExtensionAPI): void {
+export default function TelosPlanModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
@@ -231,17 +231,17 @@ export default function piDeckPlanModeExtension(pi: ExtensionAPI): void {
 		todoItems = [];
 		if (enabled) {
 			enablePlanModeTools();
-			ctx.ui.notify("PiDeck 计划模式已启用。启用期间只能执行只读命令，不能修改文件。", "info");
+			ctx.ui.notify("Telos 计划模式已启用。启用期间只能执行只读命令，不能修改文件。", "info");
 		} else {
 			restoreNormalModeTools();
-			ctx.ui.notify("PiDeck 计划模式已禁用。已恢复写权限。", "info");
+			ctx.ui.notify("Telos 计划模式已禁用。已恢复写权限。", "info");
 		}
 		updateWidget(ctx);
 		persistState();
 	}
 
 	pi.registerCommand("plan", {
-		description: "切换 PiDeck 计划模式（只读探索，适用于复杂任务先做分析）",
+		description: "切换 Telos 计划模式（只读探索，适用于复杂任务先做分析）",
 		handler: async (args, ctx) => {
 			const normalized = String(args ?? "").trim().toLowerCase();
 			if (["on", "enable", "enabled"].includes(normalized)) setPlanMode(ctx, true);
@@ -294,7 +294,7 @@ export default function piDeckPlanModeExtension(pi: ExtensionAPI): void {
 		if (!isSafeCommand(command)) {
 			return {
 				block: true,
-				reason: `PiDeck Plan Mode blocked a non-read-only command. Choose Execute after plan confirmation to allow writes.\nCommand: ${command}`,
+				reason: `Telos Plan Mode blocked a non-read-only command. Choose Execute after plan confirmation to allow writes.\nCommand: ${command}`,
 			};
 		}
 	});
@@ -318,7 +318,7 @@ export default function piDeckPlanModeExtension(pi: ExtensionAPI): void {
 			return {
 				message: {
 					customType: "pi-deck-plan-mode-context",
-					content: `[PLAN MODE ACTIVE]\nYou are in PiDeck Plan Mode.\n\nRules:\n- Only inspect and reason. Do not edit or write files.\n- Bash is restricted to read-only commands.\n- Ask the user with ask_question when a requirement is ambiguous.\n- Keep plan steps concise: one short sentence per step; avoid long clauses, parentheticals, or run-on requirements.\n- Put each step on its own numbered line (\"1. ...\", \"2. ...\"). Never nest or merge steps — the UI renders and tracks them line by line.\n- End your response with a numbered plan under an exact \"Plan:\" heading.\n\nPlan:\n1. First concrete step\n2. Second concrete step`,
+					content: `[PLAN MODE ACTIVE]\nYou are in Telos Plan Mode.\n\nRules:\n- Only inspect and reason. Do not edit or write files.\n- Bash is restricted to read-only commands.\n- Ask the user with ask_question when a requirement is ambiguous.\n- Keep plan steps concise: one short sentence per step; avoid long clauses, parentheticals, or run-on requirements.\n- Put each step on its own numbered line (\"1. ...\", \"2. ...\"). Never nest or merge steps — the UI renders and tracks them line by line.\n- End your response with a numbered plan under an exact \"Plan:\" heading.\n\nPlan:\n1. First concrete step\n2. Second concrete step`,
 					display: false,
 				},
 			};
@@ -351,7 +351,7 @@ export default function piDeckPlanModeExtension(pi: ExtensionAPI): void {
 				pi.sendMessage(
 					{
 						customType: "pi-deck-plan-complete",
-						content: `**PiDeck Plan Complete** ✓\n\n${todoItems.map((item) => `- ${item.text}`).join("\n")}`,
+						content: `**Telos Plan Complete** ✓\n\n${todoItems.map((item) => `- ${item.text}`).join("\n")}`,
 						display: true,
 					},
 					{ triggerTurn: false },

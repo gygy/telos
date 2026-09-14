@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 把已渲染的 EP01~EP06 成片按顺序拼成合集。
 
@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=ROOT / "PiDeck-full-series.mp4",
+        default=ROOT / "Telos-full-series.mp4",
     )
     args = parser.parse_args()
 

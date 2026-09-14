@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""Generate PiDeck tutorial HTML slide decks (1920x1080) from structured content."""
+﻿#!/usr/bin/env python3
+"""Generate Telos tutorial HTML slide decks (1920x1080) from structured content."""
 from __future__ import annotations
 
 import shutil
@@ -223,12 +223,12 @@ h2 {
 def slide_html(ep: str, title: str, body: str, *, cover: bool = False, footer: str = "") -> str:
     mast = "" if cover else f"""
   <div class="mast">
-    <div class="brand"><div class="brand-mark"></div><span>PiDeck 上手系列</span></div>
+    <div class="brand"><div class="brand-mark"></div><span>Telos 上手系列</span></div>
     <div class="ep-tag">{ep}</div>
   </div>"""
     foot = f"""
   <div class="footer">
-    <span>PiDeck · 本地 AI 编程工作台</span>
+    <span>Telos · 本地 AI 编程工作台</span>
     <span>{footer or title}</span>
   </div>"""
     cls = "slide cover" if cover else "slide"
@@ -261,8 +261,8 @@ EPISODES["EP01"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP01</div>
-    <h1>PiDeck 是什么？<br><span class="accent">为什么你需要它</span></h1>
+    <div class="series">Telos 上手系列 · EP01</div>
+    <h1>Telos 是什么？<br><span class="accent">为什么你需要它</span></h1>
     <p class="lead">把多项目、多会话、Git 与历史，从命令行搬进一个桌面工作台。</p>
     <div class="meta">
       <span class="chip">零基础</span>
@@ -278,7 +278,7 @@ EPISODES["EP01"] = [
         """
     <h2>如果你已经在用 AI 写代码</h2>
     <div class="quote">切换项目、管理会话、回看历史——全靠命令行，非常痛苦。</div>
-    <p class="lead" style="margin-top:36px">今天要介绍的工具，叫 <span style="color:var(--text);font-weight:600">PiDeck</span>。</p>
+    <p class="lead" style="margin-top:36px">今天要介绍的工具，叫 <span style="color:var(--text);font-weight:600">Telos</span>。</p>
 """,
         False,
     ),
@@ -303,7 +303,7 @@ EPISODES["EP01"] = [
         """
     <div class="layout-product">
       <div class="copy">
-        <h2>PiDeck 是什么</h2>
+        <h2>Telos 是什么</h2>
         <p class="body">一个桌面工作台，专门管理你的 pi Agent 会话。</p>
         <div class="quote">左侧项目、中间对话、右侧文件与历史——统一管理所有项目的 AI 对话。</div>
         <div class="cards cols-1" style="margin-top:18px; display:flex; flex-direction:column; gap:12px">
@@ -313,7 +313,7 @@ EPISODES["EP01"] = [
         </div>
       </div>
       <div class="shot-wrap">
-        <img class="shot" src="../../assets/piHomePage.png" alt="PiDeck 主界面" />
+        <img class="shot" src="../../assets/piHomePage.png" alt="Telos 主界面" />
       </div>
     </div>
 """,
@@ -358,7 +358,7 @@ EPISODES["EP01"] = [
         "07-compare",
         "对比",
         """
-    <h2>裸 pi CLI vs PiDeck</h2>
+    <h2>裸 pi CLI vs Telos</h2>
     <div class="compare">
       <div class="col">
         <h3><span class="badge-no">CLI</span> 裸 pi</h3>
@@ -372,7 +372,7 @@ EPISODES["EP01"] = [
         </ul>
       </div>
       <div class="col">
-        <h3><span class="badge-ok">GUI</span> PiDeck</h3>
+        <h3><span class="badge-ok">GUI</span> Telos</h3>
         <ul>
           <li>图形界面 ✓</li>
           <li>多项目管理 ✓</li>
@@ -383,7 +383,7 @@ EPISODES["EP01"] = [
         </ul>
       </div>
     </div>
-    <p class="lead" style="margin-top:24px;font-size:28px">PiDeck = pi 的 GUI 层。不限制你使用 pi 的任何功能。</p>
+    <p class="lead" style="margin-top:24px;font-size:28px">Telos = pi 的 GUI 层。不限制你使用 pi 的任何功能。</p>
 """,
         False,
     ),
@@ -424,9 +424,9 @@ EPISODES["EP02"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP02</div>
+    <div class="series">Telos 上手系列 · EP02</div>
     <h1>安装与<br><span class="accent">环境检测</span></h1>
-    <p class="lead">装好 Node、pi、PiDeck，打开后先完成 pi 环境检测——再谈项目与对话。</p>
+    <p class="lead">装好 Node、pi、Telos，打开后先完成 pi 环境检测——再谈项目与对话。</p>
     <div class="meta">
       <span class="chip">零基础</span>
       <span class="chip">约 4–5 分钟</span>
@@ -443,7 +443,7 @@ EPISODES["EP02"] = [
     <div class="steps">
       <div class="step"><div class="idx">01</div><div class="txt"><b>安装 Node.js 20+</b><br><span class="muted">官网下载安装</span></div></div>
       <div class="step"><div class="idx">02</div><div class="txt"><b>安装 pi CLI</b><br><span class="muted">按官方文档安装并确认可用</span></div></div>
-      <div class="step"><div class="idx">03</div><div class="txt"><b>安装并打开 PiDeck</b><br><span class="muted">再做环境检测 / 自定义路径</span></div></div>
+      <div class="step"><div class="idx">03</div><div class="txt"><b>安装并打开 Telos</b><br><span class="muted">再做环境检测 / 自定义路径</span></div></div>
     </div>
     <p class="lead" style="font-size:26px">先把 pi 配通，再添加项目、启动 Agent。</p>
 """,
@@ -473,14 +473,14 @@ EPISODES["EP02"] = [
         False,
     ),
     (
-        "04-pideck",
-        "装 PiDeck",
+        "04-Telos",
+        "装 Telos",
         """
-    <h2>安装并打开 PiDeck</h2>
+    <h2>安装并打开 Telos</h2>
     <ol class="list">
       <li><span class="n">1</span><span>从 GitHub Releases 下载对应系统安装包</span></li>
       <li><span class="n">2</span><span>Windows 用 exe · Mac 用 dmg · Linux 用 AppImage</span></li>
-      <li><span class="n">3</span><span>安装完成后打开 PiDeck</span></li>
+      <li><span class="n">3</span><span>安装完成后打开 Telos</span></li>
     </ol>
     <p class="lead">首次打开时，会先做 pi 环境检测——这是最关键的一步。</p>
 """,
@@ -493,7 +493,7 @@ EPISODES["EP02"] = [
     <div class="layout-product">
       <div class="copy">
         <h2>pi 环境检测</h2>
-        <p class="body">PiDeck 会自动在 PATH 和常见路径里查找 pi。</p>
+        <p class="body">Telos 会自动在 PATH 和常见路径里查找 pi。</p>
         <div class="quote">检测不到时，会给出安装指引，也可以手动指定 pi 路径。</div>
         <div class="cards" style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
           <div class="card"><div class="k">npm 安装</div><div class="t">按指引安装 pi</div><div class="d">装完后重新打开或点「重新检测」</div></div>
@@ -537,7 +537,7 @@ EPISODES["EP02"] = [
     <ol class="list">
       <li><span class="n">✓</span><span>Node.js 20+ 已安装</span></li>
       <li><span class="n">✓</span><span>pi CLI 已安装（官方文档）</span></li>
-      <li><span class="n">✓</span><span>PiDeck 已打开</span></li>
+      <li><span class="n">✓</span><span>Telos 已打开</span></li>
       <li><span class="n">✓</span><span>环境检测通过，或已自定义 pi 路径</span></li>
     </ol>
     <p class="lead">pi 连上了，下一集再配置模型与认证。</p>
@@ -567,7 +567,7 @@ EPISODES["EP03"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP03</div>
+    <div class="series">Telos 上手系列 · EP03</div>
     <h1>配置模型与<br><span class="accent">认证</span></h1>
     <p class="lead">pi 通了还不够——还要告诉它用哪家模型、Key 怎么填。配好再开项目。</p>
     <div class="meta">
@@ -659,7 +659,7 @@ EPISODES["EP03"] = [
     <div class="cards" style="margin-top:20px;display:flex;flex-direction:column;gap:14px">
       <div class="card">
         <div class="k">Bilibili</div>
-        <div class="t">如何在 PiDeck 中使用 OpenCode Zen 的免费模型</div>
+        <div class="t">如何在 Telos 中使用 OpenCode Zen 的免费模型</div>
         <div class="code" style="margin-top:12px;font-size:20px;display:block">https://www.bilibili.com/video/BV1NRTK6LE5z</div>
       </div>
       <div class="card">
@@ -708,7 +708,7 @@ EPISODES["EP04"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP04</div>
+    <div class="series">Telos 上手系列 · EP04</div>
     <h1>添加项目与<br><span class="accent">第一次对话</span></h1>
     <p class="lead">pi 已通、模型已配。现在加本地项目、启动 Agent，发出第一条消息。</p>
     <div class="meta">
@@ -781,7 +781,7 @@ EPISODES["EP04"] = [
         """
     <h2>从安装到第一条消息</h2>
     <div class="steps">
-      <div class="step"><div class="idx">01</div><div class="txt">装 Node → 装 pi → 装 PiDeck</div></div>
+      <div class="step"><div class="idx">01</div><div class="txt">装 Node → 装 pi → 装 Telos</div></div>
       <div class="step"><div class="idx">02</div><div class="txt">环境检测 / 自定义 pi 路径</div></div>
       <div class="step"><div class="idx">03</div><div class="txt">配置 Models 或 Auth 并保存</div></div>
       <div class="step"><div class="idx">04</div><div class="txt">左侧加号添加项目目录</div></div>
@@ -827,7 +827,7 @@ EPISODES["EP05"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP05</div>
+    <div class="series">Telos 上手系列 · EP05</div>
     <h1>对话进阶<br><span class="accent">用得更高效</span></h1>
     <p class="lead">会发消息只是起点。这一集讲 @ 引用、斜线命令、Shell，以及一套更稳的提问方式。</p>
     <div class="meta">
@@ -981,7 +981,7 @@ EPISODES["EP06"] = [
         "01-cover",
         "封面",
         """
-    <div class="series">PiDeck 上手系列 · EP06</div>
+    <div class="series">Telos 上手系列 · EP06</div>
     <h1>进阶功能<br><span class="accent">总览</span></h1>
     <p class="lead">如果只用对话，大概只用了三成能力。这一集快速过完多项目、Git、终端、历史和设置。</p>
     <div class="meta">
@@ -1070,7 +1070,7 @@ EPISODES["EP06"] = [
         "06-compare",
         "对比",
         """
-    <h2>裸 pi CLI vs PiDeck</h2>
+    <h2>裸 pi CLI vs Telos</h2>
     <div class="compare">
       <div class="col">
         <h3><span class="badge-no">CLI</span> 裸 pi</h3>
@@ -1083,7 +1083,7 @@ EPISODES["EP06"] = [
         </ul>
       </div>
       <div class="col">
-        <h3><span class="badge-ok">GUI</span> PiDeck</h3>
+        <h3><span class="badge-ok">GUI</span> Telos</h3>
         <ul>
           <li>多项目图形管理 ✓</li>
           <li>会话历史可视化 ✓</li>
@@ -1117,7 +1117,7 @@ EPISODES["EP06"] = [
         "收官",
         """
     <h2>系列到这里结束了</h2>
-    <p class="body">PiDeck 免费开源。觉得有用，欢迎去 GitHub 点个 Star。</p>
+    <p class="body">Telos 免费开源。觉得有用，欢迎去 GitHub 点个 Star。</p>
     <div class="cards cols-2" style="margin-top:28px">
       <div class="card"><div class="k">GitHub</div><div class="t">github.com/gygy/telos</div><div class="d">源码 · Releases · Issue</div></div>
       <div class="card"><div class="k">QQ 群</div><div class="t">1026218644</div><div class="d">交流使用心得与反馈</div></div>
@@ -1139,7 +1139,7 @@ def write_episode(ep_id: str, slides: list[tuple[str, str, str, bool]]) -> None:
 
     manifest_items = []
     titles = {
-        "EP01": "PiDeck 是什么",
+        "EP01": "Telos 是什么",
         "EP02": "安装与环境检测",
         "EP03": "配置模型与认证",
         "EP04": "添加项目与第一次对话",
@@ -1173,7 +1173,7 @@ def write_episode(ep_id: str, slides: list[tuple[str, str, str, bool]]) -> None:
     # Title
     new_template = new_template.replace(
         "<title>Deck · Multi-file Slide Index</title>",
-        f"<title>PiDeck {ep_id} · {titles[ep_id]}</title>",
+        f"<title>Telos {ep_id} · {titles[ep_id]}</title>",
     )
     (ep_dir / "index.html").write_text(new_template, encoding="utf-8")
     print(f"{ep_id}: {len(slides)} slides -> {ep_dir}")
@@ -1187,7 +1187,7 @@ def main() -> None:
         f'      <a class="card" href="{ep}/index.html"><div class="k">{ep}</div>'
         f'<div class="t">{title}</div></a>'
         for ep, title in [
-            ("EP01", "PiDeck 是什么"),
+            ("EP01", "Telos 是什么"),
             ("EP02", "安装与环境检测"),
             ("EP03", "配置模型与认证"),
             ("EP04", "添加项目与第一次对话"),
@@ -1199,7 +1199,7 @@ def main() -> None:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>PiDeck 上手系列 · HTML PPT</title>
+<title>Telos 上手系列 · HTML PPT</title>
 <style>
   {SLIDE_CSS}
   body {{ width: auto; height: auto; min-height: 100vh; overflow: auto; }}
@@ -1214,7 +1214,7 @@ def main() -> None:
 </head>
 <body>
 <div class="wrap">
-  <h1>PiDeck 上手系列</h1>
+  <h1>Telos 上手系列</h1>
   <p class="sub">6 集 HTML 幻灯片。点进某一集后：概览墙点选页面，或按 Space / ← → 翻页，ESC 回概览。</p>
   <div class="grid">
 {links}

@@ -1,8 +1,8 @@
-/**
- * PiDeck Subagents Bridge Extension
+﻿/**
+ * Telos Subagents Bridge Extension
  *
  * 订阅 @tintinweb/pi-subagents 插件的生命周期事件，累积快照，经 setWidget 推
- * 送给 PiDeck 渲染层。桥接失效不影响主功能（面板回落为 record + 工具调用推导）。
+ * 送给 Telos 渲染层。桥接失效不影响主功能（面板回落为 record + 工具调用推导）。
  *
  * 另桥接 billion-context-pi 的 acp_delegate 委托链（独立 spawn 子进程，不发插件
  * 事件、不落 record、运行状态 widget 仅 TUI 模式激活）：监听工具执行事件与终态
@@ -341,7 +341,7 @@ const START_ENTRY_TYPE = "pi-deck-subagent-start";
  */
 const RECORD_ENTRY_TYPE = "subagents:record";
 
-export default function piDeckSubagentsBridge(pi: any): void {
+export default function TelosSubagentsBridge(pi: any): void {
 	let snapshot: SnapshotState = new Map();
 	let pluginActive = false;
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;

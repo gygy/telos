@@ -1,5 +1,5 @@
-/**
- * PiDeck Todo 三态状态纯模块（v3 快照）。
+﻿/**
+ * Telos Todo 三态状态纯模块（v3 快照）。
  *
  * 本模块不 import 任何 pi API、不注册工具、不持久化：只做 v3 快照解码、
  * 操作 reducer、预算与输出格式化、压缩后补注判定。pi-deck-todo.ts 扩展在真实变更时把
