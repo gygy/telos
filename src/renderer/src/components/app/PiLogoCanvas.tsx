@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef } from "react";
  * - 8×9 棋盘上的 FINAL_LOGO 点阵
  * - 彩色方块带 bevel 立体边
  * - 四块 tetromino 下落拼装 → 消行闪烁 → 定格为单色 logo
- * - 点击可重播（尊重 prefers-reduced-motion）
+ * - 默认定格静态，点击才播拼装动画（尊重 prefers-reduced-motion）
+ * - 不再挂载/会话启动自动播：常驻侧栏重播会抢注意力
  */
 
 type ColorKey = "cyan" | "red" | "green" | "orange" | "flash" | "white" | "ink" | "logoGreen";
@@ -310,21 +311,16 @@ function paintCells(canvas: HTMLCanvasElement, cells: Cells, cssSize: number) {
 export type PiLogoCanvasProps = {
 	/** 画布 CSS 边长（正方形：宽=高=size） */
 	size?: number;
-	/** 挂载后是否自动播放一次 intro */
+	/** 挂载后是否自动播放一次 intro；默认 false。侧栏/关于弹窗都不传，避免一进来就播。 */
 	autoPlay?: boolean;
-	/** 点击是否重播 */
+	/** 点击是否重播；默认 true，这是侧栏品牌位的唯一触发 */
 	playOnClick?: boolean;
-	/**
-	 * 外部重播令牌：数值变化时强制重播拼装动画。
-	 * 用于 agent 启动/关闭等业务事件反馈；0/undefined 不触发。
-	 */
-	replayToken?: number;
 	className?: string;
 };
 
 /**
  * 官方 pi 风格 canvas logo。
- * 侧栏品牌位：挂载 autoPlay、点击重播、业务事件 via replayToken。
+ * 侧栏品牌位：默认定格静态，点击才播 tetromino 拼装动画。
  */
 export function PiLogoCanvas(props: PiLogoCanvasProps) {
 	const size = props.size ?? 32;
@@ -338,7 +334,6 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 	const playGenRef = useRef(0);
 	/** 播放中又来了重播请求：当前轮结束后只再播一次，合并连点/连触发 */
 	const pendingReplayRef = useRef(false);
-	const lastReplayTokenRef = useRef<number | undefined>(undefined);
 
 	const showStatic = useCallback(() => {
 		const canvas = canvasRef.current;
@@ -457,7 +452,8 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 
 	useEffect(() => {
 		showStatic();
-		if (props.autoPlay !== false) {
+		// 侧栏默认不自动播；只有显式 autoPlay 才挂载播一次。
+		if (props.autoPlay) {
 			void playIntro();
 		}
 
@@ -465,7 +461,7 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 			// 播放中不抢画布，等本轮结束后的 showStatic 会用新主题色
 			if (!busyRef.current) showStatic();
 		};
-		// Telos 主题/主题色切换会改 data-theme / data-accent
+		// PiDeck 主题/主题色切换会改 data-theme / data-accent
 		const observer = new MutationObserver(onTheme);
 		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
 
@@ -478,19 +474,10 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 		};
 	}, [playIntro, props.autoPlay, showStatic]);
 
-	// agent 启停等外部事件通过递增 replayToken 触发；0/undefined 初始值不触发，避免与 autoPlay 叠播。
-	useEffect(() => {
-		const token = props.replayToken;
-		if (token == null || token === 0) return;
-		if (lastReplayTokenRef.current === token) return;
-		lastReplayTokenRef.current = token;
-		// 播放中则合并 pending，播完再来一次；空闲则立即开播——不并行双轨
-		void playIntro();
-	}, [playIntro, props.replayToken]);
-
-	const handleActivate = () => {
+	const handleActivate = (event?: { stopPropagation: () => void }) => {
 		if (props.playOnClick === false) return;
-		// 点击与业务事件同一套串行队列，不并行
+		// 侧栏 logo 在 AboutPopover 触发器里：点击只播拼装动画，不冒泡打开「关于」。
+		event?.stopPropagation();
 		void playIntro();
 	};
 
@@ -500,11 +487,11 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 			className={props.className ?? "pi-logo-canvas-stage"}
 			style={{ width: size, height: size }}
 			aria-label="Play Pi logo animation"
-			onClick={handleActivate}
+			onClick={(e) => handleActivate(e)}
 			onKeyDown={(e) => {
 				if (e.key === "Enter" || e.key === " ") {
 					e.preventDefault();
-					handleActivate();
+					handleActivate(e);
 				}
 			}}
 		>
@@ -518,7 +505,7 @@ export function PiLogoCanvas(props: PiLogoCanvasProps) {
 	);
 }
 
-// ── 右侧「Telos」字标：与 logo 同一套 canvas 方块绘制 ──────────────
+// ── 右侧「PiDeck」字标：与 logo 同一套 canvas 方块绘制 ──────────────
 
 /**
  * 5×7 点阵（i 为 3×7）。笔画加粗：竖干双列 / 横画更满，小字号下仍够「重」。
@@ -654,7 +641,7 @@ function paintWordmark(canvas: HTMLCanvasElement, text: string, cellCss: number)
 	}
 }
 
-export type TelosWordmarkCanvasProps = {
+export type PiDeckWordmarkCanvasProps = {
 	/** 每个点阵格的 CSS 边长；与 logo 并排时建议 4~5 */
 	cellSize?: number;
 	text?: string;
@@ -662,12 +649,12 @@ export type TelosWordmarkCanvasProps = {
 };
 
 /**
- * 右侧 Telos 字标：与左侧 logo 同一套 bevel 方块 canvas 绘制。
+ * 右侧 PiDeck 字标：与左侧 logo 同一套 bevel 方块 canvas 绘制。
  * 主题切换时自动重绘 ink/white。
  */
-export function TelosWordmarkCanvas(props: TelosWordmarkCanvasProps) {
+export function PiDeckWordmarkCanvas(props: PiDeckWordmarkCanvasProps) {
 	const cellSize = props.cellSize ?? 5;
-	const text = props.text ?? "Telos";
+	const text = props.text ?? "PiDeck";
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 
 	const paint = useCallback(() => {

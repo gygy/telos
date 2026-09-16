@@ -20,6 +20,8 @@ function loadTranspiledModule(filePath, overrides = new Map()) {
 	const sandbox = {
 		clearTimeout,
 		exports: {},
+		// jsonlLineStream（会话 JSONL 流式扫描）运行时需要 Buffer
+		Buffer,
 		process,
 		require: (id) => overrides.has(id) ? overrides.get(id) : require(id),
 		setTimeout,
@@ -80,6 +82,8 @@ function loadSessionScanner(homePath) {
 	const sessionIdentity = loadTranspiledModule("src/shared/sessionIdentity.ts");
 	// SessionScanner 新增的自包含块折叠（无依赖纯函数）
 	const expandedRefBlocks = loadTranspiledModule("src/shared/expandedRefBlocks.ts");
+	// 会话 JSONL 流式行扫描器（只依赖 node:fs/promises，测试注入真实实现）
+	const jsonlLineStream = loadTranspiledModule("src/main/sessions/jsonlLineStream.ts");
 	const sandbox = {
 		AbortController,
 		AbortSignal,
@@ -104,6 +108,7 @@ function loadSessionScanner(homePath) {
 			if (id === "./sessionNameLine") return loadSessionNameLineModule();
 			if (id === "../../shared/sessionIdentity") return sessionIdentity;
 			if (id === "../../shared/expandedRefBlocks") return expandedRefBlocks;
+			if (id === "./jsonlLineStream") return jsonlLineStream;
 			// sharedLogger 未注册时 getAppLogger 返回 null，SessionScanner 埋点静默跳过
 			if (id === "../logging/sharedLogger") return { getAppLogger: () => null };
 			return require(id);
@@ -182,15 +187,15 @@ test("rename appends a pi-native session_info entry and keeps the header first (
 	}
 });
 
-test("rename heals legacy Telos sessionName head lines that broke pi loading (#114)", async () => {
+test("rename heals legacy PiDeck sessionName head lines that broke pi loading (#114)", async () => {
 	const home = mkdtempSync(join(tmpdir(), "pideck-rename-heal-"));
 	try {
 		const { SessionScanner } = loadSessionScanner(home);
 		const scanner = new SessionScanner();
 		const file = join(home, "session-b.jsonl");
-		// 旧版 Telos 的破坏产物：头部前置无 type 的 sessionName 私有行
+		// 旧版 PiDeck 的破坏产物：头部前置无 type 的 sessionName 私有行
 		writeSession(file, [
-			{ sessionName: "Old Telos name", ts: 1700000000000 },
+			{ sessionName: "Old PiDeck name", ts: 1700000000000 },
 			...healthySession,
 		]);
 		assert.notEqual(firstParseableEntry(readLines(file))?.type, "session");
@@ -222,7 +227,7 @@ test("repeated rename keeps the file flat and the latest name authoritative", as
 		const infoCount = lines.filter((line) => line.includes('"session_info"')).length;
 		assert.equal(infoCount, 2);
 		assert.equal(piSessionName(lines), "second");
-		// Telos 摘要同样以最后一条 session_info 为准
+		// PiDeck 摘要同样以最后一条 session_info 为准
 		const summary = await scanner["readSummary"](file);
 		assert.equal(summary?.name, "second");
 	} finally {

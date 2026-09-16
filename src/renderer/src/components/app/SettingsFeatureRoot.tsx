@@ -25,7 +25,7 @@ type SettingsFeatureRootProps = {
   onChange: (patch: Partial<AppSettings>) => Promise<boolean>;
   /** 当前项目身份：项目资源 IPC 只接受主进程登记的 id。 */
   projectId?: string;
-  /** Telos 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
+  /** PiDeck 当前加载的全部项目（作用域下拉展示；Chat 项目除外）。 */
   projects?: Array<{ id: string; name: string; kind?: Project["kind"] }>;
   /** Chat workspace has no project resource scope. */
   projectKind?: Project["kind"];
@@ -49,6 +49,15 @@ export function SettingsFeatureRoot(props: SettingsFeatureRootProps) {
       void api.settings.update({ updateDotHintSeen: true }).catch(() => undefined);
     }
   }, [open]);
+
+  // 全局快捷键（macOS Cmd+, / Windows·Linux Ctrl+Alt+S）由主进程 before-input-event
+  // 捕获后经 app:open-settings 广播（覆盖 webview 焦点与托盘隐藏唤起场景）；
+  // 这里只负责打开弹窗——快捷键入口没有深链聚焦目标，无需动 settingsFocusAtom。
+  useEffect(() => {
+    return api.app.onOpenSettings(() => {
+      setOpen(true);
+    });
+  }, [setOpen]);
 
   /**
    * File editors debounce writes during normal typing. Before an updater-triggered process

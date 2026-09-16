@@ -208,6 +208,12 @@ export const ipcChannels = {
 	dshListProviders: "dsh:list-providers",
 	/** DSH 配置管理页状态（host 启动状态 + 目录 + providers + 模型目录）。 */
 	dshGetStatus: "dsh:get-status",
+	/** 探测本机 CUI node（DSH 沙箱 runner）；传草稿路径可在保存前预览。 */
+	dshDetectRunnerNode: "dsh:detect-runner-node",
+	/** 打开文件选择框挑 node.exe；取消返回 null。 */
+	dshChooseRunnerNode: "dsh:choose-runner-node",
+	/** 从 AtomGit/GitHub latest 应用 Release 下载 Node 24 到 userData（不改 PATH、不进安装包）。 */
+	dshInstallRunnerNode: "dsh:install-runner-node",
 	/** DSH settings.describe（脱敏 namespace 视图 + schema，渲染配置表单）。 */
 	dshConfigDescribe: "dsh:config-describe",
 	/** DSH settings.update（合并 patch 到 namespace 用户层）。 */
@@ -254,6 +260,8 @@ export const ipcChannels = {
 	zcodeSessionsImport: "zcode-sessions:import",
 	workbuddySessionsScan: "workbuddy-sessions:scan",
 	workbuddySessionsImport: "workbuddy-sessions:import",
+	cursorSessionsScan: "cursor-sessions:scan",
+	cursorSessionsImport: "cursor-sessions:import",
 	settingsGet: "settings:get",
 	settingsUpdate: "settings:update",
 	/** 重启当前已启用的 Web 服务，不修改 Web 设置 */
@@ -312,6 +320,30 @@ export const ipcChannels = {
 	extensionsBuiltInUpdateRestorePrevious: "extensions:builtin-update-restore-previous",
 	/** 内置扩展热更新：打开当前生效的扩展目录 */
 	extensionsBuiltInOpenDir: "extensions:builtin-open-dir",
+	/** 提示词商店官方模板热更新：查询内置/覆盖层版本状态（不联网）。与扩展热更新同一套交互模型。 */
+	promptsStoreUpdateStatus: "prompts-store:update-status",
+	/** 提示词商店官方模板热更新：检查远端清单是否有更新（联网，逐文件 sha256 比对） */
+	promptsStoreUpdateCheck: "prompts-store:update-check",
+	/** 提示词商店官方模板热更新：拉取远端最新版写入 userData 覆盖层 */
+	promptsStoreUpdateApply: "prompts-store:update-apply",
+	/** 提示词商店官方模板热更新：还原为随包分发版本（当前覆盖层转 .bak） */
+	promptsStoreUpdateRestore: "prompts-store:update-restore",
+	/** 提示词商店官方模板热更新：恢复上一个覆盖版（.bak 校验通过才写回） */
+	promptsStoreUpdateRestorePrevious: "prompts-store:update-restore-previous",
+	/** 提示词商店官方模板热更新：打开当前生效的模板目录 */
+	promptsStoreOpenDir: "prompts-store:open-dir",
+	/** 内置技能热更新：查询内置/覆盖层版本状态（不联网） */
+	skillsStoreUpdateStatus: "skills-store:update-status",
+	/** 内置技能热更新：检查远端清单是否有更新（联网，逐文件 sha256 比对） */
+	skillsStoreUpdateCheck: "skills-store:update-check",
+	/** 内置技能热更新：拉取远端最新版写入 userData 覆盖层 */
+	skillsStoreUpdateApply: "skills-store:update-apply",
+	/** 内置技能热更新：还原为随包分发版本（当前覆盖层转 .bak） */
+	skillsStoreUpdateRestore: "skills-store:update-restore",
+	/** 内置技能热更新：恢复上一个覆盖版（.bak 校验通过才写回） */
+	skillsStoreUpdateRestorePrevious: "skills-store:update-restore-previous",
+	/** 内置技能热更新：打开当前生效的技能目录 */
+	skillsStoreOpenDir: "skills-store:open-dir",
 	/** 扫描项目目录内的独立 Git 仓库（根 + 嵌套），供侧栏切换 */
 	gitListRepos: "git:list-repos",
 	gitBranches: "git:branches",
@@ -393,10 +425,14 @@ export const ipcChannels = {
 	/** 拉取 CHANGELOG 正文（atomgit 优先，GitHub 回退；失败时 markdown=null 由 UI 降级打开浏览器）。 */
 	appGetChangelog: "app:get-changelog",
 	appOpenInBrowser: "app:open-in-browser",
+	/** 全局快捷键（macOS Cmd+, / Windows·Linux Ctrl+Alt+S）命中后由主进程广播，渲染层打开设置页。 */
+	appOpenSettings: "app:open-settings",
+	/** 全局快捷键（新建会话/搜索会话）命中后广播快捷键 id，渲染层决定是否执行（输入框聚焦时忽略）。 */
+	appShortcutTriggered: "app:shortcut-triggered",
 	appRestart: "app:restart",
 	/** 真正退出应用（置 isQuitting 后 app.quit）。异常页不能走 window-close：closeToTray 会把关窗吞成隐藏。 */
 	appQuit: "app:quit",
-	/** 在系统文件管理器中打开 Telos 数据目录（跨平台：explorer / Finder / xdg-open） */
+	/** 在系统文件管理器中打开 PiDeck 数据目录（跨平台：explorer / Finder / xdg-open） */
 	appOpenDataDir: "app:open-data-dir",
 	/** 进程监控：拉取 Electron 各进程 + pi agent 子进程的内存/CPU 快照 */
 	processMetrics: "system:process-metrics",
@@ -697,6 +733,11 @@ export const ipcChannels = {
 	imagegenGetConfig: "imagegen:get-config",
 	/** 保存独立生图配置（白名单校验后落盘） */
 	imagegenSaveConfig: "imagegen:save-config",
+	/**
+	 * 按需取回落盘生图图片的 base64（入参为 blob 引用名）。
+	 * 展示走 pideck-img:// 协议流式加载，这个通道只服务「复制 / 保存 / 重发带回参考图」。
+	 */
+	imagegenReadImageBlob: "imagegen:read-image-blob",
 
 	// ===== Composer voice transcription =====
 	voiceTranscriptionGetConfig: "voice-transcription:get-config",
@@ -729,7 +770,7 @@ export const ipcChannels = {
 	clipboardWriteText: "clipboard:write-text",
 
 	// ===== 资源管理器右键菜单（HKCU 注册/查询，portable 亦可用） =====
-	/** 渲染层 → 主进程：查询「用 Telos 打开」右键菜单是否已注册 */
+	/** 渲染层 → 主进程：查询「用 PiDeck 打开」右键菜单是否已注册 */
 	shellMenuGetState: "shell-menu:get-state",
 	/** 渲染层 → 主进程：启用/取消资源管理器右键菜单注册 */
 	shellMenuSetEnabled: "shell-menu:set-enabled",

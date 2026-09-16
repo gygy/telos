@@ -13,6 +13,12 @@
  * 本文件保持纯类型 + 纯函数（无任何运行时层依赖），主/渲染两侧与 node 单测共享。
  */
 
+import {
+	atomGitFeedUrl,
+	gitHubLatestDownloadBase,
+} from "../updateSources";
+import type { UpdateSourceId } from "./settings";
+
 /** 清单 schema 版本：结构不兼容变更时 +1，旧 runtime 会被判定为不可用并提示重装。 */
 export const DSH_RUNTIME_MANIFEST_SCHEMA = 1;
 
@@ -22,12 +28,69 @@ export const DSH_RUNTIME_MANIFEST_FILE = "manifest.json";
 /** tarball 内的顶层目录名（解压后剥掉这一层）。 */
 export const DSH_RUNTIME_ARCHIVE_ROOT = "dsh-runtime";
 
+/**
+ * 索引文件名（挂在当前 latest 应用 Release 上）。
+ * 禁止再建独立 `dsh-runtime` tag——会抢走 GitHub /releases/latest，
+ * 把安装包更新检查指到 sidecar 而不是应用安装包。
+ */
+export const DSH_RUNTIME_INDEX_FILE = "dsh-runtime-releases.json";
+
+/** 平台分归档文件名（与 pack-dsh-runtime.mjs 产出一致）。 */
+export function dshRuntimeArchiveName(platform: string, arch: string): string {
+	return `dsh-runtime-${platform}-${arch}.tgz`;
+}
+
+/** 平台分索引文件名（CI 各 job 互不覆盖；客户端按平台拼 latest 资产地址）。 */
+export function dshRuntimeIndexFileName(platform: string, arch: string): string {
+	return `dsh-runtime-${platform}-${arch}-releases.json`;
+}
+
+/** 当前 latest 应用 Release 上的 runtime 资产 URL（AtomGit / GitHub 路径不同）。 */
+export function dshRuntimeAssetDownloadUrl(
+	source: UpdateSourceId,
+	fileName: string,
+): string {
+	const encoded = encodeURIComponent(fileName);
+	if (source === "github") {
+		return `${gitHubLatestDownloadBase()}/${encoded}`;
+	}
+	return `${atomGitFeedUrl()}/${encoded}`;
+}
+
+/** 索引默认地址：按平台分索引文件名拼 latest 资产。 */
+export function defaultDshRuntimeIndexUrl(
+	source: UpdateSourceId = "atomgit",
+	platform: string = typeof process !== "undefined" ? process.platform : "win32",
+	arch: string = typeof process !== "undefined" ? process.arch : "x64",
+): string {
+	return dshRuntimeAssetDownloadUrl(source, dshRuntimeIndexFileName(platform, arch));
+}
+
+/**
+ * 解析 runtime 索引地址：环境变量 / 设置覆盖优先，否则跟 updateSource 拼 latest。
+ * 空串视为未配置，走内置默认。
+ */
+export function resolveDshRuntimeIndexUrl(input: {
+	indexUrl?: string;
+	updateSource?: UpdateSourceId;
+	platform?: string;
+	arch?: string;
+}): string {
+	const override = input.indexUrl?.trim();
+	if (override) return override;
+	return defaultDshRuntimeIndexUrl(
+		input.updateSource ?? "atomgit",
+		input.platform,
+		input.arch,
+	);
+}
+
 /** runtime 清单。 */
 export type DshRuntimeManifest = {
 	schemaVersion: number;
 	/** runtime 版本（= dsh 版本，如 0.1.1-rc.2）；同时是解压目录名。 */
 	runtimeVersion: string;
-	/** 产出该 runtime 的 Telos 版本，便于排查「哪个 app 版本打的」。 */
+	/** 产出该 runtime 的 PiDeck 版本，便于排查「哪个 app 版本打的」。 */
 	builtByAppVersion: string;
 	/** 兼容的最低 app 版本（含）。 */
 	minAppVersion: string;
@@ -73,6 +136,35 @@ export type DshRuntimeReleaseIndex = {
 	schemaVersion: number;
 	releases: DshRuntimeRelease[];
 };
+
+/**
+ * 把索引条目的 url 改成当前更新源应用 Release 的归档资产。
+ * 默认跟随 latest；启动旧版/预发布 app 时可传 releaseTag，避免误从 latest
+ * 下载不匹配当前 app 的 runtime。file:// / 本地路径不改写——离线/内网验证用。
+ */
+export function resolveDshRuntimeReleaseUrl(
+	release: DshRuntimeRelease,
+	source: UpdateSourceId,
+	platform: string,
+	arch: string,
+	releaseTag?: string,
+): string {
+	const url = release.url;
+	if (url.startsWith("file:") || /^[a-zA-Z]:[\\/]/.test(url) || url.startsWith("/")) {
+		return url;
+	}
+	// 相对文件名或任意 http(s) 占位都改写为目标应用 Release 资产——
+	// 避免旧索引里的 dsh-runtime tag / 其它直连地址被客户端用上。
+	const assetName = dshRuntimeArchiveName(platform, arch);
+	const tag = releaseTag?.trim();
+	if (source === "github" && tag) {
+		return `${gitHubLatestDownloadBase().replace(/\/releases\/latest\/download$/, `/releases/download/${encodeURIComponent(tag)}`)}/${encodeURIComponent(assetName)}`;
+	}
+	if (source === "atomgit" && tag) {
+		return `${atomGitFeedUrl().replace(/\/releases\/download\/latest$/, `/releases/download/${encodeURIComponent(tag)}`)}/${encodeURIComponent(assetName)}`;
+	}
+	return dshRuntimeAssetDownloadUrl(source, assetName);
+}
 
 /**
  * 为当前 app 版本挑出要安装的版本：兼容区间内 runtimeVersion 最大的一条。

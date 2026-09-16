@@ -40,7 +40,7 @@ export type WorkspaceContentOpenMode = "split" | "maximize";
 export type SessionTabOpenMode = "preview" | "permanent";
 export type AppFontSizeMode = "compact" | "default" | "medium" | "large" | "xlarge";
 
-/** 更新源：github = 官方 GitHub Release（默认）；atomgit = 可选国内镜像。 */
+/** 更新源：atomgit = 国内 AtomGit 源（默认首选）；github = 官方 GitHub Release。 */
 export type UpdateSourceId =
 	| "atomgit"
 	| "github";
@@ -88,6 +88,13 @@ export type AppSettings = {
 	useNativeTitleBar: boolean;
 	showNativeMenu: boolean;
 	sendShortcut: SendShortcutMode;
+	/**
+	 * 全局快捷键用户覆盖：ShortcutId → accelerator（Electron 语法子集，见 shared/shortcuts.ts）。
+	 * 缺省键 = 平台默认值（macOS ⌘, 打开设置 / F12 开发者工具等）；设置页「快捷键管理」
+	 * 修改后写这里，主进程 before-input-event 匹配实时读取（无需重启）。
+	 * 可选以兼容旧 settings.json；未知 id / 非法 accelerator 的条目在保存时丢弃。
+	 */
+	shortcuts?: Record<string, string>;
 	/** 界面主题：system 跟随系统；schedule 按本地时钟在浅色/暗色之间切换 */
 	theme: AppThemeMode;
 	/** 跟随时间：浅色开始（HH:mm，含）。仅 theme=schedule 时生效。 */
@@ -139,11 +146,17 @@ export type AppSettings = {
 	 * 用户显式配置后，所有 git 子进程（含 worktree）都使用该路径。
 	 */
 	gitExecutablePath: string;
+	/**
+	 * DSH 沙箱 runner 用的本机 Node 绝对路径（Windows 必须是 CUI node.exe）。
+	 * 空串 = 自动探测 PATH / 版本管理器 / 应用数据目录里的专用副本。
+	 * 不随包分发，避免安装包再涨 ~86MB；可在开发设置里一键下载到 userData。
+	 */
+	dshRunnerNodePath: string;
 	/** 关闭窗口时隐藏到系统托盘而不是退出 */
 	closeToTray: boolean;
 	/**
 	 * 单实例模式：再次打开应用时复用已有窗口（托盘隐藏也会唤起）。
-	 * 默认 true；关闭后允许同时跑多个 Telos 进程。
+	 * 默认 true；关闭后允许同时跑多个 PiDeck 进程。
 	 */
 	singleInstance: boolean;
 	/** 会话结束时发送系统通知 */
@@ -191,7 +204,7 @@ export type AppSettings = {
 	/**
 	 * Electron Chromium 渲染进程沙箱（与 pi Agent 无关）。
 	 * false（默认）：关闭沙箱，兼容 Windows 安全软件/旧 GPU 驱动；
-	 * true：启用 Chromium 沙箱，需重启 Telos 后生效。
+	 * true：启用 Chromium 沙箱，需重启 PiDeck 后生效。
 	 */
 	electronChromiumSandbox: boolean;
 	/** 是否给 pi agent 子进程注入代理环境变量，不影响 desktop 自身网络请求 */
@@ -348,29 +361,25 @@ export type AppSettings = {
 	 */
 	autoDownloadUpdates: boolean;
 	/**
-	 * 更新源："github" 走 GitHub Release 官方源（app-update.yml 原生链路，默认）；
-	 * "atomgit" 为可选国内镜像（generic provider）；
+	 * 更新源："github" 走 GitHub Release 官方源（app-update.yml 原生链路）；
+	 * 其余为国内镜像前缀代理（generic provider 拼 releases/latest/download）；
 	 * "custom" 用 customUpdateSourceUrl 的镜像前缀。
-	 * 默认 "github"。
+	 * 默认 "atomgit"（v0.7.5 起，国内加速源为第一首选）。
 	 */
 	updateSource: UpdateSourceId;
 	/** updateSource="custom" 时的镜像前缀（如 https://mirror.example.com），拼接规则见 updateSources.ts。 */
 	customUpdateSourceUrl: string;
 	/**
-	 * updateSource 一次性迁移标记：默认源从 atomgit 改回 github 时，
-	 * 对仍停在 "atomgit" 的用户补一次迁回；置 true 后永不重复迁移，
-	 * 尊重用户此后显式再选 AtomGit。缺省 = 未迁移。
-	 */
-	updateSourceGithubDefaultMigrated?: boolean;
-	/**
-	 * @deprecated v0.7.5 曾用此标记把 github 迁到 atomgit；现已停用，保留仅兼容旧 JSON。
+	 * updateSource 一次性迁移标记：v0.7.5 将默认源从 github 切为 atomgit 时，
+	 * 对已持久化过 "github" 的旧用户补一次迁移到 atomgit；置 true 后永不重复迁移，
+	 * 用户后续显式改回 github 会被尊重。缺省 = 未迁移（仅旧 settings.json 会出现）。
 	 */
 	updateSourceAtomgitMigrated?: boolean;
 	/** 上次后台检查完成时间（毫秒时间戳）；缺省 = 从未检查。 */
 	updateLastCheckAt?: number;
-	/** 最近一次“已提示过”的 Telos 版本（弹窗关闭后写入，用于“每版本只弹一次”）；缺省 = 未提示过任何版本。 */
+	/** 最近一次“已提示过”的 PiDeck 版本（弹窗关闭后写入，用于“每版本只弹一次”）；缺省 = 未提示过任何版本。 */
 	updateNotifiedVersion?: string;
-	/** 用户跳过的 Telos 版本（该版本不再主动提示，手动检测仍可查看）；缺省 = 未跳过。 */
+	/** 用户跳过的 PiDeck 版本（该版本不再主动提示，手动检测仍可查看）；缺省 = 未跳过。 */
 	updateSkippedVersion?: string;
 	/** 最近一次“已提示过”的 Pi CLI 版本；缺省 = 未提示过。 */
 	updatePiNotifiedVersion?: string;
@@ -437,10 +446,10 @@ export type AppSettings = {
 	removedBuiltInExtensions: string[];
 
 	/**
-	 * 用户禁用的扩展列表（source 标识 + 作用域），存储于 Telos 自身设置（不写 pi settings）。
-	 * pi 0.82.x 不识别 settings.json 的 disabledExtensions，禁用只能靠 Telos 启动 RPC 时
+	 * 用户禁用的扩展列表（source 标识 + 作用域），存储于 PiDeck 自身设置（不写 pi settings）。
+	 * pi 0.82.x 不识别 settings.json 的 disabledExtensions，禁用只能靠 PiDeck 启动 RPC 时
 	 * 切「白名单模式」：--no-extensions + 逐条 -e 注入未禁用扩展实现（见 enabledExtensionResolver）。
-	 * 列表为空 = 白名单关闭，pi 自动发现全部扩展（兼容用户在 Telos 外手动安装的扩展）。
+	 * 列表为空 = 白名单关闭，pi 自动发现全部扩展（兼容用户在 PiDeck 外手动安装的扩展）。
 	 */
 	disabledExtensions: DisabledExtensionEntry[];
 
@@ -453,18 +462,18 @@ export type AppSettings = {
 
 	/**
 	 * 用户禁用的全局技能名列表（与 SkillManager.list 的 name 去重键一致，比较时小写），
-	 * 存储于 Telos 自身设置（不写 pi settings）。
+	 * 存储于 PiDeck 自身设置（不写 pi settings）。
 	 * pi 的 frontmatter `disable-model-invocation` 只阻止模型自动调用、技能仍被加载；
-	 * 完全禁用只能靠 Telos 启动 RPC 时切「白名单模式」：--no-skills + 逐条 --skill
+	 * 完全禁用只能靠 PiDeck 启动 RPC 时切「白名单模式」：--no-skills + 逐条 --skill
 	 * 注入未禁用技能（见 skillWhitelistResolver）。
-	 * 列表为空 = 白名单关闭，pi 自动发现全部技能（兼容用户在 Telos 外手动安装的技能）。
+	 * 列表为空 = 白名单关闭，pi 自动发现全部技能（兼容用户在 PiDeck 外手动安装的技能）。
 	 */
 	disabledSkills: string[];
 
 	/**
 	 * 用户禁用的全局提示词模板名列表（与 PromptManager.list 的 name 一致，比较时小写），
-	 * 存储于 Telos 自身设置（不写 pi settings）。
-	 * 完全禁用只能靠 Telos 启动 RPC 时切「白名单模式」：--no-prompt-templates +
+	 * 存储于 PiDeck 自身设置（不写 pi settings）。
+	 * 完全禁用只能靠 PiDeck 启动 RPC 时切「白名单模式」：--no-prompt-templates +
 	 * 逐条 --prompt-template 注入未禁用模板（见 promptWhitelistResolver）。
 	 * 列表为空 = 白名单关闭，pi 自动发现全部模板。
 	 */
@@ -497,11 +506,18 @@ export type AppSettings = {
 	dshHomeDir?: string;
 
 	/**
-	 * DSH runtime 下载源索引地址（覆盖默认 GitHub Release 资产）。
-	 * 用于镜像/内网分发：索引是 dsh-runtime-releases.json，条目里给出 tarball 直链与 sha256。
-	 * 缺省/空串 = 用内置默认地址。sha256 校验始终生效，镜像也不能绕过。
+	 * DSH runtime 下载源索引地址（覆盖默认 AtomGit/GitHub latest 应用 Release）。
+	 * 用于镜像/内网分发：索引是分平台 `dsh-runtime-<platform>-<arch>-releases.json`，
+	 * 条目里给出 tarball 直链与 sha256。缺省/空串 = 跟随 settings.updateSource。
+	 * sha256 校验始终生效，镜像也不能绕过。禁止指向独立 `dsh-runtime` tag。
 	 */
 	dshRuntimeIndexUrl?: string;
+
+	/**
+	 * DSH 沙箱 Node 24 下载源索引（覆盖默认 AtomGit/GitHub latest 应用 Release）。
+	 * 缺省/空串 = 跟随 settings.updateSource。sha256 始终校验。
+	 */
+	dshRunnerNodeIndexUrl?: string;
 
 	/**
 	 * DSH 审批自动放行：开启后 DSH 会话的工具/命令审批（approval/requested）

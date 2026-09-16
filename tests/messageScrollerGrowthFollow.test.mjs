@@ -25,12 +25,11 @@ test("follow scroll only on content growth, not on shrink", () => {
   // 引擎在 ResizeObserver 回调里区分正/负 resize：增长才 scrollToBottom
   assert.match(engineSource, /const difference = height - \(previousHeight \?\? height\);/);
   assert.match(engineSource, /if \(difference >= 0\) \{/);
-  // 收缩（negative resize）：不主动滚动；仅在「已近底且用户未逃逸」时维持锁底状态，
-  // 逃逸用户（上滚读历史）不被负增长误重锁（与 handleScroll 的守卫规则一致）。
-  // 断言锚定到负增长分支（} else {）内，避免误匹配 handleScroll 里已有的同形守卫。
-  assert.match(
+  // 收缩只记录几何，不得借负增长把已浏览用户拽回锁底。
+  assert.match(engineSource, /内容收缩只记录几何，不改跟随态/);
+  assert.doesNotMatch(
     engineSource,
-    /\} else \{\s*\/\*\*[\s\S]*?if \(!state\.escapedFromLock && state\.isNearBottom\) \{/,
+    /if \(!state\.escapedFromLock && state\.isNearBottom\) \{\s*setEscapedFromLock\(false\);\s*setIsAtBottom\(true\);/,
   );
   // 增长时追底保留期（350ms）与弹簧物理由引擎管理，避免"收缩弹到底"的旧 bug
   assert.match(engineSource, /RETAIN_ANIMATION_DURATION_MS/);
@@ -177,7 +176,7 @@ test("timeline controller restores via engine restoreAt and keeps negative offse
   assert.match(source, /if \(viewStateOwnerKey !== ownerKey\) \{/);
 });
 
-test("turn-window expansion pins the viewport through restoreAt instead of native scrollTop", () => {
+test("turn-window expansion pins the visible row instead of native scrollTop", () => {
   const timelineSource = readFileSync(
     "src/renderer/src/components/session/SessionMessageTimeline.tsx",
     "utf8",
@@ -186,17 +185,17 @@ test("turn-window expansion pins the viewport through restoreAt instead of nativ
     "src/renderer/src/hooks/useSessionTimelineController.ts",
     "utf8",
   );
-  // 扩窗补偿走 controller.pinViewportAfterPrepend（内部 restoreAt），不再写原生 scrollTop。
-  assert.match(timelineSource, /pinViewportAfterPrepend\(/);
-  assert.match(timelineSource, /restoreTimelineAnchor\(timeline\.scrollTop, nextHeight - prev\.height\)/);
+  // 扩窗补偿走 pinBrowseRow（钉正在看的那一轮），不再用整页高度差写原生 scrollTop。
+  assert.match(timelineSource, /pinBrowseRow\(\)/);
+  assert.doesNotMatch(timelineSource, /restoreTimelineAnchor\(timeline\.scrollTop, nextHeight - prev\.height\)/);
   assert.doesNotMatch(timelineSource, /timeline\.scrollTop = nextTop/);
-  // effect 不得依赖整个 controller 对象（每次 render 新引用会提前把 prev.height 写成新高度）。
   assert.match(
     timelineSource,
-    /\[displayRuns, followingForTurnWindow, pinViewportAfterPrepend, timelineRef, turnWindowActive, turnWindowTurns\]/,
+    /\[displayRuns, followingForTurnWindow, pinBrowseRow, turnWindowActive, turnWindowTurns\]/,
   );
   assert.match(controllerSource, /api\.restoreAt\(nextTop\)/);
   assert.match(controllerSource, /scrollerScrollApiRef\.current\?\.stopScroll\(\)/);
+  assert.match(controllerSource, /browsePinScrollTop/);
 });
 
 test("timeline keeps the same turn window through anchor restoration", () => {

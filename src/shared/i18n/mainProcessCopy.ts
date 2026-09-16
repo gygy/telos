@@ -7,6 +7,8 @@ export const mainProcessZhCN = {
 	"diagnostic.extensionsDisabledFallback": "扩展加载失败，已禁用扩展运行。可在本会话把下面的错误信息发给 AI，协助排查扩展问题。",
 	"diagnostic.skillWhitelistSkipped":
 		"技能数量过多（{count} 个），已跳过「禁用技能」设置：本次启动由 pi 自动加载全部技能（禁用技能仍可被模型自动调用）。减少技能后重启会话即可恢复。",
+	"diagnostic.modelPreferenceIgnored":
+		"会话保存的模型偏好 {provider}/{model} 已不存在（可能已被重命名或删除），本次发送沿用当前模型。请打开模型选择器重新选择。",
 	"diagnostic.agentStopped": "Agent 进程已停止，请重启 Agent 后重试",
 	"diagnostic.messageRequired": "消息不能为空",
 	"diagnostic.promptRejected": "消息发送失败。",
@@ -35,8 +37,8 @@ export const mainProcessZhCN = {
 	"git.commitMessageBusy": "上一份提交摘要仍在生成中，请稍候再试。",
 	"git.commitMessageTimeout": "提交摘要生成超时，请重试。",
 	"tray.showWindow": "显示窗口",
-	"tray.restart": "重启 Telos",
-	"tray.quit": "退出 Telos",
+	"tray.restart": "重启 PiDeck",
+	"tray.quit": "退出 PiDeck",
 	"dialog.chooseChatHistoryFolder": "选择聊天记录目录",
 	"dialog.chooseProjectFolder": "选择项目目录",
 	"update.checkFailed": "检查更新失败，请稍后重试。",
@@ -71,12 +73,12 @@ export const mainProcessZhCN = {
 	"session.newTitle": "新会话",
 	"session.dshUntitled": "DSH 会话",
 	"session.dshRuntimeNotInstalled": "DSH 后端运行时未安装，无法新建 DSH 会话。请在配置管理页安装后再试；pi 后端不受影响。",
-	"session.dshRuntimeOutdated": "DSH 后端运行时与本版本 Telos 不配套，已停止使用。请在配置管理页重新安装配套版本后再试；pi 后端不受影响。",
+	"session.dshRuntimeOutdated": "DSH 后端运行时与本版本 PiDeck 不配套，已停止使用。请在配置管理页重新安装配套版本后再试；pi 后端不受影响。",
 	"dsh.runtime.invalidArchivePath": "所选路径不是有效的 runtime（.tgz 归档或已解压目录），请重新选择。",
 	"dsh.runtime.pickArchiveTitle": "选择 DSH runtime（.tgz 归档或已解压目录）",
 	"dsh.runtime.errors.manifestMissing": "所选目录缺少 manifest.json，不是完整的 DSH runtime。请选择包含 manifest.json 与 node_modules 的 runtime 根目录（或 .tgz 归档）。",
 	"dsh.runtime.errors.manifestUnreadable": "所选目录的 manifest.json 无法解析（可能已损坏），请重新下载或选择有效目录。",
-	"dsh.runtime.errors.schemaUnsupported": "所选 runtime 的 manifest schema 版本过高，当前应用不支持，请升级 Telos 或换用匹配的 runtime。",
+	"dsh.runtime.errors.schemaUnsupported": "所选 runtime 的 manifest schema 版本过高，当前应用不支持，请升级 PiDeck 或换用匹配的 runtime。",
 	"dsh.runtime.errors.appIncompatible": "所选 runtime 与当前应用版本不兼容（版本区间不匹配），请换用匹配的 runtime。",
 	"dsh.runtime.errors.nodeModulesMissing": "所选目录缺少 node_modules，不是完整的 DSH runtime，请重新选择。",
 	"dsh.runtime.errors.requiredPackageMissing": "所选 runtime 缺少关键包 {pkg}，文件可能不完整，请重新下载。",
@@ -85,6 +87,8 @@ export const mainProcessZhCN = {
 	"session.untitled": "未命名会话",
 	"session.emptyPreview": "空会话",
 	"session.copyTitle": "{title} 副本",
+	// 整文件读入前的体量护栏（大会话一次性读成字符串会终止主进程，见 jsonlLineStream）
+	"session.fileTooLargeForWholeRead": "会话文件过大（{sizeMb}MB，超过 {limitMb}MB 整读上限），该操作已取消以免应用崩溃。",
 	// fork/clone 产物物理命名后缀：属于会话名的一部分（重命名可删除），展示层不再拼装。
 	"session.forkedSuffix": "(fork)",
 	"session.historyTitle": "{project} 历史会话",
@@ -122,7 +126,7 @@ export const mainProcessZhCN = {
 	"mainConfig.fetchModelsFailed": "获取模型列表失败，请检查 provider 配置后重试。",
 	"mainConfig.providerTestFailed": "Provider 连接测试失败，请检查配置后重试。",
 	"mainConfig.providerTestTimeout": "Provider 连接测试超时。这不一定表示兼容模式不受支持；请稍后重试，或使用更轻量的模型测试。",
-	"mainConfig.importFilesRequired": "导入文件缺少 files 字段，请确认它是 Telos 导出的配置包。",
+	"mainConfig.importFilesRequired": "导入文件缺少 files 字段，请确认它是 PiDeck 导出的配置包。",
 	"mainConfig.providerUsageUnsupported": "当前 provider 暂不支持用量查询。",
 	"mainConfig.providerUsageNoKey": "当前 provider 未配置 API key，无法查询用量。",
 	"mainConfig.providerUsageDisabled": "用量查询未开启。",
@@ -172,7 +176,7 @@ export const mainProcessZhCN = {
 	"mainProjectResource.warningNameCharacters": "name 只能包含小写字母、数字和单个连字符",
 	"mainExtension.invalidPath": "扩展路径无效。",
 	"mainExtension.sourceRequired": "扩展来源不能为空。",
-	"mainExtension.builtInCannotUninstall": "Telos 内置扩展不可卸载。",
+	"mainExtension.builtInCannotUninstall": "PiDeck 内置扩展不可卸载。",
 	"mainExtension.nameRequired": "扩展名称不能为空。",
 	"mainExtension.piNotInstalled": "未检测到 pi CLI。",
 	"mainExtension.noUpdate": "当前版本 {current}，最新版本 {latest}，无需更新。",
@@ -222,7 +226,7 @@ export const mainProcessZhCN = {
 	"mainNotification.askQuestion": "「{title}」正在询问：{question}",
 	"mainNotification.automationDone": "定时任务「{name}」执行完成",
 	"mainNotification.automationFailed": "定时任务「{name}」执行失败：{error}",
-	"shellMenu.openWithTelos": "用 Telos 打开",
+	"shellMenu.openWithPiDeck": "用 PiDeck 打开",
 } as const;
 
 export type MainProcessTranslationKey = keyof typeof mainProcessZhCN;
@@ -236,6 +240,8 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"diagnostic.extensionsDisabledFallback": "Extensions failed to load, so the Agent is running with extensions disabled. Paste the error details below into this chat and ask the AI to help diagnose them.",
 	"diagnostic.skillWhitelistSkipped":
 		"Too many skills ({count}). The disabled-skill list was skipped for this launch, so pi loaded every skill (disabled ones can still be invoked by the model). Reduce the number of skills and restart the session to restore it.",
+	"diagnostic.modelPreferenceIgnored":
+		"The saved model preference {provider}/{model} no longer exists (it may have been renamed or removed). This message was sent with the current model. Pick a model again in the model selector.",
 	"diagnostic.agentStopped": "The Agent process has stopped. Restart the Agent and try again.",
 	"diagnostic.messageRequired": "The message cannot be empty.",
 	"diagnostic.promptRejected": "Failed to send the message.",
@@ -264,8 +270,8 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"git.commitMessageBusy": "The previous commit-message generation is still running. Please wait and try again.",
 	"git.commitMessageTimeout": "Commit-message generation timed out. Please try again.",
 	"tray.showWindow": "Show window",
-	"tray.restart": "Restart Telos",
-	"tray.quit": "Quit Telos",
+	"tray.restart": "Restart PiDeck",
+	"tray.quit": "Quit PiDeck",
 	"dialog.chooseChatHistoryFolder": "Choose chat history folder",
 	"dialog.chooseProjectFolder": "Choose project folder",
 	"update.checkFailed": "Failed to check for updates. Try again later.",
@@ -300,12 +306,12 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"session.newTitle": "New session",
 	"session.dshUntitled": "DSH session",
 	"session.dshRuntimeNotInstalled": "The DSH backend runtime is not installed, so a DSH session cannot be created. Install it from the configuration page and try again; the pi backend is unaffected.",
-	"session.dshRuntimeOutdated": "The DSH backend runtime does not match this Telos version and has been disabled. Reinstall the matching runtime from the configuration page and try again; the pi backend is unaffected.",
+	"session.dshRuntimeOutdated": "The DSH backend runtime does not match this PiDeck version and has been disabled. Reinstall the matching runtime from the configuration page and try again; the pi backend is unaffected.",
 	"dsh.runtime.invalidArchivePath": "The selected path is not a valid runtime (a .tgz archive or an extracted directory). Choose again.",
 	"dsh.runtime.pickArchiveTitle": "Select a DSH runtime (a .tgz archive or an extracted directory)",
 	"dsh.runtime.errors.manifestMissing": "The selected folder has no manifest.json and is not a complete DSH runtime. Choose the runtime root that contains manifest.json and node_modules (or a .tgz archive).",
 	"dsh.runtime.errors.manifestUnreadable": "The manifest.json in the selected folder cannot be parsed (it may be corrupted). Download it again or choose a valid folder.",
-	"dsh.runtime.errors.schemaUnsupported": "The selected runtime manifest schema is too new for this app. Upgrade Telos or use a matching runtime.",
+	"dsh.runtime.errors.schemaUnsupported": "The selected runtime manifest schema is too new for this app. Upgrade PiDeck or use a matching runtime.",
 	"dsh.runtime.errors.appIncompatible": "The selected runtime is incompatible with this app version. Choose a matching runtime.",
 	"dsh.runtime.errors.nodeModulesMissing": "The selected folder is missing node_modules and is not a complete DSH runtime. Choose again.",
 	"dsh.runtime.errors.requiredPackageMissing": "The selected runtime is missing a required package ({pkg}); the files may be incomplete. Download it again.",
@@ -314,6 +320,8 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"session.untitled": "Untitled session",
 	"session.emptyPreview": "Empty session",
 	"session.copyTitle": "{title} copy",
+	// Whole-file read guard (a huge session read into one string aborts the main process).
+	"session.fileTooLargeForWholeRead": "This session file is too large ({sizeMb}MB, over the {limitMb}MB whole-read limit); the operation was cancelled to avoid crashing the app.",
 	// Physical suffix appended to fork/clone session titles: part of the real name (removable by rename).
 	"session.forkedSuffix": "(fork)",
 	"session.historyTitle": "{project} history",
@@ -351,7 +359,7 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"mainConfig.fetchModelsFailed": "Failed to load the model list. Check the provider configuration and try again.",
 	"mainConfig.providerTestFailed": "The provider connection test failed. Check the configuration and try again.",
 	"mainConfig.providerTestTimeout": "The provider connection test timed out. This does not necessarily mean the compatibility mode is unsupported; try again later or test with a lighter model.",
-	"mainConfig.importFilesRequired": "The import is missing its files field. Confirm that it is a Telos configuration export.",
+	"mainConfig.importFilesRequired": "The import is missing its files field. Confirm that it is a PiDeck configuration export.",
 	"mainConfig.providerUsageUnsupported": "Usage fetch is not supported for this provider yet.",
 	"mainConfig.providerUsageNoKey": "No API key configured for this provider; cannot fetch usage.",
 	"mainConfig.providerUsageDisabled": "Usage query is not enabled.",
@@ -401,7 +409,7 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"mainProjectResource.warningNameCharacters": "name may contain only lowercase letters, numbers, and single hyphens",
 	"mainExtension.invalidPath": "The extension path is invalid.",
 	"mainExtension.sourceRequired": "The extension source is required.",
-	"mainExtension.builtInCannotUninstall": "Built-in Telos extensions cannot be uninstalled.",
+	"mainExtension.builtInCannotUninstall": "Built-in PiDeck extensions cannot be uninstalled.",
 	"mainExtension.nameRequired": "The extension name is required.",
 	"mainExtension.piNotInstalled": "pi CLI was not detected.",
 	"mainExtension.noUpdate": "Current version: {current}. Latest version: {latest}. No update is required.",
@@ -451,7 +459,7 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"mainNotification.askQuestion": "\u201c{title}\u201d is asking: {question}",
 	"mainNotification.automationDone": "Automation \u201c{name}\u201d completed",
 	"mainNotification.automationFailed": "Automation \u201c{name}\u201d failed: {error}",
-	"shellMenu.openWithTelos": "Open with Telos",
+	"shellMenu.openWithPiDeck": "Open with PiDeck",
 };
 
 export type MainProcessLocale = "zh-CN" | "en-US";

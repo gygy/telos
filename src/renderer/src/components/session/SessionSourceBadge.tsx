@@ -3,7 +3,6 @@ import type { AgentBackend, SessionSource } from "../../../../shared/types";
 import { ImageIcon } from "lucide-react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/utils";
-import { TelosLogo } from "../app/TelosLogo";
 import { Badge } from "../ui-shadcn/badge";
 
 const SOURCE_LABELS: Record<SessionSource, string> = {
@@ -13,6 +12,7 @@ const SOURCE_LABELS: Record<SessionSource, string> = {
   opencode: t("sessionSource.opencode"),
   zcode: t("sessionSource.zcode"),
   workbuddy: t("sessionSource.workbuddy"),
+  cursor: t("sessionSource.cursor"),
 };
 
 const SOURCE_TONES: Record<SessionSource, string> = {
@@ -25,6 +25,8 @@ const SOURCE_TONES: Record<SessionSource, string> = {
   zcode: "border-muted-foreground/40 text-muted-foreground",
   // WorkBuddy 同无公开品牌 SVG，沿用中性色 + 自绘 W 字形标记（与 zcode 惯例一致）
   workbuddy: "border-muted-foreground/40 text-muted-foreground",
+  // Cursor 无随包品牌 SVG，用中性色 + 指针标记，避免误用第三方品牌色。
+  cursor: "border-muted-foreground/40 text-muted-foreground",
 };
 
 function SourceLogo(props: { source: SessionSource }) {
@@ -78,13 +80,42 @@ function SourceLogo(props: { source: SessionSource }) {
     );
   }
 
-  // pi 来源徽章与后端选择器统一走 Telos 圆标，不再用上游官方窗口字形。
-  return <TelosLogo className="size-3.5" title="pi" />;
+  if (props.source === "cursor") {
+    // Cursor 现行品牌是立方体 logomark（cursor.com/brand），不是鼠标指针。
+    // 三面等距立方体用 currentColor + 透明度，14px 徽章上仍能读出体积。
+    return (
+      <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M12 2.2 20.8 7.2 12 12.2 3.2 7.2Z" />
+        <path fill="currentColor" opacity="0.66" d="M3.2 7.2 12 12.2V21.8L3.2 16.8Z" />
+        <path fill="currentColor" opacity="0.4" d="M12 12.2 20.8 7.2V16.8L12 21.8Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="140 140 520 520" className="size-3.5" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M165.29 165.29H517.36V400H400v117.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+      />
+      <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
+    </svg>
+  );
 }
 
-/** pi 后端 / 来源标记：Telos 品牌圆标（白底 + Yandex 红 π）。 */
+/** pi 官方 logo（品牌窗口标记，来源徽章同款）。 */
 export function PiLogo(props: { className?: string }) {
-  return <TelosLogo className={props.className ?? "size-3.5"} title="pi" />;
+  return (
+    <svg viewBox="140 140 520 520" className={props.className ?? "size-3.5"} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M165.29 165.29H517.36V400H400v117.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+      />
+      <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
+    </svg>
+  );
 }
 
 /** DSH 官方 logo（DeepSeek 鲸鱼，取自 @deepseek-ai/dsh-web-frontend favicon.svg）。 */

@@ -8,6 +8,7 @@ import test from "node:test";
 import ts from "typescript";
 import vm from "node:vm";
 import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
+import { tryRequireLocalTs } from "./helpers/requireLocalTs.mjs";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -84,6 +85,10 @@ function loadAgentMessageProjectorModule() {
       }
       // rewind checkpoint 纯 git 模块：本测试不涉及，空桩满足依赖契约
       if (specifier === "../rewind/index.ts") return {};
+      // 相对 import 按 src/main/pi 解析后交给 Node 原生 TS 加载（见 helper 注释）；
+      // 直接交 nodeRequire 会以 tests/ 为基准，生产新增本地模块即整片 MODULE_NOT_FOUND（#213）
+      const localFromSource = tryRequireLocalTs(specifier, "src/main/pi");
+      if (localFromSource) return localFromSource;
       return nodeRequire(specifier);
     },
     Date,
@@ -137,6 +142,8 @@ function loadAgentManagerModule() {
 			if (specifier === "../../shared/sessionTodo") return { parseTodoSnapshotData: () => undefined };
 			// acp_delegate 推导纯函数：本测试不覆盖（另有 sessionAcpDelegateDerive.test.mjs），空实现满足依赖契约
 			if (specifier === "./derivedSubagents") return { deriveToolSubagentEntries: () => [] };
+			// 会话 JSONL 流式行扫描器：真实加载（索引重建已改为流式，不再整文件 readFile）
+			if (specifier === "../sessions/jsonlLineStream") return loadTsCommonJs("src/main/sessions/jsonlLineStream.ts");
 			// 会话文件汇总纯函数：本测试不覆盖，空实现满足 AgentManager 依赖契约
 			if (specifier === "../../shared/fileChanges") return { collectLatestTurnFileChanges: () => [] };
 			return nodeRequire(specifier);
@@ -172,7 +179,7 @@ function loadAgentManagerModule() {
       // 停止身份缓存（72fe93da 起 AgentManager 依赖）：真实加载保持身份核对行为
       if (specifier === "./stoppedMessageIdentity") return loadTsCommonJs("src/main/pi/stoppedMessageIdentity.ts");
       if (specifier === "electron") {
-        return { app: { getName: () => "Telos" }, Notification: { isSupported: () => false } };
+        return { app: { getName: () => "PiDeck" }, Notification: { isSupported: () => false } };
       }
       // 共享扩展 resolver（issue #181）：本测试不涉及扩展加载，透传空实现即可
       if (specifier === "../extensions/piProcessExtensionResolvers") {
@@ -282,6 +289,9 @@ function loadAgentManagerModule() {
       }
       // rewind checkpoint 纯 git 模块：本测试不涉及，空桩满足依赖契约
       if (specifier === "../rewind/index.ts") return {};
+      // 同上：生产新增的本地纯模块（如 #213 的 ./messagePayloadSize）从 src/main/pi 解析加载
+      const localFromSource = tryRequireLocalTs(specifier, "src/main/pi");
+      if (localFromSource) return localFromSource;
       return nodeRequire(specifier);
     },
     Date,

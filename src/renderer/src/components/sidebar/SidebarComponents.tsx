@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
-import { Archive, Boxes, Check, CircleAlert, CircleDot, CircleStop, Code2, Copy, Download, FileDown, FileText, Filter, Folder, FolderSearch, GitBranch, Link2, List, LoaderCircle, MessageCircle, Pencil, Pin, PinOff, Play, Plus, Power, Radio, RefreshCw, RotateCw, ScrollText, Settings2, SquarePen, Trash2, UserPlus, XCircle } from "lucide-react";
+import { Archive, Boxes, Check, CircleAlert, CircleDot, CircleStop, Clock, Code2, Copy, Download, FileDown, FileText, Filter, Folder, FolderSearch, GitBranch, Link2, List, LoaderCircle, MessageCircle, Pencil, Pin, PinOff, Play, Plus, Power, Radio, RefreshCw, RotateCw, ScrollText, Settings2, SquarePen, Trash2, UserPlus, XCircle } from "lucide-react";
 import { t } from "../../i18n";
 import {
 	canRunSessionAction,
@@ -581,6 +581,7 @@ export function SessionSourceFilterMenu(props: {
 		opencode: t("sessionSource.opencode"),
 		zcode: t("sessionSource.zcode"),
 		workbuddy: t("sessionSource.workbuddy"),
+		cursor: t("sessionSource.cursor"),
 		dsh: t("sessionBackend.dsh"),
 		imagegen: t("sessionBackend.imagegen"),
 	};
@@ -629,7 +630,9 @@ export function ProjectContextMenu(props: {
 	onImportOpenCodeSessions: () => void;
 	onImportZCodeSessions: () => void;
 	onImportWorkBuddySessions: () => void;
+	onImportCursorSessions: () => void;
 	onManageProjectResources: () => void;
+	onManageAutomations: () => void;
 	onManageSessions: () => void;
 	onFilterSessions: () => void;
 	onToggleWorktree: () => void;
@@ -692,6 +695,10 @@ export function ProjectContextMenu(props: {
 				<List className="size-3.5" aria-hidden="true" />
 				{t("menu.manageSessions")}
 			</DropdownMenuItem>
+			<DropdownMenuItem onSelect={props.onManageAutomations}>
+				<Clock className="size-3.5" aria-hidden="true" />
+				{t("automation.title")}
+			</DropdownMenuItem>
 			{/* 内置聊天项目没有 .pi/.agents 资源目录，不暴露项目管理入口，避免打开即报
 			    "Chat 项目不支持项目级资源"（由弹窗本体兜底） */}
 			{props.menu.project.kind !== "chat" && (
@@ -740,6 +747,9 @@ export function ProjectContextMenu(props: {
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={props.onImportWorkBuddySessions}>
 								{t("menu.importWorkBuddy")}
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={props.onImportCursorSessions}>
+								{t("menu.importCursor")}
 							</DropdownMenuItem>
 						</DropdownMenuSubContent>
 					</DropdownMenuSub>

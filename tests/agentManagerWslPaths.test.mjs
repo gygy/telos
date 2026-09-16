@@ -6,6 +6,7 @@ import test from "node:test";
 import ts from "typescript";
 import vm from "node:vm";
 import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
+import { tryRequireLocalTs } from "./helpers/requireLocalTs.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -48,6 +49,7 @@ function loadAgentManager(existsPredicate = () => false) {
 	const calls = {
 		copyFile: [],
 		existsSync: [],
+		open: [],
 		readFile: [],
 		readdir: [],
 		readdirSync: [],
@@ -63,13 +65,21 @@ function loadAgentManager(existsPredicate = () => false) {
 			return sessionJsonl;
 		},
 		stat: async () => ({ size: Buffer.byteLength(sessionJsonl), mtimeMs: 1 }),
-		open: async () => ({
-			read: async (buffer, _offset, length) => {
-				Buffer.from(sessionJsonl).copy(buffer, 0, 0, length);
-				return { bytesRead: length };
-			},
-			close: async () => {},
-		}),
+		// 定位读替身：按 position/length 返回真实字节，读到 EOF 返回 bytesRead=0
+		// （SessionHistoryReader 的索引重建已改为流式 open+read，靠 EOF 收尾）
+		open: async (...args) => {
+			calls.open.push(args);
+			const source = Buffer.from(sessionJsonl, "utf8");
+			return {
+				read: async (buffer, _offset, length, position) => {
+					const start = Number.isFinite(position) ? position : 0;
+					const bytesRead = Math.min(length, Math.max(0, source.length - start));
+					if (bytesRead > 0) source.copy(buffer, 0, start, start + bytesRead);
+					return { bytesRead };
+				},
+				close: async () => {},
+			};
+		},
 		readdir: async (...args) => {
 			calls.readdir.push(args);
 			return [];
@@ -94,6 +104,9 @@ function loadAgentManager(existsPredicate = () => false) {
 			// 工具推导纯函数：本测试不覆盖（另有 sessionAcpDelegateDerive.test.mjs），空实现满足依赖契约
 			: id === "./derivedSubagents"
 			? { deriveToolSubagentEntries: () => [] }
+			// 会话 JSONL 流式行扫描器：真实加载，但注入被断言的 fs 替身（读到 host 路径）
+			: id === "../sessions/jsonlLineStream"
+			? loadTsCommonJs("src/main/sessions/jsonlLineStream.ts", { stubs: { "node:fs/promises": fsPromises } })
 			// 会话文件汇总纯函数：本测试不覆盖，空实现满足 AgentManager 依赖契约
 			: id === "../../shared/fileChanges"
 			? { collectLatestTurnFileChanges: () => [] }
@@ -232,6 +245,11 @@ function loadAgentManager(existsPredicate = () => false) {
 			// rewind checkpoint 纯 git 模块：WSL 路径测试不涉及回退，空桩满足依赖契约
 			// （桩返回空对象即可——命名导入在调用时才取属性，本测试不触发 rewind 方法）。
 			if (id === "../rewind/index.ts") return {};
+			// 相对 import 按 src/main/pi 解析后交给 Node 原生 TS 加载（见 helper 注释）；
+			// 直接交 require(id) 会以 tests/ 为基准，生产新增本地模块（#213 的
+			// ./messagePayloadSize）就会让本文件整片 MODULE_NOT_FOUND。
+			const localFromSource = tryRequireLocalTs(id, "src/main/pi");
+			if (localFromSource) return localFromSource;
 			return require(id);
 		},
 	};
@@ -286,8 +304,10 @@ test("maps WSL Session file operations to host paths while retaining Linux proto
 
 	const expectedHostPath = "\\\\wsl.localhost\\Ubuntu-24.04\\root\\.pi\\agent\\sessions\\session.jsonl";
 	assert.equal(calls.statSync[0], expectedHostPath);
+	// 会话 JSONL 的读取入口：索引重建走流式 open+定位 read（不再整文件 readFile）
+	assert.equal(calls.open[0][0], expectedHostPath);
+	// SessionFileEditor 的读写仍走 readFile/writeFile，同样必须落在 host 路径
 	assert.equal(calls.readFile[0][0], expectedHostPath);
-	assert.equal(calls.readFile[1][0], expectedHostPath);
 	assert.equal(calls.writeFile[0][0], expectedHostPath);
 });
 
