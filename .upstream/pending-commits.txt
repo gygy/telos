@@ -1,0 +1,105 @@
+﻿0950e2c1 chore: update star history [skip ci]
+commit 6e9a9d9cc1c7d9e9720d8da910375554dd5743e7
+6e9a9d9c chore: update star history [skip ci]
+commit 628f46d4f3d82ce6a21b312ecd2aaccadbda73d3
+628f46d4 Merge pull request #217 from ayuayue/dev
+commit e0b809ab148078799c119dc5e3b1840f220e17c0
+e0b809ab feat(sync): AtomGit 鍚屾鏀寔 --only/--select 鎸戦€夎祫浜т笌鐐瑰悕閲嶄紶锛屽苟淇杩滅澶у皬鎺㈡祴澶辨晥
+commit ae17d827a7b67766e99c1a120dc9dc60115983ac
+ae17d827 Merge pull request #216 from ayuayue/dev
+commit 309f1509f6e600a777481d79c0b5cf894b24641b
+309f1509 fix(runtime): DSH runtime 褰掓。鎶ゆ爮鈥斺€攆ile: 鏈湴鍖呭叆鍙ｉ妫€ + 褰掓。闂搁棬鍫典綇鍏冩暟鎹鍑烘紡娲?commit fd0219c23f0ba853124de7029bbc50ef1ac7abbf
+fd0219c2 馃悰 fix锛氬唴缃墿灞曠儹鏇存柊瑕嗙洊灞傝ˉ鎷?vendored 杩愯鏃朵緷璧栵紝淇 MODULE_NOT_FOUND 瀵艰嚧 pi 鍚姩澶辫触
+commit e882522a6c3ca01ccad84f4cfb9e291285805034
+e882522a Merge remote-tracking branch 'origin/dev'
+commit 43f8b7c20ec48f7a063d1ad74481dc30b90edc32
+43f8b7c2 fix: unify remote DSH runtime distribution
+commit d084f899e2cd91b83260d5c0532ca582608a3700
+d084f899 Merge branch 'dev' of github.com:ayuayue/PiDeck into dev
+commit c9953036948d83c9ce173418c7dd1dd2cf09909a
+c9953036 鉁?feat: 鏇存柊 CHANGELOG.md 浠ヨ褰?v0.7.6-beta 鐨勬渶缁堝彉鏇?commit 0e8f02df0e7d00a1671b5b8a2035bad5e569a37c
+0e8f02df Merge branch 'dev' of https://github.com/ayuayue/PiDeck into dev
+commit 9c2daf5476ac3996ad6279c806b5db8d2cef11f7
+9c2daf54 fix(session): 瀵煎叆浼氳瘽鍐欐垚姝ｈ pi JSONL
+commit a9f914ed29794423434804b3b01e12afacde2c1d
+a9f914ed ci: 鏂板 Publish DSH runtime 鎵嬪姩鍙戝竷 Action
+commit 161271a6e0ee0cd3ef1bc66273f48e7e70244e50
+161271a6 feat(session): 瀵煎叆 Cursor Agent 浼氳瘽骞惰浆鎴?pi 鍘熺敓 JSONL
+commit bc7004e114224e384e13516e461bcceb3bf3f7ac
+bc7004e1 fix(session): 涓婃粦缈诲巻鍙查拤浣忔鍦ㄧ湅鐨勪竴杞紝閬垮厤鎵╃獥鍚庤烦鍒版洿鏃╁璇?commit e6979fb9472ab98cdbb8a3ff4840a94f771358b3
+e6979fb9 fix: 澶т細璇濇祦寮忚鍙栥€佸惎鍔ㄥけ璐ュ綊鍥狅紝骞舵敹鏁涘搧鐗屽姩鐢诲崰鐢?commit 1fb6aead180ac1b0e817093324740e2bf2049f14
+1fb6aead Merge branch 'dev' into main
+commit c4bff579280093add2c277177d54fd41dd33bec0
+c4bff579 perf: 瀹樻柟瀹夎鍖呴粯璁?lite 骞惰鍓?DLL/椋炰功/node-pty/Shiki
+commit 6470c0feda2c866cbb5c7d824fe7c57cf176f87b
+6470c0fe chore: update star history [skip ci]
+commit 422e04d372522e36894da4ee2f64000084931f27
+422e04d3 fix(dsh): Node 24 sidecar 鎸傚埌 latest 搴旂敤 Release锛屼笉鍐嶅崟鐙缓 tag
+commit cea02b8099cf4cc34430a221423f2130aebd639b
+cea02b80 chore: update star history [skip ci]
+commit a668969506e96f858f42f90611981cc9c4eb64a8
+a6689695 Merge branch 'dev' into main
+commit e2e1fb1815cbb51ada07469518d78e2e62aaaf65
+e2e1fb18 feat(dsh): Windows 娌欑 Node 24 鎸夐渶浠?AtomGit/GitHub 涓嬭浇
+commit c80b812fac8a37e15939f2d0cb7f10bfd0da344c
+c80b812f 馃敡 chore: 鏇存柊 .gitignore 鍜?CHANGELOG.md
+commit e58106d3f695d0dcb18e55fb3dc2355bb43938f8
+e58106d3 perf: 鏀舵暃甯搁┗鍔ㄧ敾闄嶄綆 CPU/GPU 鍗犵敤锛屾竻鐞嗗姩鐢绘浠ｇ爜
+commit 4c6971a9fc1375206fbc56c142751a82eb7689f5
+4c6971a9 馃悰 fix: 闄愬埗鍝佺墝瀛楁爣鎵厜鍔ㄧ敾鎾斁鏃堕暱浠ュ噺灏?GPU 杩涚▼绌洪棽鍗犵敤
+commit 349a668d8216fa53f99f79ce4112319cebc5c25a
+349a668d fix(session): 鏂颁細璇濆巻鍙?ENOENT 瑙嗕负绌哄巻鍙诧紱娲?runtime 瀛愪唬鐞嗘寜鍚姩鏃堕棿瀵硅处
+commit 62323781b1bffb97c67bddd7dd800ff655ae3eac
+62323781 test: PiProcess 娌欑鐧昏 gitProcess 渚濊禆
+commit a40c7ad91be025411973a57920cf973d7d162560
+a40c7ad9 docs: 鐩綍缁勫姛鑳借皟鐮旂瑪璁?commit 724da529571bc0c7de9f843bf814322d32c8dd62
+724da529 refactor(automation): 绠＄悊鐣岄潰鏀规ā鎬佸脊妗嗭紝绉婚櫎 workspace surface 瑕嗙洊灞?commit 3fdf1df9aa25db44fb2da286ae71f9bf1c766139
+3fdf1df9 feat: 鍏ㄥ眬蹇嵎閿嚜瀹氫箟锛堣缃〉銆屽揩鎹烽敭銆嶇鐞?+ 涓昏繘绋嬬粺涓€鍖归厤锛?commit 7690fea51aebb98f9633778f516a568c3cc84a4f
+7690fea5 feat(tabs): 浼氳瘽 Tab 鏍?鈰?鑿滃崟鏂板銆屽綋鍓嶄細璇濇搷浣溿€嶇粍
+commit 9faf47cfe7ea9e0d2d9fba77ebbc2c9fc3bfc19c
+9faf47cf feat(ask): 鎻愰棶鍗℃敮鎸佺洿鎺ュ洖杞︽彁浜わ紙鍗曞崱/鎵归噺鍗★紝IME 瀹夊叏锛?commit 7cca287867b5f497a9b5cddde2b65635f8525e1b
+7cca2878 perf(memory): 甯搁┗缂撳瓨琛ュ瓧鑺傞绠楋紝鍫靛洓澶勬棤鐣屽闀匡紙2026 鍐呭瓨鎺掓煡锛?commit 277cf4ca629dc8d57941741d2ab656264516c25a
+277cf4ca fix(dsh): koffi 杩涘簲鐢ㄤ緷璧栧苟鎵撻€?runtime 瑙ｆ瀽閾撅紝淇墦鍖呯増榛戠獥鍙?commit e448f58b11405f96a7d7007c7cd92d6ae8fcb145
+e448f58b fix(pi): 鍋滄浼氳瘽鏁存爲缁堟瀛愪唬鐞嗚繘绋嬶紱妯″瀷鍋忓ソ澶辨晥闄嶇骇涓嶉樆鏂彂閫?commit 7779e0e5778695ae18f0d7e02d7df0e1e23a5bb5
+7779e0e5 ci: 鏂板 Linux 鎵嬪姩琛ュ彂浜х墿 workflow锛堜緵琛ュ彂 arm64/x64 鍖咃級
+commit 3f7c5a80c9d57e972205ac06a2aeca0e65673f34
+3f7c5a80 Merge remote-tracking branch 'origin/dev' into dev
+commit c5c8cf2481021871dbb94211160760a6b6ff5715
+c5c8cf24 feat: 鍙戝竷娴佹按绾挎敮鎸?Linux arm64锛屾柊澧炴墜鍔ㄨˉ鍙戜骇鐗?workflow
+commit 3b23c6703a545f5151fba236618643e8a253dcfe
+3b23c670 chore: update star history [skip ci]
+commit 548ee5bb96be42bce0b531469ab265787f47ed4f
+548ee5bb ``` 馃敡 chore: 鏂板 GitHub Issue/PR 妯℃澘涓庝笁骞冲彴鏋勫缓宸ヤ綔娴?commit c5b67a44b6abe29112557836b87ba5c353eef3de
+c5b67a44 Merge remote-tracking branch 'origin/dev' into dev
+commit 6bfa211a0618b3a0e24d2f5c5802f046af8c98de
+6bfa211a fix: 鐢熷浘浼氳瘽 base64 鍏ㄩ噺钀界洏瀵艰嚧娓叉煋杩涚▼ OOM 鐧藉睆
+commit 49b4d6a10fb52afa6560ee48631773d4351c13d4
+49b4d6a1 fix: 娓叉煋杩涚▼ OOM 娌荤悊鈥斺€斿爢涓婇檺鍒嗗眰銆佺獥鍙ｆ潯鐩绠椼€佸崟杞寕杞介绠?commit d267ce9dee6e259e7dde38855576dfe3e7708dc8
+d267ce9d feat: 鎻愮ず璇嶅晢搴楀畼鏂规ā鏉夸笌鍐呯疆鎶€鑳芥敮鎸佺儹鏇存柊
+commit 63cb656d121ae84d0e8c6b172a2d60cfb7353ec9
+63cb656d fix: 鍗曞疄渚嬮攣娈嬬暀瀵艰嚧 Linux銆屽弻鍑诲浘鏍囨病鍙嶅簲銆?commit a3c829f8b6c4c9ea76ebad272a5c81b218be4167
+a3c829f8 feat: 鎻愮ず璇嶅晢搴楁柊澧?WB 澧炲己鎻愮ず璇嶆ā鏉匡紙閫氱敤澧炲己/娣卞害澧炲己锛?commit c219d28027a0bf36f3f3834f5429513ff76c7641
+c219d280 chore: update star history [skip ci]
+commit e29db8e76fd5b7cf521ba901d5356df74680b7ed
+e29db8e7 fix: 鏃堕棿绾垮惛搴曞彧鐢辩湡瀹炶緭鍏ョ寮€锛屽竷灞€澧為珮涓嶅啀璇烦鍑?commit 84042bd3a3d0e3fd1212263f71fdacd586771653
+84042bd3 feat: add project-scoped automation tasks
+commit 72acf45bc49e58a40b08066e669868468b9f4d40
+72acf45b fix: 鑷姩鍛藉悕浼氳瘽鏍囬鍦ㄦ帹鐞嗘ā鍨嬩笅闈欓粯澶辨晥
+commit 33791995934d3d694454127ef849bdf83d83ca1c
+33791995 fix: 瀹氭椂浠诲姟棰勭畻鐣欑┖涓嶉檺淇濆瓨鍚庤榛樿鍊艰鐩?commit c11cee8b53b669594e2f67942a763a0d88033019
+c11cee8b fix: 鍏憡鎷夊彇婧愭敼璧?AtomGit+GitHub 瀹樻柟涓ゆ笭閬擄紝寮冪敤 jsDelivr
+commit e68f927484bc04171d14ba7216148e4a76d8e0c5
+e68f9274 fix: --force-resync 鏀逛负鍒犻檮浠堕噸浼狅紝AtomGit 鏃犲垹闄ゆ暣涓?release 鐨?API
+commit 0aded36d9e9498ab9311c2865fe123c708067a84
+0aded36d fix: AtomGit 鍒犻櫎 Release 闇€鎸?id锛?releases/{id}锛夛紝tag 璺緞杩斿洖 405
+commit f58099478e36b015e0b63337e1fde14784c69c2e
+f5809947 fix: AtomGit 鍚屾鎸夋枃浠跺悕鍘婚噸瀵艰嚧鍚岀増鏈噸寤轰骇鐗╄闈欓粯璺宠繃
+commit 6e9e6567e2b6da68a2add0bbc9e20cb0af1ea29c
+6e9e6567 announcements: PiDeck v0.7.5 鍙戝竷鍏憡
+commit 35734b059c9e9f9488d0dfee73f35c91c7530ca6
+35734b05 fix(update): AtomGit 闀滃儚鏇存柊妫€鏌?404 鈥斺€?鎷︽埅鍣ㄦ敼鎸?updater 涓撳睘 partition session
+commit 0b625a27f0d16666f44d7e4e97ab84145afb7f1a
+0b625a27 fix(update): AtomGit 闀滃儚婧愭洿鏂版鏌?404锛坵ebRequest 鍓ラ櫎 noCache 鍙傛暟锛?commit 175038fc878b94778af282bf62675f5ac8c1fec4
+175038fc ci: release 鐢?RELEASE_PAT 鍙戝竷锛岀‘淇?release 浜嬩欢鍙Е鍙?sync-atomgit
+commit 6eb976938670c4b409d2ab7976fa5ce623bca199
+6eb97693 chore: release v0.7.5

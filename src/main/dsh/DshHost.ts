@@ -6,6 +6,8 @@ import { createRequire } from "node:module";
 import { getAppLogger } from "../logging/sharedLogger";
 import { applyProxyEnvPatch, type HostProxyEnvPatch } from "../sessions/sessionProxyPolicy";
 import { DshHostProcess, resolveHostEntryPath } from "./DshHostProcess";
+import { DSH_RUNNER_NODE_ENV } from "./dshRunnerNodeSidecar";
+import { resolveDshRunnerNodePath } from "./dshRunnerNode";
 import { DshApiClient, type DshFetchTransport } from "./DshApiClient";
 import { DshRemoteClient } from "./dshRemoteClient";
 import { toDshAvailableModels, toDshFetchedModels, unwrapDshDiscoveryModels } from "./dshModels";
@@ -43,7 +45,7 @@ import type {
 /**
  * DSH 深融合宿主（v2 形态）：utilityProcess 承载完整 DSH host，
  * 主进程侧通过 `DshApiClient`（AbstractApiClient 实例，doFetch 走桥）访问
- * 同一 ApiProxy 契约——传输替换对 Telos 其余代码完全透明。
+ * 同一 ApiProxy 契约——传输替换对 PiDeck 其余代码完全透明。
  *
  * 形态说明（docs/dsh-agent-backend-plan.md §3.2 形态 b）：
  * - host 在 utilityProcess 里 boot（无 web/无 HTTP/无端口），原生 ABI 与崩溃面
@@ -86,7 +88,8 @@ export class DshHost {
 		private readonly resolveHostProxyEnvPatch: () => HostProxyEnvPatch | undefined = () => undefined,
 		/**
 		 * 外部 DSH runtime 根目录（阶段 2：userData/runtimes/dsh/<version>，其下有 node_modules）。
-		 * 返回 undefined 时回退 app 内置 node_modules（依赖分区前的存量包走这条）。
+		 * 返回 undefined 时仅在旧 full/存量包兼容模式下回退 app 内置 node_modules；新的 dev/lite
+		 * 路径由上层安装态门控，不把项目 node_modules 当作已发布 runtime。
 		 * 只影响 @deepseek-ai/* 的解析；hostEntry 与桥代码始终在 app 内。
 		 */
 		private readonly resolveRuntimeAppRoot: () => string | undefined = () => undefined,
@@ -95,6 +98,11 @@ export class DshHost {
 		 * 主进程装配时注入 electron shell.trashItem；测试注入假实现，保持 DshHost 与 electron 解耦。
 		 */
 		private readonly trashPath: (path: string) => Promise<void> = () => Promise.reject(new Error("trashPath not injected")),
+		/**
+		 * Windows 沙箱 runner 的本机 CUI node。空串/undefined = 自动探测。
+		 * 改路径后需重启 host 才写入 fork env。
+		 */
+		private readonly getDshRunnerNodePath: () => string | undefined = () => undefined,
 	) {}
 
 	/** 订阅 host-ready（首次启动与崩溃自动重启；E4：崩溃后恢复运行时状态）。 */
@@ -384,7 +392,7 @@ export class DshHost {
 	/**
 	 * DSH 原生模型发现：配置页传入仍在编辑的草稿，结果只作为候选返回。
 	 * apiKey 仅在调用方有未保存草稿时出现；已保存凭证由 DSH 的 adapter/credentials
-	 * seam 自己解析，避免 Telos 读取并转运密钥。settingsNs 是 adapter 选择的必要契约。
+	 * seam 自己解析，避免 PiDeck 读取并转运密钥。settingsNs 是 adapter 选择的必要契约。
 	 */
 	async discoverModels(
 		input: import("../../shared/types").DshModelDiscoveryInput,
@@ -465,12 +473,12 @@ export class DshHost {
 
 	/**
 	 * 永久删除已归档的 DSH 会话（区别于恢复）：把归档目录移入系统回收站（经注入的 trashPath）。
-	 * 幂等：归档目录不存在/非 Telos 归档（无 manifest）返回 false；否则删除后返回 true。
+	 * 幂等：归档目录不存在/非 PiDeck 归档（无 manifest）返回 false；否则删除后返回 true。
 	 */
 	async deleteArchivedSession(dshSessionId: string): Promise<boolean> {
 		const archiveRoot = pideckArchivePath(this.getHomeDir());
 		const archivedDir = join(archiveRoot, dshSessionId);
-		// 只有带 manifest 的目录才算 Telos 归档（与 listArchivedSessions 同判定），避免误删非归档目录。
+		// 只有带 manifest 的目录才算 PiDeck 归档（与 listArchivedSessions 同判定），避免误删非归档目录。
 		const manifestPath = join(archivedDir, "pideck-manifest.json");
 		if (!existsSync(manifestPath)) return false;
 		await this.trashPath(archivedDir);
@@ -497,7 +505,7 @@ export class DshHost {
 	 * 归档区中的 DSH 会话清单（G14：恢复入口用；返回 manifest 里的原 workspace cwd、
 	 * 归档时间与标题）。标题优先 manifest（G14+ 写入）；旧归档缺省时从归档目录的
 	 * 会话日志前缀只读折叠补全（与外部会话导入同源策略）。
-	 * manifest 缺失/损坏的目录跳过（无 manifest 不视为 Telos 归档）。
+	 * manifest 缺失/损坏的目录跳过（无 manifest 不视为 PiDeck 归档）。
 	 */
 	listArchivedSessions(): Array<import("../../shared/types").ArchivedDshSession> {
   const archiveRoot = pideckArchivePath(this.getHomeDir());
@@ -568,7 +576,7 @@ export class DshHost {
 		return Array.isArray(value) ? (value as DshPluginView[]) : [];
 	}
 
-	/** 静态 Loader 条目清单（origin 标注来源：user = 用户补丁层 / builtin = 官方与 Telos 组合）。 */
+	/** 静态 Loader 条目清单（origin 标注来源：user = 用户补丁层 / builtin = 官方与 PiDeck 组合）。 */
 	async listStaticPlugins(): Promise<DshStaticPluginView[]> {
 		const value = await this.pluginRpc("staticInventory", undefined);
 		const views = Array.isArray(value) ? (value as DshStaticPluginView[]) : [];
@@ -587,8 +595,8 @@ export class DshHost {
 
 	/**
 	 * 卸载用户自装的静态插件：从 $DSH_HOME/cordis.patch.yml 移除对应行（下个 host
-	 * 重启生效），可选把插件目录移入回收站（仅限 userData/dsh-plugins 内的 Telos
-	 * 管理目录）。内置条目一律拒绝——它们属于 base/预设/Telos 组合，不归用户卸载。
+	 * 重启生效），可选把插件目录移入回收站（仅限 userData/dsh-plugins 内的 PiDeck
+	 * 管理目录）。内置条目一律拒绝——它们属于 base/预设/PiDeck 组合，不归用户卸载。
 	 */
 	async uninstallUserPlugin(
 		input: DshUserPluginUninstallInput,
@@ -635,7 +643,7 @@ export class DshHost {
 					matchedRow?.name !== undefined ? nearestPackageDir(matchedRow.name) : undefined;
 				result.reason = hintDir
 					? `plugin files are outside this install's managed folder: ${hintDir}`
-					: "plugin directory is outside Telos's managed folder; remove it manually if needed";
+					: "plugin directory is outside PiDeck's managed folder; remove it manually if needed";
 				result.keptPluginDir = hintDir;
 			} else {
 				try {
@@ -809,7 +817,7 @@ export class DshHost {
 		const presets = listed.result.value.presets ?? [];
 		if (presets.length === 0) {
 			getAppLogger()?.warn("dsh-host", "agentPreset.list returned an empty roster", {
-				hint: "agent-presets 组合行未装配时 Telos 隐藏会话头模式胶囊（与 dsh-web 一致）",
+				hint: "agent-presets 组合行未装配时 PiDeck 隐藏会话头模式胶囊（与 dsh-web 一致）",
 			});
 		}
 		return presets.map((preset: {
@@ -832,7 +840,7 @@ export class DshHost {
 	/**
 	 * 删除本地（user）预设（agentPreset.remove）。host 拒绝删除 system 预设
 	 * （随部署安装的组合行，不是用户的删除对象）；user 预设来自
-	 * $DSH_HOME/.agent-presets 用户根（dsh-web「复制预设」与 Telos 同一目录）。
+	 * $DSH_HOME/.agent-presets 用户根（dsh-web「复制预设」与 PiDeck 同一目录）。
 	 */
 	async removeAgentPreset(id: string): Promise<void> {
 		await this.ensureStarted();
@@ -864,7 +872,7 @@ export class DshHost {
 	/**
 	 * DSH_HOME 并发锁（B6）：同目录双 host 并发会互相覆盖 session log，DSH 官方
 	 * 不支持。锁文件记录主进程 pid：发现存活 pid 时告警（不阻断——dsh CLI 等外部
-	 * 进程不遵守本锁，阻断也无法防外部并发，但至少双 Telos 实例有提示）。
+	 * 进程不遵守本锁，阻断也无法防外部并发，但至少双 PiDeck 实例有提示）。
 	 */
 	private acquireHostLock(): void {
   this.hostLockPath = pideckHostLockPath(this.dshHome);
@@ -910,7 +918,7 @@ export class DshHost {
 		this.configDir = join(userData, "dsh-config");
 		mkdirSync(this.dshHome, { recursive: true });
 		mkdirSync(this.configDir, { recursive: true });
-		// Telos 私有文件统一落 $DSH_HOME/.pideck/：先搬旧位置数据（幂等），再创建目录。
+		// PiDeck 私有文件统一落 $DSH_HOME/.pideck/：先搬旧位置数据（幂等），再创建目录。
 		// 注：migrateLegacyPideckDshFiles 是一次性迁移（旧布局仅开发/试用环境存在），
 		// 确认无残留后随下一版删除该调用（见 pideckDshHome.ts 头部「生命周期」说明）。
 		migrateLegacyPideckDshFiles(this.dshHome);
@@ -919,8 +927,9 @@ export class DshHost {
 
 		// 定位 hostEntry 产物与 node_modules 锚点（bareModuleBaseUrl）。
 		// @deepseek-ai/* 现在可能来自外部 runtime（阶段 2：userData/runtimes/dsh/<v>），
-		// 因此 require 基准改用 runtime 目录而不是 appPath；未装 runtime 时回退内置。
-		// hostEntry 仍是 Telos 自己的产物，继续从 appPath 解析。
+		// 因此 require 基准改用 runtime 目录；新的 dev/lite 未安装时不会启动 host，旧 full/存量包
+		// 才允许通过 appPath 继续解析内置依赖。
+		// hostEntry 仍是 PiDeck 自己的产物，继续从 appPath 解析。
 		const runtimeRoot = this.resolveRuntimeAppRoot?.() ?? this.getAppPath();
 		const require = createRequire(join(runtimeRoot, "package.json"));
 		const appRoot = dirname(dirname(dirname(require.resolve("@deepseek-ai/dsh-base/package.json"))));
@@ -937,6 +946,18 @@ export class DshHost {
 		const forkEnv = buildDshHostForkEnv();
 		const proxyPatch = this.resolveHostProxyEnvPatch();
 		if (proxyPatch) applyProxyEnvPatch(forkEnv, proxyPatch);
+		// Windows 沙箱 runner 改走 CUI node sidecar（B 方案）：host 仍是 utilityProcess，
+		// 但 runner 不再用 electron.exe，避免 AllocConsole 闪窗。路径写入 fork env，
+		// hostEntry 在补丁安装前 configureDshRunnerNodeSidecar。
+		const runnerNode = await resolveDshRunnerNodePath({
+			platform: process.platform,
+			configuredPath: this.getDshRunnerNodePath(),
+			envPath: process.env[DSH_RUNNER_NODE_ENV],
+			userDataPath: this.getUserDataDir(),
+			resourcesPath: typeof process.resourcesPath === "string" ? process.resourcesPath : undefined,
+			appPath: this.getAppPath(),
+		});
+		if (runnerNode) forkEnv[DSH_RUNNER_NODE_ENV] = runnerNode;
 
 		const hostProcess = new DshHostProcess(
 			hostEntryPath,

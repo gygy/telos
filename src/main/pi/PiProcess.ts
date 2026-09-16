@@ -1,9 +1,11 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { PiRpcClient } from "./PiRpcClient";
 import { PiLocator } from "./PiLocator";
+import { createSpawnFailureError } from "./piSpawnFailure";
 import {
   parkBlockedExtensionsInDir,
   unparkBlockedExtensions,
@@ -16,6 +18,7 @@ import { appendBuiltInExtensionArgs } from "../extensions/builtInExtensions";
 import { MIN_PI_MINOR_VERSION_FOR_EXTENSION_WHITELIST, MIN_PI_MINOR_VERSION_FOR_PROMPT_WHITELIST, MIN_PI_MINOR_VERSION_FOR_SKILL_WHITELIST } from "../extensions/extensionVersionGate";
 import { getAppLogger } from "../logging/sharedLogger";
 import { applyPiProxyMode } from "../sessions/sessionProxyPolicy";
+import { killProcessTree } from "../git/gitProcess";
 
 type PiProcessSettings = Pick<
   AppSettings,
@@ -47,7 +50,7 @@ type PiProcessLocator = Pick<
 type PiProcessOptions = {
   agentHomeDir?: string;
   /**
-   * 解析当前应通过 -e 注入的 Telos 内置扩展绝对路径。
+   * 解析当前应通过 -e 注入的 PiDeck 内置扩展绝对路径。
    * 未提供时 RPC 不注入内置扩展（兼容测试/探针）。
    */
   resolveBuiltInExtensionPaths?: (
@@ -108,7 +111,7 @@ type PiProcessOptions = {
    */
   proxyOverride?: SessionProxyMode;
   /**
-   * spawn pi 前对会话文件的预检/修复回调（如剔除旧版 Telos 私有 sessionName 头行，
+   * spawn pi 前对会话文件的预检/修复回调（如剔除旧版 PiDeck 私有 sessionName 头行，
    * 该行会让 pi 报 "Session file is not a valid pi session" 并 exit 1）。
    * 返回是否发生修复；抛错或未注入都不阻塞启动（pi 自身的加载错误更接近事实，留日志即可）。
    */
@@ -118,7 +121,7 @@ type PiProcessOptions = {
 /**
  * 估算 --skill 注入占用的命令行字符数（含选项名、分隔符与可能的引号）。
  *
- * 为什么需要：技能白名单（--no-skills + 逐条 --skill）必须由 Telos 自己枚举
+ * 为什么需要：技能白名单（--no-skills + 逐条 --skill）必须由 PiDeck 自己枚举
  * 「pi 本来会加载的全部技能」，命令行长度因此 O(技能数)，技能多的用户会直接撑爆命令行。
  * 该估算与 locator.resolveArgCharBudget() 给出的通道预算比较（各通道上限差 4 倍，
  * 见 PiLocator 中的常量注释），超限就整体放弃注入——pi 走默认发现，本次「禁用技能」
@@ -135,6 +138,20 @@ function estimateSkillWhitelistArgChars(paths: readonly string[]): number {
     total += "--skill ".length + trimmed.length + (trimmed.includes(" ") ? 2 : 0);
   }
   return total;
+}
+
+/**
+ * 取工作目录的客观状态。
+ *
+ * 只用于「spawn 失败后还原真实原因」（见 piSpawnFailure），绝不据此拦截启动：
+ * WSL 的 \\wsl$\... 宿主路径在 Windows 侧 stat 可能失败，但 spawn 是正常的。
+ */
+function readCwdState(cwd: string): { exists: boolean; isDirectory: boolean } {
+  try {
+    return { exists: true, isDirectory: statSync(cwd).isDirectory() };
+  } catch {
+    return { exists: false, isDirectory: false };
+  }
 }
 
 type VersionCacheEntry =
@@ -195,6 +212,19 @@ export class PiProcess extends EventEmitter {
     exitSignal: string | null;
     customPiPath: string | undefined;
     versionCheck: boolean;
+    /** 版本检测是否真的跑完过（false 时 versionCheck=false 只表示「还没探过」，不是失败）。 */
+    versionCheckProbed?: boolean;
+    /**
+     * spawn 阶段就失败（Node 只发 error、不发 exit，pid 从未拿到）。
+     * 与「进程起来了又退出」严格区分：前者一定与扩展无关，回退禁用扩展没有意义。
+     */
+    spawnFailed?: boolean;
+    cwdMissing?: boolean;
+    /**
+     * Windows 启动通道：node 直启（.cmd 垫片已还原成 node + JS 入口）或 cmd.exe 回退 + 原因。
+     * 这条以前是静默的，用户看到命令行里有 cmd.exe 会以为「改 node 启动没生效」。
+     */
+    launch?: { channel: "node-direct" | "cmd-shim"; reason?: string; entry?: string };
     /** 被桌面端 RPC 启动路径自动隔离的扩展名（如 codeisland） */
     blockedExtensions?: string[];
     /**
@@ -233,6 +263,15 @@ export class PiProcess extends EventEmitter {
     exitSignal: string | null;
     customPiPath: string | undefined;
     versionCheck: boolean;
+    /**
+     * 版本检测是否真的跑完过。
+     * versionCheck=false 有两种含义：探测失败（pi 不可用）或**还没探过**（未命中 --version 缓存）。
+     * 诊断卡不分青红皂白显示「✗ 失败」会把用户引去重装 pi，故单列一位。
+     */
+    versionCheckProbed?: boolean;
+    spawnFailed?: boolean;
+    cwdMissing?: boolean;
+    launch?: { channel: "node-direct" | "cmd-shim"; reason?: string; entry?: string };
     blockedExtensions?: string[];
     skillWhitelistSkipped?: { skills: number; chars: number; budget: number };
   }> | null {
@@ -271,7 +310,7 @@ export class PiProcess extends EventEmitter {
   async start(sessionPath?: string, trustOverride?: "approve" | "no-approve", noSession?: boolean) {
     if (this.proc) return this.rpc!;
 
-    // 预检会话文件：旧版 Telos 私有 sessionName 头行会让 pi 拒绝加载（exit 1）。
+    // 预检会话文件：旧版 PiDeck 私有 sessionName 头行会让 pi 拒绝加载（exit 1）。
     // 修复失败不阻塞启动——pi 自身的报错会进入启动诊断，比静默吞掉更有价值。
     if (sessionPath && !noSession && this.options.repairSessionFileBeforeStart) {
       try {
@@ -337,7 +376,7 @@ export class PiProcess extends EventEmitter {
       !this.settings?.piRpcNoExtensions &&
       (!this.settings?.disableExtensionWhitelist || !includeProjectResources);
 
-    // Telos 内置扩展：从 app resources 以 -e 注入，不再复制到 ~/.pi/agent/extensions。
+    // PiDeck 内置扩展：从 app resources 以 -e 注入，不再复制到 ~/.pi/agent/extensions。
     // piRpcNoExtensions 或白名单模式时不再单独注入（白名单列表已包含内置扩展）。
     const builtInPaths = this.options.resolveBuiltInExtensionPaths?.(
       this.settings,
@@ -355,11 +394,11 @@ export class PiProcess extends EventEmitter {
       });
       console.log(`[PiProcess] Extension whitelist mode: ${whitelistPaths.length} extensions via -e`);
     } else if (builtInPaths.length > 0 && !this.settings?.piRpcNoExtensions) {
-      void getAppLogger()?.info("pi-process", "Loading Telos built-in extensions via -e", {
+      void getAppLogger()?.info("pi-process", "Loading PiDeck built-in extensions via -e", {
         extensions: builtInPaths.map((path) => path.split(/[/\\]/).pop()).join(", "),
       });
       console.log(
-        "[PiProcess] Loading Telos built-in extensions via -e:",
+        "[PiProcess] Loading PiDeck built-in extensions via -e:",
         builtInPaths.map((path) => path.split(/[/\\]/).pop()).join(", "),
       );
     }
@@ -450,7 +489,7 @@ export class PiProcess extends EventEmitter {
     // 技能白名单模式：存在禁用技能时 --no-skills 关自动发现 + 逐条 --skill 注入未禁用的技能。
     // pi 的 frontmatter disable-model-invocation 只阻止模型自动调用、不阻止加载（用户仍可
     // /skill:name 手动触发）；「不加载」唯一可靠手段就是白名单（与扩展白名单同构）。
-    // 解析器返回 null = 无禁用项，不启用（pi 默认发现全部技能，兼容 Telos 未跟踪的安装）。
+    // 解析器返回 null = 无禁用项，不启用（pi 默认发现全部技能，兼容 PiDeck 未跟踪的安装）。
     const skillWhitelistPaths = this.options.resolveEnabledSkillPaths?.(
       this.settings,
       this.cwd,
@@ -621,9 +660,21 @@ export class PiProcess extends EventEmitter {
       exitSignal: null,
       customPiPath: this.settings?.customPiPath,
       versionCheck: cachedVersion?.status === "done" ? cachedVersion.ok : false,
+      // 与 versionCheck 一起记录：只有真的探过才配显示「✗ 失败」（见 getDiagnostics 注释）。
+      versionCheckProbed: cachedVersion?.status === "done",
+      launch: invocation.windowsLaunch,
       blockedExtensions: blockedNames.length > 0 ? blockedNames : undefined,
       skillWhitelistSkipped,
     };
+    if (invocation.windowsLaunch?.channel === "cmd-shim" && invocation.windowsLaunch.reason) {
+      // 显式记录回退原因：命令行里出现 cmd.exe 时，用户与支持人员都要能立刻知道为什么没走 node 直启。
+      void getAppLogger()?.warn("pi-process", "Windows launch falls back to cmd.exe", {
+        command,
+        spawned: invocation.command,
+        reason: invocation.windowsLaunch.reason,
+      });
+      console.warn(`[PiProcess] Windows launch falls back to cmd.exe: ${invocation.windowsLaunch.reason}`);
+    }
     if (!trustOverride) {
       void this.ensureVersionCheck(command);
     }
@@ -666,9 +717,15 @@ export class PiProcess extends EventEmitter {
     if (this.options.feishuLinked) {
       env.PIDECK_FEISHU_LINKED = "1";
     }
-    // 会话自动标题由 Telos 内置扩展在 agent_settled 后独立调用模型；
+    // 会话自动标题由 PiDeck 内置扩展在 agent_settled 后独立调用模型；
     // 显式注入 0/1，避免继承宿主环境中的同名变量。设置变更对新建/重启 Agent 生效。
     env.PIDECK_AUTO_SESSION_TITLE = this.settings?.autoSessionTitle === false ? "0" : "1";
+
+    // spawn 前记录工作目录事实，仅用于「失败后还原真实原因」：
+    // Windows 下 cwd 无效会被 libuv 报成 "spawn <cmd.exe> ENOENT"（实测复现），
+    // 不记下来就只能把这条误导性错误原样丢给用户。
+    const cwdFact = readCwdState(spawnCwd);
+    const isWslCommand = command.startsWith("wsl://");
 
     // 每个 agent 绑定独立 cwd，确保 pi 自己发现项目级 AGENTS.md、settings 和 session 分组。
     // 打包后的 Electron 不一定继承用户终端 PATH；这里补齐跨平台 Node 工具链常见 bin 目录，尽量让已安装 pi 的用户开箱即用。
@@ -679,8 +736,12 @@ export class PiProcess extends EventEmitter {
         cwd: spawnCwd,
         stdio: ["pipe", "pipe", "pipe"],
         shell: invocation.shell,
+        // Unix：让 pi 成为新进程组组长，stop() 时可用负 pid 对整个进程组兜底
+        // SIGKILL（清理 pi 退出后残留的子代理）。Windows 的树杀走 taskkill /T，
+        // 不依赖进程组。
+        detached: process.platform !== "win32",
         // env 已在上方合并安全门环境变量（PIDECK_SECURITY_CONFIG / PIDECK_SESSION_ID）
-        // Windows：Telos 是无控制台的 GUI 进程，隐藏子进程窗口以免 cmd.exe 弹出控制台。
+        // Windows：PiDeck 是无控制台的 GUI 进程，隐藏子进程窗口以免 cmd.exe 弹出控制台。
         env,
         windowsHide: true,
         windowsVerbatimArguments: invocation.windowsVerbatimArguments,
@@ -690,6 +751,8 @@ export class PiProcess extends EventEmitter {
       if (this.diagnostics) {
         this.diagnostics.stderr.push(err.message);
         this.diagnostics.exitCode = -1;
+        // 同步失败同样属于「进程从未起来」：回退禁用扩展没有意义（见 spawnFailed）。
+        this.diagnostics.spawnFailed = true;
       }
       // spawn 失败也要还原停放的扩展，避免 codeisland 永久消失。
       this.restoreParkedExtensions();
@@ -725,7 +788,48 @@ export class PiProcess extends EventEmitter {
         // spawn 失败通常没有 exit code；用 -1 标记“未能真正拉起进程”。
         if (this.diagnostics.exitCode === null) this.diagnostics.exitCode = -1;
       }
-      this.emit("error", error);
+      // 关键：spawn 失败在 Node 里**只有 error 事件、没有 exit 事件**（pid 从未拿到）。
+      // 不在这里收尾的话：
+      //   1) 挂起的 RPC 请求（启动握手的 get_state）只能等满 rpcTimeout —— 默认 10 分钟，
+      //      用户体感就是「启动失败不报错、直接超时」；
+      //   2) 已停放的黑名单扩展永不还原（exit 回调是唯一的还原点）；
+      //   3) isRunning() 仍为 true，扩展回退策略会误判为「进程还活着，别动它」。
+      const spawnFailed = this.proc?.pid === undefined;
+      let surfaced: Error = error;
+      if (spawnFailed) {
+        // WSL 的工作目录在 distro 内，Windows 侧 stat 宿主路径（\\wsl$\...）不可靠：
+        // 探不到时不能反过来说「目录不存在」，否则会把 wsl.exe 自身的问题误报成项目路径问题。
+        const cwdFactForDiagnosis = isWslCommand
+          ? { exists: true, isDirectory: true }
+          : cwdFact;
+        if (this.diagnostics) {
+          this.diagnostics.spawnFailed = true;
+          this.diagnostics.cwdMissing =
+            !cwdFactForDiagnosis.exists || !cwdFactForDiagnosis.isDirectory;
+        }
+        const { error: described, described: hasReason } = createSpawnFailureError({
+          error,
+          spawnedCommand: invocation.command,
+          piCommand: command,
+          cwd: spawnCwd,
+          cwdExists: cwdFactForDiagnosis.exists,
+          cwdIsDirectory: cwdFactForDiagnosis.isDirectory,
+          // WSL 的 pi 在 distro 内，Windows 侧 existsSync 只会返回 false，不能据此说路径失效。
+          piCommandExists: isWslCommand ? true : existsSync(command),
+          isWindows: process.platform === "win32",
+        });
+        if (hasReason) {
+          // 归因成功时把可读原因补进 stderr 缓冲：诊断卡展示这条，原始 errno 文本仍保留可检索
+          surfaced = described;
+          if (this.diagnostics) this.diagnostics.stderr.push(described.message);
+        }
+        // 用同一个错误终结 client：启动握手的 pending 请求会立刻以此 reject，不再空等超时。
+        this.rpc?.close(surfaced);
+        this.restoreParkedExtensions();
+        this.proc = undefined;
+        this.rpc = undefined;
+      }
+      this.emit("error", surfaced);
     });
     this.proc.on("exit", (code, signal) => {
       // 退出时更新诊断信息
@@ -784,7 +888,25 @@ export class PiProcess extends EventEmitter {
       this.restoreParkedExtensions();
       return;
     }
+    const pid = this.proc.pid;
+    if (pid !== undefined && process.platform === "win32") {
+      // Windows：先整树强杀、再杀根。pi-subagents / acp_delegate 的子代理是 pi
+      // 自行 spawn 的独立进程，只 kill 根进程会把它们留在孤儿态继续运行（父会话
+      // 已停、子代理还在烧 token）。taskkill /T 需要根进程存活才能枚举整棵树，
+      // 顺序反过来会漏杀；/F 与原 proc.kill()（TerminateProcess）强度一致。
+      killProcessTree(pid);
+    }
     this.proc.kill();
+    if (pid !== undefined && process.platform !== "win32") {
+      // Unix：先 SIGTERM 优雅停 pi（保持原语义），延迟对整个进程组 SIGKILL 兜底
+      // ——spawn 已 detached（pi 是组长），兜底只清理 pi 退出后残留的子代理；
+      // 组随最后一个成员退出自然消失，kill 失败（ESRCH）忽略。unref 不阻退出。
+      const groupId = -pid;
+      const reaper = setTimeout(() => {
+        try { process.kill(groupId, "SIGKILL"); } catch { /* 组已不存在 */ }
+      }, 3_000);
+      reaper.unref?.();
+    }
     // 真正还原在 exit 回调里做；此处不提前 unpark，避免与仍在退出的 pi 竞态。
   }
 
@@ -793,7 +915,10 @@ export class PiProcess extends EventEmitter {
     const cached = PiProcess.versionCache.get(command);
     if (cached?.status === "done") {
       this.piMinorVersion = cached.minorVersion;
-      if (this.diagnostics?.command === command) this.diagnostics.versionCheck = cached.ok;
+      if (this.diagnostics?.command === command) {
+        this.diagnostics.versionCheck = cached.ok;
+        this.diagnostics.versionCheckProbed = true;
+      }
       return Promise.resolve(cached.ok);
     }
     if (cached?.status === "pending") return cached.promise;
@@ -813,7 +938,10 @@ export class PiProcess extends EventEmitter {
         const minorVersion = ok ? this.parseMinorVersion(stdout.trim()) : 0;
         PiProcess.versionCache.set(command, { status: "done", ok, minorVersion });
         this.piMinorVersion = minorVersion;
-        if (this.diagnostics?.command === command) this.diagnostics.versionCheck = ok;
+        if (this.diagnostics?.command === command) {
+          this.diagnostics.versionCheck = ok;
+          this.diagnostics.versionCheckProbed = true;
+        }
         this.emit("version-check", { ok, minorVersion });
         resolve(ok);
       });

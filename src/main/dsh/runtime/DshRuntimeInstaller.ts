@@ -9,10 +9,12 @@
  * 编排层不认识 BrowserWindow。
  */
 import {
+	resolveDshRuntimeReleaseUrl,
 	selectRelease,
 	type DshRuntimeReleaseIndex,
 } from "../../../shared/types/dshRuntimeManifest";
 import type { DshRuntimeInstallProgress } from "../../../shared/types/dshRuntime";
+import type { UpdateSourceId } from "../../../shared/types/settings";
 import { existsSync, statSync } from "node:fs";
 import type { BundledDshRuntime, DshRuntimeManager } from "./DshRuntimeManager";
 
@@ -25,6 +27,10 @@ export type DshRuntimeInstallerDeps = {
 	manager: DshRuntimeManager;
 	/** 下载源索引地址（settings 可覆盖为镜像）。 */
 	indexUrl: () => string;
+	/** 当前更新源：用于把索引里的归档文件名改写成 latest 资产 URL。 */
+	updateSource?: () => UpdateSourceId;
+	/** runtime 索引对应的应用 Release tag；省略时使用 latest。 */
+	releaseTag?: () => string | undefined;
 	appVersion: () => string;
 	fetchIndex: DshRuntimeIndexFetcher;
 	onProgress: (progress: DshRuntimeInstallProgress) => void;
@@ -58,8 +64,8 @@ export class DshRuntimeInstaller {
 	/**
 	 * 安装与当前 app 兼容的 runtime。
 	 *
-	 * 优先用随包资源：它是打包时就放在 resources/ 里的同一份归档，本地解压即可，
-	 * 不需要网络也不需要等下载。没有随包资源（lite 包）才走在线索引。
+	 * 官方 dev/lite 路径不依赖 app 内部 node_modules：默认从与应用 Release 同源的索引
+	 * 下载。只有显式 full/存量包注入 bundledRuntime 时才本地解压，作为离线与旧包兼容兜底。
 	 * 索引里没有兼容版本时不下载（避免下完才发现装不上，白耗几十 MB 流量）。
 	 */
 	async installFromIndex(): Promise<DshRuntimeCommandResult> {
@@ -107,7 +113,16 @@ export class DshRuntimeInstaller {
 		}
 
 		deps.onProgress({ phase: "downloading", percent: 0, runtimeVersion: release.runtimeVersion });
-		const result = await deps.manager.installFromUrl(release.url, release.sha256, {
+		// 索引条目的 url 可能只是归档文件名占位；客户端按 updateSource 改写为
+		// 当前 latest 应用 Release 资产。file:// / 本地路径保持原样（离线验证）。
+		const archiveUrl = resolveDshRuntimeReleaseUrl(
+			release,
+			deps.updateSource?.() ?? "atomgit",
+			process.platform,
+			process.arch,
+			deps.releaseTag?.(),
+		);
+		const result = await deps.manager.installFromUrl(archiveUrl, release.sha256, {
 			onPhase: (phase) => {
 				// 各阶段的离散进度：只有 downloading 有真实字节占比（见 onDownloadProgress）。
 				const percent = phase === "downloading" ? 0 : phase === "verifying" ? 75 : phase === "extracting" ? 85 : 95;

@@ -34,8 +34,8 @@ import type {
 	ResolvedLaunchDefaults,
 	ArchivedDshSession,
 } from "../../shared/types";
-import { parseSessionProcessEvents } from "../sessions/sessionProcessEvents";
-import { downgradeStaleRunning } from "../pi/derivedSubagents";
+import { parseSessionProcessEventsFromFile } from "../sessions/sessionProcessEventsFile";
+import { downgradeRunningStartedBefore, downgradeStaleRunning } from "../pi/derivedSubagents";
 import { resolveLaunchDefaultOptions, isModelInModelsConfig } from "../sessions/launchDefaults";
 import { BackgroundScanCoordinator } from "../sessions/BackgroundScanCoordinator";
 
@@ -82,6 +82,7 @@ import type { ClaudeSessionImporter } from "../sessions/ClaudeSessionImporter";
 import type { OpenCodeSessionImporter } from "../sessions/OpenCodeSessionImporter";
 import type { ZCodeSessionImporter } from "../sessions/ZCodeSessionImporter";
 import type { WorkBuddySessionImporter } from "../sessions/WorkBuddySessionImporter";
+import type { CursorSessionImporter } from "../sessions/CursorSessionImporter";
 import type { AppLogger } from "../logging/AppLogger";
 
 /**
@@ -298,6 +299,7 @@ export type SessionIpcDeps = {
 	openCodeSessionImporter: OpenCodeSessionImporter;
 	zcodeSessionImporter: ZCodeSessionImporter;
 	workbuddySessionImporter: WorkBuddySessionImporter;
+	cursorSessionImporter: CursorSessionImporter;
 	appLogger: AppLogger;
 	terminalManager: TerminalSessionManager;
 	mainCopy: (key: string, params?: Record<string, string | number>) => string;
@@ -388,6 +390,7 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 		openCodeSessionImporter,
 		zcodeSessionImporter,
 		workbuddySessionImporter,
+		cursorSessionImporter,
 		appLogger,
 		terminalManager,
 		mainCopy,
@@ -895,7 +898,10 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 				return (await readImageSessionMessages?.(sessionId)) ?? [];
 			}
 			if (!entry?.filePath) return [];
-			const messages = await agentManager.readSessionDisplayMessages(entry.filePath, sessionId);
+			// 有界「加载窗口」（9 轮 + 条目预算），不是全量历史：整量读出在大会话上
+			// 会同时顶爆主进程与渲染层（#213）；需要更早历史走 readRecordMessagePage。
+			const window = await agentManager.readSessionLoadWindow(entry.filePath, sessionId);
+			const messages = window.messages;
 			const metadata = await agentManager.readSessionDisplayMetadata(entry.filePath);
 			await backfillHistoricalSessionMetadata(sessionId, metadata);
 			return messages;
@@ -913,9 +919,21 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 				// 终态通知没写进文件（进程被杀/崩溃）的委托在历史会话里永远是 running，
 				// 会误导为仍在运行；活会话保持 running，由后续通知/桥接覆盖。
 				// 与 start 锚点残留合成 stopped 同一语义（见 downgradeStaleRunning）。
-				if (!sessionRuntimeCoordinator.getTarget(sessionId)
-					&& !sessionRuntimeCoordinator.isActivating(sessionId)) {
-					records = downgradeStaleRunning(records);
+				const liveTarget = sessionRuntimeCoordinator.getTarget(sessionId);
+				if (!liveTarget) {
+					if (!sessionRuntimeCoordinator.isActivating(sessionId)) {
+						records = downgradeStaleRunning(records);
+					}
+				} else {
+					// 活 runtime 也要对账：本代 runtime 启动（tab.createdAt）之前派发的
+					// running/queued 已随上一代 pi 进程消亡，永远等不到终态写盘。渲染层
+					// hook 在绑定出现时会重新拉取本列表，激活完成后即看到降级结果
+					//（2026-09-14 用户环境实测：真实活动子代理 0，历史投影仍显示 33 个
+					// running；启动之后派发的异步运行不受影响，保持 running）。
+					const liveTab = agentManager.list().find((t) => t.id === liveTarget.agentId);
+					if (liveTab?.createdAt) {
+						records = downgradeRunningStartedBefore(records, liveTab.createdAt);
+					}
 				}
 			// 回填 childSessionPath：按 parentSessionPath === 本会话 filePath 收集所有子会话，
 			// 再按子会话名 `${type}#${id前8位}` 精确匹配。
@@ -934,7 +952,10 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 			return records;
 		},
 	);
-	/** 会话级文件修改汇总：从会话文件全量显示消息聚合（历史/活会话通用）。 */
+	/**
+	 * 会话级文件修改汇总：只读会话文件「最新一轮」的 write/edit/create/patch
+	 * （有界读，不展开整条活动分支；历史/活会话通用）。
+	 */
 	ipcMain.handle(
 		ipcChannels.sessionsListFileChanges,
 		async (_event, sessionId: string) => {
@@ -1041,17 +1062,18 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 				const target = sessionRuntimeCoordinator.getTarget(sessionId);
 				return readDshProcessEvents(target?.agentId, entry.dshSessionId);
 			}
-			if (!entry?.filePath) return [];
-			const content = await sessionScanner.readSessionRawText(entry.filePath);
-			return parseSessionProcessEvents(content);
-		},
-	);
+		if (!entry?.filePath) return [];
+		// 流式扫描（收够 MAX_EVENTS 即停）：历史大会话读全文会撞 V8 单字符串上限 /
+		// 主进程 384MB 堆上限（闪退），而账本只需要前若干条记录。
+		return parseSessionProcessEventsFromFile(entry.filePath);
+	},
+);
 	ipcMain.handle(
 		ipcChannels.sessionsCatalogReadDshSystemPrompt,
 		async (_event, sessionId: string): Promise<string | undefined> => {
 			if (typeof sessionId !== "string" || !sessionId.trim()) return undefined;
 			const entry = sessionCatalog.get(sessionId);
-			// DSH 会话的系统提示由 harness 在请求时组装（persona + sections），Telos
+			// DSH 会话的系统提示由 harness 在请求时组装（persona + sections），PiDeck
 			// 只能从 request/header 事件取；运行时会话读投影缓存，历史会话从 host history
 			// 折叠（未装配/无数据返回 undefined，轨迹不展示，不阻断）。
 			if (entry?.backend === "dsh" && readDshSystemPrompt) {
@@ -2200,6 +2222,29 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 			if (!project) throw new Error(`Project not found: ${projectId}`);
 			const result = await workbuddySessionImporter.import(project.path, sourcePaths);
 			void appLogger.info("session", "WorkBuddy sessions imported", {
+				projectId,
+				sourceCount: sourcePaths.length,
+			});
+			return result;
+		},
+	);
+	ipcMain.handle(
+		ipcChannels.cursorSessionsScan,
+		async (_event, projectId: string) => {
+			const project = projectStore.get(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			const result = await cursorSessionImporter.scan(project.path);
+			void appLogger.debug("session", "Cursor sessions scanned", { projectId });
+			return result;
+		},
+	);
+	ipcMain.handle(
+		ipcChannels.cursorSessionsImport,
+		async (_event, projectId: string, sourcePaths: string[]) => {
+			const project = projectStore.get(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			const result = await cursorSessionImporter.import(project.path, sourcePaths);
+			void appLogger.info("session", "Cursor sessions imported", {
 				projectId,
 				sourceCount: sourcePaths.length,
 			});

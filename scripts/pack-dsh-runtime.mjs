@@ -2,9 +2,14 @@
 /**
  * 打包 DSH runtime 为按需下载的 tarball（AgentRuntimeProvider 阶段 2）。
  *
- *   node scripts/pack-dsh-runtime.mjs [--out <dir>] [--dry-run]
+ *   node scripts/pack-dsh-runtime.mjs [--out <dir>] [--dry-run] [--lite|--full] [--if-missing]
  *
- * 产出：<out>/dsh-runtime-<platform>-<arch>.tgz，内部结构固定为
+ * 默认 --lite：只产 tgz + 分平台索引，extraResources 目录只留 .gitkeep（官方安装包
+ * 不随包 runtime，用户首次用 DSH 时从 AtomGit/GitHub latest 应用 Release 按需下载）。
+ * --full 才把归档拷进 extraResources（内网离线 / 自测用）。
+ *
+ * 产出：<out>/dsh-runtime-<platform>-<arch>.tgz 与
+ *       <out>/dsh-runtime-<platform>-<arch>-releases.json，内部结构固定为
  *
  *   dsh-runtime/
  *     manifest.json
@@ -50,13 +55,20 @@
  * 裁剪后必须跑一遍入口解析校验（见 docs 的验证记录），确认没有裁掉运行文件。
  */
 import { createHash } from "node:crypto";
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, truncateSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, truncateSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as tar from "tar";
 // 裁剪规则独立成模块：CLI 主流程不便 import（会触发打包），测试直接引用规则单测。
-import { isExcluded, isSrcPrunable } from "./runtime-prune-rules.mjs";
+import {
+	allEntryCandidates,
+	isExcluded,
+	isNpmHashedLeftoverDir,
+	isSrcPrunable,
+	runtimeEntryResolvableOnDisk,
+} from "./runtime-prune-rules.mjs";
 
 const require = createRequire(import.meta.url);
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -71,12 +83,35 @@ const ARCH = process.arch;
 
 const argv = process.argv.slice(2);
 const dryRun = argv.includes("--dry-run");
-/** --lite：只产 tgz 与索引，不把 runtime 塞进随包资源（用于在意安装体积的场景）。 */
-const lite = argv.includes("--lite");
-/** --if-missing：随包资源已存在就跳过（给快速打包链路用，避免每次都重打 20 秒）。 */
+/**
+ * 官方默认 lite：不把 runtime 打进 extraResources。
+ * --full 才拷进随包目录；--lite 显式传入时与默认等价（兼容旧脚本/文档）。
+ * --full 与 --lite 同时出现时 --full 赢——维护者想打离线包时不应被默认 lite 挡掉。
+ */
+const lite = !argv.includes("--full");
+/** --if-missing：tgz 已存在就跳过（给快速打包链路用，避免每次都重打 20 秒）。 */
 const ifMissing = argv.includes("--if-missing");
 const outIndex = argv.indexOf("--out");
 const outDir = outIndex >= 0 ? resolve(argv[outIndex + 1]) : join(projectRoot, "dist-runtime");
+
+/**
+ * lite 包必须把 extraResources 清成只剩 .gitkeep。
+ * dist:fast 的 --if-missing 跳过重打时也要走这一步，否则本地残留的 --full tgz/manifest
+ * 会被 electron-builder 打进安装包，「安装包不随 runtime」被静默摧掉。
+ */
+function ensureLiteExtraResources(bundleDir) {
+	mkdirSync(bundleDir, { recursive: true });
+	if (existsSync(bundleDir)) {
+		for (const name of readdirSync(bundleDir)) {
+			if (name !== ".gitkeep") rmSync(join(bundleDir, name), { recursive: true, force: true });
+		}
+	}
+	// 只在文件不存在时创建占位（首次检出/目录被删场景）；已在版本库里的 .gitkeep
+	// 带说明注释，绝不能被每次打包清空——否则 git 工作区永远显示它被修改（diff 噪声）。
+	if (!existsSync(join(bundleDir, ".gitkeep"))) {
+		writeFileSync(join(bundleDir, ".gitkeep"), "");
+	}
+}
 
 // ── 闭包收集 ──
 
@@ -131,6 +166,74 @@ function packageNameOf(dir) {
 	return readPackageJson(dir)?.name;
 }
 
+/**
+ * 判断包目录是否为 file: 本地依赖的 symlink（npm 7+ 对 file:/workspace: 建链）。
+ * 真实路径与 node_modules 内路径不一致即视为本地包。
+ */
+function isSymlinkedLocalPackage(dir) {
+	try {
+		return realpathSync(dir) !== resolve(dir);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * 闭包入口预检（file: 本地包未构建防护）。
+ *
+ * 事故背景（2026-09 v0.7.5 sidecar）：dsh-tool-pwsh-persistent 是 file: 本地包，
+ * lib/ 是 gitignore 的构建产物——全新检出上 npm ci 只把包以链接形式挂进
+ * node_modules，源码-only 的包被原样打进归档，host 启动时
+ * require.resolve("dsh-tool-pwsh-persistent")（exports 指向 lib/index.js）即崩
+ * （Cannot find module .../node_modules/dsh-tool-pwsh-persistent/lib/index.js）。
+ * check-dsh-asar 只守护 CI 上传链路，手动 pack/upload 会绕过——所以打包前必须
+ * 在磁盘上把每个闭包包运行时入口钉死。
+ *
+ * 规则：入口缺失且包带 build 脚本 → 自动执行构建后复检；仍缺失（或无构建脚本）
+ * → 报错退出。宁可打包失败，也不产出 host 起不来的归档。
+ * 判定语义与 check-dsh-asar 一致：main + exports["."] 运行时条件里
+ * 「至少一个可解析」即通过（个别上游包 exports 指向从未发布的文件，见该脚本注释）。
+ */
+function ensureClosureEntriesBuilt(closureDirs) {
+	for (const dir of closureDirs) {
+		const pkg = readPackageJson(dir);
+		if (!pkg || String(pkg.name ?? "").startsWith("@types/")) continue;
+		const entries = allEntryCandidates(dir);
+		if (entries.length === 0) continue; // 无运行时入口的包无需校验
+		if (entries.some((entry) => runtimeEntryResolvableOnDisk(dir, entry))) continue;
+		const rel = relative(nodeModulesRoot, dir);
+		// 自动构建只对 file: 本地包（symlink 到仓库内源码目录）生效：全新检出下
+		// lib/ 等编译产物不存在是这类包的真实风险（2026-09 dsh-tool-pwsh-persistent
+		// 缺 lib/index.js 事故）。registry 包一律不自动构建——dist/ 已存在但
+		// exports["."] 指不存在文件（子路径导出包）更常见，跑构建既慢又炸流程，
+		// 直接报错交给人判断。
+		if (isSymlinkedLocalPackage(dir) && typeof pkg.scripts?.build === "string") {
+			console.warn(
+				`[pack-dsh-runtime] ⚠️ ${rel}: 运行时入口缺失（${entries.join(", ")}），自动执行 npm run build...`,
+			);
+			// Windows 上 npm 是 npm.cmd shim，CreateProcess 不经 cmd.exe 不能执行批处理（EINVAL），
+			// 必须显式走 cmd.exe；不用 shell:true——Node 24 传参会触发 DEP0190（参数不转义只拼接），
+			// 而这里的参数全是固定常量，无用户输入，无注入面。
+			const [npmCmd, npmArgs] =
+				process.platform === "win32"
+					? ["cmd.exe", ["/d", "/s", "/c", "npm", "run", "build"]]
+					: ["npm", ["run", "build"]];
+			execFileSync(npmCmd, npmArgs, { cwd: dir, stdio: "inherit" });
+			if (entries.some((entry) => runtimeEntryResolvableOnDisk(dir, entry))) continue;
+			console.error(
+				`[pack-dsh-runtime] ❌ ${rel}: npm run build 后入口仍缺失（${entries.join(", ")}），中止打包。`,
+			);
+			process.exit(1);
+		}
+		console.error(
+			`[pack-dsh-runtime] ❌ ${rel}: 运行时入口全部不可解析（${entries.join(", ")}），中止打包。\n` +
+				`   file: 本地包请先构建（npm run build）；registry 包可能是子路径导出包（exports["."] 指向未发布文件），\n` +
+				`   请确认该包确为 dsh 运行所需后手动处理（补文件或从闭包剔除），再重试。`,
+		);
+		process.exit(1);
+	}
+}
+
 // ── 文件级裁剪（规则实现见 runtime-prune-rules.mjs） ──
 
 function listFiles(dir) {
@@ -157,13 +260,27 @@ if (!existsSync(dshScopeDir)) {
 	process.exit(1);
 }
 
-// --if-missing：随包资源齐备就跳过。放在闭包扫描之前，跳过时几乎零耗时。
-// 判据是「manifest + 当前平台归档都在」，不比对内容哈希——依赖内容变了需要
-// 手动删掉 dist-runtime/ 重打，日常迭代用这个粒度换速度是划算的。
+// --if-missing：tgz 已在 outDir 就跳过闭包扫描。官方默认 lite，extraResources
+// 目录只留 .gitkeep——不能再看 bundleDir/manifest.json，否则本地残留的 --full
+// 产物会被当成「已齐备」直接打进安装包。
+// 不比对内容哈希：依赖变了需要手动删 dist-runtime/ 重打。
 if (ifMissing) {
-	const bundleDir = join(outDir, DSH_BUNDLED_DIRNAME);
 	const archiveName = `dsh-runtime-${PLATFORM}-${ARCH}.tgz`;
-	if (existsSync(join(bundleDir, "manifest.json")) && existsSync(join(bundleDir, archiveName))) {
+	const archivePath = join(outDir, archiveName);
+	const indexPath = join(outDir, `dsh-runtime-${PLATFORM}-${ARCH}-releases.json`);
+	const bundleDir = join(outDir, DSH_BUNDLED_DIRNAME);
+	if (lite) {
+		// lite：只看 outDir 的 tgz+索引。跳过重打也必须清 extraResources，
+		// 否则 dist:fast 会把上次 --full 残留打进安装包。
+		if (existsSync(archivePath) && existsSync(indexPath)) {
+			ensureLiteExtraResources(bundleDir);
+			console.log("[pack-dsh-runtime] --if-missing：归档与索引已存在，跳过（已清 extraResources）");
+			process.exit(0);
+		}
+	} else if (
+		existsSync(join(bundleDir, "manifest.json")) &&
+		existsSync(join(bundleDir, archiveName))
+	) {
 		console.log("[pack-dsh-runtime] --if-missing：随包 runtime 已存在，跳过");
 		process.exit(0);
 	}
@@ -178,6 +295,7 @@ const EXTRA_SEED_NAMES = ["dsh-bill", "dsh-tool-pwsh-persistent"];
 
 const seedDirs = [
 	...readdirSync(dshScopeDir)
+		.filter((name) => !isNpmHashedLeftoverDir(name))
 		.map((name) => join(dshScopeDir, name))
 		.filter((dir) => existsSync(join(dir, "package.json"))),
 	...EXTRA_SEED_NAMES.map((name) => join(nodeModulesRoot, name)).filter((dir) =>
@@ -193,8 +311,15 @@ const seedDirs = [
 // node_modules（见文件头说明），app.asar 里的副本 host 根本看不见——
 // 结果 runtime 里留下一个没有 package.json/index.js 的空壳 pi-ai，
 // dsh-llm-pi-ai 加载即崩（host exit 1）。runtime 必须自包含，不再做此裁剪。
-const closure = collectClosure(seedDirs).filter((dir) => Boolean(packageNameOf(dir)));
+const closure = collectClosure(seedDirs).filter((dir) => {
+	const base = dir.split(/[/\\]/).pop() ?? "";
+	// leftover 仍有 package.json，不能只凭名字当活包；种子过滤漏掉时这里再拦一道。
+	return Boolean(packageNameOf(dir)) && !isNpmHashedLeftoverDir(base);
+});
 const closureSet = new Set(closure);
+
+// 入口预检必须发生在文件收集之前：自动构建产生的 lib/ 产物要能进入归档。
+ensureClosureEntriesBuilt(closure);
 
 // 遍历文件时跳过「属于另一个闭包目录」的子目录：嵌套 node_modules 既会被父目录
 // 递归到、又会作为独立闭包项单独统计，不去重会把体积算成两倍。
@@ -206,7 +331,8 @@ for (const dir of closure) {
 		for (const entry of readdirSync(current, { withFileTypes: true })) {
 			const full = join(current, entry.name);
 			if (entry.isDirectory()) {
-				if (closureSet.has(full)) continue;
+				// 嵌套 leftover（npm 升级残留）即使不在种子里也会被父包 walk 扫到，必须跳过。
+				if (isNpmHashedLeftoverDir(entry.name) || closureSet.has(full)) continue;
 				walk(full, base);
 				continue;
 			}
@@ -334,17 +460,7 @@ const finalSize = statSync(archivePath).size;
 const bundleDir = join(outDir, DSH_BUNDLED_DIRNAME);
 mkdirSync(bundleDir, { recursive: true });
 if (lite) {
-	// --lite：随包目录留空，但必须清掉此前非 lite 打包残留的 tgz/manifest——
-	// 否则 electron-builder 的 extraResources 会把旧 runtime 打进安装包，
-	// “减小体积”的目标被过期产物悄悄破坏。
-	for (const name of readdirSync(bundleDir)) {
-		if (name !== ".gitkeep") rmSync(join(bundleDir, name), { recursive: true, force: true });
-	}
-	// 只在文件不存在时创建占位（首次检出/目录被删场景）；已在版本库里的 .gitkeep
-	// 带说明注释，绝不能被每次打包清空——否则 git 工作区永远显示它被修改（diff 噪声）。
-	if (!existsSync(join(bundleDir, ".gitkeep"))) {
-		writeFileSync(join(bundleDir, ".gitkeep"), "");
-	}
+	ensureLiteExtraResources(bundleDir);
 	console.log("[pack-dsh-runtime] --lite：随包目录留空（已清理旧产物），安装走在线/手动导入");
 } else {
 	copyFileSync(archivePath, join(bundleDir, archiveName));
@@ -356,6 +472,37 @@ if (lite) {
 	console.log("[pack-dsh-runtime] 随包目录:", bundleDir, "（拷进 resources/ 即可离线安装）");
 }
 
+/**
+ * 分平台索引：挂到当前 latest 应用 Release（vX.Y.Z），禁止独立 dsh-runtime tag
+ *（会抢走 GitHub /releases/latest）。url 先写归档文件名占位，客户端按
+ * updateSource 改写为 AtomGit/GitHub latest 资产地址。CI 各平台 job 各写一份，
+ * 互不覆盖（win32-x64 不会把 darwin-arm64 的索引冲掉）。
+ */
+const indexPath = join(outDir, `dsh-runtime-${PLATFORM}-${ARCH}-releases.json`);
+writeFileSync(
+	indexPath,
+	`${JSON.stringify(
+		{
+			schemaVersion: 1,
+			releases: [
+				{
+					runtimeVersion: dshVersion,
+					minAppVersion: appVersion,
+					maxAppVersion: "",
+					url: archiveName,
+					sha256,
+					size: finalSize,
+				},
+			],
+		},
+		null,
+		2,
+	)}
+`,
+);
+console.log("[pack-dsh-runtime] 索引:", indexPath);
+
 console.log("[pack-dsh-runtime] 产出:", archivePath);
 console.log("[pack-dsh-runtime] 压缩后:", mb(finalSize), `（压缩率 ${((1 - finalSize / totalBytes) * 100).toFixed(0)}%）`);
 console.log("[pack-dsh-runtime] sha256:", sha256);
+console.log("[pack-dsh-runtime] 上传到当前 latest 应用 Release（vX.Y.Z）后客户端即可按需下载");

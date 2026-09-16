@@ -1,0 +1,9 @@
+src/renderer/src/components/agents/agent-activity/activity-row.tsx
+src/renderer/src/components/agents/agent-activity/index.tsx
+src/renderer/src/components/agents/agent-activity/types.ts
+src/renderer/src/components/agents/loading-states/thinking-shimmer.tsx
+src/renderer/src/components/motion/animated-number.tsx
+src/renderer/src/components/motion/button/magnetic.tsx
+src/renderer/src/components/motion/button/metallic.tsx
+src/renderer/src/components/motion/magnetic.tsx
+src/renderer/src/components/motion/number-ticker.tsx

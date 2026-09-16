@@ -7,7 +7,7 @@ import {
 } from "./builtInExtensionsManifest";
 
 /**
- * Telos 内置扩展（随应用 resources 分发，不再复制到 ~/.pi/agent/extensions）。
+ * PiDeck 内置扩展（随应用 resources 分发，不再复制到 ~/.pi/agent/extensions）。
  * 启动 RPC 时通过可重复的 `--extension/-e` 注入，避免污染用户全局 pi。
  */
 export const BUILT_IN_EXTENSIONS = [
@@ -82,7 +82,7 @@ function overlayArtifact(overlayDir: string): BuiltInExtensionsManifest | null {
 
 /**
  * 当前生效的内置扩展包版本（覆盖层优先，否则随包内置）。
- * 版本号由 resources/extensions/extensions-manifest.json 维护，**不跟 Telos 应用版本走**。
+ * 版本号由 resources/extensions/extensions-manifest.json 维护，**不跟 PiDeck 应用版本走**。
  * 清单缺失（旧安装包）返回 null，此时扩展列表版本列回退「-」。
  */
 export function readEffectiveBuiltInExtensionsVersion(
@@ -100,6 +100,18 @@ export function resolveBuiltInExtensionsDir(roots: BuiltInExtensionPathRoots): s
 	return roots.isDev
 		? join(roots.appPath, "resources", "extensions")
 		: join(roots.resourcesPath, "extensions");
+}
+
+/**
+ * 扩展运行时依赖的 vendored node_modules 源目录（供覆盖层复制，见 builtInExtensionsUpdater）。
+ *
+ * 打包态：extraResources 把 `node_modules/<pkg>` 复制到 `extensions/node_modules/<pkg>`；
+ * 开发态：直接用仓库顶层 node_modules（extensionPackagingDeps.test.mjs 保证它有这些包）。
+ */
+export function resolveVendorNodeModulesDir(roots: BuiltInExtensionPathRoots): string {
+	return roots.isDev
+		? join(roots.appPath, "node_modules")
+		: join(roots.resourcesPath, "extensions", "node_modules");
 }
 
 /**
@@ -148,7 +160,7 @@ export function listActiveBuiltInExtensionPaths(
 /**
  * 把内置扩展路径追加为可重复的 `--extension <path>`。
  * pi 文档：`--no-extensions` 只关自动发现，显式 -e 仍有效；
- * 但 Telos 约定 piRpcNoExtensions 时连内置也不注入（诊断干净）。
+ * 但 PiDeck 约定 piRpcNoExtensions 时连内置也不注入（诊断干净）。
  */
 export function appendBuiltInExtensionArgs(
 	args: readonly string[],

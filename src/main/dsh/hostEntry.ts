@@ -18,7 +18,9 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { installHiddenConsolePatch, installHostHiddenConsole, installRunnerNodeModeEnv, installRunnerPreloadEnv, getHiddenConsoleMode } from "./hideChildConsoles";
+import { installHiddenConsolePatch, installHostHiddenConsole, installRunnerNodeModeEnv, installRunnerPreloadEnv, getHiddenConsoleMode, configureDshRunnerNodeSidecar, getDshRunnerNodeSidecar } from "./hideChildConsoles";
+import { DSH_RUNNER_NODE_ENV } from "./dshRunnerNodeSidecar";
+import type { Win32Ffi } from "./hideChildConsoles";
 import { agentPresetsRow, dshSubagentModelSelectionSettingsRow, dshWebAgentPlaneDisableRows, hostCompositionPath } from "./dshPresetComposition";
 import {
 	PIDECK_PLUGIN_BRIDGE_PATH,
@@ -85,6 +87,17 @@ async function main(): Promise<void> {
 	// Windows 黑窗口治理（必须在下面任何 @deepseek-ai/* 动态 import 之前安装——
 	// dsh-subprocess-local 等模块加载时会捕获 child_process.spawn 的引用，
 	// 补丁先于加载才覆盖得到）：
+	// 0) koffi 解析（2026-09-14 黑窗口根因）：koffi 是 @deepseek-ai/dsh-subprocess-local
+	//    的传递依赖，此前不在应用 dependencies 里——开发态从仓库 node_modules 向上
+	//    解析没问题，打包版 app.asar 里根本没有它 → installHostHiddenConsole 与
+	//    runnerConsolePreload 里的 koffi 加载全部静默失败（日志实证 mode=failed）→
+	//    host 与 runner 都拿不到隐藏控制台 → runner（electron.exe GUI，不继承控制台）
+	//    用 CreateProcessW(1028) 拉起 rg/pwsh 时 Windows 新建【可见】控制台 = 黑窗口。
+	//    修复分三层：a) koffi 进应用 dependencies（随包分发，见 package.json）；
+	//    b) 这里优先从 runtime node_modules 解析（runtime 必带 koffi，最可靠），
+	//       并把解析结果写进 PIDECK_KOFFI_MODULE 供 runner preload 兜底；
+	//    c) preload 侧按 PIDECK_KOFFI_MODULE → __dirname 解析链兜底（见
+	//       runnerConsolePreload.ts）。
 	// 1) installHostHiddenConsole：给 host 分配隐藏控制台。utilityProcess 无控制台，
 	//    child_process.spawn 拉起控制台子程序时 libuv 自动 CREATE_NO_WINDOW（本地
 	//    路径本就不弹窗）；分配隐藏控制台后所有子进程/孙进程继承它，整棵树零弹窗。
@@ -101,7 +114,18 @@ async function main(): Promise<void> {
 	//    process.env（与 3) 同一缺口）：第二级 ACL runner 拿不到 preload 就没有
 	//    可继承的控制台，它用 CreateProcessAsUserW（无 CREATE_NO_WINDOW）拉起 pwsh
 	//    时 Windows 会新建【可见】控制台——命令秒回但每条弹黑窗口（2026-09-12 实测）。
-	installHostHiddenConsole();
+	let koffiFfi: Win32Ffi | undefined;
+	try {
+		const runtimeRequire = createRequire(join(fileURLToPath(nodeModulesUrl), "package.json"));
+		const koffiEntry = runtimeRequire.resolve("koffi") as string;
+		process.env.PIDECK_KOFFI_MODULE = koffiEntry;
+		koffiFfi = runtimeRequire(koffiEntry) as Win32Ffi;
+	} catch {
+		// runtime 里没有 koffi（异常形态）：退回 app 内解析——koffi 已进应用依赖，
+		// 打包版从 asar 内 createRequire(__dirname) 可解析（native 落 asar.unpacked）。
+	}
+	configureDshRunnerNodeSidecar(process.env[DSH_RUNNER_NODE_ENV]);
+	installHostHiddenConsole(undefined, koffiFfi);
 	installHiddenConsolePatch();
 	installRunnerNodeModeEnv();
 	installRunnerPreloadEnv();
@@ -112,7 +136,9 @@ async function main(): Promise<void> {
 	console.error(
 		`[dsh-host-entry] windows console policy: mode=${getHiddenConsoleMode()} ` +
 			`runnerNodeMode=${process.env.ELECTRON_RUN_AS_NODE === "1"} ` +
-			`runnerPreloadEnv=${String(process.env.NODE_OPTIONS?.includes("runnerConsolePreload") === true)}`,
+			`runnerPreloadEnv=${String(process.env.NODE_OPTIONS?.includes("runnerConsolePreload") === true)} ` +
+			`runnerSidecar=${getDshRunnerNodeSidecar() ?? "none"} ` +
+			`koffiModule=${process.env.PIDECK_KOFFI_MODULE ?? "unresolved"}`,
 	);
 
 	// ── 组合：base 补丁 + 覆盖层（Connection/Gateway/remotes + storage + picker stub + 遥测关）──
@@ -187,7 +213,7 @@ async function main(): Promise<void> {
 			// （agent-preset/invalid），见 dshSubagentModelSelectionSettingsRow 注释。
 			dshSubagentModelSelectionSettingsRow(),
 			// 动态 Cordis 插件管理（G13 深化）：运行器（define/run/stop/undefine，
-			// 进程内临时扩展、按会话归属）+ 只读静态 Loader 清单 + Telos 管理桥。
+			// 进程内临时扩展、按会话归属）+ 只读静态 Loader 清单 + PiDeck 管理桥。
 			// 与 dsh-web-app 的 cordis.patch.yml 同一挂载形态（无 config 的普通行）。
 			{ id: "plugin-inventory", name: "@deepseek-ai/dsh-host-plugin-inventory" },
 			{ id: "cordis-host-runner", name: "@deepseek-ai/dsh-cordis-host-runner" },
@@ -201,12 +227,12 @@ async function main(): Promise<void> {
 			// 冷读路径计算 session/page 的合法 throughSeq。
 			{ id: "pideck-session-bridge", name: join(__dirname, "pideckSessionBridge.js") },
 			// 用量采集（G16）：成熟第三方 dsh-bill。无 web 硬依赖，钩 llm/stream
-			// 落盘 $DSH_HOME/dsh-bill/records.jsonl；Telos 费用页只读该日志。
+			// 落盘 $DSH_HOME/dsh-bill/records.jsonl；PiDeck 费用页只读该日志。
 			// inject 为空：headless host 没有 webServer 也能继续记账。
 			// name 用绝对路径：host 的模块解析锚在 app node_modules，裸名在
 			// utilityProcess 里不一定能走到同一目录。
 			{ id: "bill", name: require.resolve("dsh-bill") },
-			// Telos 最小化收敛：host 层仍保留 bill_stats / pwsh_persistent 供
+			// PiDeck 最小化收敛：host 层仍保留 bill_stats / pwsh_persistent 供
 			// 非 minimal 预设使用，但 minimal 会话必须挡掉这两个全局扩展，
 			// 保持与官方 minimal（Windows 为 pwsh + str_replace_editor）一致。
 			{
@@ -219,13 +245,13 @@ async function main(): Promise<void> {
 
 	// 官方 home 级用户补丁层（$DSH_HOME/cordis.patch.yml）：dsh CLI / dsh-web 的
 	// 用户自装插件与机器本地配置覆盖都写在这一层（官方语义：作用于每个 profile，
-	// 优先级高于 profile 自身层）。Telos 之前不加载它，dsh-web 侧安装的插件在
-	// Telos host 里既不显示也不生效；这里追加在 Telos 自有行之后（官方层级顺序：
+	// 优先级高于 profile 自身层）。PiDeck 之前不加载它，dsh-web 侧安装的插件在
+	// PiDeck host 里既不显示也不生效；这里追加在 PiDeck 自有行之后（官方层级顺序：
 	// bundle < profile < home < overlay），让两侧部署一致。
 	// 容错：文件缺失 = 无层（loadOptionalPatches 语义）；文件存在但读取/解析失败
-	// 仅告警跳过——不让用户补丁写坏阻断 Telos host 启动（对官方 fail-loud 的放宽）。
+	// 仅告警跳过——不让用户补丁写坏阻断 PiDeck host 启动（对官方 fail-loud 的放宽）。
 	// 注意：补丁里 insert 的裸包名按 --dsh-node-modules 锚点解析，dsh-web 安装到
-	// 其自身目录的包在 Telos runtime 里可能解析不到，boot 会 fail-loud 并把原因
+	// 其自身目录的包在 PiDeck runtime 里可能解析不到，boot 会 fail-loud 并把原因
 	// 透到配置页错误 banner（可从补丁文件移除该行后重启 host 恢复）。
 	try {
 		const homeUserPatches =
@@ -265,7 +291,7 @@ async function main(): Promise<void> {
 		);
 	}
 	// Slash 命令桥：dsh-web 的命令执行（/permission /plan /compact 等）走浏览器
-	// 客户端通道（commands.execute Remote），Telos 只有 api-proxy RPC 通道，拿不到
+	// 客户端通道（commands.execute Remote），PiDeck 只有 api-proxy RPC 通道，拿不到
 	// 该 Remote。本插件把「以 / 开头的单条用户消息」在 agent/pre-step（步骤组装前）
 	// 拦截下来，经 ctx.commands.execute 执行：命中则 reject 该步骤（命令日志事件
 	// command/run + command/done 由执行器落盘，消息不进模型、不上时间线），
@@ -313,7 +339,7 @@ async function main(): Promise<void> {
 			].join("\n"),
 		);
 
-	// 极简工具过滤插件：挂在 host 组合里，minimal agent 创建时把 Telos 全局
+	// 极简工具过滤插件：挂在 host 组合里，minimal agent 创建时把 PiDeck 全局
 	// 扩展（bill_stats / pwsh_persistent）从继承工具目录中剔除；非 minimal 预设
 	// 仍保留这两个扩展。只拦继承层，不动 minimal 自身注册的 bash/pwsh/editor。
 	const minimalToolFilterPath = join(configDir, "pideck-minimal-tool-filter.js");
@@ -367,7 +393,7 @@ async function main(): Promise<void> {
 	// typertGateway 由 dsh-base 补丁的 typert-gateway 行提供（Context 增广见
 	// dsh-api-gateway/types）。
 	const wireStream = ctx.typertGateway.wireStream;
-	// Telos 插件管理桥（G13 深化）：/pideck-plugin/rpc 走桥插件服务（动态插件
+	// PiDeck 插件管理桥（G13 深化）：/pideck-plugin/rpc 走桥插件服务（动态插件
 	// 生命周期 + 静态 Loader 清单），其余路径原样交给 Connection RPC handler。
 	const handler = (url: URL, init?: RequestInit): Promise<Response> => {
 		if (url.pathname === PIDECK_PLUGIN_BRIDGE_PATH) {
