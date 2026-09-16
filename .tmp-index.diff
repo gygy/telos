@@ -1,0 +1,725 @@
+diff --git a/src/main/index.ts b/src/main/index.ts
+index e0454f57..a85f878e 100644
+--- a/src/main/index.ts
++++ b/src/main/index.ts
+@@ -10,7 +10,6 @@ import {
+ 	protocol,
+ 	safeStorage,
+ 	session,
+-	screen,
+ 	shell,
+ 	Tray,
+ 	Notification,
+@@ -40,7 +39,9 @@ import {
+ 	readSingleInstancePreference,
+ } from "./settings/SettingsStore";
+ import { acquireVersionSingleInstance, type FocusPayload } from "./singleInstance";
++import { mainProcessJsFlags, rendererHeapAdditionalArguments } from "./v8HeapLimits";
+ import { isDevToolsShortcut, toggleMainWindowDevTools } from "./devTools";
++import { isShortcutInput, refreshShortcutBindings } from "./appShortcuts";
+ import {
+ 	DEFAULT_DEV_USER_DATA_NAME,
+ 	isSharedDevBranch,
+@@ -52,29 +53,8 @@ import { resolvePackagedUserDataDir } from "./portableUserData";
+ import { extractFocusTargetFromArgv } from "./utils/focusTarget";
+ import type { Project, StartupWindowMode } from "../shared/types";
+ // 使用 ?asset 后缀导入图标，electron-vite 会在构建时将其复制到输出目录并提供正确的运行时路径
+-// 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题。
+-// Windows 窗口/任务栏/桌面快捷方式优先用多尺寸 PNG-ICO（对齐 Yandex）；PNG 作回退与其它平台。
+-import iconPngPath from "../../build/icon.png?asset";
+-import iconIcoPath from "../../build/icon.ico?asset";
+-import trayIcon16Path from "../../build/icons/tray-16x16.png?asset";
+-import trayIcon20Path from "../../build/icons/tray-20x20.png?asset";
+-import trayIcon24Path from "../../build/icons/tray-24x24.png?asset";
+-import trayIcon32Path from "../../build/icons/tray-32x32.png?asset";
+-
+-/** 窗口与快捷方式图标：Windows 用 ICO，其它平台用 PNG。 */
+-const iconPath = process.platform === "win32" ? iconIcoPath : iconPngPath;
+-
+-/**
+- * 托盘图标：正圆白底红 π（icons/tray-*），对齐 Yandex g101 圆形面孔。
+- * 任务栏/安装包走 icon.ico（同一正圆）。禁止圆角方；禁止深色描边。
+- * DPI：16@100% / 20@125% / 24@150% / 32@≥200%。
+- */
+-function resolveTrayNativeImage(): Electron.NativeImage {
+-	const scale = screen.getPrimaryDisplay().scaleFactor;
+-	const trayPath =
+-		scale >= 2 ? trayIcon32Path : scale >= 1.5 ? trayIcon24Path : scale >= 1.25 ? trayIcon20Path : trayIcon16Path;
+-	return nativeImage.createFromPath(trayPath);
+-}
++// 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题
++import iconPath from "../../build/icon.png?asset";
+ 
+ // 构建标记：npm run dist:win:dev 打包时由 vite define 注入 true（构建期替换，非运行时环境变量）。
+ declare const __PIDECK_DEV_BUILD__: boolean;
+@@ -88,7 +68,7 @@ const isDevBuild = !app.isPackaged || __PIDECK_DEV_BUILD__;
+ const isE2E = process.env.PIDECK_E2E === "1";
+ 
+ // 开发态与正式版隔离 userData。
+-// 否则 npm run dev 会与已安装的 Telos 共用数据/锁，表现为「开发启动被复用到正式版窗口」。
++// 否则 npm run dev 会与已安装的 PiDeck 共用数据/锁，表现为「开发启动被复用到正式版窗口」。
+ // 未打包的 npm run dev：功能分支再按 git 分支名拆目录（pi-desktop-dev-<branch>），
+ // 避免多个 worktree 同时启动共用 catalog / 单实例锁 / DSH home。main/dev 仍用历史目录。
+ // 打包的 dist:win:dev 仍固定 pi-desktop-dev（与脚本约定一致，复用现有开发配置）。
+@@ -106,7 +86,7 @@ const explicitUserDataDir =
+ 		?.slice("--user-data-dir=".length);
+ if (isDevBuild) {
+ 	// 显式固定目录名：dev 构建的 productName 是 phidsDev，
+-	// 默认 userData 会落在 %APPDATA%\TelosDev，必须指回 dev 配置目录以复用现有配置。
++	// 默认 userData 会落在 %APPDATA%\PiDeckDev，必须指回 dev 配置目录以复用现有配置。
+ 	// 例外：命令行显式传入 --user-data-dir（e2e 隔离、多实例调试）时尊重该路径，
+ 	// 否则 e2e 会读到本机真实开发数据（settings/projects 全部污染测试断言）。
+ 	if (explicitUserDataDir) {
+@@ -144,29 +124,31 @@ if (!electronChromiumSandboxEnabled) {
+ 	app.commandLine.appendSwitch("no-sandbox");
+ }
+ 
+-// V8 老生代堆上限（渲染进程 + 主进程 + worker 一并生效）：
++// V8 老生代堆上限（分层，见 v8HeapLimits.ts 注释）：
+ // Chromium 默认上限 ≈ 物理内存 60%（8GB 机器 ≈ 4.8GB），V8 没有压力就不主动收缩，
+ // 会话消息/代码块高亮等大对象把堆撑大后 committed 空间长期不归还 OS（内存采样实测：
+ // V8 总 55MB → 210MB 不回落，RSS 基线随每次操作抬升）。
+-// 设 384MB：留 2 倍于实测 JS used 峰值（~185MB）的余量，超限即强制 GC 收缩。
+-app.commandLine.appendSwitch("js-flags", "--max-old-space-size=384");
++// 这里的 384MB 是**主进程**档位；渲染进程不能跟着吃这个值（会被 msg 体量打爆 V8，
++// #213），所以每个窗口额外用 additionalArguments 抬到 RENDERER_MAX_OLD_SPACE_MB。
++app.commandLine.appendSwitch("js-flags", mainProcessJsFlags());
+ 
+ // Windows 系统通知必须设置 AppUserModelID，否则通知不显示、点击事件不触发。
+-// Telos 使用独立 AUMID，避免与已安装的 Telos（com.ayuayue.pi-desktop）共用任务栏图标/名称。
++// dev 与正式版使用不同 AppID，避免通知中心归属混淆（与 dev userData 隔离思路一致）。
+ if (process.platform === "win32") {
+-	const packagedAppId = "app.telos.desktop";
+ 	const devAppId =
+ 		devUserDataDirName === DEFAULT_DEV_USER_DATA_NAME
+-			? "app.telos.desktop.dev"
+-			: `app.telos.desktop.dev.${sanitizeDevBranchSegment(devGitBranch ?? "detached")}`;
+-	app.setAppUserModelId(isDevBuild ? devAppId : packagedAppId);
++			? "com.ayuayue.pi-desktop-dev"
++			: `com.ayuayue.pi-desktop-dev.${sanitizeDevBranchSegment(devGitBranch ?? "detached")}`;
++	app.setAppUserModelId(isDevBuild ? devAppId : "com.ayuayue.pi-desktop");
+ }
+-app.setName("Telos");
+ 
+-// 注册 telos:// 自定义协议：系统通知点击通过该协议唤起应用。
+-// 仅 packaged 应用注册：dev 模式勿劫持正式版关联。
++// 注册 pideck:// 自定义协议：系统通知点击（toast activationType="protocol"）通过该协议唤起应用，
++// 唤起实例的 argv 携带 pideck://session/<id> URL，主进程据此跳转对应会话。
++// 仅 packaged 应用注册：dev 模式跑的是 electron 二进制，注册会把协议关联劫持到 electron.exe，
++// 覆盖已安装正式版的关联；dev 模式下通知点击依赖 Electron 原生 click 事件聚焦即可。
++// 安装包内 electron-builder 的 protocols 配置也会在安装时写入注册表，此处是运行时兜底。
+ if (app.isPackaged) {
+-	app.setAsDefaultProtocolClient("telos");
++	app.setAsDefaultProtocolClient("pideck");
+ }
+ 
+ // 按「应用版本」隔离的单实例：同版本复用窗口，不同版本可并行。
+@@ -276,6 +258,8 @@ import {
+ 	readDeclaredDshVersion,
+ } from "./dsh/runtime/DshRuntimeManager";
+ import { DshRuntimeInstaller } from "./dsh/runtime/DshRuntimeInstaller";
++import { resolveDshRuntimeReleaseTag } from "./dsh/runtime/dshRuntimeReleaseTarget";
++import { resolveDshRuntimeIndexUrl } from "../shared/types/dshRuntimeManifest";
+ import { autoUpdateDshRuntimeIfOutdated } from "./dsh/runtime/dshRuntimeAutoUpdate";
+ import { createNetDownloader, createTarExtractor, fetchDshRuntimeIndex } from "./dsh/runtime/dshRuntimeIo";
+ import { credentialValueFromDocument } from "./dsh/dshCredentials";
+@@ -308,6 +292,7 @@ import { ClaudeSessionImporter } from "./sessions/ClaudeSessionImporter";
+ import { OpenCodeSessionImporter } from "./sessions/OpenCodeSessionImporter";
+ import { ZCodeSessionImporter } from "./sessions/ZCodeSessionImporter";
+ import { WorkBuddySessionImporter } from "./sessions/WorkBuddySessionImporter";
++import { CursorSessionImporter } from "./sessions/CursorSessionImporter";
+ import { SettingsStore } from "./settings/SettingsStore";
+ import { SecurityStore } from "./security/SecurityStore";
+ import { applyDesktopProxy } from "./settings/DesktopProxy";
+@@ -329,10 +314,18 @@ import { BuiltInExtensionsUpdater } from "./extensions/builtInExtensionsUpdater"
+ import {
+ 	resolveBuiltInExtensionsDir,
+ 	resolveBuiltInExtensionsOverlayDir,
++	resolveVendorNodeModulesDir,
+ 	type BuiltInExtensionPathRoots,
+ } from "./extensions/builtInExtensions";
+ import { createPiProcessExtensionResolvers } from "./extensions/piProcessExtensionResolvers";
+ import { registerBuiltInExtensionIpc } from "./ipc/builtInExtensionIpc";
++import {
++	PROMPTS_STORE_CHANNELS,
++	SKILLS_STORE_CHANNELS,
++	registerContentStoreIpc,
++} from "./ipc/contentStoreIpc";
++import { PromptStoreUpdater } from "./prompts/promptStoreUpdater";
++import { SkillStoreUpdater } from "./skills/skillStoreUpdater";
+ import { createPiProcessSkillResolvers } from "./skills/piProcessSkillResolvers";
+ import { createPiProcessPromptResolvers } from "./prompts/piProcessPromptResolvers";
+ import { ProjectResourceManager } from "./projects/ProjectResourceManager";
+@@ -356,6 +349,8 @@ import { registerVisionIpc } from "./ipc/visionIpc";
+ import { registerImageGenIpc } from "./ipc/imagegenIpc";
+ import { ImageGenService } from "./imagegen/ImageGenService";
+ import { ImageSessionStore } from "./imagegen/ImageSessionStore";
++import { ImageBlobStore } from "./imagegen/ImageBlobStore";
++import { registerImageGenImageProtocol } from "./imagegen/ImageGenImageProtocol";
+ import { ImageGenConfigStore } from "./imagegen/ImageGenConfigStore";
+ import { registerVoiceTranscriptionIpc } from "./ipc/voiceTranscriptionIpc";
+ import { VoiceTranscriptionConfigStore } from "./voice/VoiceTranscriptionConfigStore";
+@@ -419,7 +414,6 @@ import type { FeishuChatBinding } from "../shared/types";
+ import { createRealAutoUpdater } from "./update/createAutoUpdater";
+ import { installAtomgitNoCacheBypass, UPDATER_PARTITION_NAME } from "./update/atomgitNoCacheBypass";
+ import { createMacManualUpdateChecker } from "./update/macManualUpdate";
+-import { UPDATE_REPO, UPDATE_REPO_OWNER } from "./update/releaseRepo";
+ import { UpdateService } from "./update/UpdateService";
+ 
+ let mainWindow: BrowserWindow | null = null;
+@@ -441,6 +435,7 @@ let claudeSessionImporter: ClaudeSessionImporter;
+ let openCodeSessionImporter: OpenCodeSessionImporter;
+ let zcodeSessionImporter: ZCodeSessionImporter;
+ let workbuddySessionImporter: WorkBuddySessionImporter;
++let cursorSessionImporter: CursorSessionImporter;
+ let settingsStore: SettingsStore;
+ let securityStore: SecurityStore;
+ let worktreeService: WorktreeService;
+@@ -888,6 +883,15 @@ async function copyCatalogSession(sessionId: string) {
+ 	return { cancelled: false, targetSessionId: copied.id };
+ }
+ 
++/**
++ * 生图独立存储的两个磁盘根：sessions（会话 JSONL 索引）+ blobs（图片二进制）。
++ * 统一在这里解析，避免「列表读 A、写盘写 B、协议从 C 读」这类路径漂移。
++ */
++function resolveImageGenStorageRoots(): { sessions: string; blobs: string } {
++	const root = join(app.getPath("userData"), "imagegen");
++	return { sessions: join(root, "sessions"), blobs: join(root, "blobs") };
++}
++
+ async function exportCatalogSessionHtml(sessionId: string): Promise<{ path: string }> {
+ 	const entry = sessionCatalog.get(sessionId);
+ 	// G10：DSH 会话投影式导出（无活跃 runtime 时从 host 分页拉全量渲染），
+@@ -1355,9 +1359,10 @@ function handleVersionFocusRequest(payload?: FocusPayload) {
+ focusExistingWindow = handleVersionFocusRequest;
+ 
+ function setupTray() {
+-	// 专用小尺寸 PNG（make-icon 锐化导出），不要对大图 resize——那是托盘发糊的主因。
+-	tray = new Tray(resolveTrayNativeImage());
+-	tray.setToolTip("Telos");
++	// iconPath 由 electron-vite 的 ?asset 后缀自动解析，打包后也能正确定位
++	const icon = nativeImage.createFromPath(iconPath);
++	tray = new Tray(icon.resize({ width: 16, height: 16 }));
++	tray.setToolTip("PiDeck");
+ 	// C12：退出清理登记（before-quit 统一 runAll）
+ 	quitCleanup.register("tray", () => {
+ 		tray?.destroy();
+@@ -1423,7 +1428,7 @@ function printStartupInfo() {
+ 			"color: #8b5cf6; font-weight: bold;"
+ 		);
+ 		console.log(
+-			"%c│                      Telos Desktop                      │",
++			"%c│                      PiDeck Desktop                      │",
+ 			"color: #8b5cf6; font-weight: bold; font-size: 16px;"
+ 		);
+ 		console.log(
+@@ -1446,7 +1451,7 @@ function printStartupInfo() {
+ 		console.log("%c  Persistent installationType: %c${persistentInstallationType}", "color: #6b7280;", "color: #8b5cf6; font-weight: bold;");
+ 		console.log("");
+ 		console.log("%c🐛 Found a bug? Report at:", "color: #6b7280;");
+-		console.log("%c  https://github.com/gygy/telos/issues", "color: #3b82f6; text-decoration: underline;");
++		console.log("%c  https://github.com/ayuayue/PiDeck/issues", "color: #3b82f6; text-decoration: underline;");
+ 		console.log("");
+ 		console.log("%c🎉 Easter egg: You found it! Thanks for exploring.", "color: #ec4899; font-weight: bold;");
+ 		console.log("");
+@@ -1514,6 +1519,8 @@ function configureBrowserPanelWebviewHost(window: BrowserWindow): void {
+ 
+ 		webPreferences.partition = BROWSER_PANEL_PARTITION;
+ 		webPreferences.sandbox = true;
++		// 内置浏览器是第三方页面，同样不能被主进程的 384MB 档位锁住（#213）
++		webPreferences.additionalArguments = rendererHeapAdditionalArguments();
+ 		webPreferences.nodeIntegration = false;
+ 		webPreferences.nodeIntegrationInWorker = false;
+ 		webPreferences.nodeIntegrationInSubFrames = false;
+@@ -1553,9 +1560,17 @@ function configureBrowserPanelWebviewHost(window: BrowserWindow): void {
+ 		});
+ 
+ 		// webview guest 是独立 webContents，按键到不了主窗口的 before-input-event；
+-		// 转发 DevTools 快捷键到主窗口开关，避免焦点在内置浏览器面板时 F12 无响应。
++		// 转发全局快捷键到主窗口：DevTools 开关、打开设置（唤起窗口并广播），
++		// 键位按用户配置匹配（见 appShortcuts.ts / shared/shortcuts.ts）。
+ 		guest.on("before-input-event", (event, input) => {
+-			if (!isDevToolsShortcut(input)) return;
++			if (isShortcutInput("openSettings", input)) {
++				event.preventDefault();
++				if (!window || window.isDestroyed()) return;
++				if (!window.isVisible()) window.show();
++				window.webContents.send(ipcChannels.appOpenSettings);
++				return;
++			}
++			if (!isShortcutInput("toggleDevTools", input)) return;
+ 			event.preventDefault();
+ 			toggleMainWindowDevTools(window);
+ 		});
+@@ -1617,8 +1632,8 @@ async function createWindow() {
+ 		minHeight: 640,
+ 		// 多 worktree 并行 dev：标题带分支名，任务栏/Alt-Tab 一眼区分窗口
+ 		title: isolateDevByGitBranch && !isSharedDevBranch(devGitBranch)
+-			? `Telos · ${devGitBranch}`
+-			: "Telos",
++			? `PiDeck · ${devGitBranch}`
++			: "PiDeck",
+ 		icon: iconPath,
+ 		frame: windowOptions.frame,
+ 		titleBarStyle: windowOptions.titleBarStyle,
+@@ -1629,6 +1644,8 @@ async function createWindow() {
+ 			contextIsolation: true,
+ 			nodeIntegration: false,
+ 			webviewTag: true,
++			// 渲染进程 V8 堆上限：必须覆盖 Chromium 透传的全局 `--js-flags`（#213）
++			additionalArguments: rendererHeapAdditionalArguments(),
+ 		},
+ 	});
+ 	const createdWindow = mainWindow;
+@@ -1783,11 +1800,30 @@ async function createWindow() {
+ 		}
+ 	});
+ 
+-	// 监听浏览器标准快捷键打开开发者工具（F12 / Ctrl+Shift+I / Ctrl+Shift+J，
+-	// macOS 变体与开关逻辑集中在 devTools.ts，主窗口/webview/设置 IPC 共用）
++	// 监听全局快捷键（打开设置 / 开发者工具 / 新建会话 / 搜索会话，键位见 shared/shortcuts.ts，
++	// 可设置页自定义）；devTools 组合键的 macOS 变体与开关逻辑集中在 devTools.ts，
++	// 主窗口/webview/设置 IPC 共用。新建/搜索是渲染层 UI 动作（引导页/命令面板），
++	// 这里只做命中与广播，由渲染层按焦点状态决定是否执行（输入框聚焦时忽略）。
+ 	mainWindow.webContents.on("before-input-event", (event, input) => {
+ 		if (!mainWindow || mainWindow.isDestroyed()) return;
+-		if (isDevToolsShortcut(input)) {
++		if (isShortcutInput("openSettings", input)) {
++			event.preventDefault();
++			// 快捷键可能命中在窗口隐藏（托盘）期间：先唤起窗口，再让渲染层打开设置页
++			if (!mainWindow.isVisible()) mainWindow.show();
++			mainWindow.webContents.send(ipcChannels.appOpenSettings);
++			return;
++		}
++		if (isShortcutInput("openNewSession", input)) {
++			event.preventDefault();
++			mainWindow.webContents.send(ipcChannels.appShortcutTriggered, "openNewSession");
++			return;
++		}
++		if (isShortcutInput("openSearch", input)) {
++			event.preventDefault();
++			mainWindow.webContents.send(ipcChannels.appShortcutTriggered, "openSearch");
++			return;
++		}
++		if (isShortcutInput("toggleDevTools", input)) {
+ 			event.preventDefault();
+ 			toggleMainWindowDevTools(mainWindow);
+ 		}
+@@ -2321,7 +2357,7 @@ async function sendAgentPromptWithIntegrations(
+ 	const sessionChatId = bridgeConnected ? bridge.getSessionChatId(input.agentId) : undefined;
+ 	let agentInstruction: string | undefined;
+ 	const buildFeishuActionInstruction = (chatId?: string) => [
+-		"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，Telos 会按当前会话绑定自动上传。",
++		"当前会话已连接飞书聊天。严禁调用 lark-cli、飞书 IM API 或搜索群聊来发送文件；不要询问 chat_id。需要把本地文件发到当前飞书聊天时，最终回答末尾独立一行写 [SEND_FILE:本地文件路径]，PiDeck 会按当前会话绑定自动上传。",
+ 		chatId ? `当前绑定的飞书 chat_id: ${chatId}。这是只读上下文，用于确认当前会话绑定；发送文件仍必须用 [SEND_FILE:本地文件路径]。` : undefined,
+ 	].filter(Boolean).join("\n");
+ 
+@@ -2347,7 +2383,7 @@ async function sendAgentPromptWithIntegrations(
+ 			});
+ 			bridge.trackDocRequest(tab.id, docTitle);
+ 			void bridge.forwardUserMessageToFeishu(tab.id, input.message).catch((error) => {
+-				console.error("[Feishu] forward Telos message failed:", error);
++				console.error("[Feishu] forward PiDeck message failed:", error);
+ 			});
+ 			agentInstruction = `${buildFeishuActionInstruction(bridge.getSessionChatId(tab.id))}\n创建飞书文档时，先输出完整正文，最后独立一行写 [CREATE_DOC:文档标题]。`;
+ 		}
+@@ -2360,7 +2396,7 @@ async function sendAgentPromptWithIntegrations(
+ 			});
+ 			if (input.message.trim()) {
+ 				void bridge.forwardUserMessageToFeishu(tab.id, input.message).catch((error) => {
+-					console.error("[Feishu] forward Telos message failed:", error);
++					console.error("[Feishu] forward PiDeck message failed:", error);
+ 				});
+ 			}
+ 		}
+@@ -2441,7 +2477,7 @@ function registerIpc() {
+ 		resolveWslEnvironment: async (distro, user) => {
+ 			const { resolveWslEnvironment } = await import("./wsl/WslEnvironment");
+ 			return resolveWslEnvironment(distro, user, {
+-				warn: (msg: string, detail: Record<string, unknown>) => console.warn("[Telos] " + msg, detail),
++				warn: (msg: string, detail: Record<string, unknown>) => console.warn("[PiDeck] " + msg, detail),
+ 			});
+ 		},
+ 	});
+@@ -2488,10 +2524,19 @@ function registerIpc() {
+ 		log: (message, ...args) => appLogger.info("imagegen", message, ...args),
+ 	});
+ 	// 生图 session 独立存储：无 pi 会话文件的纯生图草稿把历史落盘到这里（重启可恢复），
+-	// 不依赖 pi 会话文件也不进 pi 的 sessions 目录（Telos userData/imagegen/sessions）。
++	// 不依赖 pi 会话文件也不进 pi 的 sessions 目录（PiDeck userData/imagegen/sessions）。
++	// 图片二进制单独落 blobs：JSONL 只留引用，否则几十轮生图就能把会话文件堆到 200 MB+，
++	// 渲染进程加载即 OOM（2026-09 白屏事故）。两个根必须同源解析，各拼一次路径会漂移成
++	// 「图片写进了 A 目录、协议从 B 目录读」。
++	const imageGenRoots = resolveImageGenStorageRoots();
++	const imageBlobStore = new ImageBlobStore({ getBlobsPath: () => imageGenRoots.blobs });
++	void imageBlobStore.ensureDir();
+ 	const imageSessionStore = new ImageSessionStore({
+-		getStorePath: () => join(app.getPath("userData"), "imagegen", "sessions"),
++		getStorePath: () => imageGenRoots.sessions,
++		blobs: imageBlobStore,
+ 	});
++	// pideck-img:// 必须在 app ready 后注册（scheme 特权声明在文件底部 ready 前完成）
++	registerImageGenImageProtocol(imageBlobStore);
+ 	registerImageGenIpc({
+ 		imageGen: new ImageGenService({
+ 			getProviderCredentials: async (provider) => {
+@@ -2503,6 +2548,7 @@ function registerIpc() {
+ 		}),
+ 		imageGenConfig: imageGenConfigStore,
+ 		log: (message, ...args) => appLogger.info("imagegen", message, ...args),
++		readImageBlob: (ref) => imageBlobStore.readPayload(ref),
+ 		// 生图记录落盘：user 提示词 + assistant 图片两条消息写入 pi 会话文件，
+ 		// 让「不走 pi/dsh 直连 API」的生图结果也进会话历史（重启后可见）。
+ 		// DSH 会话无 pi 会话文件且 host 无消息追加 API，跳过（生图仍正常返回）。
+@@ -2526,7 +2572,7 @@ function registerIpc() {
+ 				}
+ 			}
+ 			// 生图独立持久化：imagegen 后端会话（可能残留无意义的 pi filePath）与无 pi 会话文件的
+-			// 纯生图草稿，都落盘到 ImageSession 独立存储（Telos userData 下的 imagegen/sessions），
++			// 纯生图草稿，都落盘到 ImageSession 独立存储（PiDeck userData 下的 imagegen/sessions），
+ 			// 不再依赖 pi 会话文件；并把会话提升为 active，防重启时 staleDrafts 清理丢入口——
+ 			// 否则生图历史重启即失（2026 用户反馈）。只有非 imagegen 且有 filePath 才写 pi 文件。
+ 			if (entry.backend === "imagegen" || !entry.filePath) {
+@@ -2613,6 +2659,7 @@ function registerIpc() {
+ 		openCodeSessionImporter,
+ 		zcodeSessionImporter,
+ 		workbuddySessionImporter,
++		cursorSessionImporter,
+ 		appLogger,
+ 		terminalManager,
+ 		mainCopy: mainCopy as (key: string, params?: Record<string, string | number>) => string,
+@@ -2854,15 +2901,20 @@ function registerIpc() {
+ 		source: () => settingsStore.get().updateSource,
+ 		customHost: () => settingsStore.get().customUpdateSourceUrl,
+ 	});
+-	// 内置扩展热更新：版本号不跟 Telos 应用版本走（见 resources/extensions/extensions-manifest.json），
++	// 内置扩展热更新：版本号不跟 PiDeck 应用版本走（见 resources/extensions/extensions-manifest.json），
+ 	// 打包态 resources 只读，更新写进 userData 覆盖层，路径解析侧覆盖层优先 → 重启会话即生效。
+ 	const builtInExtensionRoots = resolveBuiltInExtensionRoots();
+ 	const builtInExtensionsUpdater = new BuiltInExtensionsUpdater({
+ 		userDataDir: app.getPath("userData"),
+ 		builtinExtensionsDir: resolveBuiltInExtensionsDir(builtInExtensionRoots),
++		// vendored 运行时依赖（node_modules/undici 等）的源目录：覆盖层上层没有 node_modules，
++		// 缺了它 pi 会因扩展裸导入解析不到而启动失败（2026-09-15 线上事故）。
++		vendorNodeModulesDir: resolveVendorNodeModulesDir(builtInExtensionRoots),
+ 		// 与模型目录/应用更新共用 settings.updateSource：默认 AtomGit，切 GitHub 后 raw 直连优先。
+ 		source: () => settingsStore.get().updateSource,
+ 	});
++	// 旧覆盖层（没有 vendored 依赖的版本写的）启动自愈，不能要求用户先点一次「更新」
++	builtInExtensionsUpdater.ensureOverlayVendorDependencies();
+ 	// 后台更新检查：Windows / 支持自动升级的发行物走 electron-updater；
+ 	// macOS 当前未签 Developer ID，不能承诺稳定的替换/重启，因此只检测 Release 并交给用户手动安装。
+ 	// 两条路径都由同一个 UpdateService 快照推送渲染层，设置页能明确表达能力边界。
+@@ -2947,6 +2999,17 @@ function registerIpc() {
+ 		// 进程监控停止 agent：按 agentId 走完整会话停止链路（含 detach 推送）
+ 		stopAgentFromMonitor,
+ 		getDshHostPid: () => dshHost.getHostPid(),
++		restartDshHost: async () => {
++			await dshAgentManager.stopAll();
++			await dshHost.restart();
++			try {
++				await dshHost.ensureStarted();
++				return dshHost.isHostProcessRunning() && dshHost.isHostReady();
++			} catch {
++				return false;
++			}
++		},
++		dshHostIsStarted: () => dshHost.isStarted(),
+ 		providerMigration: {
+ 			configManager,
+ 			dshHost,
+@@ -3089,6 +3152,8 @@ function registerIpc() {
+ 			// 恢复写回的是磁盘文件：pideck 设置需重新 load 进内存（其它 store 仍持旧值，
+ 			// UI 会提示重启生效）；pi 模型目录缓存刷新，避免恢复后仍用旧模型列表。
+ 			await settingsStore.load();
++			// 快捷键覆盖可能随备份一起被恢复：同步刷新主进程生效绑定，无需重启
++			refreshShortcutBindings(settingsStore.get());
+ 			void piModelCapabilityCache?.refresh().catch(() => undefined);
+ 		},
+ 	});
+@@ -3114,7 +3179,7 @@ function registerIpc() {
+ 	// 资源管理器右键菜单（HKCU）：菜单显示名跟随主进程 locale（可能随设置语言切换）
+ 	registerShellMenuIpc({
+ 		appLogger,
+-		menuTitle: mainCopy("shellMenu.openWithTelos"),
++		menuTitle: mainCopy("shellMenu.openWithPiDeck"),
+ 	});
+ }
+ 
+@@ -3157,11 +3222,13 @@ async function detectExternalEditorsOnFirstLaunch() {
+ 	void appLogger.info("editor", "External editors detected on first launch", { count: detected.length });
+ }
+ 
+-// 换肤背景图/宠物雪碧图/声音提醒协议：自定义 scheme 必须在 ready 前注册特权声明（secure 以便渲染层 CSS/图片/音频引用）
++// 换肤背景图/宠物雪碧图/声音提醒/生图历史图片协议：自定义 scheme 必须在 ready 前注册特权声明（secure 以便渲染层 CSS/图片/音频引用）
+ protocol.registerSchemesAsPrivileged([
+ 	{ scheme: "pideck-bg", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: false } },
+ 	{ scheme: "pideck-pet", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: false } },
+ 	{ scheme: "pideck-sound", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: true } },
++	// 生图历史图片：渲染层 <img> 直接加载落盘 blob，避免把 base64 搬回渲染进程堆
++	{ scheme: "pideck-img", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: true } },
+ ]);
+ 
+ app.whenReady().then(async () => {
+@@ -3176,6 +3243,7 @@ app.whenReady().then(async () => {
+ 	openCodeSessionImporter = new OpenCodeSessionImporter(mainCopy);
+ 	zcodeSessionImporter = new ZCodeSessionImporter(mainCopy);
+ 	workbuddySessionImporter = new WorkBuddySessionImporter(mainCopy);
++	cursorSessionImporter = new CursorSessionImporter(mainCopy);
+ 	settingsStore = new SettingsStore();
+ 	// 安全管理：配置 owner + 策略快照写入（供 pi-deck-security-gate 扩展消费）
+ 	securityStore = new SecurityStore({
+@@ -3237,8 +3305,38 @@ app.whenReady().then(async () => {
+ 		() => settingsStore.get(),
+ 		(patch) => settingsStore.update(patch),
+ 	);
+-	xuePromptManager = new XuePromptManager();
++	// 提示词商店官方模板 / 内置技能热更新：与内置扩展同一套「resources 只读 → userData 覆盖层」机制。
++	// 覆盖层供查询侧（XuePromptManager / SkillManager）叠加解析：远端新增/修改的模板与技能免发版生效。
++	const promptStoreUpdater = new PromptStoreUpdater({
++		userDataDir: app.getPath("userData"),
++		// 随包根与 skills/xueprompts.db 同一约定：dev 读 app.getAppPath()/resources，
++		// 打包读 process.resourcesPath —— extraResources 的 `to` 已经把目录铺到
++		// <app>/resources/<to>，这里再拼一层 "resources" 会指向不存在的路径。
++		builtinPromptsDir: app.isPackaged
++			? join(process.resourcesPath, "prompts")
++			: join(app.getAppPath(), "resources", "prompts"),
++		// 与内置扩展/模型目录共用 settings.updateSource：默认 AtomGit，切 GitHub 后 raw 直连优先。
++		source: () => settingsStore.get().updateSource,
++	});
++	const skillStoreUpdater = new SkillStoreUpdater({
++		userDataDir: app.getPath("userData"),
++		// 与 SkillManager.installTemplate 的 root 解析严格对齐：打包态 process.resourcesPath
++		// 已是 <app>/resources，再拼一层会变成 <app>/resources/resources/skills。
++		builtinSkillsDir: app.isPackaged
++			? join(process.resourcesPath, "skills")
++			: join(app.getAppPath(), "resources", "skills"),
++		source: () => settingsStore.get().updateSource,
++	});
++	registerContentStoreIpc(promptStoreUpdater, PROMPTS_STORE_CHANNELS);
++	registerContentStoreIpc(skillStoreUpdater, SKILLS_STORE_CHANNELS);
++	xuePromptManager = new XuePromptManager(
++		undefined,
++		// 官方模板覆盖层叠加：热更新后商店列表/详情立即显示覆盖层版本
++		() => promptStoreUpdater.resolveEffectiveOverlayDir(),
++	);
+ 	skillManager = new SkillManager(undefined, mainCopy);
++	// 内置技能覆盖层叠加：安装内置技能模板时覆盖层优先（修 bug/新增技能免发版）
++	skillManager.configureSkillOverlay(() => skillStoreUpdater.resolveEffectiveOverlayDir());
+ 	// 注入设置读写：技能开关同步持久化禁用列表（--no-skills/--skill 白名单模式的依据），
+ 	// 跨重启保留，不再只依赖 SKILL.md frontmatter（该标记仅阻止模型自动调用）。
+ 	skillManager.configureSettings(
+@@ -3265,13 +3363,13 @@ app.whenReady().then(async () => {
+ 			void appLogger?.warn("skill", "Image-gen skill template auto-install failed", { error: result.error });
+ 		}
+ 	});
+-	// 环境诊断技能启动时自动落到用户全局技能目录，用户可 /skill:telos-doctor 让 pi 读诊断报告排障。
++	// 环境诊断技能启动时自动落到用户全局技能目录，用户可 /skill:pideck-doctor 让 pi 读诊断报告排障。
+ 	// fire-and-forget，失败不阻塞启动。
+-	void skillManager.installTelosDoctorTemplate().then((result) => {
++	void skillManager.installPideckDoctorTemplate().then((result) => {
+ 		if (result.success) {
+-			void appLogger?.info("skill", "Telos-doctor skill template auto-installed", { path: result.path });
++			void appLogger?.info("skill", "Pideck-doctor skill template auto-installed", { path: result.path });
+ 		} else {
+-			void appLogger?.warn("skill", "Telos-doctor skill template auto-install failed", { error: result.error });
++			void appLogger?.warn("skill", "Pideck-doctor skill template auto-install failed", { error: result.error });
+ 		}
+ 	});
+ 	extensionManager = new ExtensionManager(
+@@ -3394,12 +3492,11 @@ app.whenReady().then(async () => {
+ 		log: (scope, message, detail) => void appLogger.info(scope, message, detail),
+ 	});
+ 	// DSH runtime 安装态服务先于 DshHost 装配（探测只依赖 appPath，不 fork host）。
+-	// 探测顺序：外部已装 runtime 优先 → 回退 app 内置（dev 模式 = 项目 node_modules 的
+-	// @deepseek-ai 开发依赖，已随 npm install 存在，直接可用无需安装/下载），
+-	// 两边都没有才是 notInstalled。状态变更经 dsh-runtime:status-changed 广播给渲染层。
+-	// allowBundledFallback 只在开发态开启：**打包版不内置 runtime**（build 用 runtime:pack:lite，
+-	// 随包目录留空）——减小安装体积，需要 DSH 的用户在打包版里按引导下载安装；
+-	// 开发态则直接复用项目 node_modules（零下载、零安装，符合「dev 不需要装 runtime」的诉求）。
++	// 探测顺序：外部已装 runtime 优先 → 兼容旧版 full/存量包时才回退 app 内置。
++	// 官方 lite 包与 dev 都把 runtime 获取统一到 userData 外部目录，未安装时从同一份
++	// Release 索引下载；这样开发环境验证的就是用户实际走的远程安装链路。
++	// allowBundledFallback 仅保留给显式 full/存量包兼容，不再按 app.isPackaged 区分；
++	// 新的 dev/lite 默认关闭，避免项目 node_modules 或残留资源绕过远程安装。
+ 	dshRuntimeStatus = new DshRuntimeStatusService(
+ 		() => app.getAppPath(),
+ 		(scope, message, detail) => void appLogger.info(scope, message, detail),
+@@ -3409,10 +3506,12 @@ app.whenReady().then(async () => {
+ 				? { nodeModules: active.nodeModules, runtimeVersion: active.manifest.runtimeVersion }
+ 				: undefined;
+ 		},
+-		() => !app.isPackaged,
++		// dev 不把项目 node_modules 当成「已安装 runtime」；统一走外部 Release 下载。
++		() => false,
++		// 保留构造位次供旧调用方兼容；安装入口现在由状态服务统一开放，不读取打包态。
+ 		() => app.isPackaged,
+ 		// 声明的配套 dsh 版本（package.json）：与已装 runtime 比对得出 updateAvailable，
+-		// 升级 Telos 后旧 runtime 仍「兼容」会被一直选用，UI 需要这个信号提示更新。
++		// 升级 PiDeck 后旧 runtime 仍「兼容」会被一直选用，UI 需要这个信号提示更新。
+ 		() => readDeclaredDshVersion(app.getAppPath()),
+ 	);
+ 	dshRuntimeStatus.subscribe((status) => {
+@@ -3424,21 +3523,31 @@ app.whenReady().then(async () => {
+ 	// 索引地址默认指向与 app update 同一仓库的 release 资产，settings 可覆盖为镜像。
+ 	dshRuntimeInstaller = new DshRuntimeInstaller({
+ 		manager: dshRuntimeManager,
+-		// 优先级：环境变量（本地/内网验证用，免改设置）> 设置项（镜像）> 默认 Release 资产。
++		// 优先级：环境变量（本地/内网验证用，免改设置）> 设置项（镜像）> 当前 latest 应用 Release。
++		// 禁止独立 dsh-runtime tag：会抢走 GitHub /releases/latest。
+ 		indexUrl: () =>
+-			process.env.DSH_RUNTIME_INDEX_URL ||
+-			settingsStore.get().dshRuntimeIndexUrl ||
+-			`https://github.com/${UPDATE_REPO_OWNER}/${UPDATE_REPO}/releases/download/dsh-runtime/dsh-runtime-releases.json`,
++			resolveDshRuntimeIndexUrl({
++				indexUrl: process.env.DSH_RUNTIME_INDEX_URL || settingsStore.get().dshRuntimeIndexUrl,
++				updateSource: settingsStore.get().updateSource,
++			}),
++		updateSource: () => settingsStore.get().updateSource,
++		releaseTag: () =>
++			resolveDshRuntimeReleaseTag({
++				explicitTag: process.env.PIDECK_RELEASE_TAG,
++				isPackaged: app.isPackaged,
++				appVersion: app.getVersion(),
++			}),
+ 		appVersion: () => app.getVersion(),
+ 		fetchIndex: fetchDshRuntimeIndex,
+-		// 随包 runtime（resources/dsh-runtime/）：有就本地解压，不必联网。
+-		// dev 模式下 process.resourcesPath 指向 Electron 自己的 resources，
+-		// 没有该子目录 → 读不到 → 自然回退到在线/手动导入。
++		// dev 与官方 lite 包统一走远程 Release；只给显式 full/存量包保留离线兼容入口。
++		// 通过显式环境变量开启，避免开发机或新包因残留资源误绕过远程下载链路。
+ 		bundledRuntime: () =>
+-			readBundledRuntime(
+-				process.resourcesPath ? join(process.resourcesPath, DSH_BUNDLED_RUNTIME_DIRNAME) : undefined,
+-				app.getVersion(),
+-			),
++			process.env.PIDECK_DSH_ALLOW_BUNDLED_RUNTIME === "1"
++				? readBundledRuntime(
++					process.resourcesPath ? join(process.resourcesPath, DSH_BUNDLED_RUNTIME_DIRNAME) : undefined,
++					app.getVersion(),
++				)
++				: undefined,
+ 		onProgress: (progress) => {
+ 			if (mainWindow && !mainWindow.isDestroyed()) {
+ 				mainWindow.webContents.send(ipcChannels.dshRuntimeInstallProgress, progress);
+@@ -3492,10 +3601,12 @@ app.whenReady().then(async () => {
+ 				bypass: settingsSnapshot.piProxyBypass,
+ 			});
+ 		},
+-		// 外部 runtime 根目录（未安装时返回 undefined，回退 app 内置 node_modules）。
++		// 外部 runtime 根目录；未安装时保持 undefined，随后由 canCreateDshSession 门控，
++		// 不再把 dev 项目 node_modules 当作远程 runtime 的隐式回退。
+ 		() => dshRuntimeStatus.resolveAppRoot(),
+ 		// 永久删除归档目录：统一走系统回收站（与 pi 会话删除同语义，可恢复；拒绝静默硬删）。
+ 		async (path) => { await shell.trashItem(path); },
++		() => settingsStore.get().dshRunnerNodePath ?? "",
+ 	);
+ 	dshAgentManager = new DshAgentManager(
+ 		dshHost,
+@@ -3662,15 +3773,17 @@ app.whenReady().then(async () => {
+ 			readCatalogSessionReferenceMessages(sessionId),
+ 		readSessionMessages: async (sessionId) => {
+ 			const entry = sessionCatalog.get(sessionId);
+-			// DSH 会话没有 pi 会话文件：全量读走 host 历史事件流（一次拉最大页），
+-			// 与分页路径同源；未挂载 DSH 后端时返回空数组。
++			// DSH 会话没有 pi 会话文件：读 host 历史事件流的一页（有界），
++			// 与分页路径同源；未挂载 DSH 后端时返回空窗口。
+ 			if (entry?.backend === "dsh" && entry.dshSessionId && dshAgentManager) {
+ 				const page = await dshAgentManager.readHistoryPage(entry.dshSessionId, undefined, 1000);
+-				return page.messages;
++				return { messages: page.messages, total: page.total, windowStart: 0, truncated: false };
+ 			}
+-			if (!entry?.filePath) return [];
+-			const content = await sessionScanner.readSessionRawText(entry.filePath);
+-			return agentManager.readSessionDisplayMessages(entry.filePath, sessionId, content);
++			if (!entry?.filePath) return { messages: [], total: 0, windowStart: 0, truncated: false };
++			// 有界加载窗口（9 轮 + 条目预算），不是全量历史：全量下发在大会话上会同时顶爆
++			// 主进程与渲染层（#213）。更早历史请走分页接口（Web：/messages/page）。
++			const window = await agentManager.readSessionLoadWindow(entry.filePath, sessionId);
++			return { ...window, truncated: window.windowStart > 0 };
+ 		},
+ 		readSessionMessagePage: async (sessionId, before, pageSize) => {
+ 			const entry = sessionCatalog.get(sessionId);
+@@ -3793,6 +3906,8 @@ app.whenReady().then(async () => {
+ 	quitCleanup.register("terminal", () => terminalManager?.closeAll());
+ 
+ 	await settingsStore.load();
++	// 快捷键覆盖从磁盘载入后立即刷新主进程生效绑定（此后 settings:update 路径实时刷新）
++	refreshShortcutBindings(settingsStore.get());
+ 	piModelCapabilityCache = new PiModelCapabilityCache({
+ 		// 模型能力水合分两档（详见 docs/pi-model-capability-plan.md）：
+ 		// - 快速档（默认，loadExtensions=false）：--no-extensions。实测 418 模型下
+@@ -3988,7 +4103,7 @@ app.whenReady().then(async () => {
+ 		if (wslEnabled && wslDistro && wslUser) {
+ 			const { resolveWslEnvironment: resolveWsl2 } = await import("./wsl/WslEnvironment");
+ 			const wslEnv = await resolveWsl2(wslDistro, wslUser, {
+-				warn: (msg: string, detail: unknown) => console.warn("[Telos] " + String(msg), detail),
++				warn: (msg: string, detail: unknown) => console.warn("[PiDeck] " + String(msg), detail),
+ 			});
+ 			await sessionScanner.configureWsl(wslEnv);
+ 			agentManager.configureWsl(wslEnv);
+@@ -4025,11 +4140,11 @@ app.whenReady().then(async () => {
+ 	void cleanupPasteFiles?.().catch((error: unknown) => {
+ 		void appLogger.warn("app", "Paste file cleanup failed during startup", error);
+ 	});
+-	// DSH runtime 自动更新（打包态）：升级 Telos 后若已装 runtime 与声明版本不一致
++	// DSH runtime 自动更新：升级 PiDeck 后若已装 runtime 与声明版本不一致
+ 	// （outdated，被硬门控挡住无法启动 host），启动期后台自动重装配套版本并回收旧
+ 	// 版本目录——与其让用户手动点「重新安装」，不如升级后首次启动自动完成。
+-	// notInstalled 不自动装（用户未选择使用 DSH，保持安装引导）；dev 跳过（项目
+-	// node_modules 即声明版本，且 dev 禁止在线下载）。fire-and-forget，不挡首帧。
++	// notInstalled 不自动装（用户未选择使用 DSH，保持安装引导）；dev 与打包版都允许
++	// 手动安装，但自动更新只处理已有 runtime 的版本错配。fire-and-forget，不挡首帧。
+ 	void autoUpdateDshRuntimeIfOutdated({
+ 		getStatus: () => dshRuntimeStatus.getStatus(),
+ 		refresh: () => dshRuntimeStatus.refresh(),
+@@ -4066,7 +4181,7 @@ app.whenReady().then(async () => {
+ 	// 模型 capability cache 的 hydration 在 syncWslConfig 后启动，确保它与 PiProcess
+ 	// 使用同一套 WSL HOME/config 目录；不阻塞首帧。
+ 	void syncWslConfig().then(async () => {
+-		// 冷启动先刷 pi 模型目录缓存（models-store.json）再 hydration：Telos 的 RPC
++		// 冷启动先刷 pi 模型目录缓存（models-store.json）再 hydration：PiDeck 的 RPC
+ 		// 进程都带 --offline，pi 启动时的自动目录网络刷新被跳过；目录若不主动刷新
+ 		// 只能靠 TUI 更新，可能长期滞后（官方 provider 新模型导致「列表有、Agent
+ 		// 快照没有」的选择失败，2026-08 deepseek 场景）。目录过期才刷（mtime 节流），
+@@ -4272,17 +4387,17 @@ app.whenReady().then(async () => {
+ 	void appLogger?.error("app", "Application startup failed", error);
+ 	void import("electron").then(({ dialog }) => {
+ 		dialog.showErrorBox(
+-			"Telos failed to start",
++			"PiDeck failed to start",
+ 			error instanceof Error ? (error.stack ?? error.message) : String(error),
+ 		);
+ 	}).catch(() => undefined);
+ });
+ 
+ /**
+- * 删除用户扩展目录中的 Telos 扩展文件（历史部署或已下线扩展）。
++ * 删除用户扩展目录中的 PiDeck 扩展文件（历史部署或已下线扩展）。
+  * 内置扩展现改为 -e 从 app resources 加载，用户目录不应再有 pi-deck-* 副本。
+  */
+-async function removeStaleTelosExtension(extensionName: string, homeDir?: string): Promise<void> {
++async function removeStalePiDeckExtension(extensionName: string, homeDir?: string): Promise<void> {
+ 	const home = homeDir ?? app.getPath("home");
+ 	const targetPath = join(home, ".pi", "agent", "extensions", extensionName);
+ 	await rm(targetPath, { force: true });
+@@ -4307,7 +4422,7 @@ async function migrateLegacyBuiltInExtensions(): Promise<void> {
+ 	}
+ 	for (const home of homes) {
+ 		for (const name of legacyNames) {
+-			await removeStaleTelosExtension(name, home).catch(() => undefined);
++			await removeStalePiDeckExtension(name, home).catch(() => undefined);
+ 		}
+ 	}
+ }
+@@ -4350,7 +4465,7 @@ async function ensurePiSettingsDefaults(configDir: string, piVersionHint?: strin
+ 	if (changed) {
+ 		await mkdir(configDir, { recursive: true });
+ 		await writeFile(filePath, JSON.stringify(current, null, 2), "utf8");
+-		console.log('[Telos] Ensured pi settings defaults at:', filePath);
++		console.log('[PiDeck] Ensured pi settings defaults at:', filePath);
+ 	}
+ }
+ 
