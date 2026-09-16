@@ -30,7 +30,7 @@ import {
   isLanWeb,
   missingElectronPreload,
 } from "./desktopApi";
-import { turnFlowSettingsAtom, defaultAgentBackendAtom, effectiveAgentBackendAtom, busySendDeliveryAtom, imageGenConfigAtom, dshRuntimeStatusAtom, openSettingsAtom, sessionRecordsAtom, bumpNewTurnCollapseTickAtom } from "./atoms";
+import { turnFlowSettingsAtom, defaultAgentBackendAtom, effectiveAgentBackendAtom, busySendDeliveryAtom, imageGenConfigAtom, dshRuntimeStatusAtom, openSettingsAtom, openAutomationModalAtom, sessionRecordsAtom, bumpNewTurnCollapseTickAtom } from "./atoms";
 import { resolveBusySendDelivery } from "../../shared/busySendDelivery";
 import { FILE_TREE_ABSOLUTE_MAX_DEPTH } from "../../shared/fileTree";
 // 文件链接路由：图片类型走弹窗预览
@@ -246,6 +246,7 @@ export function App() {
   const agents = useAtomValue(agentInventoryAtom);
   const setCurrentSessionId = useSetAtom(currentSessionIdAtom);
   const replaceProjectSessions = useSetAtom(replaceProjectSessionsAtom);
+  const openAutomationModal = useSetAtom(openAutomationModalAtom);
   const setProjects = useSetAtom(replaceProjectInventoryAtom);
   const applyRuntimeEvent = useSetAtom(applySessionRuntimeEventAtom);
   const upsertSession = useSetAtom(upsertSessionAtom);
@@ -649,6 +650,7 @@ export function App() {
     gitCommitMessageProvider: "",
     gitCommitMessageModel: "",
     gitExecutablePath: "",
+    dshRunnerNodePath: "",
     closeToTray: true,
     singleInstance: true,
     enableNotifications: true,
@@ -3178,6 +3180,7 @@ export function App() {
         return openOpenCodeImport(project);
       },
       manageResources: (project) => setProjectResourcesProject(project),
+      manageAutomations: (projectId) => openAutomationModal(projectId),
       toggleWorktree: toggleProjectWorktree,
       copyPath: async (project) => {
         await navigator.clipboard.writeText(project.path);

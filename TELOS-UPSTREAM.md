@@ -9,8 +9,10 @@
 
 基线 commit（首次导入时锁定）见 [`.upstream/pideck-baseline.json`](./.upstream/pideck-baseline.json)。
 
-**当前基线：** `4ab3beea370e83cb79d52aa314537c277b4c4f55`（`4ab3beea`）  
-`chore: update star history [skip ci]` @ 2026-09-13T03:36:27Z
+**当前基线：** `0950e2c1a3e55cb2ab3771d40dc8ae9d97b7ba72`（`0950e2c1`）  
+`chore: update star history [skip ci]` @ 2026-09-16T03:43:13Z
+
+上次选择性合入区间：`4ab3beea` → `0950e2c1`（约 62 commits）。跳过上游 CI / star-history / PiDeck CHANGELOG·README；保留 Telos 品牌、`updateSource=github`、`gygy/telos`、`telos-doctor`。
 
 ## Remotes（本机）
 

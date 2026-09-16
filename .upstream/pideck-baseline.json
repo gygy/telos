@@ -9,14 +9,14 @@
   "localMirror": "G:/gitea/pideck-github",
   "giteaMirror": "ssh://git@192.168.80.3:8022/sheng/pideck-github.git",
   "baseline": {
-    "commit": "4ab3beea370e83cb79d52aa314537c277b4c4f55",
-    "short": "4ab3beea",
+    "commit": "0950e2c1a3e55cb2ab3771d40dc8ae9d97b7ba72",
+    "short": "0950e2c1",
     "subject": "chore: update star history [skip ci]",
     "author": "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
-    "authoredAt": "2026-09-13T03:36:27Z",
-    "committedAt": "2026-09-13T03:36:27Z",
-    "recordedAt": "2026-09-13T12:35:00Z",
-    "note": "First Telos import tip of GitHub ayuayue/PiDeck main. Use this commit as the start of incremental / selective sync."
+    "authoredAt": "2026-09-16T03:43:13Z",
+    "committedAt": "2026-09-16T03:43:13Z",
+    "recordedAt": "2026-09-16T15:05:00Z",
+    "note": "Selective sync of PiDeck main after first Telos import (4ab3beea → 0950e2c1). Telos branding/updateSource/telos-doctor overlays preserved; upstream CI/star-history/CHANGELOG/README skipped."
   },
   "readOnly": true
 }

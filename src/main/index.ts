@@ -365,6 +365,8 @@ import { registerVisionIpc } from "./ipc/visionIpc";
 import { registerImageGenIpc } from "./ipc/imagegenIpc";
 import { ImageGenService } from "./imagegen/ImageGenService";
 import { ImageSessionStore } from "./imagegen/ImageSessionStore";
+import { ImageBlobStore } from "./imagegen/ImageBlobStore";
+import { registerImageGenImageProtocol } from "./imagegen/ImageGenImageProtocol";
 import { ImageGenConfigStore } from "./imagegen/ImageGenConfigStore";
 import { registerVoiceTranscriptionIpc } from "./ipc/voiceTranscriptionIpc";
 import { VoiceTranscriptionConfigStore } from "./voice/VoiceTranscriptionConfigStore";
@@ -896,6 +898,12 @@ async function copyCatalogSession(sessionId: string) {
 		forked: true,
 	});
 	return { cancelled: false, targetSessionId: copied.id };
+}
+
+/** 生图 sessions/blobs 根必须同源解析，避免「写进 A、协议从 B 读」。 */
+function resolveImageGenStorageRoots(): { sessions: string; blobs: string } {
+	const root = join(app.getPath("userData"), "imagegen");
+	return { sessions: join(root, "sessions"), blobs: join(root, "blobs") };
 }
 
 async function exportCatalogSessionHtml(sessionId: string): Promise<{ path: string }> {
@@ -2526,9 +2534,18 @@ function registerIpc() {
 	});
 	// 生图 session 独立存储：无 pi 会话文件的纯生图草稿把历史落盘到这里（重启可恢复），
 	// 不依赖 pi 会话文件也不进 pi 的 sessions 目录（Telos userData/imagegen/sessions）。
+	// 图片二进制单独落 blobs：JSONL 只留引用，否则几十轮生图就能把会话文件堆到 200 MB+、
+	// 渲染进程加载后 OOM（2026-09 白屏事故）。两个根必须同源解析，各拼一次路径会漂移成
+	// 「图片写进了 A 目录、协议从 B 目录读」。
+	const imageGenRoots = resolveImageGenStorageRoots();
+	const imageBlobStore = new ImageBlobStore({ getBlobsPath: () => imageGenRoots.blobs });
+	void imageBlobStore.ensureDir();
 	const imageSessionStore = new ImageSessionStore({
-		getStorePath: () => join(app.getPath("userData"), "imagegen", "sessions"),
+		getStorePath: () => imageGenRoots.sessions,
+		blobs: imageBlobStore,
 	});
+	// pideck-img:// 必须在 app ready 后注册（scheme 特权声明在文件底部 ready 前完成）
+	registerImageGenImageProtocol(imageBlobStore);
 	registerImageGenIpc({
 		imageGen: new ImageGenService({
 			getProviderCredentials: async (provider) => {
@@ -2540,6 +2557,7 @@ function registerIpc() {
 		}),
 		imageGenConfig: imageGenConfigStore,
 		log: (message, ...args) => appLogger.info("imagegen", message, ...args),
+		readImageBlob: (ref) => imageBlobStore.readPayload(ref),
 		// 生图记录落盘：user 提示词 + assistant 图片两条消息写入 pi 会话文件，
 		// 让「不走 pi/dsh 直连 API」的生图结果也进会话历史（重启后可见）。
 		// DSH 会话无 pi 会话文件且 host 无消息追加 API，跳过（生图仍正常返回）。
@@ -2650,6 +2668,7 @@ function registerIpc() {
 		openCodeSessionImporter,
 		zcodeSessionImporter,
 		workbuddySessionImporter,
+		cursorSessionImporter,
 		appLogger,
 		terminalManager,
 		mainCopy: mainCopy as (key: string, params?: Record<string, string | number>) => string,
@@ -3201,6 +3220,8 @@ protocol.registerSchemesAsPrivileged([
 	{ scheme: "pideck-bg", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: false } },
 	{ scheme: "pideck-pet", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: false } },
 	{ scheme: "pideck-sound", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: true } },
+	// 生图历史图片：渲染层 <img> 直接加载落盘 blob，避免把 base64 搬回渲染进程
+	{ scheme: "pideck-img", privileges: { secure: true, standard: true, corsEnabled: false, supportFetchAPI: true, stream: true } },
 ]);
 
 app.whenReady().then(async () => {
@@ -3734,15 +3755,17 @@ app.whenReady().then(async () => {
 			readCatalogSessionReferenceMessages(sessionId),
 		readSessionMessages: async (sessionId) => {
 			const entry = sessionCatalog.get(sessionId);
-			// DSH 会话没有 pi 会话文件：全量读走 host 历史事件流（一次拉最大页），
-			// 与分页路径同源；未挂载 DSH 后端时返回空数组。
+			// DSH 会话没有 pi 会话文件：读 host 历史事件流的一页（有界），
+			// 与分页路径同源；未挂载 DSH 后端时返回空窗口。
 			if (entry?.backend === "dsh" && entry.dshSessionId && dshAgentManager) {
 				const page = await dshAgentManager.readHistoryPage(entry.dshSessionId, undefined, 1000);
-				return page.messages;
+				return { messages: page.messages, total: page.total, windowStart: 0, truncated: false };
 			}
-			if (!entry?.filePath) return [];
-			const content = await sessionScanner.readSessionRawText(entry.filePath);
-			return agentManager.readSessionDisplayMessages(entry.filePath, sessionId, content);
+			if (!entry?.filePath) return { messages: [], total: 0, windowStart: 0, truncated: false };
+			// 有界加载窗口（条数 + 条目预算），不是全量历史：全量下发在大会话上会同时顶爆
+			// 主进程与渲染层（#213）。更早历史请走分页接口（Web /messages/page）。
+			const window = await agentManager.readSessionLoadWindow(entry.filePath, sessionId);
+			return { ...window, truncated: window.windowStart > 0 };
 		},
 		readSessionMessagePage: async (sessionId, before, pageSize) => {
 			const entry = sessionCatalog.get(sessionId);
