@@ -5,6 +5,19 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.6
+
+发布时间：2026-09-17
+
+- 🚀 **导入 Cursor Agent 会话**
+- 🚀 **全局快捷键自定义**
+- 🚀 **定时任务管理改模态弹框**
+- 🚀 **提示词商店与内置技能热更新**
+- ✨ **生图会话 OOM 白屏**
+- ✨ **大会话历史有界加载**
+- ✨ **上滑翻历史钉住当前轮**
+- ✨ **DSH runtime 与 Node 24 sidecar**
+
 ## v0.7.5
 
 发布时间：2026-09-12

@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.7.5--beta-blue)
+![Version](https://img.shields.io/badge/version-0.7.6-blue)
 
 <!-- star-history:start -->
 <picture>
@@ -79,25 +79,17 @@
 
 ## 📋 Changelog
 
-> **Latest: v0.7.5** (2026-09-12)
+> **Latest: v0.7.6** (2026-09-17)
 
-### v0.7.5 Release Highlights
-- 🚀 **Inline reference chips aligned with Proma and self-contained persistence**
-- 🚀 **Sidebar session hover preview card**
-- 🚀 **Configurable Git executable path with detection**
-- 🚀 **Built-in prompt templates restored and AtomGit mirror added**
-- 🚀 **DSH runtime upgraded to 0.1.5 (Typert Remote)**
-- 🚀 **Scheduled tasks and automation**
-- 🚀 **AtomGit-first update source**
-- 🚀 **In-app update changelog**
-- 🚀 **pi-deck-trash-guard built-in extension**
-- 🚀 **Built-in extension remote hot updates**
-- 🚀 **Notice toast truncation with details dialog**
-- 🚀 **Session proxies save-in-effect with full run-state control**
-- ✨ **DSH sandbox hang and console window fixed**
-- ✨ **Second and subsequent DSH sessions respond again**
-- ✨ **DSH journal replay no longer duplicates messages and traces**
-- ✨ **DSH model discovery no longer always reports "0 models fetched"**
+### v0.7.6 Release Highlights
+- 🚀 **Import Cursor Agent sessions**
+- 🚀 **Custom global shortcuts**
+- 🚀 **Automation manager as a modal**
+- 🚀 **Prompt-store and built-in skill hot updates**
+- ✨ **Image-session OOM white screen**
+- ✨ **Bounded history load for large sessions**
+- ✨ **History expand keeps the focused turn**
+- ✨ **DSH runtime and Node 24 sidecar**
 
 [View Full Changelog →](CHANGELOG.md)
 

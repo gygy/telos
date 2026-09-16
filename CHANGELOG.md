@@ -1,3 +1,22 @@
+## v0.7.6 - 2026-09-17
+
+### 🚀 New Features
+- **Import Cursor Agent sessions** — Project context menu can scan and import Agent transcripts under `~/.cursor/projects`, rewritten as native pi JSONL (text / thinking / tool_use pairing) with current / outdated markers on re-import.
+- **Custom global shortcuts** — Settings gains a Shortcuts panel for open-settings / new-session / search / DevTools bindings; the main process matches them uniformly (including when a webview has focus).
+- **Automation manager as a modal** — Automation management moves into a modal dialog instead of covering the session workbench; the project menu can open the task list scoped to that project.
+- **Prompt-store and built-in skill hot updates** — Official prompt templates and built-in skills support remote-manifest hot updates (verified overlay) without waiting for an app release.
+
+### 🐛 Fixes
+- **Image-session OOM white screen** — Generated images are stored as content-addressed blobs (`pideck-img://`) with refs only in JSONL; reads are byte-bounded so dozens of image turns no longer crash the renderer.
+- **Bounded history load for large sessions** — Full-read entry points now return a load window (total / windowStart / truncated); older turns use paging so huge sessions no longer materialize the entire history at once.
+- **History expand keeps the focused turn** — Expanding older history pins the viewport to the turn you were reading instead of jumping earlier.
+- **DSH runtime and Node 24 sidecar** — Remote DSH runtime distribution is unified; Windows sandbox Node 24 can download on demand from AtomGit / GitHub; koffi is a first-class app dependency with a complete runtime resolve chain.
+- **Resident animation and memory budgets** — Resident animations are toned down to cut idle GPU use; caches gain byte budgets to close several unbounded-growth paths.
+
+### 🙏 Acknowledgments
+
+Thanks to upstream PiDeck contributors; this release selectively merges upstream features while keeping Telos branding and update-source defaults.
+
 ## v0.7.5 - 2026-09-12
 
 ### 🚀 New Features

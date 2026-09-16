@@ -9,10 +9,10 @@ Telos 是基于上游 [PiDeck](https://github.com/ayuayue/PiDeck) 定制的**智
 
 | 字段 | 值 |
 |------|-----|
-| Commit | `4ab3beea370e83cb79d52aa314537c277b4c4f55` |
-| Short | `4ab3beea` |
+| Commit | `0950e2c1a3e55cb2ab3771d40dc8ae9d97b7ba72` |
+| Short | `0950e2c1` |
 | Subject | `chore: update star history [skip ci]` |
-| Time | `2026-09-13T03:36:27Z` |
+| Time | `2026-09-16T03:43:13Z` |
 
 完整记录：[`.upstream/pideck-baseline.json`](./.upstream/pideck-baseline.json)  
 同步说明：[TELOS-UPSTREAM.md](./TELOS-UPSTREAM.md)
