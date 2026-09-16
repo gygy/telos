@@ -533,16 +533,20 @@ export function App() {
     setZcodeImportProject,
     workbuddyImportProject,
     setWorkbuddyImportProject,
+    cursorImportProject,
+    setCursorImportProject,
     codexImportController,
     claudeImportController,
     openCodeImportController,
     zcodeImportController,
     workbuddyImportController,
+    cursorImportController,
     openCodexImport,
     openClaudeImport,
     openOpenCodeImport,
     openZCodeImport,
     openWorkBuddyImport,
+    openCursorImport,
   } = useImportFlow({
     setProjectMenu: () => undefined,
     refreshProjectSessions,
@@ -557,6 +561,8 @@ export function App() {
     importZCodeSessionsApi: api.zcodeSessions.import,
     scanWorkBuddySessions: api.workbuddySessions.scan,
     importWorkBuddySessionsApi: api.workbuddySessions.import,
+    scanCursorSessions: api.cursorSessions.scan,
+    importCursorSessionsApi: api.cursorSessions.import,
     t,
   });
 
@@ -3168,6 +3174,7 @@ export function App() {
         if (source === "claude") return openClaudeImport(project);
         if (source === "zcode") return openZCodeImport(project);
         if (source === "workbuddy") return openWorkBuddyImport(project);
+        if (source === "cursor") return openCursorImport(project);
         return openOpenCodeImport(project);
       },
       manageResources: (project) => setProjectResourcesProject(project),
@@ -4218,6 +4225,7 @@ export function App() {
     {openCodeImportProject && <ImportOverlayHost kind="opencode" project={openCodeImportProject} controller={openCodeImportController} onClose={() => setOpenCodeImportProject(null)} />}
     {zcodeImportProject && <ImportOverlayHost kind="zcode" project={zcodeImportProject} controller={zcodeImportController} onClose={() => setZcodeImportProject(null)} />}
     {workbuddyImportProject && <ImportOverlayHost kind="workbuddy" project={workbuddyImportProject} controller={workbuddyImportController} onClose={() => setWorkbuddyImportProject(null)} />}
+    {cursorImportProject && <ImportOverlayHost kind="cursor" project={cursorImportProject} controller={cursorImportController} onClose={() => setCursorImportProject(null)} />}
 
     {/* 定时任务与自动化管理中心全功能弹窗 */}
     <AutomationModal
