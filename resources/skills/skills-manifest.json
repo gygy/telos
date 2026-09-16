@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
   "version": "1.0.0",
-  "bundleSha256": "0396f98af772e77a8ed09ef5651bd6f32ecc869ef8abf56c3c5eba08398869cb",
+  "bundleSha256": "427c2621d43721a2e5eacb2d45df7816031b705eb2ea0aafc14c971eaf5dabb3",
   "fileCount": 3,
   "files": [
     {
       "name": "image-gen/SKILL.md",
-      "sha256": "4bd23311cb40eab90cd9245c130f3b71ccf72e6e5a35227f17166afc62565cc3",
-      "bytes": 8034
+      "sha256": "5cac9c71bceb6c46bbbb34e0f94d46e42007fb1e70f093c59a8ce3512810f321",
+      "bytes": 8072
     },
     {
-      "name": "pideck-doctor/SKILL.md",
-      "sha256": "18f79100a9ae5b8800cb9d3970ef11fee2049db88b9f299e1f5c72c478d2e81d",
-      "bytes": 4784
+      "name": "telos-doctor/SKILL.md",
+      "sha256": "1216b9ed00ecaec8dc50699322d168ed61b7019fef156b01279b02d70c81284f",
+      "bytes": 4774
     },
     {
       "name": "usage-probe/SKILL.md",
-      "sha256": "d0e4c331c0b7950653df613a9b4a355aed0ee7615628d8ae771763d8eb8d4a51",
-      "bytes": 8243
+      "sha256": "9ec4bc7678fa6912c858484ac766759a93056ab0ab477123b141b94d803b56a3",
+      "bytes": 8242
     }
   ]
 }
