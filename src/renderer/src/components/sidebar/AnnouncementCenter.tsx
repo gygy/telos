@@ -339,7 +339,7 @@ export function AnnouncementCenter() {
 				if (next && unreadCount > 0) markAllRead();
 			}}
 		>
-			{/* 无 DialogTrigger：侧栏不再放常驻按钮；打开仅靠 toast「查看」写 atom */}
+			{/* 无常驻触发按钮：侧栏 dock 已移除入口；打开仅靠 toast「查看」写 atom */}
 			<DialogContent
 				onPointerDownOutside={(event) => {
 					// 源头拦截：详情抽屉（含背板）上的交互只关抽屉，不关列表弹窗。

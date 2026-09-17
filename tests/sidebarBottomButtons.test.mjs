@@ -52,7 +52,8 @@ test("dock keeps settings and theme; feedback lives in AboutPopover", () => {
 test("announcement center mounts without dock trigger for toast view action", () => {
   assert.match(appSidebar, /<AnnouncementCenter \/>/);
   assert.doesNotMatch(sidebar, /AnnouncementCenter/);
-  assert.doesNotMatch(announcement, /DialogTrigger|Megaphone/);
+  assert.doesNotMatch(announcement, /\bDialogTrigger\b/);
+  assert.doesNotMatch(announcement, /\bMegaphone\b/);
   assert.match(announcement, /announcementCenterOpenAtom/);
 });
 
