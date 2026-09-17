@@ -28,14 +28,23 @@ function piAgentSettingsPath() {
 	return join(app.getPath("home"), ".pi", "agent", "settings.json");
 }
 
+/**
+ * ready 前同步读 settings 的进程内缓存。
+ * pet / sandbox / singleInstance 在入口各读一次；同文件三次 open+parse 没必要。
+ * 不提供失效：这些偏好只能重启后改（appendSwitch / 单实例锁已固定）。
+ */
+let desktopSettingsSyncCache: Partial<AppSettings> | undefined;
+
 /** 同步读取桌面 settings.json（app.ready 前可用）。文件缺失时返回空对象。 */
 function readDesktopSettingsSync(): Partial<AppSettings> {
+	if (desktopSettingsSyncCache) return desktopSettingsSyncCache;
 	try {
 		const raw = readFileSync(desktopSettingsPath(), "utf8");
-		return JSON.parse(raw) as Partial<AppSettings>;
+		desktopSettingsSyncCache = JSON.parse(raw) as Partial<AppSettings>;
 	} catch {
-		return {};
+		desktopSettingsSyncCache = {};
 	}
+	return desktopSettingsSyncCache;
 }
 
 /**

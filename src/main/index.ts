@@ -50,6 +50,7 @@ import {
 	sanitizeDevBranchSegment,
 } from "./devIsolation";
 import { resolvePackagedUserDataDir } from "./portableUserData";
+import { createStartupTimer } from "./startupTiming";
 import { extractFocusTargetFromArgv } from "./utils/focusTarget";
 import type { Project, StartupWindowMode } from "../shared/types";
 // 使用 ?asset 后缀导入图标，electron-vite 会在构建时将其复制到输出目录并提供正确的运行时路径
@@ -435,6 +436,8 @@ import { UpdateService } from "./update/UpdateService";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+/** 冷启动分段计时（whenReady 内创建；show 时打点）。 */
+let startupTimer: ReturnType<typeof createStartupTimer> | null = null;
 /** 标记是否由用户主动退出（托盘菜单「退出」），区别于窗口关闭隐藏到托盘 */
 let isQuitting = false;
 /** 渲染进程崩溃自动恢复守卫（2026-08 黑屏治理，见 window/rendererCrashRecovery.ts）：
@@ -1672,6 +1675,7 @@ async function createWindow() {
 		}
 		// 向开发者工具输出启动信息
 		printStartupInfo();
+		startupTimer?.mark("main-window-shown");
 	}
 
 	// 窗口保持隐藏时先按启动预设调整（maximize/fullscreen），再加载页面；
@@ -3228,6 +3232,15 @@ app.whenReady().then(async () => {
 	// 未拿到同版本主实例锁时不要继续初始化，避免第二进程短暂闪窗。
 	if (singleInstanceEnabled && !gotSingleInstanceLock) return;
 
+	startupTimer = createStartupTimer({
+		info: (scope, message, detail) => {
+			// appLogger 在紧随其后的装配里才创建；首几条 mark 先落到 console，避免丢点。
+			if (appLogger) void appLogger.info(scope, message, detail);
+			else console.info(`[${scope}] ${message}`, detail ?? "");
+		},
+	});
+	startupTimer.mark("whenReady");
+
 	projectStore = new ProjectStore(() => mainCopy("dialog.chooseProjectFolder"));
 	fileSystemService = new FileSystemService();
 	sessionScanner = new SessionScanner(mainCopy);
@@ -3888,6 +3901,7 @@ app.whenReady().then(async () => {
 	quitCleanup.register("terminal", () => terminalManager?.closeAll());
 
 	await settingsStore.load();
+	startupTimer?.mark("settings-loaded");
 	// 快捷键覆盖从磁盘载入后立即刷新主进程生效绑定（此后 settings:update 路径实时刷新）
 	refreshShortcutBindings(settingsStore.get());
 	piModelCapabilityCache = new PiModelCapabilityCache({
@@ -3957,7 +3971,9 @@ app.whenReady().then(async () => {
 		// 把 pi-subagents transcript 等无 type 头的产物挡在 catalog 之外（#168）。
 		(filePath) => sessionScanner.inferSessionNameAndValidity(filePath),
 	);
-	await sessionCatalog.load();
+	// 不在此 await：catalog I/O 与 createWindow/Chromium 首载并行，缩短「点图标→见窗口」。
+	// 只读 IPC 在 loaded 前返回空；写路径仍 assertLoaded（窗口出现后、用户操作前会 await 完成）。
+	const sessionCatalogReady = sessionCatalog.load();
 	// 多后端网关装配：pi + dsh（DSH 在窗口创建后后台预热，失败时按需重试）。
 	// Coordinator 与事件桥接均面向合成器，新增后端只需追加网关实例。
 	compositeAgentGateway = new CompositeAgentGateway([agentManager, dshAgentManager]);
@@ -3968,9 +3984,9 @@ app.whenReady().then(async () => {
 		appLogger,
 	);
 
-	// 定时任务调度器与执行编排器装配
+	// 定时任务调度器与执行编排器装配（load/start 挪到窗口之后，与 catalog 一并等待）
 	automationStore = new AutomationStore(join(app.getPath("userData"), "automation.json"));
-	await automationStore.load();
+	const automationStoreReady = automationStore.load();
 	automationRunCoordinator = new AutomationRunCoordinator({
 		store: automationStore,
 		catalog: sessionCatalog,
@@ -4010,7 +4026,6 @@ app.whenReady().then(async () => {
 	automationScheduler.setTriggerHandler(async (task, scheduledFor, trigger) => {
 		await automationRunCoordinator?.enqueueRun(task, scheduledFor, trigger);
 	});
-	automationScheduler.start();
 	quitCleanup.register("automation", () => {
 		automationScheduler?.stop();
 		automationRunCoordinator?.dispose();
@@ -4033,7 +4048,6 @@ app.whenReady().then(async () => {
 			if (target) emitSessionRuntimeDetach(target);
 		},
 	);
-	idleAgentReleaser.start();
 	quitCleanup.register("idle-agent-releaser", () => idleAgentReleaser?.stop());
 	// pi 运行时标题（首轮自动改名 / session_info_changed / rename）写回 catalog：
 	// 侧栏 SessionTree 与 Tab 栏读的是 SessionRecord.title，不是 AgentTab.title。
@@ -4109,15 +4123,27 @@ app.whenReady().then(async () => {
 		}
 	};
 
-	// 先注册 IPC 并创建窗口：WSL 探测 / pi settings / 代理 / Web 服务都可能卡住或抛错，
-	// 不能挡在 createWindow 前面（打包便携版表现为「启动没反应」，dev 因热路径较短不易复现）。
+	// 先注册 IPC 并创建窗口：catalog/automation 磁盘加载与 Chromium 首载并行；
+	// WSL 探测 / pi settings / 代理 / Web 服务都可能卡住或抛错，不能挡在 createWindow 前面。
+	startupTimer?.mark("before-registerIpc");
 	registerIpc();
 	registerFeishuIpc();
-	// 配置备份（手动模式）：仅在备份目录为空（首次使用）时自动建一份 first-run，
-	// 之后不再自动备份。同步快，不挡首帧；失败仅记录，不阻断启动。
-	configBackupManager?.ensureInitialBackups();
+	startupTimer?.mark("before-createWindow");
 	await createWindow();
+	startupTimer?.mark("after-createWindow");
 	setupTray();
+	// catalog + automation 与窗口创建重叠；此处汇合后再启动调度，避免空表扫一轮。
+	await Promise.all([sessionCatalogReady, automationStoreReady]);
+	startupTimer?.mark("catalog-automation-ready");
+	automationScheduler.start();
+	idleAgentReleaser.start();
+	// 渲染层若在 catalog 就绪前拉过空列表，推一次刷新避免侧栏短时空窗。
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send(ipcChannels.sessionsCatalogRefreshed, {});
+	}
+	// 配置备份（手动模式）：仅在备份目录为空（首次使用）时自动建一份 first-run。
+	// 挪到窗口之后：同步读 pi 配置不应挡首帧。
+	configBackupManager?.ensureInitialBackups();
 	// 粘贴文件启动清理：删除超过保留期的落盘文件（fire-and-forget，不挡首帧）
 	void cleanupPasteFiles?.().catch((error: unknown) => {
 		void appLogger.warn("app", "Paste file cleanup failed during startup", error);

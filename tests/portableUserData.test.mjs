@@ -51,9 +51,10 @@ test("主进程正式版走 resolvePackagedUserDataDir，启动失败有 catch",
 	const src = readFileSync("src/main/index.ts", "utf8");
 	assert.match(src, /from "\.\/portableUserData"/);
 	assert.match(src, /resolvePackagedUserDataDir\(\{ appData: app\.getPath\("appData"\) \}\)/);
+	// 窗口先于 ensureInitialBackups：同步备份不挡首帧。
 	assert.match(
 		src,
-		/registerIpc\(\);\s*registerFeishuIpc\(\);\s*(?:\/\/[^\n]*\n\s*)*configBackupManager\?\.ensureInitialBackups\(\);\s*await createWindow\(\);/s,
+		/registerIpc\(\);\s*registerFeishuIpc\(\);[\s\S]*?await createWindow\(\);[\s\S]*?configBackupManager\?\.ensureInitialBackups\(\);/s,
 	);
 	assert.match(src, /Application startup failed/);
 	assert.match(src, /showErrorBox/);

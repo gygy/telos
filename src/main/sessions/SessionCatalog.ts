@@ -332,7 +332,8 @@ export class SessionCatalog {
 	}
 
 	listEntries(): SessionCatalogEntry[] {
-		this.assertLoaded();
+		// 窗口可先于 catalog 落盘完成显示：未加载完时只读返回空，避免 IPC 抛错。
+		if (!this.loaded) return [];
 		return [
 			...this.entries.map(cloneEntry),
 			...Array.from(this.transientEntries.values(), cloneEntry),
@@ -340,7 +341,7 @@ export class SessionCatalog {
 	}
 
 	get(id: string): SessionCatalogEntry | undefined {
-		this.assertLoaded();
+		if (!this.loaded) return undefined;
 		const entry = this.transientEntries.get(id) ?? this.entries.find((candidate) => candidate.id === id);
 		return entry ? cloneEntry(entry) : undefined;
 	}
@@ -348,14 +349,14 @@ export class SessionCatalog {
 	/** 按 DSH host 会话 id 反查 catalog 记录（会话标题同步用；只读查询，不排队写）。
 	 *  transient 草稿尚未 attach host 会话（无 dshSessionId），只需查持久 entries。 */
 	findByDshSessionId(dshSessionId: string): SessionCatalogEntry | undefined {
-		this.assertLoaded();
+		if (!this.loaded) return undefined;
 		const entry = this.entries.find((candidate) => candidate.dshSessionId === dshSessionId);
 		return entry ? cloneEntry(entry) : undefined;
 	}
 
 	/** 侧栏删除过的 DSH host 会话。自动同步跳过；手动导入会清掉。 */
 	listDismissedDshSessionIds(): Set<string> {
-		this.assertLoaded();
+		if (!this.loaded) return new Set();
 		return new Set(this.dismissedDshSessionIds);
 	}
 
@@ -415,7 +416,7 @@ export class SessionCatalog {
 		filePath: string,
 		environment: SessionEnvironment,
 	): SessionCatalogEntry | undefined {
-		this.assertLoaded();
+		if (!this.loaded) return undefined;
 		const target = canonicalizeSessionPath(filePath, environment);
 		const entry = this.entries.find((candidate) => (
 			candidate.filePath &&
