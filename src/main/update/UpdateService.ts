@@ -94,13 +94,15 @@ export class UpdateService {
 	constructor(deps: UpdateServiceDeps) {
 		this.deps = deps;
 		this.deliveryMode = deps.deliveryMode ?? "automatic";
-		if (this.deliveryMode === "automatic") this.subscribeAutoUpdater();
-		else this.getManualChecker(); // Fail at composition time instead of silently disabling macOS checks.
+		// automatic 模式的 autoUpdater 订阅延后到 start()：createRealAutoUpdater /
+		// session.fromPartition 在 Windows 上可达数秒，不能挡在 createWindow 前。
+		if (this.deliveryMode === "manual") this.getManualChecker(); // Fail at composition time instead of silently disabling macOS checks.
 	}
 
 	/** 启动后台调度：延迟首查 + 固定周期续查（带抖动）。 */
 	start(options?: { startDelayMs?: number; intervalMs?: number }): void {
 		if (this.disposed) return;
+		this.ensureAutoUpdaterSubscribed();
 		this.applyAutoDownloadPreference();
 		this.applyUpdateSource();
 		this.scheduleNext(
@@ -112,6 +114,7 @@ export class UpdateService {
 	/** 立即执行一轮检查（自动调度 / 手动「检测更新」共用；经 checkUpdate IPC）。 */
 	async checkNow(): Promise<void> {
 		if (this.running || this.download.phase === "installing") return;
+		this.ensureAutoUpdaterSubscribed();
 		this.running = true;
 		this.applyAutoDownloadPreference();
 		// 已下载的更新保持 ready，不能因手动检测而让安装入口消失。
@@ -158,6 +161,7 @@ export class UpdateService {
 			void this.deps.log?.("warn", "In-app download is unavailable for manual update delivery");
 			return;
 		}
+		this.ensureAutoUpdaterSubscribed();
 		if (this.download.phase === "installing") {
 			void this.deps.log?.("warn", "Ignored download request while update installation is starting");
 			return;
@@ -301,6 +305,13 @@ export class UpdateService {
 		}
 		this.unsubscribeUpdater?.();
 		this.unsubscribeUpdater = null;
+	}
+
+	/** 惰性订阅：构造时不碰 electron-updater，start/checkNow/download 路径再装。 */
+	private ensureAutoUpdaterSubscribed(): void {
+		if (this.deliveryMode === "automatic" && !this.unsubscribeUpdater) {
+			this.subscribeAutoUpdater();
+		}
 	}
 
 	private subscribeAutoUpdater(): void {

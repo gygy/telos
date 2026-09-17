@@ -483,6 +483,16 @@ let skillManager: SkillManager;
 let extensionManager: ExtensionManager;
 /** 后台更新检查服务（启动延迟 + 2h 周期，无配额方案）；null = 未初始化。 */
 let updateService: UpdateService | null = null;
+/** electron-updater 惰性单例：createWindow 之后再 require，避免冷启动挡窗。 */
+let deferredAutoUpdaterInstance: ReturnType<typeof createRealAutoUpdater> | null = null;
+function deferredAutoUpdater(): ReturnType<typeof createRealAutoUpdater> {
+	if (!deferredAutoUpdaterInstance) {
+		// AtomGit 镜像源对 query string 返回 404；剥除器必须挂在 updater 专属 partition。
+		installAtomgitNoCacheBypass(() => session.fromPartition(UPDATER_PARTITION_NAME, { cache: false }));
+		deferredAutoUpdaterInstance = createRealAutoUpdater();
+	}
+	return deferredAutoUpdaterInstance;
+}
 let projectResourceManager: ProjectResourceManager;
 let webServiceManager: WebServiceManager;
 let terminalManager: TerminalSessionManager;
@@ -2926,12 +2936,8 @@ function registerIpc() {
 	// 后台更新检查：Windows / 支持自动升级的发行物走 electron-updater；
 	// macOS 当前未签 Developer ID，不能承诺稳定的替换/重启，因此只检测 Release 并交给用户手动安装。
 	// 两条路径都由同一个 UpdateService 快照推送渲染层，设置页能明确表达能力边界。
-	// AtomGit 镜像源对 query string 返回 404，而 electron-updater 检查必带 noCache 参数：
-	// 在 updater 首次发起请求前注册 webRequest 剥除器（幂等）。注意必须挂在
-	// electron-updater 的独立 partition session（"electron-updater"）上，而不是 defaultSession
-	// —— updater 的 ElectronHttpExecutor 用 session.fromPartition("electron-updater") 发请求，
-	// 挂在 defaultSession 会拦不到（0.7.5 曾因此漏修）。
-	installAtomgitNoCacheBypass(() => session.fromPartition(UPDATER_PARTITION_NAME, { cache: false }));
+	// AtomGit noCache 剥除 + createRealAutoUpdater 延后到 startDeferredUpdateServices
+	// （Windows 上 fromPartition / require(electron-updater) 可达数秒，不能挡窗口）。
 	const updateServiceBase = {
 		settingsStore,
 		checkPiUpdate: () => extensionManager.checkPiUpdate(),
@@ -2963,7 +2969,16 @@ function registerIpc() {
 		updateService = new UpdateService({
 			...updateServiceBase,
 			deliveryMode: "automatic",
-			autoUpdater: createRealAutoUpdater(),
+			// 惰性：start() 才 require electron-updater / 建 partition，避免挡窗口。
+			autoUpdater: {
+				setAutoDownload: (enabled) => deferredAutoUpdater().setAutoDownload(enabled),
+				isAutoDownload: () => deferredAutoUpdater().isAutoDownload(),
+				setFeedUrl: (url) => deferredAutoUpdater().setFeedUrl(url),
+				checkForUpdates: () => deferredAutoUpdater().checkForUpdates(),
+				downloadUpdate: () => deferredAutoUpdater().downloadUpdate(),
+				quitAndInstall: () => deferredAutoUpdater().quitAndInstall(),
+				onEvents: (handlers) => deferredAutoUpdater().onEvents(handlers),
+			},
 			// closeToTray 会吞掉普通窗口关闭；安装器必须等待真实主进程退出。
 			prepareForInstall: () => {
 				updateInstallSetQuitting = !isQuitting;
@@ -2976,7 +2991,7 @@ function registerIpc() {
 			},
 		});
 	}
-	updateService.start();
+	// 不在此 start：与 createWindow 并行后再 startDeferredUpdateServices()。
 	registerCatalogIpc(catalogUpdater);
 	registerBuiltInExtensionIpc(builtInExtensionsUpdater);
 	// TokenDance 目录 store 是共享实例：渲染层目录展示与一键安装（写入配置）读同一份缓存。
@@ -4142,6 +4157,9 @@ app.whenReady().then(async () => {
 	if (mainWindow && !mainWindow.isDestroyed()) {
 		mainWindow.webContents.send(ipcChannels.sessionsCatalogRefreshed, {});
 	}
+	// electron-updater / updater partition：窗口可见后再装，避免挡首帧（实测 ~3s）。
+	updateService?.start();
+	startupTimer?.mark("update-service-started");
 	// 配置备份（手动模式）：仅在备份目录为空（首次使用）时自动建一份 first-run。
 	// 挪到窗口之后：同步读 pi 配置不应挡首帧。
 	configBackupManager?.ensureInitialBackups();

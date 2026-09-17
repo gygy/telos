@@ -23,6 +23,14 @@ test("startup overlaps catalog/automation load with createWindow", () => {
 	assert.ok(schedIdx > readyIdx, "scheduler starts after catalog ready");
 });
 
+test("UpdateService starts after createWindow (electron-updater deferred)", () => {
+	const createIdx = main.indexOf("await createWindow()");
+	const startIdx = main.indexOf("updateService?.start()");
+	assert.ok(createIdx > 0 && startIdx > createIdx, "updateService.start after createWindow");
+	assert.match(main, /function deferredAutoUpdater/);
+	assert.match(main, /autoUpdater: \{\s*setAutoDownload:/);
+});
+
 test("SessionCatalog soft-empty reads before load completes", () => {
 	assert.match(catalog, /\/\/ 窗口可先于 catalog 落盘完成显示/);
 	assert.match(catalog, /if \(!this\.loaded\) return \[\];/);
@@ -34,4 +42,14 @@ test("startup timing helper and settings sync cache exist", () => {
 	assert.match(main, /createStartupTimer/);
 	assert.match(main, /startupTimer\?\.mark\("main-window-shown"\)/);
 	assert.match(settings, /desktopSettingsSyncCache/);
+});
+
+test("UpdateService lazy-subscribes autoUpdater on start not constructor", () => {
+	const updateServiceSrc = readFileSync("src/main/update/UpdateService.ts", "utf8");
+	assert.match(updateServiceSrc, /if \(this\.deliveryMode === "automatic" && !this\.unsubscribeUpdater\)/);
+	assert.match(updateServiceSrc, /this\.subscribeAutoUpdater\(\);/);
+	// constructor 不得再立即 subscribe（那会在 createWindow 前触发 createRealAutoUpdater）
+	const ctor = updateServiceSrc.match(/constructor\(deps: UpdateServiceDeps\) \{[\s\S]*?\n\t\}/);
+	assert.ok(ctor, "constructor block");
+	assert.doesNotMatch(ctor[0], /subscribeAutoUpdater/);
 });
