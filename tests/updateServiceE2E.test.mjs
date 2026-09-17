@@ -190,6 +190,9 @@ function createAutomaticService(options = {}) {
 		rollbackInstallPreparation: options.rollbackInstallPreparation,
 		installExitTimeoutMs: options.installExitTimeoutMs,
 	});
+	// production 把 subscribe 延后到 start()；测试需显式 start 才能接到 updater 事件。
+	// 用超长 delay 避免真的跑 checkNow，stop() 会清掉定时器。
+	service.start({ startDelayMs: 3_600_000, intervalMs: 3_600_000 });
 	return { service, updater, settings, snapshots, logs };
 }
 
