@@ -3,6 +3,7 @@ import type { AgentBackend, SessionSource } from "../../../../shared/types";
 import { ImageIcon } from "lucide-react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/utils";
+import { TelosLogo } from "../app/TelosLogo";
 import { Badge } from "../ui-shadcn/badge";
 
 const SOURCE_LABELS: Record<SessionSource, string> = {
@@ -92,30 +93,13 @@ function SourceLogo(props: { source: SessionSource }) {
     );
   }
 
-  return (
-    <svg viewBox="140 140 520 520" className="size-3.5" aria-hidden="true" focusable="false">
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M165.29 165.29H517.36V400H400v117.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-      />
-      <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
-    </svg>
-  );
+  // pi 来源徽章与后端选择器统一用 Telos 圆标，不再用上游官方窗口字形。
+  return <TelosLogo className="size-3.5" title="pi" />;
 }
 
-/** pi 官方 logo（品牌窗口标记，来源徽章同款）。 */
+/** pi 后端 / 来源标记：Telos 品牌圆标（白底 + Yandex 红 π）。 */
 export function PiLogo(props: { className?: string }) {
-  return (
-    <svg viewBox="140 140 520 520" className={props.className ?? "size-3.5"} aria-hidden="true" focusable="false">
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M165.29 165.29H517.36V400H400v117.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-      />
-      <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
-    </svg>
-  );
+  return <TelosLogo className={props.className ?? "size-3.5"} title="pi" />;
 }
 
 /** DSH 官方 logo（DeepSeek 鲸鱼，取自 @deepseek-ai/dsh-web-frontend favicon.svg）。 */

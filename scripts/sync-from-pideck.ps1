@@ -44,6 +44,7 @@ $TelosOverlays = @(
     "src/renderer/src/components/app/AppParts.tsx",
     "src/renderer/src/components/app/AboutPopover.tsx",
     "src/renderer/src/components/app/brandMark.ts",
+    "src/renderer/src/components/session/SessionSourceBadge.tsx",
     "src/renderer/src/web/WebBrandLockup.tsx",
     "src/renderer/src/i18n/rendererCopy.zh-CN.ts",
     "src/renderer/src/i18n/rendererCopy.en-US.ts",
