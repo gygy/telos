@@ -69,7 +69,7 @@ function readAnnouncementBusyContext(): AnnouncementBusyContext {
  * 公告通知调度。开关读 announcementNotificationEnabledAtom 镜像（App.tsx 从
  * settings 同步，参数化 prop 改为 atom 后切开关最多延迟一个轮询周期生效，
  * 约 3s，对低频公告无感知）；关闭后完全不弹 toast，入口按钮与红点由
- * AnnouncementCenter 按同一开关隐藏。
+ * AnnouncementCenter 按同一开关隐藏弹窗宿主（无侧栏常驻按钮）。
  */
 export function useAnnouncementNotifier(): void {
 	// 本运行周期已弹过 toast 的公告 id：防止同一条公告反复打扰（应用重启才重置）

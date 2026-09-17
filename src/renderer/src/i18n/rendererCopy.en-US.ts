@@ -556,6 +556,7 @@ export const enUS: Record<TranslationKey, string> = {
   "about.github": "GitHub",
   "about.releases": "Releases",
   "about.changelog": "Changelog",
+  "about.feedback": "Feedback",
   "changelog.title": "Changelog",
   "changelog.subtitle": "See what changed in each release",
   "changelog.subtitleVersions": "{count} version entries",
@@ -2603,7 +2604,7 @@ export const enUS: Record<TranslationKey, string> = {
   "feedback.stepsLabel": "Steps to reproduce",
   "feedback.stepsHint": "Write reproducible steps (optional)",
   "feedback.stepsPlaceholder":
-    "1. Open the app\n2. Click Feedback in Pi Management\n3. ...",
+    "1. Open the app\n2. Click the Telos brand mark → Feedback\n3. ...",
   "feedback.environmentTitle": "Environment Information",
   "feedback.environmentHint": "Will be attached automatically, you can edit after copying",
   "feedback.reportTitle": "Environment information to include",

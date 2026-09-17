@@ -557,6 +557,7 @@ export const zhCN = {
   "about.github": "GitHub 主页",
   "about.releases": "版本发布",
   "about.changelog": "更新日志",
+  "about.feedback": "问题反馈",
   "changelog.title": "更新日志",
   "changelog.subtitle": "查看各版本的变更内容",
   "changelog.subtitleVersions": "共 {count} 个版本条目",
@@ -2583,7 +2584,7 @@ export const zhCN = {
   "feedback.stepsLabel": "复现步骤",
   "feedback.stepsHint": "写出尽量稳定的复现步骤（可选）",
   "feedback.stepsPlaceholder":
-    "1. 打开应用\n2. 点击配置管理左侧的问题反馈\n3. ...",
+    "1. 打开应用\n2. 点击左上角 Telos 品牌 → 问题反馈\n3. ...",
   "feedback.environmentTitle": "环境信息",
   "feedback.environmentHint": "提交时会自动附带，可在复制后自行删改",
   "feedback.reportTitle": "将附带的环境信息",

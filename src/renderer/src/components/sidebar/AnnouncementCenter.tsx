@@ -1,5 +1,5 @@
 /**
- * 公告中心：侧栏底栏入口按钮（含未读圆点）+ 弹窗列表 + 公告详情弹窗。
+ * 公告中心弹窗宿主（无侧栏常驻按钮）：toast「查看」经 atom 打开列表弹窗 + 详情 Drawer。
  *
  * 公告分三类（AnnouncementCategory）：
  * - flash 临时通知（时点性）：系统维护/活动截止等，读完即从列表移除（不值得回查），强提醒；
@@ -10,7 +10,7 @@
  * - 列表按「临时通知 → 公告 → 使用指南 → 已读归档」分区，各区内部发布时间倒序（新的在前）；
  * - 未读（flash + notice）+ 指南默认只展开前 VISIBLE_LIMIT 条，超出走「展示更多公告 (N)」/「收起」；
  * - 已读归档默认折叠成一行计数（看过后不该占主列表），可展开回看；已读 flash 不归档、直接消失；
- * - 红点/角标与列表未读标记共用 unreadAnnouncementsAtom（仅统计 flash+notice，见 atoms）；
+ * - 未读集合仍由 unreadAnnouncementsAtom 派生（仅统计 flash+notice，见 atoms）；侧栏不再展示红点入口；
  * - 打开弹窗即标记全部已读（公告是低频广播，不做逐条已读的复杂交互）；
  * - 列表卡片只展示清洗后的短摘要（announcementExcerpt），完整正文放「查看详情」
  *   右侧 Drawer 经 MarkdownStream 渲染——公告是外部数据，全量 md 渲染走会话消息
@@ -23,7 +23,7 @@ import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { ChevronDown, ChevronRight, Megaphone, RefreshCw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, X } from "lucide-react";
 import {
 	unreadAnnouncementsAtom,
 	announcementStateAtom,
@@ -44,9 +44,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DialogTrigger,
 } from "../ui-shadcn/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui-shadcn/tooltip";
 import { Drawer } from "../motion/drawer";
 import type { AnnouncementItem } from "../../../../shared/types/announcement";
 
@@ -262,8 +260,9 @@ function AnnouncementDetailDrawer(props: {
 }
 
 /**
- * 公告中心入口 + 弹窗。挂在侧栏底栏 Dock（与设置/反馈并排）。
- * 未读数（仅 notice）> 0 时按钮显示圆点；打开弹窗即触发全部已读（幂等）。
+ * 公告中心弹窗宿主。toast「查看」经 announcementCenterOpenAtom 打开本弹窗。
+ * 侧栏 dock 不再挂常驻按钮（减 clutter）；本组件以无触发器形态挂在 AppSidebar，
+ * 仅保留 Dialog / 详情抽屉供 toast 与设置开关链路使用。
  */
 export function AnnouncementCenter() {
 	const [refreshing, setRefreshing] = useState(false);
@@ -323,7 +322,7 @@ export function AnnouncementCenter() {
 	const hiddenCount = Math.max(0, activeItems.length - VISIBLE_LIMIT);
 	const unreadCount = unread.length;
 
-	// 入口隐藏：开关关闭 = 用户不要公告，通知与入口一并下线（挂载点不变，侧栏结构稳定）
+	// 入口隐藏：开关关闭 = 用户不要公告，通知与弹窗宿主一并下线
 	if (!notifyEnabled) return null;
 
 	return (
@@ -340,38 +339,7 @@ export function AnnouncementCenter() {
 				if (next && unreadCount > 0) markAllRead();
 			}}
 		>
-			<Tooltip delayDuration={300}>
-				<TooltipTrigger asChild>
-					<DialogTrigger asChild>
-						<div className="relative size-full">
-							<Button
-								type="button"
-								variant="ghost"
-								className="size-full rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-								aria-label={
-									unreadCount > 0
-										? t("announcements.unreadAria", { count: String(unreadCount) })
-										: t("announcements.title")
-								}
-							>
-								<Megaphone className="size-4" />
-							</Button>
-							{/* 未读圆点：与设置按钮更新角标同款式；仅 notice 计入（guide 常驻不打扰） */}
-							{unreadCount > 0 && (
-								<span
-									className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-[var(--color-accent)]"
-									aria-hidden="true"
-								/>
-							)}
-						</div>
-					</DialogTrigger>
-				</TooltipTrigger>
-				<TooltipContent side="right" sideOffset={6}>
-					{unreadCount > 0
-						? t("announcements.unreadBadge", { count: String(unreadCount) })
-						: t("announcements.title")}
-				</TooltipContent>
-			</Tooltip>
+			{/* 无 DialogTrigger：侧栏不再放常驻按钮；打开仅靠 toast「查看」写 atom */}
 			<DialogContent
 				onPointerDownOutside={(event) => {
 					// 源头拦截：详情抽屉（含背板）上的交互只关抽屉，不关列表弹窗。

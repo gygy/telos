@@ -7,6 +7,7 @@ import { useSidebarController } from "../../hooks/useSidebarController";
 import type { SidebarNavTab } from "../../utils/sidebarNavTab";
 import { BrandLockup } from "../app/AppParts";
 import { AboutPopover } from "../app/AboutPopover";
+import { AnnouncementCenter } from "./AnnouncementCenter";
 import { settingsOpenAtom } from "../../atoms";
 import { desktopApi } from "../../desktopApi";
 import { Button } from "../ui-shadcn/button";
@@ -24,6 +25,7 @@ interface AppSidebarProps {
   isLanWeb: boolean;
   /** 「新建会话」：打开初始引导页（居中输入框 + 项目下拉切换），由 App 提供。 */
   onOpenNewSession: () => void;
+  /** 问题反馈：关于面板入口打开 FeedbackDialog，由 App 的 overlay 状态驱动。 */
   onOpenFeedback: () => void;
   /** 关于弹框（版本/官网/GitHub 链接）数据，由 App 从 AppInfo IPC 拉取后提供。 */
   appInfo: AppInfo;
@@ -81,6 +83,8 @@ export function AppSidebar(props: AppSidebarProps) {
 
   return (
     <>
+    {/* 公告弹窗宿主：无侧栏按钮，toast「查看」写 atom 打开；须挂在侧栏树内以便通知开关链路同进程。 */}
+    <AnnouncementCenter />
     <SidebarContent
       controller={controller}
       actions={props.actions}
@@ -94,7 +98,7 @@ export function AppSidebar(props: AppSidebarProps) {
       onOpenNewSession={props.onOpenNewSession}
       chrome={<>
         <div className="list-toolbar flex h-10 shrink-0 items-center gap-1 border-b border-border/40 pr-2.5 pl-[max(0.625rem,var(--traffic-lights-width,0px))]">
-          <AboutPopover appInfo={props.appInfo}>
+          <AboutPopover appInfo={props.appInfo} onOpenFeedback={props.onOpenFeedback}>
             <div
               className="app-badge flex min-w-0 flex-1 cursor-pointer items-center justify-center pl-5"
               role="button"
@@ -126,7 +130,6 @@ export function AppSidebar(props: AppSidebarProps) {
         </div>
       </>}
       onOpenSettings={() => setSettingsOpen(true)}
-      onOpenFeedback={props.onOpenFeedback}
       themeMode={props.themeMode}
       onToggleTheme={props.onToggleTheme}
     />

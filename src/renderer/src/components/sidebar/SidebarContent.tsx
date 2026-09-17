@@ -1,4 +1,4 @@
-import { Activity, Bolt, CirclePlus, Clock, Folder, Globe, MessageSquare, Monitor, Moon, Search, Sun } from "lucide-react";
+import { Activity, Bolt, CirclePlus, Clock, Folder, MessageSquare, Monitor, Moon, Search, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { AgentTab, AppThemeMode, ArchivedDshSession, ArchivedPiSession, Project, SessionRecord, SessionSummary, WorktreeEntry } from "../../../../shared/types";
 import {
@@ -34,7 +34,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui-shadcn/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "../motion/tabs";
 import { Dock, DockItem } from "../motion/dock";
 import { UpdateDotHint } from "./UpdateDotHint";
-import { AnnouncementCenter } from "./AnnouncementCenter";
 import { AutomationDockButton } from "../automation/AutomationDockButton";
 import { MorphingSearch, type MorphingSearchItem } from "../motion/morphing-search";
 import { parseSidebarNavTab } from "../../utils/sidebarNavTab";
@@ -141,7 +140,6 @@ export type SidebarContentProps = {
   /** 「新建会话」：打开初始引导页（居中输入框 + 项目下拉切换），由 App 提供。 */
   onOpenNewSession?: () => void;
   onOpenSettings?: () => void;
-  onOpenFeedback?: () => void;
   /** 底栏主题切换：当前主题模式 + 点击循环（浅色→暗色→跟随系统），由 App 提供。 */
   themeMode?: AppThemeMode;
   onToggleTheme?: () => void;
@@ -438,9 +436,10 @@ export function SidebarContent(props: SidebarContentProps) {
           />
         </section>
       </div>
-      {/* 底栏 dock（beUI Dock）：设置/公告/反馈/主题切换收进浮动卡片，铺满底栏宽度
-          （w-full + justify-between 让四个动作均匀分布，侧栏最小宽 208px 时也不溢出）。
-          DockItem 只提供尺寸与居中容器，按钮本体仍是 shadcn ghost；四入口 hover 提示
+      {/* 底栏 dock（beUI Dock）：设置 / 主题切换收进浮动卡片，铺满底栏宽度
+          （w-full + justify-between 让动作均匀分布，侧栏最小宽 208px 时也不溢出）。
+          公告改为 toast「查看」打开（无常驻按钮）；问题反馈迁入左上角「关于」面板。
+          DockItem 只提供尺寸与居中容器，按钮本体仍是 shadcn ghost；入口 hover 提示
           统一走 styled Tooltip（side="right"/delay 300），不用原生 title——原生 title
           会与 Tooltip 双弹且样式割裂（回归见 sidebarBottomButtons.test.mjs）。
           行容器带 relative：首次解释气泡挂在整行上（左缘铺满行宽），不能寄生在 32px
@@ -477,19 +476,6 @@ export function SidebarContent(props: SidebarContentProps) {
                 {/* 更新角标：PiDeck / Pi CLI / 模型目录任一有可提示更新时显示圆点 */}
                 {hasPendingUpdate && <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-[var(--color-accent)]" aria-hidden="true" />}
               </div>
-            </DockItem>
-            {/* 公告中心入口：未读红点在组件内部按 atom 派生（单一 owner） */}
-            <DockItem>
-              <AnnouncementCenter />
-            </DockItem>
-            <DockItem>
-              {/* 反馈入口：与设置/公告统一 styled Tooltip（原生 title 移除，防双弹）；aria-label 保留读屏契约 */}
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Button type="button" variant="ghost" className="size-full rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("feedback.title")} onClick={props.onOpenFeedback}><MessageSquare className="size-4" /></Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={6}>{t("feedback.title")}</TooltipContent>
-              </Tooltip>
             </DockItem>
             <DockItem>
               {/* 主题切换：Tooltip 文案随当前模式变化（主题：X（点击切换）），与其它入口同一观感 */}

@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactElement, type ReactNode } from "react";
-import { ChevronRight, ExternalLink, FolderGit2, Globe, ScrollText, Tag } from "lucide-react";
+import { ChevronRight, ExternalLink, FolderGit2, Globe, MessageSquare, ScrollText, Tag } from "lucide-react";
 import type { AppInfo } from "../../../../shared/types";
 import { desktopApi } from "../../desktopApi";
 import { formatI18nDateTime, t } from "../../i18n";
@@ -17,6 +17,8 @@ interface AboutPopoverProps {
   appInfo: AppInfo;
   /** 弹出触发区（BrandLockup 所在容器）；MorphPopoverTrigger 会为其注入点击控制。 */
   children: ReactElement;
+  /** 打开问题反馈弹窗；入口从侧栏 dock 迁入关于面板，避免底栏 clutter。 */
+  onOpenFeedback: () => void;
 }
 
 /**
@@ -100,6 +102,15 @@ export function AboutPopover(props: AboutPopoverProps) {
                 // 打开更新日志弹窗的同时收起关于面板（见 aboutOpen 注释）；
                 // 弹窗挂在 MorphPopover root 下而非面板内，面板退场不会卸载它。
                 setAboutOpen(false);
+              }}
+            />
+            {/* 问题反馈：从侧栏 dock 迁入；打开 FeedbackDialog 前先收起关于面板，避免双层浮层叠放 */}
+            <AboutActionRow
+              icon={MessageSquare}
+              label={t("about.feedback")}
+              onClick={() => {
+                setAboutOpen(false);
+                props.onOpenFeedback();
               }}
             />
             <AboutLinkRow icon={Tag} label={t("about.releases")} url={info.releasesUrl} onOpen={openExternal} />
