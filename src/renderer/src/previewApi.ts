@@ -901,10 +901,10 @@ export function createPreviewApi(): PiDesktopApi {
 		app: {
 			info: async () => ({
 				version: "preview",
-				releasesUrl: "https://github.com/ayuayue/PiDeck/releases",
+				releasesUrl: "https://github.com/gygy/telos/releases",
 				platform: "win32" as NodeJS.Platform,
 				homeDir: "C:/Users/preview",
-				userDataDir: "C:/Users/preview/AppData/Roaming/pi-desktop",
+				userDataDir: "C:/Users/preview/AppData/Roaming/Telos-dev",
 			}),
 			preferredSystemLanguages: async () => navigator.languages?.length ? [...navigator.languages] : [navigator.language],
 			networkAddresses: async () => [{ address: "192.168.1.100", interfaceName: "Wi-Fi", cidr: "192.168.1.100/24", isPrivate: true }],
@@ -949,7 +949,7 @@ export function createPreviewApi(): PiDesktopApi {
 				markdown: null,
 				source: null,
 				versionCount: 0,
-				pageUrl: "https://atomgit.com/ayuayue/PiDeck/blob/main/CHANGELOG.zh-CN.md",
+				pageUrl: "https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md",
 				fetchedAt: null,
 				fromCache: false,
 				stale: false,

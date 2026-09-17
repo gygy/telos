@@ -1354,7 +1354,7 @@ const CHIP_ICONS: Record<string, typeof FileText> = {
 
 /** 气泡正文片段：正文 + 引用/会话/skill chip，严格按原文顺序行内渲染。
  *
- * quoted_context / referenced_session / pi 的 skill / PiDeck 的 prompt_template 都自带展示名和
+ * quoted_context / referenced_session / pi 的 skill / Telos 的 prompt_template 都自带展示名和
  * 完整模型上下文；因此切会话、重启、模板改名或删除后仍可恢复，不依赖运行时 atom。其余
  * 原始 `@path`、`/command` 正文继续走 renderChipText 重新解析。
  * 顺序必须保持：用户可能「引用A + 描述A + 引用B + 描述B」，把引用全部提前会打乱配对

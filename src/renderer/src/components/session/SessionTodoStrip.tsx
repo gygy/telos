@@ -19,7 +19,7 @@ import {
 	parseAgentTodoItems,
 	runtimeTodosToItems,
 	sessionTodoSnapshotToItems,
-	stripPiDeckTodoWidgetMetadata,
+	stripTelosTodoWidgetMetadata,
 	type AgentTodoItem,
 } from "./agentTodoParser";
 import { useSessionTodoSnapshot } from "../../hooks/useSessionTodoSnapshot";
@@ -243,7 +243,7 @@ export function SessionTodoStrip(props: { sessionId: string }) {
 		for (const widget of visibleWidgets) {
 			lines.push(
 				...(widget.key === "pi-deck-todo"
-					? stripPiDeckTodoWidgetMetadata(widget.lines)
+					? stripTelosTodoWidgetMetadata(widget.lines)
 					: widget.lines),
 			);
 		}

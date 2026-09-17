@@ -20,7 +20,7 @@ const COMPLETED_MARKER = /^(?:☑|\[[xX]\])/;
 /** 进行中标记（扩展未输出，但类型支持；parser 保守支持以免未来扩展复用行式）。 */
 const IN_PROGRESS_MARKER = /^(?:◐|⏳)/;
 
-export function stripPiDeckTodoWidgetMetadata(lines: readonly string[]): string[] {
+export function stripTelosTodoWidgetMetadata(lines: readonly string[]): string[] {
 	return lines.filter((line) => !PI_DECK_TODO_PLAN_METADATA_LINE.test(line.trim()));
 }
 
@@ -28,7 +28,7 @@ export function stripPiDeckTodoWidgetMetadata(lines: readonly string[]): string[
  * 将 pi 扩展的轻量 widget 行转换为官方 BeUI TodoItem 数据模型。
  *
  * 规则：
- * - `pi-deck-todo` 的计划身份元数据必须先由 `stripPiDeckTodoWidgetMetadata` 过滤；
+ * - `pi-deck-todo` 的计划身份元数据必须先由 `stripTelosTodoWidgetMetadata` 过滤；
  *   该元数据只属于内置 widget 协议，通用 parser 不应误伤第三方 widget；
  * - 跳过空行、折叠摘要（"2/4" / "计划进度 1/3" / "计划草案 3 步"）、
  *   分组标题（"── 待办 ──"）——

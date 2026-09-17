@@ -3,7 +3,7 @@
  *
  * 背景：runtime manifest 的 maxAppVersion 常为空 = 对任何 app 版本都「兼容」，
  * resolveActive 会一直选中旧版。版本不一致时状态服务判 outdated 并硬门控 host
- * 启动，但重装此前仍需用户手动点「重新安装」。本模块把「升级 PiDeck 后首次
+ * 启动，但重装此前仍需用户手动点「重新安装」。本模块把「升级 Telos 后首次
  * 启动」变成零操作：检测到 outdated → 走与手动重装完全相同的 installFromIndex
  * 链路（随包资源优先本地解压，其次在线索引下载）→ 成功后回收旧版本目录。
  *

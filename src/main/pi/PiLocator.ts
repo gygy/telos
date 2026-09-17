@@ -91,7 +91,7 @@ export type PiCommandInvocation = {
    * `node-direct` = 已把 .cmd 垫片还原成 node + JS 入口直启（没有 cmd.exe 层）；
    * `cmd-shim` = 退回 `cmd.exe /d /s /c "<整条命令行>"`，附原因。
    * 之前这条回退是静默的：用户只看到「启动走 cmd.exe」，无从知道为什么没走 node 直启——
-   * 现场正是拿这一点误判成「PiDeck 根本没改成 node 启动」。
+   * 现场正是拿这一点误判成「Telos 根本没改成 node 启动」。
    */
   windowsLaunch?: {
     channel: "node-direct" | "cmd-shim";

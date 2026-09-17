@@ -2,7 +2,7 @@
  * rewind checkpoint 常量（移植自 pi-rewind core.ts，MIT）。
  *
  * 与 pi-rewind 保持一致：ref 命名空间、过滤阈值、忽略目录全部对齐，
- * 保证 PiDeck 与 pi CLI 场景下创建的 checkpoint 互相可读——同一仓库里
+ * 保证 Telos 与 pi CLI 场景下创建的 checkpoint 互相可读——同一仓库里
  * 谁打的点都能被另一方列出/恢复，这是 refs 存储（而非内存存储）的收益。
  */
 
@@ -52,7 +52,7 @@ export const DEFAULT_MAX_CHECKPOINTS = 50;
 /**
  * 快照忽略目录（匹配路径任意段）。
  * 前半部分与 pi-rewind 同源（node_modules/env/dist 等），保证两边创建的快照
- * 语义一致；`.runs`/`out`/`target`/`shots` 是 PiDeck 侧扩展（2026-09-13 用户
+ * 语义一致；`.runs`/`out`/`target`/`shots` 是 Telos 侧扩展（2026-09-13 用户
  * 报告的产物目录类型）：这些目录即使没被 .gitignore 覆盖也几乎必然是产物，
  * 纳入快照只会制造 I/O 风暴，不会带来可用的回滚价值。ref 里的元数据自描述，
  * 忽略名单差异不影响两端互相读取对方创建的 checkpoint。
@@ -70,7 +70,7 @@ export const IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 	".cache",
 	".tox",
 	"__pycache__",
-	// PiDeck 侧扩展：常见产物/运行时输出目录
+	// Telos 侧扩展：常见产物/运行时输出目录
 	".runs",
 	"out",
 	"target",

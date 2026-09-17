@@ -432,7 +432,7 @@ export const ipcChannels = {
 	appRestart: "app:restart",
 	/** 真正退出应用（置 isQuitting 后 app.quit）。异常页不能走 window-close：closeToTray 会把关窗吞成隐藏。 */
 	appQuit: "app:quit",
-	/** 在系统文件管理器中打开 PiDeck 数据目录（跨平台：explorer / Finder / xdg-open） */
+	/** 在系统文件管理器中打开 Telos 数据目录（跨平台：explorer / Finder / xdg-open） */
 	appOpenDataDir: "app:open-data-dir",
 	/** 进程监控：拉取 Electron 各进程 + pi agent 子进程的内存/CPU 快照 */
 	processMetrics: "system:process-metrics",
@@ -770,7 +770,7 @@ export const ipcChannels = {
 	clipboardWriteText: "clipboard:write-text",
 
 	// ===== 资源管理器右键菜单（HKCU 注册/查询，portable 亦可用） =====
-	/** 渲染层 → 主进程：查询「用 PiDeck 打开」右键菜单是否已注册 */
+	/** 渲染层 → 主进程：查询「用 Telos 打开」右键菜单是否已注册 */
 	shellMenuGetState: "shell-menu:get-state",
 	/** 渲染层 → 主进程：启用/取消资源管理器右键菜单注册 */
 	shellMenuSetEnabled: "shell-menu:set-enabled",

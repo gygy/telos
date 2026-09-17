@@ -19,7 +19,7 @@ export const PROMPT_OVERLAY_DIR_NAME = "prompt-overlay";
 export const PROMPT_OVERLAY_BACKUP_DIR_NAME = "prompt-overlay.bak";
 /** 清单文件名（远端与内置目录同名）。 */
 export const PROMPTS_MANIFEST_FILE_NAME = "prompts-manifest.json";
-/** 官方模板在 PiDeck 仓库中的相对目录（与 resources/prompts 一致）。 */
+/** 官方模板在 Telos 仓库中的相对目录（与 resources/prompts 一致）。 */
 const PROMPTS_REPO_DIR = "resources/prompts";
 /** 官方模板文件形态：单段 .md（slug 即文件名去后缀）。 */
 const PROMPT_FILE_PATTERN = /^[A-Za-z0-9._-]+\.md$/;

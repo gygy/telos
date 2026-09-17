@@ -6,7 +6,7 @@
  *
  * 1. acp_delegate（billion-context-pi 插件）：独立 spawn pi 子进程运行，不写
  *    subagents:record、不发插件事件，自带的运行状态 widget 仅 TUI 模式激活
- *    （PiDeck 为 RPC 模式收不到）。父会话文件里唯一的痕迹是三类条目：
+ *    （Telos 为 RPC 模式收不到）。父会话文件里唯一的痕迹是三类条目：
  *    - assistant 消息里的 toolCall（name=acp_delegate*，arguments 携带 agent/task/runId）；
  *    - role=toolResult 的派发确认文本（含 runId `del_xxx`，把 runId 关联到 toolCallId）；
  *    - role=user 的终态系统通知（"[acp_delegate completed]" / "[acp_delegate FAILED ⚠️]"，
@@ -308,7 +308,7 @@ export function downgradeStaleRunning(entries: PiSubagentEntry[]): PiSubagentEnt
 /**
  * 活 runtime 的历史对账降级：本代 runtime 启动（tab.createdAt）之前派发的
  * running/queued 条目已随上一代 pi 进程消亡——子代理是 pi 的子进程，父进程
- * 停止/崩溃后失去协调者，PiDeck stop 还会整树终止它们，永远等不到终态写盘。
+ * 停止/崩溃后失去协调者，Telos stop 还会整树终止它们，永远等不到终态写盘。
  * 不降级的话旧会话激活后面板会一直显示「运行中」（2026-09-14 用户环境实测：
  * 真实活动子代理 0，历史投影仍显示 33 个 running）。
  *

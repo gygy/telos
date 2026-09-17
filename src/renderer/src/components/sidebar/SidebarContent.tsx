@@ -473,7 +473,7 @@ export function SidebarContent(props: SidebarContentProps) {
                     )}
                   </TooltipContent>
                 </Tooltip>
-                {/* 更新角标：PiDeck / Pi CLI / 模型目录任一有可提示更新时显示圆点 */}
+                {/* 更新角标：Telos / Pi CLI / 模型目录任一有可提示更新时显示圆点 */}
                 {hasPendingUpdate && <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-[var(--color-accent)]" aria-hidden="true" />}
               </div>
             </DockItem>

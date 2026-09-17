@@ -1,5 +1,5 @@
 /**
- * PiDeck 内置扩展热更新器（扩展设置页的「内置扩展」更新入口）。
+ * Telos 内置扩展热更新器（扩展设置页的「内置扩展」更新入口）。
  *
  * 背景：内置扩展（resources/extensions/*.ts）随应用分发，RPC 启动时经 `-e <绝对路径>`
  * 注入 pi。打包态 resources 目录不可写（Program Files 权限 / 签名校验），扩展出 bug 只能
@@ -73,7 +73,7 @@ const EXTENSIONS_REPO_DIR = "resources/extensions";
  * 背景（2026-09-15 线上事故）：pi 扩展加载器按扩展文件所在目录向上查 node_modules。
  * 随包目录有 extraResources 复制进来的 `extensions/node_modules/undici` 兜底，覆盖层
  * `<userData>/builtin-extensions/` 上层却没有 node_modules——pi-deck-vision.ts 顶部
- * `import "undici"` 直接 MODULE_NOT_FOUND → pi 启动失败 → PiDeck 禁用全部扩展重启
+ * `import "undici"` 直接 MODULE_NOT_FOUND → pi 启动失败 → Telos 禁用全部扩展重启
  * （Magic Context 等一并失效）。因此覆盖层必须自带同一份 vendored 依赖。
  */
 export const VENDOR_DEP_PACKAGE_NAMES = ["undici"] as const;
@@ -522,7 +522,7 @@ export class BuiltInExtensionsUpdater {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-extensions-updater" },
+				headers: { "user-agent": "Telos-extensions-updater" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = Buffer.from(await response.arrayBuffer());

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 /**
@@ -72,7 +73,46 @@ test("tray / main-process copy uses Telos, not PiDeck product name", () => {
   assert.match(mainCopy, /"tray\.restart": "Restart Telos"/);
   assert.match(mainCopy, /"tray\.quit": "Quit Telos"/);
   assert.doesNotMatch(mainCopy, /"tray\.(restart|quit)": "[^"]*PiDeck/);
+  assert.match(mainCopy, /"shellMenu\.openWithTelos": "用 Telos 打开"/);
+  assert.doesNotMatch(mainCopy, /openWithPiDeck/);
 
   const index = readFileSync("src/main/index.ts", "utf8");
   assert.match(index, /tray\.setToolTip\("Telos"\)/);
+});
+
+test("src product strings must not say PiDeck except preserved upstream/on-disk tokens", () => {
+  // 扫描 src：产品自称必须是 Telos。保留：上游仓库 URL、.pideck 磁盘路径、
+  // migrateLegacyPideck*、pi-deck-* 扩展 id、Cursor slug 示例路径 F:\\PiDeck。
+  const hits = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      const st = statSync(p);
+      if (st.isDirectory()) {
+        if (name === "node_modules") continue;
+        walk(p);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(name)) continue;
+      const text = readFileSync(p, "utf8");
+      for (const [i, line] of text.split(/\r?\n/).entries()) {
+        if (!/PiDeck|Pideck/.test(line)) continue;
+        hits.push(`${p}:${i + 1}:${line}`);
+      }
+    }
+  };
+  walk("src");
+  const allowed = (line) =>
+    /ayuayue\/PiDeck/.test(line) ||
+    /github\.com\/[^/\s]+\/PiDeck/.test(line) ||
+    /atomgit\.com\/[^/\s]+\/PiDeck/.test(line) ||
+    /\.pideck\b/.test(line) ||
+    /migrateLegacyPideck/.test(line) ||
+    /pideckDshHome/.test(line) ||
+    /\/pideck-plugin\b/.test(line) ||
+    /pi-deck-/.test(line) ||
+    /f-PiDeck/.test(line) ||
+    /F:[\\/]+PiDeck/.test(line);
+  const bad = hits.filter((line) => !allowed(line));
+  assert.deepEqual(bad, [], `unexpected PiDeck leftovers:\n${bad.join("\n")}`);
 });

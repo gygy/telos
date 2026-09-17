@@ -146,7 +146,7 @@ export type ArchivedPiSession = {
 	originalPath?: string;
 };
 
-/** PiDeck-owned session identity, independent from a running Pi process. */
+/** Telos-owned session identity, independent from a running Pi process. */
 export type SessionRecord = {
 	id: string;
 	projectId: string;

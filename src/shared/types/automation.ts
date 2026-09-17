@@ -4,7 +4,7 @@ import type { AgentBackend, ComposerAgentMode } from "./agent";
  * 定时任务可配置的工作模式。
  *
  * 只开放 composer 三态里的普通/计划/目标：imagegen 是独立后端（无 LLM 回合概念，
- * 且 AutomationTask.backend 已排除 imagegen），计划/目标靠 PiDeck 内置扩展在 pi 的
+ * 且 AutomationTask.backend 已排除 imagegen），计划/目标靠 Telos 内置扩展在 pi 的
  * input 事件里识别隐藏标记，因此这两个模式要求 pi 后端 + 对应扩展已启用。
  */
 export type AutomationTaskMode = Extract<ComposerAgentMode, "normal" | "plan" | "goal">;

@@ -202,7 +202,7 @@ test("parser maps widget lines to official TodoItem status shape", () => {
 });
 
 test("parser skips summaries and keeps pi-deck-todo metadata scoped to its own widget", () => {
-	const { parseAgentTodoItems, stripPiDeckTodoWidgetMetadata } = loadParser();
+	const { parseAgentTodoItems, stripTelosTodoWidgetMetadata } = loadParser();
 	// Generic parser keeps existing summary compatibility.
 	assert.equal(parseAgentTodoItems(["2/4"]).length, 0);
 	const plan = parseAgentTodoItems([
@@ -221,7 +221,7 @@ test("parser skips summaries and keeps pi-deck-todo metadata scoped to its own w
 
 	// The plan identity is private to pi-deck-todo. Its filter keeps generic / third-party parsing untouched.
 	const todoLines = ["[[pid:todo-plan:branch-a:7]]", "☐ #1 实现迁移"];
-	assert.deepEqual(stripPiDeckTodoWidgetMetadata(todoLines), ["☐ #1 实现迁移"]);
+	assert.deepEqual(stripTelosTodoWidgetMetadata(todoLines), ["☐ #1 实现迁移"]);
 	assert.equal(parseAgentTodoItems(todoLines)[0].title, "[[pid:todo-plan:branch-a:7]]");
 });
 

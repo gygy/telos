@@ -226,7 +226,6 @@ export const mainProcessZhCN = {
 	"mainNotification.askQuestion": "「{title}」正在询问：{question}",
 	"mainNotification.automationDone": "定时任务「{name}」执行完成",
 	"mainNotification.automationFailed": "定时任务「{name}」执行失败：{error}",
-	"shellMenu.openWithPiDeck": "用 Telos 打开",
 	"shellMenu.openWithTelos": "用 Telos 打开",
 } as const;
 
@@ -460,7 +459,6 @@ export const mainProcessEnUS: Record<MainProcessTranslationKey, string> = {
 	"mainNotification.askQuestion": "\u201c{title}\u201d is asking: {question}",
 	"mainNotification.automationDone": "Automation \u201c{name}\u201d completed",
 	"mainNotification.automationFailed": "Automation \u201c{name}\u201d failed: {error}",
-	"shellMenu.openWithPiDeck": "Open with Telos",
 	"shellMenu.openWithTelos": "Open with Telos",
 };
 

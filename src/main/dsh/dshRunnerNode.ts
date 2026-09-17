@@ -253,7 +253,7 @@ export type DetectDshRunnerNodeInput = {
 };
 
 function incompatibleError(version: string): string {
-	return `需要 Node ${DSH_RUNNER_NODE_MAJOR}.x（当前 ${version}）。PATH 上的 node 可以保持现状；请指定本机 Node ${DSH_RUNNER_NODE_MAJOR} 的路径，或一键下载仅给 PiDeck 用的副本。`;
+	return `需要 Node ${DSH_RUNNER_NODE_MAJOR}.x（当前 ${version}）。PATH 上的 node 可以保持现状；请指定本机 Node ${DSH_RUNNER_NODE_MAJOR} 的路径，或一键下载仅给 Telos 用的副本。`;
 }
 
 /**
@@ -323,7 +323,7 @@ export async function detectDshRunnerNode(
 	}
 
 	return notFound(
-		`未检测到 Node ${DSH_RUNNER_NODE_MAJOR}。可在开发设置里一键下载 PiDeck 专用副本（走应用更新源，不改系统 PATH），或手动指定本机 node.exe。`,
+		`未检测到 Node ${DSH_RUNNER_NODE_MAJOR}。可在开发设置里一键下载 Telos 专用副本（走应用更新源，不改系统 PATH），或手动指定本机 node.exe。`,
 		null,
 		"",
 	);

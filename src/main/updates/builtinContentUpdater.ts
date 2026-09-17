@@ -101,7 +101,7 @@ export type BuiltinContentUpdaterOptions = {
 	backupDirName: string;
 	/** 清单文件名，如 `prompts-manifest.json`。 */
 	manifestFileName: string;
-	/** 该内容域在 PiDeck 仓库中的相对目录（远端拉取路径），如 `resources/prompts`。 */
+	/** 该内容域在 Telos 仓库中的相对目录（远端拉取路径），如 `resources/prompts`。 */
 	repoDir: string;
 	/** 文件名白名单（默认多段安全名）。 */
 	fileNamePattern?: RegExp;
@@ -583,7 +583,7 @@ export class BuiltinContentUpdater {
 			const response = await this.fetchImpl(url, {
 				signal: controller.signal,
 				redirect: "follow",
-				headers: { "user-agent": "PiDeck-content-updater" },
+				headers: { "user-agent": "Telos-content-updater" },
 			});
 			if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
 			const buffer = Buffer.from(await response.arrayBuffer());

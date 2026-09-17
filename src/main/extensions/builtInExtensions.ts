@@ -7,7 +7,7 @@ import {
 } from "./builtInExtensionsManifest";
 
 /**
- * PiDeck 内置扩展（随应用 resources 分发，不再复制到 ~/.pi/agent/extensions）。
+ * Telos 内置扩展（随应用 resources 分发，不再复制到 ~/.pi/agent/extensions）。
  * 启动 RPC 时通过可重复的 `--extension/-e` 注入，避免污染用户全局 pi。
  */
 export const BUILT_IN_EXTENSIONS = [
@@ -82,7 +82,7 @@ function overlayArtifact(overlayDir: string): BuiltInExtensionsManifest | null {
 
 /**
  * 当前生效的内置扩展包版本（覆盖层优先，否则随包内置）。
- * 版本号由 resources/extensions/extensions-manifest.json 维护，**不跟 PiDeck 应用版本走**。
+ * 版本号由 resources/extensions/extensions-manifest.json 维护，**不跟 Telos 应用版本走**。
  * 清单缺失（旧安装包）返回 null，此时扩展列表版本列回退「-」。
  */
 export function readEffectiveBuiltInExtensionsVersion(
@@ -160,7 +160,7 @@ export function listActiveBuiltInExtensionPaths(
 /**
  * 把内置扩展路径追加为可重复的 `--extension <path>`。
  * pi 文档：`--no-extensions` 只关自动发现，显式 -e 仍有效；
- * 但 PiDeck 约定 piRpcNoExtensions 时连内置也不注入（诊断干净）。
+ * 但 Telos 约定 piRpcNoExtensions 时连内置也不注入（诊断干净）。
  */
 export function appendBuiltInExtensionArgs(
 	args: readonly string[],

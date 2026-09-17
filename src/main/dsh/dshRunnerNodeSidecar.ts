@@ -5,7 +5,7 @@ import { join } from "node:path";
  * DSH 沙箱 runner 的 CUI node sidecar（Windows 黑窗口根治 B 方案）。
  *
  * 官方 dsh-web 用 node.exe（控制台子系统）跑 runner，子进程继承已有控制台。
- * PiDeck 的 host 在 Electron utilityProcess 里，`process.execPath` 是 electron.exe
+ * Telos 的 host 在 Electron utilityProcess 里，`process.execPath` 是 electron.exe
  * （GUI 子系统）。GUI 父进程再拉 GUI runner 时 Windows 会为 pwsh 新建可见控制台；
  * 给 runner AllocConsole 再 Hide 又会闪一帧。
  *
@@ -38,7 +38,7 @@ export interface ResolveDshRunnerNodeSidecarInput {
 	configuredPath?: string;
 }
 
-/** userData 里 PiDeck 专用 node.exe（一键下载产物）。 */
+/** userData 里 Telos 专用 node.exe（一键下载产物）。 */
 export function dshRunnerNodeUserDataSidecar(
 	userDataPath: string,
 	platform: NodeJS.Platform = "win32",

@@ -19,7 +19,7 @@ export const SKILL_OVERLAY_DIR_NAME = "skills-overlay";
 export const SKILL_OVERLAY_BACKUP_DIR_NAME = "skills-overlay.bak";
 /** 清单文件名（远端与内置目录同名）。 */
 export const SKILLS_MANIFEST_FILE_NAME = "skills-manifest.json";
-/** 内置技能在 PiDeck 仓库中的相对目录（与 resources/skills 一致）。 */
+/** 内置技能在 Telos 仓库中的相对目录（与 resources/skills 一致）。 */
 const SKILLS_REPO_DIR = "resources/skills";
 /** 技能文件形态：多段相对路径（<skill-dir>/SKILL.md），单段或带子目录均可。 */
 const SKILL_FILE_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;

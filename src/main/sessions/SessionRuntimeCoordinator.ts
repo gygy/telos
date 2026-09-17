@@ -1595,7 +1595,7 @@ export class SessionRuntimeCoordinator {
 					error: message,
 				});
 				// 后端是档位能力的最终裁决者。即使本次 host 拒绝，也保留用户偏好：
-				// 目录配置、provider 或模型在之后变化时仍可重新应用，不能由 PiDeck
+				// 目录配置、provider 或模型在之后变化时仍可重新应用，不能由 Telos
 				// 根据一条当前错误擅自清空用户选择。
 			}
 		}

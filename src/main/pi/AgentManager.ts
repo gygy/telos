@@ -509,7 +509,7 @@ export class AgentManager {
 		/** 安全管理：Agent 启动前写策略快照 + 注入会话身份（缺省时不注入安全门）。 */
 		private readonly securityStore?: SecurityStore,
 		/**
-		 * spawn pi 前对会话文件的预检/修复（剔除旧版 PiDeck 私有 sessionName 头行，
+		 * spawn pi 前对会话文件的预检/修复（剔除旧版 Telos 私有 sessionName 头行，
 		 * 该行会让 pi 拒绝加载会话并 exit 1，见 #114）。由 main/index.ts 装配 SessionScanner 实现。
 		 */
 		private readonly repairSessionFile?: (sessionPath: string) => Promise<boolean>,
@@ -540,7 +540,7 @@ export class AgentManager {
 		 * set_model 被 pi 拒绝（快照无此模型）时，若模型在目录中但不在运行中 Agent 的
 		 * 启动快照里，说明是「Agent 启动后目录才更新」——应引导用户重启 Agent 而非
 		 * 误报「模型未在 models.json 配置」（如 auth.json 官方 provider 的目录模型：
-		 * 选择器可见、TUI 可用，但 PiDeck 运行中的 Agent 快照没有）。
+		 * 选择器可见、TUI 可用，但 Telos 运行中的 Agent 快照没有）。
 		 */
 		private readonly resolveModelInCatalog?: (provider: string, modelId: string) => Promise<boolean>,
 	) {
@@ -594,7 +594,7 @@ export class AgentManager {
 	}
 
 	/**
-	 * 统一构造 PiProcess：注入 PiDeck 内置扩展路径解析 + 安全管理快照/会话身份。
+	 * 统一构造 PiProcess：注入 Telos 内置扩展路径解析 + 安全管理快照/会话身份。
 	 * 内置扩展以 -e 从 app resources 加载，不再依赖用户扩展目录副本。
 	 * 安全管理：确保策略快照已落盘（小 JSON 写，等完成后启动，保证扩展首次拦截即可读到）。
 	 * settingsOverride 仅用于本次 spawn（如扩展加载失败后强制 --no-extensions），不改持久设置。
@@ -625,7 +625,7 @@ export class AgentManager {
 				this.wslEnvironment ? [this.wslEnvironment.windowsHome] : undefined,
 			),
 			...createPiProcessPromptResolvers(cwd, settings),
-			// 会话身份 = PiDeck 会话 key（SessionRecord.id，UUID 或旧版文件路径），扩展按它解析等级覆盖；
+			// 会话身份 = Telos 会话 key（SessionRecord.id，UUID 或旧版文件路径），扩展按它解析等级覆盖；
 			// 匿名会话（noSession）无 key，扩展仅用全局默认等级。
 			securitySessionId: securitySessionKey ?? sessionPath,
 			// 会话级代理覆盖：spawn 时按会话记录覆盖全局设置（on → 强制代理 / off → 强制直连）。
@@ -2603,7 +2603,7 @@ export class AgentManager {
 
 	/**
 	 * Ask the running Pi process for levels supported by its current model.
-	 * TODO(remove-compat): once PiDeck's minimum Pi version is >= 0.81 and the
+	 * TODO(remove-compat): once Telos's minimum Pi version is >= 0.81 and the
 	 * migration window is over, make an unavailable RPC a hard error instead of
 	 * falling back to the renderer's legacy static list.
 	 */
@@ -2762,7 +2762,7 @@ export class AgentManager {
 	async setThinking(agentId: string, level: string) {
 		const runtime = this.requireRuntime(agentId);
 		// 与 set_model 相同：Pi 允许运行中更新 state，具体 request 是否已经发出
-		// 由 Agent 自己决定；PiDeck 不把它预先降级成下一轮 pending。
+		// 由 Agent 自己决定；Telos 不把它预先降级成下一轮 pending。
 		await runtime.process.client.request(
 			{ type: "set_thinking_level", level },
 			60_000,
@@ -3076,7 +3076,7 @@ export class AgentManager {
 	}
 
 	/**
-	 * 追加 PiDeck 本地产物的消息条目到 pi 会话文件（生图等不走 pi RPC 的记录落盘）。
+	 * 追加 Telos 本地产物的消息条目到 pi 会话文件（生图等不走 pi RPC 的记录落盘）。
 	 * - 会话有活跃 runtime 时：写文件后 switch_session 让 pi 重读，内存与文件保持一致；
 	 * - 无 runtime（生图不依赖 Agent）时：直接落盘，下次激活由 pi 读文件自然吸收。
 	 * reload 失败不阻断落盘（文件已原子写成功），仅记日志——pi 重读失败不影响磁盘记录。
@@ -4317,7 +4317,7 @@ export class AgentManager {
 		if (diag.cwdMissing) {
 			lines.push("1. 确认上面的工作目录是否真的存在（被移动/重命名/删除，或所在磁盘/网络盘未挂载）");
 			lines.push("2. 目录不存在时 pi 无法以该目录为工作目录启动，与 pi 是否安装无关");
-			lines.push("3. 在 PiDeck 中重新指定该项目的目录后重启会话");
+			lines.push("3. 在 Telos 中重新指定该项目的目录后重启会话");
 		} else if (versionCheckFailed) {
 			lines.push("1. 在终端执行 pi --version，确认 pi 是否已安装且路径正确");
 			lines.push("2. 如未安装，执行 npm install -g @earendil-works/pi-coding-agent");

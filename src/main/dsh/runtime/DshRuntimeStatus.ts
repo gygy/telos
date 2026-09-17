@@ -36,7 +36,7 @@ export type DshRuntimeProbe =
  * 组合探测：外部已安装 runtime 优先，未安装时按兼容开关回退 app 内置 node_modules。
  *
  * 为什么保留内置回退：存量安装包（依赖分区前发布）的 asar 内仍带 @deepseek-ai；
- * 有回退才能保证「装了新版 PiDeck 但还没下载 runtime」的用户 DSH 功能不消失。
+ * 有回退才能保证「装了新版 Telos 但还没下载 runtime」的用户 DSH 功能不消失。
  * 新的 dev/lite 安装路径都以远程 runtime 为准；allowBundledFallback 只服务显式开启的
  * full/旧包兼容，不应再把 dev 项目 node_modules 或残留资源当作已发布 runtime。
  */
