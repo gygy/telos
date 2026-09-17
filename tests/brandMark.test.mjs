@@ -63,3 +63,16 @@ test("in-app brand surfaces use TelosLogo, not upstream Pi window glyph", () => 
     assert.doesNotMatch(source, SPIDER_MARK);
   }
 });
+
+test("tray / main-process copy uses Telos, not PiDeck product name", () => {
+  // 上游同步曾把托盘「重启/退出」盖回 PiDeck；悬停/右键菜单会露出旧品牌。
+  const mainCopy = readFileSync("src/shared/i18n/mainProcessCopy.ts", "utf8");
+  assert.match(mainCopy, /"tray\.restart": "重启 Telos"/);
+  assert.match(mainCopy, /"tray\.quit": "退出 Telos"/);
+  assert.match(mainCopy, /"tray\.restart": "Restart Telos"/);
+  assert.match(mainCopy, /"tray\.quit": "Quit Telos"/);
+  assert.doesNotMatch(mainCopy, /"tray\.(restart|quit)": "[^"]*PiDeck/);
+
+  const index = readFileSync("src/main/index.ts", "utf8");
+  assert.match(index, /tray\.setToolTip\("Telos"\)/);
+});

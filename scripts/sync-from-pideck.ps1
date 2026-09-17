@@ -48,6 +48,7 @@ $TelosOverlays = @(
     "src/renderer/src/web/WebBrandLockup.tsx",
     "src/renderer/src/i18n/rendererCopy.zh-CN.ts",
     "src/renderer/src/i18n/rendererCopy.en-US.ts",
+    "src/shared/i18n/mainProcessCopy.ts",
     "src/renderer/index.html",
     "src/renderer/src/styles/foundation.css",
     "build/icon.svg",
