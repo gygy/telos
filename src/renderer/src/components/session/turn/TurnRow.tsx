@@ -442,6 +442,7 @@ export const TurnRow = memo(
 							images={allImages}
 							isStreaming={props.isStreaming ?? false}
 							settle={settleId === item.id}
+							light={props.isLatestRun === false}
 							editing={editing}
 							editText={editText}
 							editAreaRef={editAreaRef}

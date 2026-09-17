@@ -687,6 +687,8 @@ export const AssistantText = memo(
 		isStreaming?: boolean;
 		/** live→settled 交接时播放一次淡入 */
 		settle?: boolean;
+		/** 强制轻量 Markdown（历史轮最终回答）：跳过代码高亮/mermaid/数学等重插件。 */
+		light?: boolean;
 	}) {
 		// 清理 ANSI 转义码与 <thinking> 标签，thinking 由调用方通过 ThinkingBlock 渲染
 		const cleanText = stripThinkingTags(stripAnsi(props.text));
@@ -719,6 +721,7 @@ export const AssistantText = memo(
 				<MarkdownStream
 					text={cleanText}
 					isStreaming={Boolean(props.isStreaming)}
+					light={props.light}
 					onOpenExternal={props.onOpenExternal}
 					onOpenFile={props.onOpenFile}
 				/>
@@ -731,6 +734,7 @@ export const AssistantText = memo(
 		prev.text === next.text &&
 		prev.isStreaming === next.isStreaming &&
 		prev.settle === next.settle &&
+		prev.light === next.light &&
 		prev.images === next.images &&
 		prev.onOpenFile === next.onOpenFile,
 );

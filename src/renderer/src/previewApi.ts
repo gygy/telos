@@ -140,7 +140,7 @@ let previewSettings: AppSettings = {
 	// showThinking 由 pi agent 的 hideThinkingBlock 控制，运行时从主进程加载
 	showThinking: true,
 	// 流式对话行为：与主进程 SettingsStore 默认一致（预览窗口保持相同观感）
-	expandInterimDuringStream: true,
+	expandInterimDuringStream: false,
 	collapsePrevRunsOnNewTurn: true,
 	showDevTools: false,
 	developerDiagnostics: false,

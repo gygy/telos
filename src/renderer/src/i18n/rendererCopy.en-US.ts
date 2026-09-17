@@ -3466,7 +3466,7 @@ export const enUS: Record<TranslationKey, string> = {
   "settings.linkOpenMode.internal": "In-app window",
   "settings.workspaceContentOpenMode": "File / Diff open mode",
   "settings.expandInterimDuringStream": "Expand interim process while streaming",
-  "settings.expandInterimDuringStreamDesc": "On (default): thinking and tool details auto-expand while the latest turn streams. Off: keep them collapsed to save rendering resources; manually expanded turns are unaffected.",
+  "settings.expandInterimDuringStreamDesc": "On: thinking and tool details auto-expand while the latest turn streams. Off (default): keep them collapsed to save rendering and keep typing/scrolling snappy; manually expanded turns are unaffected.",
   "settings.collapsePrevRunsOnNewTurn": "Collapse previous turns on new message",
   "settings.collapsePrevRunsOnNewTurnDesc": "Automatically collapses thinking/tool details of previous turns (including manually expanded ones) after sending a new message, reducing what is rendered at once.",
   "settings.idleAgentSection": "Idle agent memory optimization",

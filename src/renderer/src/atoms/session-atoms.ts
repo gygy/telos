@@ -228,6 +228,20 @@ export const sessionMessageCacheBySessionIdAtomFamily = atomFamily(
 );
 
 /**
+ * 会话是否已有生图历史（boolean selectAtom）：工具期 50ms message flush
+ * 会重建本会话 messages 数组，但生图标记极少翻转——composer 只订这个 boolean，
+ * 避免「对话中间每次工具更新都重渲输入框 + 全量 .some()」。
+ */
+export const sessionHasImageGenHistoryAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(
+    sessionMessagesCacheAtom,
+    (cache) =>
+      Boolean(cache[sessionId]?.messages?.some((message) => Boolean(message.meta?.imageGen))),
+    Object.is,
+  ),
+);
+
+/**
  * 会话切换时的滚动位置锚点（per-session，切走保存、切回恢复）。
  * 只保存「非跟底」状态：用户正在查看历史时切走，回来时停留在原位置；
  * 在底部跟流切走的会话不存锚点，切回继续跟底。
@@ -1739,6 +1753,7 @@ export const removeSessionStateAtom = atom(null, (get, set, sessionId: string) =
   runStepsVisibleMemoryBySessionIdAtomFamily.remove(sessionId);
   streamingTextBySessionIdAtomFamily.remove(sessionId);
   sessionMessageCacheBySessionIdAtomFamily.remove(sessionId);
+  sessionHasImageGenHistoryAtomFamily.remove(sessionId);
   set(streamingTextByIdAtom, (prevMap) => {
     if (!(sessionId in prevMap)) return prevMap;
     const nextMap = { ...prevMap };

@@ -155,6 +155,11 @@ export const FinalAnswer = memo(function FinalAnswer(props: {
 	isStreaming?: boolean;
 	/** live→settled 交接淡入 */
 	settle?: boolean;
+	/**
+	 * 非最新轮强制轻量 Markdown（跳过高亮/mermaid/math）：贴底窗口内可同时挂
+	 * 2–3 篇已 settle 的最终回答，全量 Streamdown 会拖垮后续轮次的输入/滚动。
+	 */
+	light?: boolean;
 	/** 编辑态 */
 	editing: boolean;
 	editText: string;
@@ -232,6 +237,7 @@ export const FinalAnswer = memo(function FinalAnswer(props: {
 			onOpenFile={props.onOpenFile}
 			isStreaming={props.isStreaming ?? false}
 			settle={props.settle}
+			light={props.light}
 		/>
 	);
 });

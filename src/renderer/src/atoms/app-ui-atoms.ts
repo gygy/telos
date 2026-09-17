@@ -144,14 +144,14 @@ export const sidebarNavTabAtom = atom<SidebarNavTab>(
  * 默认值与 main SettingsStore.defaultSettings 保持一致。
  */
 export type TurnFlowSettings = {
-	/** 流式对话时展开中间过程（默认开：最新轮流式输出时自动展开思考/工具详情）。 */
+	/** 流式对话时展开中间过程（默认关：折叠思考/工具以保输入与滚动毫秒响应；用户可在设置中开启）。 */
 	expandInterimDuringStream: boolean;
 	/** 新一轮开始时收起上一轮（默认开：发送新消息后收起所有非最新轮，含手动展开的）。 */
 	collapsePrevRunsOnNewTurn: boolean;
 };
 
 export const turnFlowSettingsAtom = atom<TurnFlowSettings>({
-	expandInterimDuringStream: true,
+	expandInterimDuringStream: false,
 	collapsePrevRunsOnNewTurn: true,
 });
 

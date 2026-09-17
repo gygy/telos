@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomFamily, selectAtom } from "jotai/utils";
 import type { ComposerAgentMode, ImageContent } from "../../../shared/types";
 import type { ModelPending } from "../utils/modelPendingDisplay";
 import type { QuoteSnippet } from "../components/session/composer/quoteChip";
@@ -41,6 +42,46 @@ export const sessionQuotesByIdAtom = atom<Record<string, SessionQuoteMap>>({});
 
 export const sessionComposerModeByIdAtom = atom<Record<string, SessionComposerMode>>({});
 export const sessionSendStateByIdAtom = atom<Record<string, SessionSendState>>({});
+
+const EMPTY_ATTACHMENTS: ImageContent[] = [];
+const EMPTY_PASTE_FILES: PastedTextFile[] = [];
+const IDLE_SEND_STATE: SessionSendState = { status: "idle" };
+
+/**
+ * Composer 按会话隔离订阅：全局 Record 任一 key 写入都会换新对象引用；
+ * selectAtom 只在本会话条目变化时通知，避免分屏/后台会话拖垮聚焦栏输入响应。
+ */
+export const sessionDraftBySessionIdAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(sessionDraftByIdAtom, (drafts) => drafts[sessionId] ?? "", Object.is),
+);
+export const sessionAttachmentsBySessionIdAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(
+    sessionAttachmentsByIdAtom,
+    (attachments) => attachments[sessionId] ?? EMPTY_ATTACHMENTS,
+    Object.is,
+  ),
+);
+export const sessionPasteFilesBySessionIdAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(
+    sessionPasteFilesByIdAtom,
+    (files) => files[sessionId] ?? EMPTY_PASTE_FILES,
+    Object.is,
+  ),
+);
+export const sessionComposerModeBySessionIdAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(
+    sessionComposerModeByIdAtom,
+    (modes) => modes[sessionId],
+    Object.is,
+  ),
+);
+export const sessionSendStateBySessionIdAtomFamily = atomFamily((sessionId: string) =>
+  selectAtom(
+    sessionSendStateByIdAtom,
+    (states) => states[sessionId] ?? IDLE_SEND_STATE,
+    Object.is,
+  ),
+);
 
 /**
  * 生成进行中切换模型：pi 不支持运行中 set_model，只写入会话记录；
@@ -228,6 +269,11 @@ export const promoteSessionComposerStateAtom = atom(
     set(sessionPasteFilesByIdAtom, move(get(sessionPasteFilesByIdAtom)));
     set(sessionComposerModeByIdAtom, move(get(sessionComposerModeByIdAtom)));
     set(sessionSendStateByIdAtom, move(get(sessionSendStateByIdAtom)));
+    sessionDraftBySessionIdAtomFamily.remove(input.fromSessionId);
+    sessionAttachmentsBySessionIdAtomFamily.remove(input.fromSessionId);
+    sessionPasteFilesBySessionIdAtomFamily.remove(input.fromSessionId);
+    sessionComposerModeBySessionIdAtomFamily.remove(input.fromSessionId);
+    sessionSendStateBySessionIdAtomFamily.remove(input.fromSessionId);
   },
 );
 
@@ -250,4 +296,10 @@ export const removeSessionComposerStateAtom = atom(null, (get, set, sessionId: s
   const modelPending = { ...get(modelPendingByIdAtom) };
   delete modelPending[sessionId];
   set(modelPendingByIdAtom, modelPending);
+  // atomFamily 无自动 GC：会话删除时同步 remove，避免长期泄漏。
+  sessionDraftBySessionIdAtomFamily.remove(sessionId);
+  sessionAttachmentsBySessionIdAtomFamily.remove(sessionId);
+  sessionPasteFilesBySessionIdAtomFamily.remove(sessionId);
+  sessionComposerModeBySessionIdAtomFamily.remove(sessionId);
+  sessionSendStateBySessionIdAtomFamily.remove(sessionId);
 });

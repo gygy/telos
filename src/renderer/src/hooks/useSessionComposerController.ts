@@ -39,16 +39,18 @@ import {
   effectiveAgentBackendAtom,
   imageGenConfigAtom,
   projectByIdAtomFamily,
-  sessionAttachmentsByIdAtom,
-  sessionComposerModeByIdAtom,
+  sessionAttachmentsBySessionIdAtomFamily,
+  sessionComposerModeBySessionIdAtomFamily,
   sessionDraftByIdAtom,
+  sessionDraftBySessionIdAtomFamily,
+  sessionHasImageGenHistoryAtomFamily,
   sessionMessagesCacheAtom,
-  sessionPasteFilesByIdAtom,
+  sessionPasteFilesBySessionIdAtomFamily,
   sessionRecordByIdAtomFamily,
   sessionRuntimeBySessionIdAtomFamily,
   sessionRuntimeUiBySessionIdAtomFamily,
   sessionQuotesByIdAtom,
-  sessionSendStateByIdAtom,
+  sessionSendStateBySessionIdAtomFamily,
   sessionSummariesByProjectIdAtomFamily,
   setSessionAttachmentsAtom,
   setSessionComposerModeAtom,
@@ -323,12 +325,13 @@ export function useSessionComposerController(
   const projectSessions = useAtomValue(
     sessionSummariesByProjectIdAtomFamily(effectiveProjectId ?? ""),
   );
-  const drafts = useAtomValue(sessionDraftByIdAtom);
-  const attachmentsBySession = useAtomValue(sessionAttachmentsByIdAtom);
-  const pasteFilesBySession = useAtomValue(sessionPasteFilesByIdAtom);
-  const modes = useAtomValue(sessionComposerModeByIdAtom);
-  const sendStates = useAtomValue(sessionSendStateByIdAtom);
-  const messageCache = useAtomValue(sessionMessagesCacheAtom);
+  // 按会话隔离订阅：禁止订全局 Record（工具期 message flush / 他栏草稿都会拖垮输入响应）。
+  const draft = useAtomValue(sessionDraftBySessionIdAtomFamily(sessionId));
+  const attachments = useAtomValue(sessionAttachmentsBySessionIdAtomFamily(sessionId));
+  const pasteFiles = useAtomValue(sessionPasteFilesBySessionIdAtomFamily(sessionId));
+  const localMode = useAtomValue(sessionComposerModeBySessionIdAtomFamily(sessionId));
+  const sendState = useAtomValue(sessionSendStateBySessionIdAtomFamily(sessionId));
+  const hasImageGenHistory = useAtomValue(sessionHasImageGenHistoryAtomFamily(sessionId));
   const imageGenConfig = useAtomValue(imageGenConfigAtom);
   const setImageGenConfig = useSetAtom(imageGenConfigAtom);
   const setDraftAtom = useSetAtom(setSessionDraftAtom);
@@ -338,15 +341,9 @@ export function useSessionComposerController(
   const setSendStateAtom = useSetAtom(setSessionSendStateAtom);
   const setCacheMessages = useSetAtom(cacheSessionMessagesAtom);
 
-  const draft = drafts[sessionId] ?? "";
-  const attachments = attachmentsBySession[sessionId] ?? [];
-  const pasteFiles = pasteFilesBySession[sessionId] ?? [];
   // DSH：plan 由 host 持有；goal 由本地选择或进行中/阻塞的目标驱动（切回普通会 pause）。
   // 生图为独立供应商配置，不属于 pi/dsh 任一后端，两种后端均可用。
   const isDshBackend = record?.backend === "dsh" || runtime?.backend === "dsh";
-  const hasImageGenHistory = (messageCache[sessionId]?.messages ?? []).some(
-    (message) => Boolean(message.meta?.imageGen),
-  );
   // 生图供应商/模型来自独立 imagegen.json，与会话 LLM 模型无关。
   const activeImageGenProviderId = imageGenConfig.activeProviderId;
   const activeImageGenModelId = imageGenConfig.activeModel;
@@ -354,11 +351,10 @@ export function useSessionComposerController(
     ? "imagegen"
     : deriveComposerAgentMode({
     backend: isDshBackend ? "dsh" : "pi",
-    localMode: modes[sessionId],
+    localMode,
     planModeActive: runtime?.state?.planModeActive === true,
     goalPhase: runtime?.state?.goal?.phase,
   });
-  const sendState = sendStates[sessionId] ?? { status: "idle" as const };
   // DSH 部署默认模型选择（settings.yaml agent-default-model）：草稿/未激活会话
   // 的底栏与选择器用它展示默认模型/思考档位（host 会话创建前没有 runtime state）。
   // settings.yaml 未配 reasoningEffort 时，回退到默认模型自身的 defaultEffort

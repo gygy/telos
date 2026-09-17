@@ -3436,7 +3436,7 @@ export const zhCN = {
   "settings.linkOpenMode.internal": "应用内窗口",
   "settings.workspaceContentOpenMode": "文件 / Diff 打开方式",
   "settings.expandInterimDuringStream": "流式对话时展开中间过程",
-  "settings.expandInterimDuringStreamDesc": "开启（默认）时，最新轮流式输出时自动展开思考与工具详情。关闭时，对话过程中保持折叠，节省渲染资源；手动展开的轮次不受影响。",
+  "settings.expandInterimDuringStreamDesc": "开启时，最新轮流式输出时自动展开思考与工具详情。关闭（默认）时保持折叠，节省渲染资源，对话中间输入与滚动更跟手；手动展开的轮次不受影响。",
   "settings.collapsePrevRunsOnNewTurn": "新一轮开始时收起上一轮",
   "settings.collapsePrevRunsOnNewTurnDesc": "发送新消息后自动收起上一轮展开的思考/工具详情（含手动展开的），减少同时渲染的内容。",
   "settings.idleAgentSection": "闲置 Agent 内存优化",

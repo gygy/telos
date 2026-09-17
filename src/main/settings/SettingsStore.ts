@@ -161,9 +161,9 @@ Gitmoji 对应关系：
   // 公告通知默认开启：新公告弹 toast 提醒（弹出时机另有忙碌延迟控制）
   announcementNotificationEnabled: true,
   showThinking: readPiAgentShowThinking() ?? true,
-  // 流式对话设置：默认自动展开中间过程（思考/工具详情随最新轮流式展开）；
-  // 新一轮开始默认收起非最新轮（含手动展开的），用户可在设置中关闭。
-  expandInterimDuringStream: true,
+  // 流式对话设置：默认折叠中间过程（思考/工具详情），避免多轮后 DOM 暴涨拖垮输入/滚动；
+  // 新一轮开始默认收起非最新轮（含手动展开的），用户可在设置中调整。
+  expandInterimDuringStream: false,
   collapsePrevRunsOnNewTurn: true,
   showDevTools: false,
   developerDiagnostics: false,

@@ -1003,9 +1003,10 @@ export function SessionMessageTimeline(props: SessionMessageTimelineProps) {
                     onPreviewImage={props.onPreviewImage}
                     showThinking={props.showThinking}
                     isStreaming={isRunStreaming}
-                    // 始终下发 live id（按 message id 命中）；勿绑 isRunStreaming，
-                    // 否则流结束而 History 未到时会提前卸思考步导致 remount dump。
-                    liveThinkingId={liveThinkingId}
+                    // liveThinkingId 只下发给最后一个 agent-run：按 message id 命中思考步，
+                    // 不必绑 isRunStreaming（流结束 History 未到时仍需挂住）；但传给非末轮
+                    // 会在 thinking id 变化时让全部 TurnRow memo 失效。
+                    liveThinkingId={item.id === latestAgentRunId ? liveThinkingId : undefined}
                     isRuntimeBusy={isRuntimeBusy}
                     agentRunning={isRunStreaming}
                     isLatestRun={item.id === lastDisplayedItemId}
