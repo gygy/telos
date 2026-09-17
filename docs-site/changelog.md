@@ -5,6 +5,12 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.10
+
+发布时间：2026-09-17
+
+- ✨ **首轮后对话中间变钝**
+
 ## v0.7.9
 
 发布时间：2026-09-17

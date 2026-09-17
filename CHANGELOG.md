@@ -1,3 +1,8 @@
+## v0.7.10 - 2026-09-17
+
+### 🐛 Fixes
+- **Mid-conversation lag after the first turn** — Composer no longer resubscribes to the global message cache on every tool flush; draft/send/attachments use per-session atoms; previous-turn final answers stay on light Markdown; streaming interim details default to collapsed. Typing and scrolling stay responsive as the thread grows.
+
 ## v0.7.9 - 2026-09-17
 
 ### ✨ Improvements

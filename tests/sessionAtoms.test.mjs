@@ -1580,3 +1580,44 @@ test("prependSessionMessagePageAtom dedupes overlapping pages by entryId", () =>
   assert.equal(entry().messages.length, 3);
   assert.equal(entry().page.nextBefore, 0);
 });
+
+test("sessionHasImageGenHistoryAtomFamily stays stable across non-imageGen message flushes", () => {
+  const atoms = loadAtoms();
+  const store = createStore();
+  store.set(atoms.cacheSessionMessagesAtom, {
+    sessionId: "session-a",
+    messages: [chatMessage("m1", "user", "hi"), chatMessage("m2", "assistant", "hello")],
+    replace: true,
+  });
+  const flagAtom = atoms.sessionHasImageGenHistoryAtomFamily("session-a");
+  assert.equal(store.get(flagAtom), false);
+  let notifyCount = 0;
+  const unsub = store.sub(flagAtom, () => {
+    notifyCount += 1;
+  });
+  // 普通工具/文本 flush：boolean 仍为 false，selectAtom 不应通知 composer。
+  store.set(atoms.cacheSessionMessagesAtom, {
+    sessionId: "session-a",
+    messages: [
+      chatMessage("m1", "user", "hi"),
+      chatMessage("m2", "assistant", "hello"),
+      chatMessage("m3", "assistant", "more"),
+    ],
+    replace: true,
+  });
+  assert.equal(store.get(flagAtom), false);
+  assert.equal(notifyCount, 0);
+  // 出现生图 meta 后才翻转并通知一次。
+  const withImage = {
+    ...chatMessage("m4", "assistant", ""),
+    meta: { imageGen: { status: "complete", prompt: "cat" } },
+  };
+  store.set(atoms.cacheSessionMessagesAtom, {
+    sessionId: "session-a",
+    messages: [chatMessage("m1", "user", "hi"), withImage],
+    replace: true,
+  });
+  assert.equal(store.get(flagAtom), true);
+  assert.equal(notifyCount, 1);
+  unsub();
+});
