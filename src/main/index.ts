@@ -3900,6 +3900,7 @@ app.whenReady().then(async () => {
 	// C12：退出清理登记（before-quit 统一 runAll）
 	quitCleanup.register("terminal", () => terminalManager?.closeAll());
 
+	startupTimer?.mark("managers-constructed");
 	await settingsStore.load();
 	startupTimer?.mark("settings-loaded");
 	// 快捷键覆盖从磁盘载入后立即刷新主进程生效绑定（此后 settings:update 路径实时刷新）

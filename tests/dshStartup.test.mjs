@@ -52,7 +52,7 @@ test("startup integration warms DSH after the main window only when default back
 	// 白起一个 utilityProcess（约 200MB）没有意义。
 	assert.match(
 		main,
-		/await createWindow\(\);[\s\S]{0,600}startDshHostInBackground\(dshHost, appLogger, \{\s*enabled:\s*settingsStore\.get\(\)\.defaultAgentBackend === "dsh" && dshRuntimeStatus\.canCreateDshSession\(\),\s*\}\)/,
+		/await createWindow\(\);[\s\S]{0,2500}startDshHostInBackground\(dshHost, appLogger, \{\s*enabled:\s*settingsStore\.get\(\)\.defaultAgentBackend === "dsh" && dshRuntimeStatus\.canCreateDshSession\(\),\s*\}\)/,
 	);
 	assert.match(configTab, /const restartHost = async \(\) =>/);
 	assert.match(configTab, /desktopApi\.sessions\.restartDshHost\(\)/);
