@@ -28,7 +28,7 @@ import { showNotice } from "./utils/notice";
 import {
   desktopApi as api,
   isLanWeb,
-  missingElectronPreload,
+  isMissingElectronPreload,
 } from "./desktopApi";
 import { turnFlowSettingsAtom, defaultAgentBackendAtom, effectiveAgentBackendAtom, busySendDeliveryAtom, imageGenConfigAtom, dshRuntimeStatusAtom, openSettingsAtom, openAutomationModalAtom, sessionRecordsAtom, bumpNewTurnCollapseTickAtom } from "./atoms";
 import { resolveBusySendDelivery } from "../../shared/busySendDelivery";
@@ -222,7 +222,8 @@ import type {
 } from "../../shared/types";
 
 export function App() {
-  if (missingElectronPreload) {
+  // 运行时探测，避免模块顶层冻死「未注入」假阳性（Vite 竞态 / HMR）
+  if (isMissingElectronPreload()) {
     return (
       <div className="boot-screen root-loading">
         <div className="boot-logo root-loading-logo" aria-hidden="true">

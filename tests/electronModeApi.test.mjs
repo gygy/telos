@@ -13,11 +13,11 @@ const ipcSource = readFileSync("src/shared/ipc.ts", "utf8");
 
 test("Electron renderer does not fall back to preview browser API when preload is missing", () => {
 	assert.match(desktopApiSource, /isElectronRuntime/);
-	assert.match(desktopApiSource, /missingElectronPreload/);
+	assert.match(desktopApiSource, /isMissingElectronPreload/);
 	assert.match(desktopApiSource, /app\.preloadMissing/);
 	assert.match(desktopApiSource, /function createUnavailableDesktopApi\(/);
-	assert.match(desktopApiSource, /missingElectronPreload\s*\?\s*createUnavailableDesktopApi\(\)/);
-	assert.match(appSource, /missingElectronPreload/);
+	assert.match(desktopApiSource, /isMissingElectronPreload\(\)\s*\?\s*createUnavailableDesktopApi\(\)/);
+	assert.match(appSource, /isMissingElectronPreload\(\)/);
 	assert.doesNotMatch(
 		desktopApiSource,
 		/window\.piDesktop\s*\?\?\s*\(isLanWeb\s*\?\s*createBrowserApi\(\)\s*:\s*createPreviewApi\(\)\)/,
