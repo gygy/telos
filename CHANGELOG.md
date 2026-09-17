@@ -1,3 +1,11 @@
+## v0.7.7 - 2026-09-17
+
+### 🐛 Fixes
+- **Chat chrome restores the Telos brand mark** — Upstream sync had replaced `PiLogo` with the official pi window glyph; reply headers, the composer backend picker, and pi source badges again use the Telos white-plate red π, and the file is on the sync overlay list so it is not overwritten again.
+
+### ✨ Improvements
+- **Leaner sidebar dock** — Removed the permanent Announcements and Feedback dock buttons; Feedback moves into the brand About popover; announcements remain reachable via the notification toast “View” action.
+
 ## v0.7.6 - 2026-09-17
 
 ### 🚀 New Features

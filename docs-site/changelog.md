@@ -5,6 +5,13 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.7
+
+发布时间：2026-09-17
+
+- ✨ **聊天窗口恢复 Telos 品牌圆标**
+- ✨ **侧栏底栏精简**
+
 ## v0.7.6
 
 发布时间：2026-09-17

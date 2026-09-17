@@ -2,59 +2,64 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+/**
+ * Telos 品牌面契约：应用内品牌标统一走 TelosLogo（白底 + Yandex 红 π），
+ * 不再使用上游 Pi 官方窗口字形，也不回潮跳蛛线稿。
+ */
+
 const mark = readFileSync("src/renderer/src/components/app/LogoMark.tsx", "utf8");
+const telosLogo = readFileSync("src/renderer/src/components/app/TelosLogo.tsx", "utf8");
 const lockup = readFileSync("src/renderer/src/components/app/AppParts.tsx", "utf8");
-const canvas = readFileSync("src/renderer/src/components/app/PiLogoCanvas.tsx", "utf8");
 const about = readFileSync("src/renderer/src/components/app/AboutPopover.tsx", "utf8");
-const shimmer = readFileSync("src/renderer/src/components/motion/text-shimmer.tsx", "utf8");
+const sessionBadge = readFileSync(
+  "src/renderer/src/components/session/SessionSourceBadge.tsx",
+  "utf8",
+);
 const app = readFileSync("src/renderer/src/App.tsx", "utf8");
 const boot = readFileSync("src/renderer/index.html", "utf8");
 const webBrand = readFileSync("src/renderer/src/web/WebBrandLockup.tsx", "utf8");
 const webTimeline = readFileSync("src/renderer/src/web/WebTimeline.tsx", "utf8");
 
-const PI_GLYPH = /M165\.29 165\.29H517\.36V400/;
+/** 上游 Pi 官方窗口字形路径（Telos 产品面不得回潮）。 */
+const UPSTREAM_PI_WINDOW = /M165\.29 165\.29H517\.36V400/;
+/** 旧跳蛛线稿片段（历史上曾用，已废弃）。 */
+const SPIDER_MARK = /M7\.5 15\.5C3\.5 14|<ellipse cx="60" cy="50"/;
 
-test("in-app brand surfaces use the Pi glyph, not the spider mark", () => {
+test("in-app brand surfaces use TelosLogo, not upstream Pi window glyph", () => {
+  assert.match(telosLogo, /fill="#FC3F1D"/);
+  assert.match(telosLogo, /export function TelosLogo/);
+
   assert.match(mark, /export function LogoMark/);
-  assert.match(mark, PI_GLYPH);
+  assert.match(mark, /<TelosLogo className="size-full" title="Telos" \/>/);
   assert.doesNotMatch(mark, /brandMarkSrc/);
-  assert.match(lockup, /<PiLogoCanvas size=\{18\}/);
-  // 侧栏 π logo：只点击播官方积木拼装，不挂载自播、不跟会话启动。
-  assert.match(lockup, /<PiLogoCanvas size=\{18\} playOnClick \/>/);
-  assert.doesNotMatch(lockup, /autoPlay/);
-  assert.doesNotMatch(lockup, /replayToken/);
-  assert.doesNotMatch(app, /brandLogoReplayToken/);
-  assert.doesNotMatch(app, /triggerBrandLogoReplay/);
-  // 引擎默认不自播：只有显式 autoPlay 才挂载播放；点击必须 stopPropagation，避免侧栏打开关于弹窗。
-  assert.match(canvas, /if \(props\.autoPlay\)/);
-  assert.doesNotMatch(canvas, /autoPlay !== false/);
-  assert.doesNotMatch(canvas, /replayToken/);
-  assert.match(canvas, /event\?\.stopPropagation\(\)/);
-  assert.match(about, /<PiLogoCanvas size=\{40\} playOnClick \/>/);
-  assert.doesNotMatch(about, /autoPlay/);
-  // beUI 两行字标（5fcca0b8）：wordmark 由 TextShimmer 承载，不再用 aria-hidden span
-  assert.match(lockup, />\s*PiDeck\s*<\/TextShimmer>/);
-  // 侧栏字标扫光必须几分钟一轮；回退到 60s 会让常驻品牌位太勤。
-  assert.match(lockup, /REST_MS = 5 \* 60_000/);
-  assert.doesNotMatch(lockup, /REST_MS = 60_000/);
-  // 启动不扫、后台/减少动效停扫：否则休息间隔再长也会在 hidden 窗口白烧 GPU。
-  assert.match(lockup, /const \[shimmerOn, setShimmerOn\] = useState\(false\)/);
-  assert.match(lockup, /arm\(REST_MS, true\)/);
-  assert.match(lockup, /visibilitychange/);
-  assert.match(lockup, /prefers-reduced-motion: reduce/);
-  // 休息态必须卸掉 clip 渐变；只关 animation 仍会留合成层。
-  assert.match(shimmer, /enabled \? TEXT_SHIMMER_CLASS_NAME : "text-foreground"/);
-  assert.match(shimmer, /enabled \? <style>\{TEXT_SHIMMER_KEYFRAMES\}<\/style> : null/);
-  assert.match(shimmer, /enabled \? textShimmerStyle\(duration\) : undefined/);
-  assert.match(app, PI_GLYPH);
-  assert.match(boot, /id="boot-logo-silver"/);
-  assert.match(boot, PI_GLYPH);
-  assert.match(webBrand, /<PiLogoCanvas size=\{18\} playOnClick \/>/);
-  assert.doesNotMatch(webBrand, /autoPlay/);
-  assert.match(webBrand, />\s*PiDeck\s*</);
+  assert.doesNotMatch(mark, UPSTREAM_PI_WINDOW);
+
+  // 侧栏字标：TelosLogo + TextShimmer「Telos」，不再挂 PiLogoCanvas / PiDeck 字样
+  assert.match(lockup, /showLogo && <TelosLogo className="size-\[18px\]" title="Telos" \/>/);
+  assert.match(lockup, />\s*Telos\s*<\/TextShimmer>/);
+  assert.doesNotMatch(lockup, /<PiLogoCanvas/);
+  assert.doesNotMatch(lockup, />\s*PiDeck\s*</);
+
+  assert.match(about, /<TelosLogo className="size-10" title="Telos" \/>/);
+  assert.doesNotMatch(about, /<PiLogoCanvas/);
+
+  // 聊天窗口 / 后端选择器的 PiLogo 也必须是 Telos 圆标（同步上游时曾被盖回）
+  assert.match(sessionBadge, /export function PiLogo/);
+  assert.match(sessionBadge, /return <TelosLogo className=\{props\.className/);
+  assert.doesNotMatch(
+    sessionBadge.slice(sessionBadge.indexOf("export function PiLogo")),
+    UPSTREAM_PI_WINDOW,
+  );
+
+  assert.match(app, /<TelosLogo className="size-12" title="Telos" \/>/);
+  assert.match(boot, /fill="#FC3F1D"/);
+  assert.doesNotMatch(boot, UPSTREAM_PI_WINDOW);
+
+  assert.match(webBrand, /<TelosLogo className="size-\[18px\]" title="Telos" \/>/);
+  assert.match(webBrand, />\s*Telos\s*</);
   assert.match(webTimeline, /<LogoMark size=\{66\} \/>/);
-  for (const source of [mark, lockup, app, boot, webBrand, webTimeline]) {
-    assert.doesNotMatch(source, /M7\.5 15\.5C3\.5 14/);
-    assert.doesNotMatch(source, /<ellipse cx="60" cy="50"/);
+
+  for (const source of [mark, telosLogo, lockup, about, sessionBadge, app, boot, webBrand, webTimeline]) {
+    assert.doesNotMatch(source, SPIDER_MARK);
   }
 });
