@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.7.7-blue)
+![Version](https://img.shields.io/badge/version-0.7.8-blue)
 
 <!-- star-history:start -->
 <picture>
@@ -79,13 +79,12 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.7** (2026-09-17)
+> **Latest: v0.7.8** (2026-09-17)
 
-### v0.7.7 Release Highlights
-- 鉁?**Chat chrome restores the Telos brand mark**
-- 鉁?**Leaner sidebar dock**
+### v0.7.8 Release Highlights
+- ✨ **False “update download failed” toast on startup**
 
-[View Full Changelog 鈫抅(CHANGELOG.md)
+[View Full Changelog →](CHANGELOG.md)
 
 ---
 

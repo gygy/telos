@@ -5,6 +5,12 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.8
+
+发布时间：2026-09-17
+
+- ✨ **启动后误报「更新下载失败」**
+
 ## v0.7.7
 
 发布时间：2026-09-17

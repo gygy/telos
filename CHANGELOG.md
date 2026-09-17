@@ -1,3 +1,8 @@
+## v0.7.8 - 2026-09-17
+
+### 🐛 Fixes
+- **False “update download failed” toast on startup** — Background update-check failures (e.g. GitHub timeouts on restricted networks) no longer raise a persistent error toast; only real download/install failures after an update is found are surfaced. Check status remains visible under Settings → Updates.
+
 ## v0.7.7 - 2026-09-17
 
 ### 🐛 Fixes
