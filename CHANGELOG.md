@@ -1,3 +1,8 @@
+## v0.7.9 - 2026-09-17
+
+### ✨ Improvements
+- **Faster cold start** — Deferred electron-updater / updater-partition init until after the main window is created, and overlapped catalog/automation loading with window creation. Measured whenReady→window-shown dropped from ~4.4s to ~1.3s; startup span logs added for future tuning.
+
 ## v0.7.8 - 2026-09-17
 
 ### 🐛 Fixes

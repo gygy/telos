@@ -5,6 +5,12 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.9
+
+发布时间：2026-09-17
+
+- ✨ **冷启动明显加快**
+
 ## v0.7.8
 
 发布时间：2026-09-17

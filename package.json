@@ -1,6 +1,6 @@
 {
   "name": "telos",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "dshRuntimeVersion": "0.1.5-rc.1",
   "description": "Telos — desktop workbench for managing pi / DSH AI coding agents across local projects.",
   "private": true,
