@@ -231,6 +231,9 @@ test("background updater UI is snapshot-driven and installation remains user-con
   assert.doesNotMatch(updateWatch, /api\.app\.installUpdate\(\)/);
   assert.match(updateWatch, /const settingsAction: NoticeActions/);
   assert.doesNotMatch(updateWatch, /api\.app\.downloadUpdate/);
+  // 纯后台检查失败不得 toast「下载失败」：必须先拿到 downloadTarget（version / hasUpdate）。
+  assert.match(updateWatch, /const downloadTarget =/);
+  assert.match(updateWatch, /if \(!downloadTarget\) return;/);
   assert.match(updateCard, /const updateStatus = useAtomValue\(updateStatusAtom\)/);
   assert.match(updateCard, /download && download\.phase === "downloading"/);
   assert.match(updateCard, /download && download\.phase === "ready"/);

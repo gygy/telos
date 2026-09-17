@@ -16,7 +16,9 @@ export type BackgroundUpdateWatchOptions = {
  *
  * 通知规则（对齐 Netcatty 语义）：
  *   - 自动下载开启：下载完成后 toast 引导至设置页；设置页在确认草稿安全后才允许安装；
- *   - 下载失败或安装器未能启动：toast 错误并跳转设置页重试；
+ *   - 已发现更新后的下载失败，或安装器未能启动：toast 错误并跳转设置页重试；
+ *   - 纯后台「检查更新」失败（网络超时 / 源不可达等）只写设置页状态，不弹 toast——
+ *     国内直连 GitHub 偶发失败很常见，启动即弹「更新下载失败」属于误报打扰；
  *   - Pi CLI：hasUpdate 且未提示过 → toast 一次并立即 notifySeen（入口在设置页）。
  * 本地 ref 兜一层去重，防快照重发/异步标记竞态导致重复 toast。
  */
@@ -81,9 +83,13 @@ export function useBackgroundUpdateWatch(options: BackgroundUpdateWatchOptions):
 			}
 
 			if (download?.phase === "error") {
-				// 下载/检查失败：toast 错误 + 去设置页（错误信息变化时提示一次）。
-				const errorKey = `${appStatus?.latestVersion ?? ""}:${download.error ?? ""}`;
-				if (notifiedRef.current.error !== errorKey && errorKey !== ":") {
+				// 仅「已锁定目标版本 / 已确认有更新」后的下载失败才打扰：
+				// 纯 check 失败（version/hasUpdate 皆空）静默，错误仍可在设置页查看。
+				const downloadTarget =
+					download.version ?? (appStatus?.hasUpdate ? appStatus.latestVersion : undefined);
+				if (!downloadTarget) return;
+				const errorKey = `${downloadTarget}:${download.error ?? ""}`;
+				if (notifiedRef.current.error !== errorKey && !errorKey.endsWith(":")) {
 					notifiedRef.current.error = errorKey;
 					showNotice(
 						t("update.downloadFailedDetail", { error: download.error ?? "" }),
