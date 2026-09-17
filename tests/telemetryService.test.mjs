@@ -158,3 +158,15 @@ test("skips heartbeat outside packaged builds", async () => {
 
 	assert.equal(calls.length, 0);
 });
+
+test("main ships no default PostHog project key", () => {
+	const mainSource = readFileSync("src/main/index.ts", "utf8");
+	assert.doesNotMatch(
+		mainSource,
+		/phc_xgJ8gFUMgExZEEPzZ7VRa7698ENcaDRquWZVGYb2dCFK/,
+	);
+	assert.match(
+		mainSource,
+		/const POSTHOG_PROJECT_KEY = process\.env\.POSTHOG_PROJECT_KEY \?\? ""/,
+	);
+});

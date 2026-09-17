@@ -1232,9 +1232,9 @@ function applyNativeThemeSource(settings: AppSettings) {
 	}
 }
 
-const POSTHOG_PROJECT_KEY =
-	process.env.POSTHOG_PROJECT_KEY ??
-	"phc_xgJ8gFUMgExZEEPzZ7VRa7698ENcaDRquWZVGYb2dCFK";
+// 默认不内置任何第三方 PostHog 项目 Key：空 Key 时 TelemetryService 直接跳过，
+// 不会向外部上报。需要自建统计时用环境变量 POSTHOG_PROJECT_KEY / POSTHOG_HOST 注入。
+const POSTHOG_PROJECT_KEY = process.env.POSTHOG_PROJECT_KEY ?? "";
 const POSTHOG_HOST = process.env.POSTHOG_HOST ?? "https://us.i.posthog.com";
 
 /**
