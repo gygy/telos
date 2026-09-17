@@ -1715,6 +1715,10 @@ async function createWindow() {
 		// 加载期排队的通知跳转目标补发一次（renderer 挂载后还会主动拉取，幂等兜底）
 		flushPendingFocusTargetOnLoad();
 	});
+	// 开发态 Vite 偶发晚于 Electron 就绪：主帧 ERR_CONNECTION_REFUSED 时退避重试，
+	// 避免停在 Chromium 错误页 / 半截 HMR，渲染层误报「预加载 API 未注入」。
+	let devRendererLoadRetries = 0;
+	const MAX_DEV_RENDERER_LOAD_RETRIES = 30;
 	mainWindow.webContents.on(
 		"did-fail-load",
 		(_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -1724,6 +1728,39 @@ async function createWindow() {
 				validatedURL,
 				isMainFrame,
 			});
+			const devUrl = shouldUseDevRendererUrl()
+				? process.env.ELECTRON_RENDERER_URL
+				: undefined;
+			if (
+				!isMainFrame ||
+				!devUrl ||
+				isQuitting ||
+				!mainWindow ||
+				mainWindow.isDestroyed()
+			) {
+				return;
+			}
+			// -102 ERR_CONNECTION_REFUSED：Vite 尚未 listen
+			if (errorCode !== -102) return;
+			if (devRendererLoadRetries >= MAX_DEV_RENDERER_LOAD_RETRIES) {
+				void appLogger.error(
+					"app",
+					"Dev renderer URL still unreachable after retries",
+					{ url: devUrl, retries: devRendererLoadRetries },
+				);
+				return;
+			}
+			devRendererLoadRetries += 1;
+			const delayMs = Math.min(200 * devRendererLoadRetries, 2000);
+			void appLogger.warn("app", "Retrying dev renderer URL after connection refused", {
+				url: devUrl,
+				attempt: devRendererLoadRetries,
+				delayMs,
+			});
+			setTimeout(() => {
+				if (isQuitting || !mainWindow || mainWindow.isDestroyed()) return;
+				void mainWindow.loadURL(devUrl);
+			}, delayMs);
 		},
 	);
 	mainWindow.webContents.on("render-process-gone", (_event, details) => {

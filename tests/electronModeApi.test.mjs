@@ -16,7 +16,9 @@ test("Electron renderer does not fall back to preview browser API when preload i
 	assert.match(desktopApiSource, /isMissingElectronPreload/);
 	assert.match(desktopApiSource, /app\.preloadMissing/);
 	assert.match(desktopApiSource, /function createUnavailableDesktopApi\(/);
-	assert.match(desktopApiSource, /isMissingElectronPreload\(\)\s*\?\s*createUnavailableDesktopApi\(\)/);
+	assert.match(desktopApiSource, /function resolveDesktopApi\(/);
+	assert.match(desktopApiSource, /isMissingElectronPreload\(\)\)\s*return createUnavailableDesktopApi\(\)/);
+	assert.match(desktopApiSource, /new Proxy\(\{\} as PiDesktopApi/);
 	assert.match(appSource, /isMissingElectronPreload\(\)/);
 	assert.doesNotMatch(
 		desktopApiSource,
@@ -26,6 +28,13 @@ test("Electron renderer does not fall back to preview browser API when preload i
 		desktopApiSource,
 		/missingElectronPreload\s*\|\|\s*!isLanWeb\s*\?\s*createPreviewApi\(\)/,
 	);
+});
+
+test("dev main window retries Vite URL after ERR_CONNECTION_REFUSED", () => {
+	assert.match(mainSource, /did-fail-load/);
+	assert.match(mainSource, /ERR_CONNECTION_REFUSED|errorCode !== -102/);
+	assert.match(mainSource, /Retrying dev renderer URL after connection refused/);
+	assert.match(mainSource, /MAX_DEV_RENDERER_LOAD_RETRIES/);
 });
 
 test("packaged main and pet windows never load the dev server URL", () => {

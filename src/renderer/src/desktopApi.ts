@@ -15,9 +15,6 @@ export function isMissingElectronPreload(): boolean {
   return navigator.userAgent.includes("Electron/") && !window.piDesktop;
 }
 
-/** @deprecated 兼容旧引用；请改用 isMissingElectronPreload() */
-export const missingElectronPreload = isMissingElectronPreload();
-
 function createUnavailableDesktopApi(): PiDesktopApi {
   const fail = () => {
     throw new Error(t("app.preloadMissing"));
@@ -31,10 +28,29 @@ function createUnavailableDesktopApi(): PiDesktopApi {
   ) as PiDesktopApi;
 }
 
-export const desktopApi: PiDesktopApi =
-  window.piDesktop ??
-  (isMissingElectronPreload()
-    ? createUnavailableDesktopApi()
-    : isLanWeb
-      ? createBrowserApi()
-      : createPreviewApi());
+function resolveDesktopApi(): PiDesktopApi {
+  if (window.piDesktop) return window.piDesktop;
+  if (isMissingElectronPreload()) return createUnavailableDesktopApi();
+  if (isLanWeb) return createBrowserApi();
+  return createPreviewApi();
+}
+
+/**
+ * 惰性代理：每次访问都回读 `window.piDesktop`，避免模块初始化瞬间未注入时
+ * 把 unavailable proxy 冻成桌面 API。
+ */
+export const desktopApi: PiDesktopApi = new Proxy({} as PiDesktopApi, {
+  get(_target, prop) {
+    const api = resolveDesktopApi();
+    const value = Reflect.get(api as object, prop, api);
+    return typeof value === "function"
+      ? (value as (...args: unknown[]) => unknown).bind(api)
+      : value;
+  },
+  set(_target, prop, value) {
+    return Reflect.set(resolveDesktopApi() as object, prop, value);
+  },
+  has(_target, prop) {
+    return Reflect.has(resolveDesktopApi() as object, prop);
+  },
+});
