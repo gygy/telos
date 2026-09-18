@@ -5,16 +5,14 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
-## v0.7.12
+## v0.7.13
 
 发布时间：2026-09-18
 
-- 🚀 **设置内搜索**
-- 🚀 **侧栏直达技能与扩展**
-- ✨ **终端与草稿纸回到 Tab 栏**
-- ✨ **预览 Tab 悬停说明**
-- ✨ **新建会话占位 Tab**
-- ✨ **后端锁定常驻提示**
+- ✨ **新建会话后台预热 Agent**
+- ✨ **激活链路少刷 get_state**
+- ✨ **右侧文件树虚拟滚动**
+- ✨ **大 Markdown 预览更轻**
 
 ## v0.7.12
 

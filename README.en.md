@@ -79,15 +79,13 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.12** (2026-09-18)
+> **Latest: v0.7.13** (2026-09-18)
 
-### v0.7.12 Release Highlights
-- 🚀 **In-settings search**
-- 🚀 **Skills and extensions in the sidebar dock**
-- ✨ **Terminal and scratchpad as first-class tab icons**
-- ✨ **Preview-tab hover hint**
-- ✨ **Placeholder tab for a new session**
-- ✨ **Persistent backend-lock hint**
+### v0.7.13 Release Highlights
+- ✨ **Background Agent warmup on new sessions**
+- ✨ **Fewer get_state calls after handshake**
+- ✨ **Virtualized file-tree scrolling**
+- ✨ **Lighter large Markdown previews**
 
 [View Full Changelog →](CHANGELOG.md)
 
