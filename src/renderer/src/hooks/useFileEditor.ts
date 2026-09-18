@@ -59,6 +59,11 @@ export interface UseFileEditorInput {
   setDrawerCollapsed: (collapsed: boolean) => void;
   /** 设置中的默认打开方式；每次新打开文件/Diff 时采用 */
   contentOpenMode: WorkspaceContentOpenMode;
+  /**
+   * 文件树打开阅读面时收起右侧抽屉。
+   * 钉住时由调用方自己决定是否忽略（现有 closeDrawer 会留下钉住的抽屉）。
+   */
+  releaseFileDrawer?: () => void;
   showToast: (message: string, duration?: number) => void;
   /** 读取文件内容的 API；maxBytes 用于编辑器大文件前置拦截（主进程 stat 检查，不传输超限内容） */
   readFileContent: (
@@ -142,13 +147,15 @@ export interface UseFileEditorOutput {
   /** VS Code 式预览 Tab id（斜体）；至多一个 */
   previewEditorTabId: string | null;
   openFilePath: (path: string) => void;
-  /** 单击默认 preview；双击传 permanent */
+  /** 单击默认 preview；双击传 permanent。会话链接走这条，布局跟随设置。 */
   viewFilePath: (
     path: string,
     openMode?: EditorTabOpenMode,
     initialLine?: number,
     fileAccessScope?: ProjectFileAccessScope,
   ) => void;
+  /** 文件树单击/双击：占满中间栏并收起文件抽屉，避免四列并排。 */
+  openTreeFile: (path: string, openMode?: EditorTabOpenMode) => void;
   diffFilePath: (path: string, originalContent?: string, content?: string) => void;
   openWorkspaceFileDiff: (
     group: GitResourceGroupType,
@@ -195,6 +202,8 @@ export function useFileEditor(input: UseFileEditorInput): UseFileEditorOutput {
 
   const contentOpenModeRef = useRef(contentOpenMode);
   contentOpenModeRef.current = contentOpenMode;
+  const releaseFileDrawerRef = useRef(input.releaseFileDrawer);
+  releaseFileDrawerRef.current = input.releaseFileDrawer;
 
   // ---- 中间栏内容布局（split | maximize）----
   const [editorMode, setEditorMode] = useState<WorkspaceContentOpenMode>(contentOpenMode);
@@ -491,6 +500,18 @@ export function useFileEditor(input: UseFileEditorInput): UseFileEditorOutput {
     [drawer, openEditorTab, dismissGitDiffOnly],
   );
 
+  const openTreeFile = useCallback(
+    (path: string, openMode: EditorTabOpenMode = "preview") => {
+      viewFilePath(path, openMode);
+      // 文件树点开是为了读：占满中间栏。设置里的 split 只约束会话链接和 Git Diff。
+      editorModeRef.current = "maximize";
+      setEditorMode("maximize");
+      // 收起文件抽屉。钉住时 closeDrawer 自己会留下。
+      releaseFileDrawerRef.current?.();
+    },
+    [viewFilePath],
+  );
+
   const diffFilePath = useCallback(
     (path: string, originalContent?: string, content?: string) => {
       const modified = modifiedFiles.find((f) => f.path === path);
@@ -648,6 +669,7 @@ export function useFileEditor(input: UseFileEditorInput): UseFileEditorOutput {
     previewEditorTabId,
     openFilePath,
     viewFilePath,
+    openTreeFile,
     diffFilePath,
     openWorkspaceFileDiff: openWorkspaceFileDiffFn,
     openCommitFileDiff: openCommitFileDiffFn,

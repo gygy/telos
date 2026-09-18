@@ -95,6 +95,26 @@ test("file view and git diff open into workbench modes, not drawer overlays", ()
   assert.match(content, /displayMode=\{props\.editorMode\}/);
 });
 
+test("file tree open fills the middle pane and releases the file drawer", () => {
+  const treeBlock = fileEditor.slice(
+    fileEditor.indexOf("const openTreeFile = useCallback"),
+    fileEditor.indexOf("const diffFilePath = useCallback"),
+  );
+  assert.ok(treeBlock.includes("const openTreeFile"), "openTreeFile must exist");
+  assert.match(treeBlock, /setEditorMode\("maximize"\)/);
+  assert.match(treeBlock, /releaseFileDrawerRef\.current\?\.\(\)/);
+  // 会话链接仍跟随设置，不跟文件树一起强制占满
+  const viewBlock = fileEditor.slice(
+    fileEditor.indexOf("const viewFilePath = useCallback"),
+    fileEditor.indexOf("const openTreeFile = useCallback"),
+  );
+  assert.match(viewBlock, /contentOpenModeRef\.current/);
+  assert.doesNotMatch(viewBlock, /setEditorMode\("maximize"\)/);
+  assert.match(app, /releaseFileDrawer:\s*workspace\.closeDrawer/);
+  assert.match(app, /viewFilePath:\s*openTreeFile/);
+  assert.match(app, /viewFilePath\(resolved, undefined, line, fileAccessScope\)/);
+});
+
 test("closing git diff dismisses the whole workbench reading surface", () => {
   // 关 Diff 时一并清文件 tab，避免优先渲染切回 editor 像「关不掉」
   assert.match(fileEditor, /dismissWorkbenchContent/);
