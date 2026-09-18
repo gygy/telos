@@ -23,6 +23,7 @@ import {
   Pencil,
   Terminal,
   GitBranch,
+  ScanSearch,
 } from "lucide-react";
 import { showNotice } from "./utils/notice";
 import {
@@ -51,7 +52,7 @@ import {
   announcementCenterOpenAtom,
   announcementNotificationEnabledAtom,
 } from "./atoms/announcement-atoms";
-import { useSessionLayout } from "./hooks/useSessionLayout";
+import { sessionInterruptedAtAtom } from "./atoms/session-interrupt";
 import { useFileEditor } from "./hooks/useFileEditor";
 import { resolveFileLinkPath } from "./utils/filePathLinks";
 import { imageMimeTypeFromPath } from "./utils/composerImages";
@@ -2364,6 +2365,9 @@ export function App() {
     }
     try {
       requireSessionCommand(await api.sessions.abortRuntime(target));
+      // 停止不写时间线。叙事条靠这份标记告诉用户：队列还在，文件可从检查点回退。
+      const sessionId = target.sessionId;
+      store.set(sessionInterruptedAtAtom, (current) => ({ ...current, [sessionId]: Date.now() }));
     } catch (error) {
       // abort 失败必须可见：之前此处直接 throw 变成未处理 rejection，
       // 用户点停止后毫无反馈、agent 继续运行，表现为「停止不了」。
@@ -3528,6 +3532,7 @@ export function App() {
       jumpToMessageRef,
       layoutRefs: paneLayoutRefs,
       exitSessionSplit: workspaceChrome.exitSplit,
+      openWorkspaceDrawer: workspace.openDrawerForce,
     }),
     [
       abortAgent,
@@ -3573,6 +3578,7 @@ export function App() {
       validFilePaths,
       workspaceChrome.exitSplit,
       workspaceChrome.promotePreview,
+      workspace.openDrawerForce,
     ],
   );
 
@@ -3929,6 +3935,13 @@ export function App() {
               active: drawer === "git",
               onClick: () => handleToolDrawerAction("git"),
             }] : []),
+            {
+              id: "review",
+              label: t("review.title"),
+              icon: <ScanSearch size={16} />,
+              active: drawer === "review",
+              onClick: () => handleToolDrawerAction("review"),
+            },
             // 轨迹固定在内置浏览器前面：有 Git 时是第 3 个（files / git / trajectory / browser）。
             {
               id: "trajectory",

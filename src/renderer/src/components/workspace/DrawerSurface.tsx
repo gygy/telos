@@ -1,5 +1,6 @@
 import { BrowserSurface } from "./BrowserSurface";
 import { GitDrawerHost } from "./GitDrawerHost";
+import { ReviewPanel } from "./ReviewPanel";
 import { RewindPanel } from "./RewindPanel";
 import { DrawerContent } from "../app/AppParts";
 import { SessionTrajectoryPanel } from "../session/trajectory/SessionTrajectoryPanel";
@@ -89,7 +90,14 @@ export function DrawerSurface(props: DrawerSurfaceProps) {
   return (
     <>
       {/* 各面板不再挂「标题 + ×」顶栏：关闭/切换改走会话 Tab 栏右侧活动图标。 */}
-      {drawer === "trajectory" && !drawerCollapsed ? (
+      {drawer === "review" && !drawerCollapsed ? (
+        <div className="drawer-content-frame flex min-h-0 flex-1 flex-col overflow-hidden">
+          <ReviewPanel
+            onOpenFile={files.openEditorTab}
+            onOpenDrawer={chrome.onOpenDrawer}
+          />
+        </div>
+      ) : drawer === "trajectory" && !drawerCollapsed ? (
         <div className="drawer-content-frame flex min-h-0 flex-1 flex-col overflow-hidden">
           <SessionTrajectoryPanel />
         </div>

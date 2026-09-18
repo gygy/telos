@@ -15,7 +15,7 @@ export const DRAWER_ANIMATION_MS = 120;
 export const EDITOR_TAB_LIMIT = 5;
 export const EDITOR_TAB_TEXT_BUDGET = 24 * 1024 * 1024;
 
-export type WorkspaceDrawerPanel = "files" | "browser" | "git" | "trajectory" | "rewind";
+export type WorkspaceDrawerPanel = "files" | "browser" | "git" | "review" | "trajectory" | "rewind";
 export type WorkspaceEditorMode = "view" | "diff";
 
 export type WorkspaceEditorTab = {
@@ -123,7 +123,7 @@ function readDrawerState(storage: WorkspacePanelOptions["storage"], key: string)
     // 编辑器面板已从抽屉移除（阅读面迁到分屏）；历史会话抽屉入口已下线。
     // 旧存档 "editor" 降为文件树；"sessions" 关掉抽屉，避免空态指向不存在的按钮。
     const panel = rawPanel === "editor" ? "files" : rawPanel === "sessions" ? null : rawPanel;
-    const validPanel = panel === null || ["files", "browser", "git", "trajectory", "rewind"].includes(String(panel));
+    const validPanel = panel === null || ["files", "browser", "git", "review", "trajectory", "rewind"].includes(String(panel));
     return validPanel && typeof value.pinned === "boolean"
       ? { panel: panel as WorkspaceDrawerPanel | null, pinned: value.pinned }
       : null;

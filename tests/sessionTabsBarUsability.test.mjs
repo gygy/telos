@@ -47,7 +47,7 @@ test("composer shows a persistent backend-lock hint", () => {
 });
 
 test("legacy sessions drawer archive is closed instead of restored", () => {
-	assert.match(hook, /export type WorkspaceDrawerPanel = "files" \| "browser" \| "git" \| "trajectory" \| "rewind"/);
+	assert.match(hook, /export type WorkspaceDrawerPanel = "files" \| "browser" \| "git" \| "review" \| "trajectory" \| "rewind"/);
 	assert.match(hook, /rawPanel === "sessions" \? null/);
 	assert.match(zh, /在左侧项目上右键打开历史会话/);
 	assert.doesNotMatch(zh, /点击项目右侧历史按钮/);

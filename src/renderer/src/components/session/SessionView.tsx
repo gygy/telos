@@ -14,6 +14,7 @@ import { isLanWeb, desktopApi as api } from "../../desktopApi";
 import { SessionHeader } from "./SessionHeader";
 import { SessionBranchBar } from "./SessionBranchBar";
 import { SessionFilesStrip } from "./SessionFilesStrip";
+import { LongTaskNarrative } from "./LongTaskNarrative";
 import { SessionGoalStrip } from "./SessionGoalStrip";
 import { SessionSubagentsStrip } from "./SessionSubagentsStrip";
 import { SessionTodoStrip } from "./SessionTodoStrip";
@@ -355,6 +356,7 @@ export function SessionView({
                 queuePanel={queuePanel}
                 widgets={
                   <>
+                    <LongTaskNarrative sessionId={sessionId} />
                     <SessionTodoStrip sessionId={sessionId} />
                     <SessionFilesStrip
                       sessionId={sessionId}

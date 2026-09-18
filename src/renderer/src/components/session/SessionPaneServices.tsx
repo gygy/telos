@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import type { WorkspaceDrawerPanel } from "../../hooks/useWorkspacePanels";
 import type { AgentTab, AgentUiResponse, ChatMessage, GitBranchInfo, ImageContent, Project } from "../../../../shared/types";
 import type { QueuedPrompt } from "../../hooks/useQueuedPrompt";
 import type { NoticeId } from "../../utils/notice";
@@ -104,6 +105,8 @@ export type SessionPaneServices = {
   };
   /** 面板级退出分屏（全屏按钮）：该会话从布局移除，同组兄弟合并占据其位置 */
   exitSessionSplit: (sessionId: string) => void;
+  /** 强制打开右侧抽屉（不 toggle）。长任务条 / 审阅入口用，避免已打开时被关掉。 */
+  openWorkspaceDrawer: (panel: WorkspaceDrawerPanel) => void;
 };
 
 const SessionPaneServicesContext = createContext<SessionPaneServices | null>(null);

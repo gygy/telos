@@ -26,6 +26,11 @@ export function useSessionFileChanges(
 
 	// 主进程 IPC：拉取最新一轮（初次 / 会话切换 / 新一轮开始）
 	useEffect(() => {
+		if (!sessionId) {
+			setFull([]);
+			setLoading(false);
+			return;
+		}
 		let cancelled = false;
 		setLoading(true);
 		desktopApi.sessions
