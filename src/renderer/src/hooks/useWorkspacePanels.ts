@@ -261,13 +261,15 @@ export function useWorkspacePanels(options: WorkspacePanelOptions = {}) {
       return;
     }
     const saved = loadDrawerState(projectId);
+    // 文件夹已迁到左侧项目面板。旧的 files 抽屉状态不再打开右栏。
+    const savedPanel = saved?.panel === "files" ? null : (saved?.panel ?? null);
     if (!isInitialHydration || !drawerRef.current) {
-      setDrawer(saved?.panel ?? null);
+      setDrawer(savedPanel);
       setDrawerCollapsed(false);
     }
     setDrawerPinnedByProject((current) => {
       const next = { ...current };
-      if (saved?.pinned && saved.panel) next[projectId] = saved.panel;
+      if (saved?.pinned && savedPanel) next[projectId] = savedPanel;
       else delete next[projectId];
       return next;
     });

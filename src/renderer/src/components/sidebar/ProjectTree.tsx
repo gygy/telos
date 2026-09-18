@@ -1,5 +1,5 @@
 import { ChevronRight, ChevronsDownUp, Ellipsis, Filter, Folder, FolderOpen, FolderPlus, Plus, RefreshCw } from "lucide-react";
-import type { DragEvent } from "react";
+import type { DragEvent, ReactNode } from "react";
 import { useAtomValue } from "jotai";
 import type { Project, WorktreeEntry } from "../../../../shared/types";
 import type { SidebarController } from "../../hooks/useSidebarController";
@@ -8,6 +8,8 @@ import type { SidebarActions } from "./SidebarContent";
 import { ActiveSessionsTree } from "./ActiveSessionsTree";
 import { SessionTree } from "./SessionTree";
 import { WorktreeTree } from "./WorktreeTree";
+import { ProjectPaneModeSwitch } from "./ProjectFilesPane";
+import { projectPaneModeAtom } from "../../atoms/app-ui-atoms";
 import { isLiveRuntimeStatus } from "../../utils/sessionCommands";
 import { sessionDisplayName } from "../../utils/sessionDisplayName";
 import { displayProjectDirectoryName, isChatProject } from "../../rendererUtils";
@@ -91,8 +93,11 @@ export function ProjectTree(props: {
   branchByProject?: Readonly<Record<string, string | null | undefined>>;
   /** 正在删除的 worktree 路径集合（透传给 WorktreeTree 驱动淡出动画）。 */
   removingWorktreePaths?: ReadonlySet<string>;
+  /** 当前项目切到「文件」时替换会话列表。聊天项目不使用。 */
+  filePane?: ReactNode;
 }) {
   const sessionRuntimeUiById = useAtomValue(sessionRuntimeUiByIdAtom);
+  const paneMode = useAtomValue(projectPaneModeAtom);
   const rootProjects = props.controller.catalog.projects.filter((project) =>
     !project.worktreeParentId && matchesProject(project, props.controller.search.trim(), props.controller),
   );
@@ -246,8 +251,13 @@ export function ProjectTree(props: {
         </div>
         {!collapsed && (
           <div className="relative ml-3 mt-1 mr-1 space-y-0.5 pl-2 pb-1">
-            {/* 展开内容不依赖当前选中项，项目切换只改变高亮，避免两棵会话树同时伸缩造成布局抖动。 */}
-            {project.worktreeEnabled ? (
+            {/* 只有当前工作区项目提供「会话 | 文件」。文件树替换会话列表，不嵌进会话行。 */}
+            {project.id === props.currentProjectId && !isChatProject(project) && !project.missing ? (
+              <ProjectPaneModeSwitch />
+            ) : null}
+            {project.id === props.currentProjectId && !isChatProject(project) && !project.missing && paneMode === "files" ? (
+              props.filePane
+            ) : project.worktreeEnabled ? (
               <WorktreeTree
                 project={project}
                 controller={props.controller}

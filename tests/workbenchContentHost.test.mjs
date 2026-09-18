@@ -102,8 +102,8 @@ test("file tree open fills the middle pane and releases the file drawer", () => 
   );
   assert.ok(treeBlock.includes("const openTreeFile"), "openTreeFile must exist");
   assert.match(treeBlock, /setEditorMode\("maximize"\)/);
-  assert.match(treeBlock, /releaseFileDrawerRef\.current\?\.\(\)/);
-  assert.match(treeBlock, /collapseSidebarForReadingRef\.current\?\.\(\)/);
+  assert.doesNotMatch(treeBlock, /releaseFileDrawerRef/);
+  assert.doesNotMatch(treeBlock, /collapseSidebarForReadingRef/);
   // 会话链接仍跟随设置，不跟文件树一起强制占满
   const viewBlock = fileEditor.slice(
     fileEditor.indexOf("const viewFilePath = useCallback"),
@@ -111,10 +111,9 @@ test("file tree open fills the middle pane and releases the file drawer", () => 
   );
   assert.match(viewBlock, /contentOpenModeRef\.current/);
   assert.doesNotMatch(viewBlock, /setEditorMode\("maximize"\)/);
-  assert.match(app, /releaseFileDrawer:\s*workspace\.closeDrawer/);
-  assert.match(app, /collapseSidebarForReading:\s*\(\)\s*=>\s*setListCollapsed\(true\)/);
   assert.match(app, /viewFilePath:\s*openTreeFile/);
   assert.match(app, /viewFilePath\(resolved, undefined, line, fileAccessScope\)/);
+  assert.doesNotMatch(app, /collapseSidebarForReading/);
   assert.match(app, /onShowChat=\{/);
   assert.doesNotMatch(app, /workbenchMaximized=/);
 });

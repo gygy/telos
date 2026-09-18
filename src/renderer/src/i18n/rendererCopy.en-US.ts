@@ -28,6 +28,7 @@ export const enUS: Record<TranslationKey, string> = {
   "app.sidebarProjects": "Projects",
   "app.sidebarWorkspaces": "Workspaces",
   "app.sidebarSessions": "Sessions",
+  "sidebar.projectPane": "Sessions or files for the current project",
   "app.sidebarActiveSessions": "Running",
   "app.sidebarActive": "Active",
   "app.sidebarActiveEmpty": "No active agent sessions",

@@ -27,6 +27,7 @@ export const zhCN = {
   "app.sidebarProjects": "项目",
   "app.sidebarWorkspaces": "工作区",
   "app.sidebarSessions": "会话",
+  "sidebar.projectPane": "当前项目的会话或文件",
   "app.sidebarActiveSessions": "运行中",
   "app.sidebarActive": "活动",
   "app.sidebarActiveEmpty": "暂无运行中的 Agent 会话",

@@ -32,12 +32,14 @@ import {
   isMissingElectronPreload,
 } from "./desktopApi";
 import { turnFlowSettingsAtom, defaultAgentBackendAtom, effectiveAgentBackendAtom, busySendDeliveryAtom, imageGenConfigAtom, dshRuntimeStatusAtom, openSettingsAtom, openAutomationModalAtom, sessionRecordsAtom, bumpNewTurnCollapseTickAtom } from "./atoms";
+import { projectPaneModeAtom } from "./atoms/app-ui-atoms";
 import { resolveBusySendDelivery } from "../../shared/busySendDelivery";
 import { FILE_TREE_ABSOLUTE_MAX_DEPTH } from "../../shared/fileTree";
 // 文件链接路由：图片类型走弹窗预览
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico"]);
 import { type SidebarActions } from "./components/sidebar/SidebarContent";
 import { AppSidebar } from "./components/sidebar/AppSidebar";
+import { ProjectFilesPane } from "./components/sidebar/ProjectFilesPane";
 import { AppBootstrap } from "./components/app/AppBootstrap";
 import { SettingsFeatureRoot } from "./components/app/SettingsFeatureRoot";
 import { TelosLogo } from "./components/app/TelosLogo";
@@ -238,6 +240,7 @@ export function App() {
   }
 
   const store = useStore();
+  const projectPaneMode = useAtomValue(projectPaneModeAtom);
   // Composer input state is owned by ComposerArea; the root does not subscribe to each key.
   const currentSessionId = useAtomValue(currentSessionIdAtom);
   const currentSession = useAtomValue(currentSessionAtom);
@@ -408,8 +411,10 @@ export function App() {
       workspace.closeDrawer();
       return;
     }
-    workspace.openDrawer("files");
-  }, [workspace]);
+    // 文件夹已在左侧项目里。右栏默认打开 Git，没有 Git 时打开 Review。
+    if (settings.enableGitManagement && activeProjectId) workspace.openDrawer("git");
+    else workspace.openDrawer("review");
+  }, [workspace, settings.enableGitManagement, activeProjectId]);
   const browserFullscreen = workspace.browserFullscreen;
   const externalEditors = workspace.externalEditors;
   const editorsOpen = workspace.externalEditorsOpen;
@@ -1391,8 +1396,6 @@ export function App() {
     setDrawer,
     setDrawerCollapsed,
     contentOpenMode: settings.workspaceContentOpenMode ?? "split",
-    releaseFileDrawer: workspace.closeDrawer,
-    collapseSidebarForReading: () => setListCollapsed(true),
     showToast,
     readFileContent: api.files.readContent,
     readGitOriginalContent: api.git.originalContent,
@@ -1459,6 +1462,16 @@ export function App() {
   // 其余情况打开/切到目标面板。outline 浮动按钮与抽屉活动栏共用同一套语义，
   // 保证两个入口行为一致。注意必须放在 useFileEditor 之后（依赖 gitDrawerDiff）。
   const handleToolDrawerAction = useCallback((panel: WorkspaceDrawerPanel) => {
+    if (panel === "files") {
+      const showingFiles = store.get(projectPaneModeAtom) === "files";
+      store.set(projectPaneModeAtom, showingFiles ? "sessions" : "files");
+      if (!showingFiles) {
+        setListCollapsed(false);
+        if (workspace.drawer === "files") workspace.closeDrawer();
+        if (activeProjectId) void refreshVisibleFiles(activeProjectId, true);
+      }
+      return;
+    }
     if (workspace.drawer === panel && !workspace.drawerCollapsed) {
       if (panel === "git" && gitDrawerDiff) {
         closeGitDiff();
@@ -1466,10 +1479,9 @@ export function App() {
       }
       workspace.closeDrawer();
     } else {
-      if (panel === "files" && activeProjectId) void refreshVisibleFiles(activeProjectId, true);
       workspace.openDrawer(panel);
     }
-  }, [workspace, gitDrawerDiff, closeGitDiff, activeProjectId, refreshVisibleFiles]);
+  }, [workspace, gitDrawerDiff, closeGitDiff, activeProjectId, refreshVisibleFiles, store, setListCollapsed]);
 
   const workspaceChrome = useSessionWorkspaceChrome({
     currentSessionId,
@@ -3296,6 +3308,52 @@ export function App() {
     },
   };
 
+  const dropFilesIntoDir = useCallback((targetDir: string, fileList: FileList) => {
+    const paths: string[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList.item(i);
+      if (file) {
+        const path = api.files.getPathForFile(file);
+        if (path) paths.push(path);
+      }
+    }
+    if (paths.length === 0) return;
+    void api.files.copy(paths, targetDir).then(() => {
+      void refreshVisibleFiles();
+      showToast(t("app.fileCopyDone", { count: paths.length }), 2000);
+    }).catch((error) => {
+      showToast(error instanceof Error ? error.message : String(error), 4000);
+    });
+  }, [refreshVisibleFiles, showToast]);
+  const pasteFilesIntoDir = useCallback((targetDir: string) => {
+    try {
+      const paths = api.files.getClipboardPaths();
+      if (paths.length === 0) return;
+      void api.files.copy(paths, targetDir).then(() => {
+        void refreshVisibleFiles();
+        showToast(t("app.fileCopyDone", { count: paths.length }), 2000);
+      }).catch((error) => {
+        showToast(t("app.filePasteFailed", { error: error instanceof Error ? error.message : String(error) }), 4000);
+      });
+    } catch { /* 剪贴板不可用 */ }
+  }, [refreshVisibleFiles, showToast]);
+  const moveFilesIntoDir = useCallback((sourcePaths: string[], targetDir: string) => {
+    void api.files.move(sourcePaths, targetDir).then(() => {
+      void refreshVisibleFiles();
+      showToast(t("app.fileMoveDone", { count: sourcePaths.length }), 2000);
+    }).catch((error) => {
+      showToast(error instanceof Error ? error.message : String(error), 4000);
+    });
+  }, [refreshVisibleFiles, showToast]);
+  const openActiveProjectFolder = useCallback(() => {
+    if (!activeProject?.path) return;
+    void api.files.open(activeProject.path).catch((error: unknown) => {
+      showToast(t("app.openFileFailed", {
+        error: error instanceof Error ? error.message : String(error),
+      }), 4000);
+    });
+  }, [activeProject?.path, showToast]);
+
   const sidebarContentNode = (
     <AppSidebar
       listCollapsed={listCollapsed}
@@ -3317,6 +3375,23 @@ export function App() {
       settingsPinnedSessionIds={settings.pinnedSessionIds}
       settingsLoaded={settingsLoaded}
       onExpandedProjectsReady={() => setExpandedProjectsReady(true)}
+      filePane={
+        <ProjectFilesPane
+          files={files}
+          expandedDirs={expandedDirs}
+          projectRoot={activeProject?.path}
+          onToggleDirectory={toggleDirectory}
+          onCollapseAll={collapseAllDirectories}
+          onFileContextMenu={(node, x, y) => setFileContextMenu({ node, x, y })}
+          onRefresh={() => { void refreshVisibleFiles(); }}
+          onOpenFolder={openActiveProjectFolder}
+          onOpenFile={openFilePath}
+          onViewFile={openTreeFile}
+          onDropFiles={dropFilesIntoDir}
+          onPasteFiles={pasteFilesIntoDir}
+          onMoveFiles={moveFilesIntoDir}
+        />
+      }
       // 关于弹框：版本号/官网/GitHub 链接数据来自 AppInfo IPC（上方 useEffect 已拉取）
       appInfo={appInfo}
       // 底栏主题按钮：点击在浅/暗之间翻转；跟随系统/跟随时间退出自动时按当前实际明暗翻到对面，
@@ -3853,48 +3928,9 @@ export function App() {
     viewFilePath: openTreeFile, openFilePath, openEditorTab,
     api, t,
     projectRoot: activeProject?.path,
-    onDropFiles: (targetDir, fileList) => {
-      // 从 OS 拖入：解析本地路径后复制到目标目录（目录不支持跨源复制时跳过）
-      const paths: string[] = [];
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList.item(i);
-        if (file) {
-          const path = api.files.getPathForFile(file);
-          if (path) paths.push(path);
-        }
-      }
-      if (paths.length > 0) {
-        void api.files.copy(paths, targetDir).then(() => {
-          void refreshVisibleFiles();
-          showToast(t("app.fileCopyDone", { count: paths.length }), 2000);
-        }).catch((error) => {
-          showToast(error instanceof Error ? error.message : String(error), 4000);
-        });
-      }
-    },
-    onPasteFiles: (targetDir) => {
-      // 粘贴：从系统剪贴板读取资源管理器复制的文件路径，复制到目标目录
-      try {
-        const paths = api.files.getClipboardPaths();
-        if (paths.length > 0) {
-          void api.files.copy(paths, targetDir).then(() => {
-            void refreshVisibleFiles();
-            showToast(t("app.fileCopyDone", { count: paths.length }), 2000);
-          }).catch((error) => {
-            showToast(t("app.filePasteFailed", { error: error instanceof Error ? error.message : String(error) }), 4000);
-          });
-        }
-      } catch { /* 剪贴板不可用 */ }
-    },
-    onMoveFiles: (sourcePaths, targetDir) => {
-      // 文件树内部拖拽移动：同设备 rename，跨设备 cp+rm
-      void api.files.move(sourcePaths, targetDir).then(() => {
-        void refreshVisibleFiles();
-        showToast(t("app.fileMoveDone", { count: sourcePaths.length }), 2000);
-      }).catch((error) => {
-        showToast(error instanceof Error ? error.message : String(error), 4000);
-      });
-    },
+    onDropFiles: dropFilesIntoDir,
+    onPasteFiles: pasteFilesIntoDir,
+    onMoveFiles: moveFilesIntoDir,
   });
 
 
@@ -3928,7 +3964,7 @@ export function App() {
               id: "files",
               label: t("app.files"),
               icon: <FolderOpen size={16} />,
-              active: drawer === "files",
+              active: projectPaneMode === "files",
               onClick: () => handleToolDrawerAction("files"),
             },
             // 编辑器入口已迁到分屏（SessionTabsBar），右侧抽屉不再提供 editor 面板

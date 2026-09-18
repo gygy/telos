@@ -1,5 +1,5 @@
 import { Activity, Bolt, Clock, Folder, MessageSquare, Monitor, Moon, Puzzle, Sparkles, Sun } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { AgentTab, AppThemeMode, ArchivedDshSession, ArchivedPiSession, Project, SessionRecord, SessionSummary, WorktreeEntry } from "../../../../shared/types";
 import {
   AgentContextMenu,
@@ -33,7 +33,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui-shadcn/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "../motion/tabs";
 import { Dock, DockItem } from "../motion/dock";
 import { UpdateDotHint } from "./UpdateDotHint";
+import { isChatProject } from "../../rendererUtils";
 import { parseSidebarNavTab } from "../../utils/sidebarNavTab";
+import { projectPaneModeAtom } from "../../atoms/app-ui-atoms";
 
 export type SidebarActions = {
   projects: {
@@ -136,6 +138,8 @@ export type SidebarContentProps = {
   /** 底栏主题切换：当前主题模式 + 点击循环（浅色→暗色→跟随系统），由 App 提供。 */
   themeMode?: AppThemeMode;
   onToggleTheme?: () => void;
+  /** 当前项目的文件夹树。仅「文件」分段挂上。 */
+  filePane?: ReactNode;
 };
 
 export function SidebarContent(props: SidebarContentProps) {
@@ -241,6 +245,19 @@ export function SidebarContent(props: SidebarContentProps) {
   const currentRootProject = currentProject?.worktreeParentId
     ? controller.catalog.projects.find((project) => project.id === currentProject.worktreeParentId) ?? currentProject
     : currentProject;
+  const paneMode = useAtomValue(projectPaneModeAtom);
+  const fileProjectId = currentRootProject && !isChatProject(currentRootProject) && !currentRootProject.missing
+    ? currentRootProject.id
+    : undefined;
+  // 切到「文件」时回到项目页。之后用户仍可去活动/聊天，不会被拽回来。
+  useEffect(() => {
+    if (paneMode !== "files") return;
+    controller.setNavTab("projects");
+  }, [paneMode, controller.setNavTab]);
+  useEffect(() => {
+    if (paneMode !== "files" || !fileProjectId) return;
+    controller.setProjectExpanded(fileProjectId, true);
+  }, [paneMode, fileProjectId, controller.setProjectExpanded]);
 
   return (
     <aside
@@ -317,6 +334,7 @@ export function SidebarContent(props: SidebarContentProps) {
             worktreesByProject={props.worktreesByProject}
             branchByProject={props.branchByProject}
             removingWorktreePaths={props.removingWorktreePaths}
+            filePane={props.filePane}
           />
         </section>
       </div>

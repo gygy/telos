@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { CirclePlus, Folder, MessageSquare, PanelLeft, Search } from "lucide-react";
 import { SidebarContent, type SidebarActions } from "./SidebarContent";
@@ -52,6 +52,8 @@ interface AppSidebarProps {
   settingsLoaded: boolean;
   /** 展开集合完成权威 hydration 后，允许 App 按它懒加载会话。 */
   onExpandedProjectsReady: () => void;
+  /** 当前项目的文件夹树，由 App 装配（文件状态不在侧栏）。 */
+  filePane?: ReactNode;
 }
 
 export function AppSidebar(props: AppSidebarProps) {
@@ -170,6 +172,7 @@ export function AppSidebar(props: AppSidebarProps) {
       creatingWorktree={props.creatingWorktree}
       removingWorktreePaths={props.removingWorktreePaths}
       isLanWeb={props.isLanWeb}
+      filePane={props.filePane}
       onOpenNewSession={props.onOpenNewSession}
       chrome={<>
         <div className="list-toolbar flex h-10 shrink-0 items-center gap-0.5 border-b border-border/40 pr-1.5 pl-[max(0.625rem,var(--traffic-lights-width,0px))]">
