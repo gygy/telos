@@ -405,16 +405,6 @@ export function App() {
   });
   const drawer = workspace.drawer;
   const drawerCollapsed = workspace.drawerCollapsed;
-  // 右侧栏总开关：已打开则关闭，否则打开 files（默认关闭，手动打开）
-  const toggleRightDrawer = useCallback(() => {
-    if (workspace.drawer) {
-      workspace.closeDrawer();
-      return;
-    }
-    // 文件夹已在左侧项目里。右栏默认打开 Git，没有 Git 时打开 Review。
-    if (settings.enableGitManagement && activeProjectId) workspace.openDrawer("git");
-    else workspace.openDrawer("review");
-  }, [workspace, settings.enableGitManagement, activeProjectId]);
   const browserFullscreen = workspace.browserFullscreen;
   const externalEditors = workspace.externalEditors;
   const editorsOpen = workspace.externalEditorsOpen;
@@ -3427,6 +3417,16 @@ export function App() {
     workspaceChrome.registerOpenSession(sessionId, "permanent");
     selectSessionCommand(record.projectId, sessionId, true);
   }, [selectSessionCommand, store, workspaceChrome]);
+
+  // 右侧栏总开关：已打开则关闭。文件夹在左侧，空右栏默认打开 Git，没有 Git 时打开 Review。
+  const toggleRightDrawer = useCallback(() => {
+    if (workspace.drawer) {
+      workspace.closeDrawer();
+      return;
+    }
+    if (settings.enableGitManagement && activeProjectId) workspace.openDrawer("git");
+    else workspace.openDrawer("review");
+  }, [workspace, settings.enableGitManagement, activeProjectId]);
 
   // 切会话过渡：会话区整体做一次 160ms 淡入+微位移（Web Animations API，
   // 不卸载树/不动布局，避免整树重建的卡顿与瞬间替换的生硬）；
