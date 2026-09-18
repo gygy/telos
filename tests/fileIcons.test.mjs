@@ -108,8 +108,9 @@ describe("Seti file icon integration", () => {
   });
 
   test("files drawer drops title chrome and keeps a denser tree", () => {
-    // 文件抽屉：无顶栏；工具行压矮；缩进 8px/层；树行原生 button（不套 shadcn Button 抢 SVG 尺寸）
-    assert.match(workspaceSurface, /props\.panel !== "files" && title/);
+    // 文件抽屉：无顶栏（仅 FilesPanel）；工具行压矮；缩进 8px/层；树行原生 button
+    assert.match(workspaceSurface, /文件抽屉：去掉「文件 \+ ×」顶栏/);
+    assert.match(workspaceSurface, /props\.panel === "files" && \(/);
     assert.match(workspaceSurface, /panel-action-row flex h-7/);
     assert.match(workspaceSurface, /depth \* 8/);
     assert.match(workspaceSurface, /树行用原生 button/);
