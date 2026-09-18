@@ -124,6 +124,9 @@ export const compactMiddlePackagesAtom = atomWithStorage<boolean>(
 	true,
 );
 
+/** 当前项目在左侧列表里看会话还是看文件夹。不写入设置：每次启动回到会话。 */
+export const projectPaneModeAtom = atom<"sessions" | "files">("sessions");
+
 export const sidebarExpandedProjectIdsAtom = atom<ReadonlySet<string>>(
   (() => {
     const cached = readExpandedSidebarProjects(

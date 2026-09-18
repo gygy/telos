@@ -122,7 +122,7 @@ export function DrawerContent(props: {
 	);
 }
 
-function FilesPanel(props: {
+export function FilesPanel(props: {
 	files: FileTreeNode[];
 	expandedDirs: Set<string>;
 	onToggleDirectory: (path: string) => void;
