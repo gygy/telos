@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.7.11-blue)
+![Version](https://img.shields.io/badge/version-0.7.12-blue)
 
 <!-- star-history:start -->
 <picture>
@@ -79,12 +79,15 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.11** (2026-09-18)
+> **Latest: v0.7.12** (2026-09-18)
 
-### v0.7.11 Release Highlights
-- ✨ **No default third-party anonymous heartbeat**
-- ✨ **Tray and main-process copy unified as Telos**
-- ✨ **Dev false “preload API not injected”**
+### v0.7.12 Release Highlights
+- 🚀 **In-settings search**
+- 🚀 **Skills and extensions in the sidebar dock**
+- ✨ **Terminal and scratchpad as first-class tab icons**
+- ✨ **Preview-tab hover hint**
+- ✨ **Placeholder tab for a new session**
+- ✨ **Persistent backend-lock hint**
 
 [View Full Changelog →](CHANGELOG.md)
 

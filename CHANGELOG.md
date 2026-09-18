@@ -1,3 +1,16 @@
+## v0.7.12 - 2026-09-18
+
+### 🚀 New Features
+- **In-settings search** — The search icon left of System / Config tabs jumps to models, skills, extensions, prompts, and other settings pages.
+- **Skills and extensions in the sidebar dock** — Two buttons to the right of Settings open the matching Pi pages in Config.
+
+### ✨ Improvements
+- **Terminal and scratchpad as first-class tab icons** — They sit on the session tab bar instead of behind the overflow menu.
+- **Preview-tab hover hint** — Send a message or double-click to pin; closing a tab does not delete the session.
+- **Placeholder tab for a new session** — The tab bar shows a New session chip before the first send.
+- **Persistent backend-lock hint** — The composer bar states that switching backends needs a new session, instead of toast-only.
+- **Dead history-drawer path removed** — Stale `sessions` drawer archives no longer open a panel with no entry; empty copy points to the sidebar context menu.
+
 ## v0.7.11 - 2026-09-18
 
 ### ✨ Improvements
