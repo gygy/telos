@@ -256,6 +256,9 @@ test("settle full render is deferred to idle (no long task during interaction)",
 	assert.match(stream, /const effectiveLight = props\.light \|\| isStreamingNow \|\| !settleFull/);
 	assert.match(stream, /const usingFrozen = isStreamingNow \|\| !settleFull/);
 	assert.match(stream, /if \(!usingFrozen\) frontierRef\.current\.reset\(\)/);
+	// 轻量期去掉 FileDiffViewer 的 rehypeKatex，超长时连 math 也先关掉
+	assert.match(stream, /effectiveLight\s*\n\s*\?\s*\[defaultRehypePlugins\.raw\]/);
+	assert.match(stream, /lightSkipMath/);
 });
 
 test("AnswerOutput live path renders through MarkdownStream (no dual typewriter)", () => {

@@ -226,8 +226,7 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 	const streamPlain =
 		isStreamingNow && displayText.length > STREAM_LIGHT_MAX_CHARS ||
 		(frozenSplit !== undefined && frozenSplit.prefixEnd === 0 && displayText.length > STREAM_UNFREEZABLE_MIN_CHARS);
-	// 流式中精简插件：gfm/codeMeta/linkifyPaths 与 math 等插件都留到静态渲染；
-	// 外部显式传入的插件（FileDiffViewer 等场景）不受流式精简影响。
+	// 流式中精简插件：gfm/codeMeta/linkifyPaths 与 math 等插件都留到静态渲染。
 	const resolvedRemarkPlugins = isStreamingNow
 		? NO_STREAM_REMARK_PLUGINS
 		: (props.remarkPlugins ?? [
@@ -235,9 +234,16 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 				defaultRemarkPlugins.codeMeta,
 				remarkLinkifyPaths,
 			]);
+	// 轻量期去掉 FileDiffViewer 注入的 rehypeKatex：大文档上 KaTeX 与高亮同属主线程重活。
 	const resolvedRehypePlugins = isStreamingNow
 		? NO_STREAM_REHYPE_PLUGINS
-		: (props.rehypePlugins ?? [defaultRehypePlugins.raw]);
+		: effectiveLight
+			? [defaultRehypePlugins.raw]
+			: (props.rehypePlugins ?? [defaultRehypePlugins.raw]);
+	// 超长轻量：连 math 也先关掉（小文档流式仍保留行内公式，避免短回复闪一下）。
+	const lightSkipMath =
+		effectiveLight &&
+		(displayText.length > STREAM_LIGHT_MAX_CHARS || shouldKeepLightOnSettle(displayText.length));
 	// 显式 Components 标注：让 a 的 props 走上下文类型推断（streamdown 的
 	// Components 是「具名槽位 | 索引签名」联合，直接内联会触发索引签名分支的类型不兼容）
 	// useMemo 依赖回调 props：回调引用变化时 components 重建，streamElement 随之重建，
@@ -268,7 +274,9 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 			rehypePlugins: resolvedRehypePlugins,
 			urlTransform: props.urlTransform ?? markdownUrlTransform,
 			plugins: (effectiveLight
-				? { math: mathPlugin }
+				? lightSkipMath
+					? {}
+					: { math: mathPlugin }
 				: {
 						code,
 						mermaid,
@@ -286,6 +294,7 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 			components,
 			props.isStreaming,
 			effectiveLight,
+			lightSkipMath,
 			resolvedRemarkPlugins,
 			resolvedRehypePlugins,
 			props.urlTransform,

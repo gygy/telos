@@ -116,19 +116,25 @@ describe("Seti file icon integration", () => {
     assert.match(workspaceSurface, /树行用原生 button/);
     assert.doesNotMatch(workspaceSurface, /\[&_svg\]:!size-/);
     assert.match(workspaceSurface, /FolderOpen size=\{18\}/);
-    // 滚动层上移到 DrawerSurface 的 LazyWrapper（overflow-y-auto）；files-panel 自身
-    // 只保留 overflow-x-hidden，避免滚动条占位导致的宽度摆动（见 DrawerSurface 注释）
+    // 滚动在 files-tree-scroll（虚拟窗口同源）；files-panel 自身只 overflow-x-hidden
     assert.match(workspaceSurface, /files-panel[^"]*overflow-x-hidden/);
+    assert.match(workspaceSurface, /files-tree-scroll[^"]*overflow-y-auto/);
     assert.doesNotMatch(workspaceSurface, /files-panel[^"]*overflow-y-auto/);
-    assert.doesNotMatch(workspaceSurface, /files-panel[^"]*overflow-hidden"/);
   });
 
   test("file tree nodes memoize on expanded/isDragOver booleans", () => {
-    // 展开/拖入高亮只传布尔值 + memo 跳过 Set 身份，避免整树无意义重渲。
+    // 展开/拖入高亮只传布尔值 + memo，避免整树无意义重渲。
     assert.match(workspaceSurface, /const FileNode = memo\(FileNodeView/);
     assert.match(workspaceSurface, /prev\.expanded === next\.expanded/);
     assert.match(workspaceSurface, /prev\.isDragOver === next\.isDragOver/);
-    assert.match(workspaceSurface, /expanded=\{props\.expandedDirs\.has\(node\.path\)\}/);
-    assert.match(workspaceSurface, /isDragOver=\{dragOverDir === node\.path\}/);
+  });
+
+  test("file tree uses a flattened virtual window", () => {
+    assert.match(workspaceSurface, /flattenFileTreeVisibleRows/);
+    assert.match(workspaceSurface, /fileTreeVirtualWindow/);
+    assert.match(workspaceSurface, /files-tree-scroll/);
+    assert.match(workspaceSurface, /virtualWindow\.totalHeight/);
+    // 扁平列表：目录不再嵌套 Collapsible 挂子树
+    assert.doesNotMatch(workspaceSurface, /CollapsibleTrigger/);
   });
 });

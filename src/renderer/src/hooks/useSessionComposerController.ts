@@ -866,9 +866,9 @@ export function useSessionComposerController(
   // 才能让模糊搜索覆盖深层文件（恢复 71d27ed1 之前的深度搜索能力）。
   // 只在用户确实在搜索（长度 ≥2）且每项目只触发一次；整树合并后所有目录
   // 都有 children 数组，下钻 effect 的 Array.isArray 门自然短路，不会重复拉。
+  // 防抖：快速连打时延后发起，避免半截查询浪费整树扫描。
   useEffect(() => {
     if (!effectiveProjectId) return;
-    // 切到新项目：重建状态（不 return，继续按新状态评估是否触发）
     const state = deepTreeStateRef.current;
     if (state.projectId !== effectiveProjectId) {
       deepTreeStateRef.current = { projectId: effectiveProjectId, loaded: false, loading: false };
@@ -878,29 +878,28 @@ export function useSessionComposerController(
     if (!trigger || trigger.char !== "@" || !shouldLoadFullTreeForAtSearch(trigger.query)) {
       return;
     }
-    // 标记在途后即便本 effect 因继续输入被重新评估，loading 门也会挡住重复请求
-    deepTreeStateRef.current.loading = true;
-    void desktopApi.files.list(effectiveProjectId, { maxDepth: FILE_TREE_ABSOLUTE_MAX_DEPTH })
-      .then((next) => {
-        // 用项目比对而非 current 标志：输入过程中的每个按键都会触发本 effect
-        // 重新评估并清理旧闭包，但请求仍属于当前项目——数据不该被丢弃，
-        // 否则快速打字会连续浪费整树扫描（重扫风暴）。只有切走项目才丢弃。
-        if (deepTreeStateRef.current.projectId !== effectiveProjectId) return;
-        // 整树是根层清单的超集且目录均带 children，整体替换最省事：
-        // 已下钻目录的数据都在里面（幂等），无需再逐目录 merge。
-        setFiles(next);
-      })
-      .catch(() => {
-        // 超大目录（FILE_TREE_DIRECTORY_TOO_LARGE）/权限问题：保留已加载部分；
-        // 同样标记为已尝试，避免每个关键词都重扫整个项目。
-      })
-      .finally(() => {
-        // 只有请求仍属于当前项目才写状态：切走后的旧闭包不能污染新项目标记。
-        if (deepTreeStateRef.current.projectId === effectiveProjectId) {
-          deepTreeStateRef.current.loading = false;
-          deepTreeStateRef.current.loaded = true;
-        }
-      });
+    const projectId = effectiveProjectId;
+    const timer = window.setTimeout(() => {
+      if (deepTreeStateRef.current.projectId !== projectId) return;
+      if (deepTreeStateRef.current.loaded || deepTreeStateRef.current.loading) return;
+      deepTreeStateRef.current.loading = true;
+      void desktopApi.files.list(projectId, { maxDepth: FILE_TREE_ABSOLUTE_MAX_DEPTH })
+        .then((next) => {
+          if (deepTreeStateRef.current.projectId !== projectId) return;
+          setFiles(next);
+        })
+        .catch(() => {
+          // 超大目录（FILE_TREE_DIRECTORY_TOO_LARGE）/权限问题：保留已加载部分；
+          // 同样标记为已尝试，避免每个关键词都重扫整个项目。
+        })
+        .finally(() => {
+          if (deepTreeStateRef.current.projectId === projectId) {
+            deepTreeStateRef.current.loading = false;
+            deepTreeStateRef.current.loaded = true;
+          }
+        });
+    }, 280);
+    return () => window.clearTimeout(timer);
   }, [cursor, draft, effectiveProjectId, validSessionRefs]);
   const suggestionAnchorStyle = useMemo<CSSProperties | undefined>(() => {
     if (!suggestionsOpen) return undefined;

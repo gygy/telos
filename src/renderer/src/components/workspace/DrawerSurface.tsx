@@ -126,12 +126,9 @@ export function DrawerSurface(props: DrawerSurfaceProps) {
         </div>
       ) : drawer === "files" && !drawerCollapsed ? (
         <LazyWrapper
-          // 滚动层上移到这里：files 面板自身不再滚动（见 timeline.css
-          // .files-panel 注释），占位与内容共用同一滚动容器，配合
-          // scrollbar-gutter: stable 让内容宽度不随滚动条出现/消失跳变——
-          // 否则切 tab 重挂时占位(无滚动条,320) → 内容(有滚动条,310) 瞬间收窄，
-          // 且树高度跨阈值时滚动条反复出现/消失，形成“呼吸式”宽度摆动。
-          className="drawer-content-frame overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+          // files 面板内部自管滚动（files-tree-scroll + 虚拟窗口）。外层只做
+          // flex 裁剪，避免双重滚动条，也让 scrollTop 与虚拟窗口同源。
+          className="drawer-content-frame flex min-h-0 flex-1 flex-col overflow-hidden"
           enabled={true}
           threshold={0}
           rootMargin="50px"

@@ -26,11 +26,15 @@ import { normalizeSessionPathForCompare } from "../../agentListDisplay";
 import { SessionSourceBadge } from "./SessionSourceBadge";
 import { Button } from "../ui-shadcn/button";
 import { ConfirmDialog } from "../ui-shadcn/ConfirmDialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui-shadcn/collapsible";
 import { FileSortControl } from "./FileSortControl";
 import { getFileIconSeti, getFileIconColor, getFileTypeLabel } from "../../fileIcons";
 import { sortFileNodes, FILE_SORT_OPTIONS, FILE_SORT_DEFAULT_DIRECTION, type FileSortMode, type FileSortDirection } from "../../utils/fileTreeSort";
 import { compactMiddlePackages } from "../../utils/fileTreeCompact";
+import {
+	FILE_TREE_ROW_HEIGHT_PX,
+	flattenFileTreeVisibleRows,
+	fileTreeVirtualWindow,
+} from "../../utils/fileTreeVisibleRows";
 import { compactMiddlePackagesAtom } from "../../atoms/app-ui-atoms";
 import { writeFileNodeDragPayload } from "../app/AppUtils";
 import { t } from "../../i18n";
@@ -171,6 +175,31 @@ function FilesPanel(props: {
 		() => (compactPackages ? compactMiddlePackages(sortedFiles) : sortedFiles),
 		[sortedFiles, compactPackages],
 	);
+	// 扁平可视行：虚拟列表只挂窗口内 DOM，展开再深也不整树挂载。
+	const visibleRows = useMemo(
+		() => flattenFileTreeVisibleRows(displayFiles, props.expandedDirs),
+		[displayFiles, props.expandedDirs],
+	);
+	const treeScrollRef = useRef<HTMLDivElement | null>(null);
+	const [treeScrollTop, setTreeScrollTop] = useState(0);
+	const [treeViewportHeight, setTreeViewportHeight] = useState(0);
+	useEffect(() => {
+		const el = treeScrollRef.current;
+		if (!el) return;
+		const sync = () => {
+			setTreeScrollTop(el.scrollTop);
+			setTreeViewportHeight(el.clientHeight);
+		};
+		sync();
+		const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sync) : null;
+		ro?.observe(el);
+		return () => ro?.disconnect();
+	}, [visibleRows.length]);
+	const virtualWindow = useMemo(
+		() => fileTreeVirtualWindow(visibleRows.length, treeScrollTop, treeViewportHeight),
+		[visibleRows.length, treeScrollTop, treeViewportHeight],
+	);
+	const windowedRows = visibleRows.slice(virtualWindow.start, virtualWindow.end);
 	/** 拖入高亮的目标目录路径（null = 拖在面板空白区域） */
 	const [dragOverDir, setDragOverDir] = useState<string | null>(null);
 	const dragCountRef = useRef(0);
@@ -285,23 +314,52 @@ function FilesPanel(props: {
 					)}
 				</div>
 			</div>
-			{displayFiles.map((node) => (
-				<FileNode
-					key={node.path}
-					node={node}
-					expanded={props.expandedDirs.has(node.path)}
-					expandedDirs={props.expandedDirs}
-					onToggleDirectory={props.onToggleDirectory}
-					onFileContextMenu={props.onFileContextMenu}
-					onOpenFile={props.onOpenFile}
-					onViewFile={props.onViewFile}
-					onDropFiles={props.onDropFiles}
-					onMoveFiles={props.onMoveFiles}
-					isDragOver={dragOverDir === node.path}
-					dragOverDir={dragOverDir}
-					onDragOverDirChange={setDragOverDir}
-				/>
-			))}
+			{/* 滚动归树体：外层 LazyWrapper 不再 overflow-y，方便虚拟窗口跟 scrollTop。 */}
+			<div
+				ref={treeScrollRef}
+				className="files-tree-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+				onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}
+			>
+				<div
+					className="relative w-full"
+					style={{ height: virtualWindow.totalHeight }}
+				>
+					<div
+						className="absolute inset-x-0 top-0"
+						style={{ transform: `translateY(${virtualWindow.offsetY}px)` }}
+					>
+						{windowedRows.map((row) =>
+							row.kind === "loading" ? (
+								<div
+									key={row.key}
+									className="px-2 py-1 text-xs text-muted-foreground"
+									style={{
+										height: FILE_TREE_ROW_HEIGHT_PX,
+										paddingLeft: `calc(var(--space-1) + ${(row.depth) * 8}px)`,
+									}}
+								>
+									{t("drawer.lazyLoading")}
+								</div>
+							) : (
+								<FileNode
+									key={row.key}
+									node={row.node}
+									expanded={row.expanded}
+									onToggleDirectory={props.onToggleDirectory}
+									onFileContextMenu={props.onFileContextMenu}
+									onOpenFile={props.onOpenFile}
+									onViewFile={props.onViewFile}
+									onDropFiles={props.onDropFiles}
+									onMoveFiles={props.onMoveFiles}
+									isDragOver={dragOverDir === row.node.path}
+									onDragOverDirChange={setDragOverDir}
+									depth={row.depth}
+								/>
+							),
+						)}
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -461,9 +519,8 @@ function fileIconElement(name: string, isDirectory: boolean, isExpanded: boolean
 
 function FileNodeView(props: {
 	node: FileTreeNode;
-	/** 本节点是否展开（布尔值便于 memo；勿只传 Set 引用）。 */
+	/** 本节点是否展开（扁平虚拟列表传入；目录用于 chevron/图标）。 */
 	expanded: boolean;
-	expandedDirs: Set<string>;
 	onToggleDirectory: (path: string) => void;
 	onFileContextMenu: (node: FileTreeNode, x: number, y: number) => void;
 	onOpenFile?: (path: string) => void;
@@ -476,7 +533,6 @@ function FileNodeView(props: {
 	onMoveFiles?: (sourcePaths: string[], targetDir: string) => void;
 	/** 本节点是否为当前拖入高亮目标 */
 	isDragOver: boolean;
-	dragOverDir?: string | null;
 	onDragOverDirChange?: (path: string | null) => void;
 }) {
 	const { node, expanded, onToggleDirectory, depth = 0 } = props;
@@ -484,6 +540,7 @@ function FileNodeView(props: {
 	const rowStyle = {
 		/* 每层 8px：旧 16 在窄抽屉里空白过大（标注「缩进太大」）。 */
 		"--file-depth-offset": `${depth * 8}px`,
+		height: FILE_TREE_ROW_HEIGHT_PX,
 		paddingLeft: `calc(var(--space-1) + ${depth * 8}px)`,
 		paddingRight: "var(--space-1)",
 	} as CSSProperties;
@@ -530,7 +587,7 @@ function FileNodeView(props: {
 	   border-color,box-shadow] duration-200），移入文件列表时背景平滑渐变而非瞬切。 */
 	const fileRowButtonClass =
 		"file-node-row inline-flex h-[28px] min-h-0 w-full items-center justify-start gap-1.5 rounded-sm border-0 bg-transparent py-0 text-left text-body font-normal text-foreground transition-[background-color,border-color,box-shadow] duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset";
-	if (node.type === "file")
+	if (node.type === "file") {
 		return (
 			<div className="file-node" style={rowStyle}>
 				<button
@@ -555,64 +612,42 @@ function FileNodeView(props: {
 				</button>
 			</div>
 		);
+	}
+	// 扁平虚拟列表：目录只渲染一行，子节点是后续独立行，不再嵌套 Collapsible。
 	return (
 		<div className="file-node" style={rowStyle}>
-			<Collapsible open={expanded} onOpenChange={() => onToggleDirectory(node.path)}>
-				<CollapsibleTrigger asChild>
-					<button
-						type="button"
-						className={cn("directory group", fileRowButtonClass, isDragOver && "bg-muted ring-1 ring-border")}
-						style={rowStyle}
-						title={node.relativePath}
-						draggable
-						onDragStart={handleDragStart}
-						onDragOver={handleDragOver}
-						onDragLeave={handleDragLeave}
-						onDrop={handleDrop}
-						onContextMenu={menu}
-					>
-						<ChevronRight className="file-node-chevron size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" aria-hidden="true" />
-						<span className="file-node-icon">
-							{fileIconElement(node.name, true, expanded)}
-						</span>
-						<span className="file-node-name">{node.name}</span>
-					</button>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					{expanded && node.hasChildren !== false && !node.children && (
-						<div className="file-children px-2 py-1 text-xs text-muted-foreground">{t("drawer.lazyLoading")}</div>
+			<button
+				type="button"
+				className={cn("directory group", fileRowButtonClass, isDragOver && "bg-muted ring-1 ring-border")}
+				style={rowStyle}
+				title={node.relativePath}
+				aria-expanded={expanded}
+				draggable
+				onDragStart={handleDragStart}
+				onDragOver={handleDragOver}
+				onDragLeave={handleDragLeave}
+				onDrop={handleDrop}
+				onClick={() => onToggleDirectory(node.path)}
+				onContextMenu={menu}
+			>
+				<ChevronRight
+					className={cn(
+						"file-node-chevron size-3.5 shrink-0 transition-transform",
+						expanded && "rotate-90",
 					)}
-					{node.children && node.children.length > 0 && (
-						<div className="file-children">
-							{node.children.map((child) => (
-								<FileNode
-									key={child.path}
-									node={child}
-									expanded={props.expandedDirs.has(child.path)}
-									expandedDirs={props.expandedDirs}
-									onToggleDirectory={onToggleDirectory}
-									onFileContextMenu={props.onFileContextMenu}
-									onOpenFile={props.onOpenFile}
-									onViewFile={props.onViewFile}
-									onDropFiles={props.onDropFiles}
-									onMoveFiles={props.onMoveFiles}
-									isDragOver={props.dragOverDir === child.path}
-									dragOverDir={props.dragOverDir}
-									onDragOverDirChange={props.onDragOverDirChange}
-									depth={depth + 1}
-								/>
-							))}
-						</div>
-					)}
-				</CollapsibleContent>
-			</Collapsible>
+					aria-hidden="true"
+				/>
+				<span className="file-node-icon">
+					{fileIconElement(node.name, true, expanded)}
+				</span>
+				<span className="file-node-name">{node.name}</span>
+			</button>
 		</div>
 	);
 }
 
 /**
- * 展开 Set / 拖入高亮路径引用常变，但多数兄弟节点的 expanded/isDragOver 布尔值不变。
- * 自定义比较跳过 Set 身份，避免展开一处或拖过一处时整棵树重渲。
+ * 展开/拖入高亮只传布尔值；虚拟窗口外节点不挂载，窗口内兄弟节点靠 memo 跳过无关重渲。
  */
 const FileNode = memo(FileNodeView, (prev, next) => (
 	prev.node === next.node &&

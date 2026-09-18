@@ -52,6 +52,10 @@ test("file tree list is shallow by default in the drawer and accepts a scoped di
   assert.match(composerSource, /maxDepth:\s*0/);
   assert.match(composerSource, /desktopApi\.files\.list\(effectiveProjectId, \{ maxDepth: 0 \}\)/);
   assert.match(composerSource, /\}, \[effectiveProjectId\]\);/);
+  // @ 纯名搜索整树：防抖后再拉，避免连打半截词浪费 IPC
+  assert.match(composerSource, /maxDepth: FILE_TREE_ABSOLUTE_MAX_DEPTH/);
+  assert.match(composerSource, /setTimeout\(\(\) => \{/);
+  assert.match(composerSource, /280/);
 });
 
 test("session display index yields during a full rebuild", () => {
