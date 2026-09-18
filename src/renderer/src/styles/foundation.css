@@ -54,6 +54,15 @@
    * 不要对 CJK 正文设负 letter-spacing。
    */
   --line-height-chat: 1.6;
+  /*
+   * 代码阅读字号独立于界面档位（data-ui-font-size 不覆盖这三项）。
+   * 编辑器 / Diff 15px、行高 1.55（约 23px）；终端与对话代码块 14px。
+   * 对话正文仍走 --font-size-chat，不要把代码块跟正文绑成同一个 em。
+   */
+  --font-size-editor: 15px;
+  --line-height-editor: 1.55;
+  --font-size-terminal: 14px;
+  --font-size-chat-code: 14px;
   --font-size-input: 14px;
   --font-size-title: 16px;
   --font-size-brand: 18px;

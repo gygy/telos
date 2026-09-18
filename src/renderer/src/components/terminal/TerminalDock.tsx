@@ -300,8 +300,9 @@ export function TerminalDock(props: {
 		fitRef.current = null;
 		if (collapsed || !contentReady || !activeTab || !containerRef.current) return;
 
-		// 终端字体接入设置 token：字体族跟随 --font-family-mono（设置中「代码字体」），
-		// 字号跟随 --font-size-control（UI 字号轨，默认 13px 与历史硬编码一致）。
+		// 终端字体接入设置 token：字体族跟随 --font-family-mono（设置中「代码字体」）。
+		// 字号用独立的 --font-size-terminal（14px），不跟界面控件档 --font-size-control，
+		// 否则把侧栏调大时终端会一起变大。
 		// xterm.js 需要具体字体串（canvas 测量用），不能用 var()，故挂载时展开一次；
 		// 设置变更后新开的终端生效，已开终端保持本次会话字体（xterm 无热更新入口）。
 		const rootStyle = getComputedStyle(document.documentElement);
@@ -309,7 +310,7 @@ export function TerminalDock(props: {
 			rootStyle.getPropertyValue("--font-family-mono").trim() ||
 			'"Cascadia Mono", Consolas, monospace';
 		const fontSize =
-			parseFloat(rootStyle.getPropertyValue("--font-size-control")) || 13;
+			parseFloat(rootStyle.getPropertyValue("--font-size-terminal")) || 14;
 
 		const terminal = new Terminal({
 			cursorBlink: true,

@@ -200,8 +200,10 @@
   border-radius: 0;
   background: transparent;
   padding: 0.75rem 0.9rem;
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-chat-code);
+  font-weight: 400;
+  line-height: 1.5;
   box-shadow: none;
 }
 

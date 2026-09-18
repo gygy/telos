@@ -94,6 +94,12 @@ export const CodeDiffView = memo(function CodeDiffView(props: {
 		// 颜色全部引用应用 token（明暗随 data-theme 自动切换），不写死色值
 		unsafeCSS: `
 			:root, :host {
+				--diffs-font-size: var(--font-size-editor);
+				--diffs-line-height: calc(var(--font-size-editor) * var(--line-height-editor));
+				--diffs-font-family: var(--font-family-mono);
+				--diffs-token-light-font-weight: 400;
+				--diffs-token-dark-font-weight: 400;
+				font-weight: 400;
 				--diffs-bg: transparent;
 				--diffs-addition-base: var(--color-success);
 				--diffs-deletion-base: var(--color-danger);

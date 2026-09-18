@@ -110,11 +110,16 @@ const editorThemeSpec = {
   "&": {
     backgroundColor: "var(--color-bg-panel)",
     color: "var(--color-text-primary)",
-    fontSize: "13px",
+    fontSize: "var(--font-size-editor)",
+    fontWeight: "400",
     height: "100%",
   },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-family-mono)", lineHeight: "1.6" },
+  ".cm-scroller": {
+    fontFamily: "var(--font-family-mono)",
+    fontWeight: "400",
+    lineHeight: "var(--line-height-editor)",
+  },
   ".cm-content": { caretColor: "var(--color-accent)", padding: "12px" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--color-accent)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, ::selection": {
