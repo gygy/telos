@@ -1,3 +1,16 @@
+## v0.7.14 - 2026-09-18
+
+### 🚀 New Features
+- **Long-task narrative** — The composer shows running, queued, and interrupted states, with one-click Review and Checkpoint so a long run can be followed and resumed.
+- **Review panel** — A first-class drawer lists this turn's file changes and commands, and can open a diff or jump to Checkpoint.
+
+### ✨ Improvements
+- **Reading a file no longer squeezes four columns** — Opening a file from the tree fills the middle pane and closes the file drawer. The session stays mounted; chat links and Git diffs still follow the open-mode setting.
+
+### 🐛 Fixes
+- **Markdown preview shows local images** — Relative images next to the Markdown file load in the preview, the same way Cursor and VS Code do.
+- **File-tree context menu responds immediately** — Menu actions no longer freeze the window on clipboard reads or close animations.
+
 ## v0.7.13 - 2026-09-18
 
 ### ✨ Improvements

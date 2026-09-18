@@ -93,6 +93,15 @@ async function ghRequest(path, { method = "GET", headers = {}, body } = {}) {
 	return json;
 }
 
+function latestChangelogSection() {
+	const text = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8");
+	const start = text.search(/^## /m);
+	if (start < 0) return "";
+	const rest = text.slice(start);
+	const next = rest.slice(1).search(/^## /m);
+	return (next < 0 ? rest : rest.slice(0, next + 1)).trim();
+}
+
 function ensureAssetsExist() {
 	for (const asset of ASSETS) {
 		if (!existsSync(asset.path)) {
@@ -174,8 +183,11 @@ async function main() {
 	ensureAssetsExist();
 	await ensureReleaseAnchor(token);
 
+	const notes = latestChangelogSection();
 	const body = [
 		`Telos ${tag}`,
+		"",
+		notes,
 		"",
 		"Windows packages:",
 		"",

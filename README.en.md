@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.7.13-blue)
+![Version](https://img.shields.io/badge/version-0.7.14-blue)
 
 <!-- star-history:start -->
 <picture>
@@ -79,13 +79,14 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.13** (2026-09-18)
+> **Latest: v0.7.14** (2026-09-18)
 
-### v0.7.13 Release Highlights
-- ✨ **Background Agent warmup on new sessions**
-- ✨ **Fewer get_state calls after handshake**
-- ✨ **Virtualized file-tree scrolling**
-- ✨ **Lighter large Markdown previews**
+### v0.7.14 Release Highlights
+- 🚀 **Long-task narrative**
+- 🚀 **Review panel**
+- ✨ **Reading a file no longer squeezes four columns**
+- ✨ **Markdown preview shows local images**
+- ✨ **File-tree context menu responds immediately**
 
 [View Full Changelog →](CHANGELOG.md)
 

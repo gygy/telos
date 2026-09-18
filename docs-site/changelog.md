@@ -5,6 +5,16 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.14
+
+发布时间：2026-09-18
+
+- 🚀 **长任务叙事**
+- 🚀 **Review 面板**
+- ✨ **文件树打开不再挤成四列**
+- ✨ **Markdown 预览能显示本地图片**
+- ✨ **文件树右键菜单不再卡住**
+
 ## v0.7.13
 
 发布时间：2026-09-18
