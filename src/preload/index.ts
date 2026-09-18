@@ -370,6 +370,9 @@ const api = {
 		 * 浏览器 ClipboardEvent 通常暴露不出 kind=file，粘贴文件引用依赖此同步 API。
 		 */
 		getClipboardPaths: () => clipboardSync<string[]>(ipcChannels.clipboardReadFilePaths, []),
+		/** 异步读剪贴板文件路径。菜单打开/点击必须用这个，不能 sendSync。 */
+		getClipboardPathsAsync: () =>
+			ipcRenderer.invoke(ipcChannels.clipboardReadFilePathsAsync) as Promise<string[]>,
 	},
 	pasteFiles: {
 		/** 粘贴大文本 → 落盘 userData/paste-files，返回路径元数据供 chip 展示与发送内联。 */

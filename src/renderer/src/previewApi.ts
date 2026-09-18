@@ -444,6 +444,7 @@ export function createPreviewApi(): PiDesktopApi {
 			move: async () => [],
 			getPathForFile: () => "",
 			getClipboardPaths: () => [],
+			getClipboardPathsAsync: async () => [],
 		},
 		pasteFiles: {
 			// 预览/浏览器模式无主进程：拒绝写盘（调用方会走「按文本粘贴」回退）

@@ -53,6 +53,7 @@ import {
   announcementNotificationEnabledAtom,
 } from "./atoms/announcement-atoms";
 import { sessionInterruptedAtAtom } from "./atoms/session-interrupt";
+import { fileContextMenuAtom } from "./atoms/file-context-menu";
 import { useSessionLayout } from "./hooks/useSessionLayout";
 import { useFileEditor } from "./hooks/useFileEditor";
 import { resolveFileLinkPath } from "./utils/filePathLinks";
@@ -185,15 +186,14 @@ import { ImportOverlayHost } from "./components/overlays/ImportOverlayHost";
 import { EnvironmentOverlay } from "./components/overlays/EnvironmentOverlay";
 import {
   EnvironmentDialog,
-  FileContextMenu,
   ImagePreviewModal,
   type SessionModifiedFile,
 } from "./components/app/AppParts";
 import { ExternalEditorOverlay } from "./components/workspace/ExternalEditorOverlay";
+import { FileContextMenuHost } from "./components/session/FileContextMenuHost";
 import { navigateTo } from "./components/app/BrowserPanel";
 import {
   flattenFiles,
-  fileNodeDragPayloadToRef,
   mergeCommands,
   getToolFilePath,
   getToolNewContent,
@@ -334,18 +334,11 @@ export function App() {
   const [sessionDurationByAgent, setSessionDurationByAgent] = useState<
     Record<string, number>
   >({});
+  const setFileContextMenu = useSetAtom(fileContextMenuAtom);
   // 会话区不再维护独立的“修改文件摘要”卡片；diff 入口贴在 edit/write 工具调用处，
   // 避免会话输入框上方摘要与 Git 工作区状态/历史会话恢复互相干扰。
   const agentStatusByAgentRef = useRef<Record<string, AgentTab["status"]>>({});
 
-  // 记录 composer 光标位置,用于光标相关的 @ / 触发检测与建议项替换。
-  const [fileMenu, setFileMenu] = useState<{
-    x: number;
-    y: number;
-    node: FileTreeNode;
-  } | null>(null);
-  /** 右键打开文件菜单时检查剪贴板是否有文件路径，决定是否显示「粘贴」项 */
-  const [hasClipboardFiles, setHasClipboardFiles] = useState(false);
   const [renamingFile, setRenamingFile] = useState<{
     path: string;
     name: string;
@@ -3827,15 +3820,7 @@ export function App() {
     expandedDirs,
     onToggleDirectory: toggleDirectory,
     onCollapseAllDirectories: collapseAllDirectories,
-    setFileMenu: (menu: { x: number; y: number; node: FileTreeNode } | null) => {
-      setFileMenu(menu);
-      if (!menu) return;
-      try {
-        setHasClipboardFiles(api.files.getClipboardPaths().length > 0);
-      } catch {
-        setHasClipboardFiles(false);
-      }
-    },
+    setFileMenu: setFileContextMenu,
     refreshFiles: refreshVisibleFiles,
     showToast,
     projects,
@@ -4000,97 +3985,36 @@ export function App() {
       closeWindow={api.app.closeWindow}
     >
 
-    {fileMenu && (
-      <FileContextMenu
-        menu={fileMenu}
-        hasClipboardFiles={hasClipboardFiles}
-        onPaste={(targetDir) => {
-          // 右键菜单「粘贴文件到此处」：读剪贴板路径复制到目标目录
-          try {
-            const paths = api.files.getClipboardPaths();
-            if (paths.length > 0) {
-              void api.files.copy(paths, targetDir).then(() => {
-                void refreshVisibleFiles();
-                showToast(t("app.fileCopyDone", { count: paths.length }), 2000);
-              }).catch((error) => {
-                showToast(t("app.filePasteFailed", { error: error instanceof Error ? error.message : String(error) }), 4000);
-              });
+    <FileContextMenuHost
+      showToast={showToast}
+      refreshFiles={() => { void refreshVisibleFiles(); }}
+      onRename={(node) => {
+        setRenamingFile({ path: node.path, name: node.name });
+        setRenamingFileInput(node.name);
+      }}
+      onDelete={(node) => {
+        overlays.showConfirm({
+          title: node.type === "directory" ? t("drawer.deleteFolderTitle") : t("drawer.deleteFileTitle"),
+          message: node.type === "directory"
+            ? t("drawer.deleteFolderConfirm", { name: node.name })
+            : t("drawer.deleteFileConfirm", { name: node.name }),
+          danger: true,
+          confirmLabel: t("common.delete"),
+          onConfirm: async () => {
+            overlays.clearConfirm();
+            try {
+              await api.files.delete(node.path, true);
+              void refreshVisibleFiles();
+              showToast(t("app.fileDeleted"), 2000);
+            } catch (error) {
+              showToast(t("app.fileDeleteFailed", {
+                error: String(error instanceof Error ? error.message : error).replace(/^Error:\s*/, ""),
+              }), 5000, "error");
             }
-          } catch { /* 剪贴板不可用 */ }
-          setFileMenu(null);
-        }}
-        onClose={() => setFileMenu(null)}
-        onOpen={() => {
-          void api.files.open(fileMenu.node.path).catch((error) => {
-            showToast(t("app.openFileFailed", { error: error instanceof Error ? error.message : String(error) }), 4000);
-          });
-          setFileMenu(null);
-        }}
-        onReveal={() => {
-          void api.files.showInFolder(fileMenu.node.path).catch((error) => {
-            showToast(t("app.openFileFailed", { error: error instanceof Error ? error.message : String(error) }), 4000);
-          });
-          setFileMenu(null);
-        }}
-        onAttach={() => {
-          // 与文件树拖拽共用同一引用格式：目录补尾斜杠（@dir/），含空格路径自动加引号。
-          // 走 composer-attach-refs 事件插入，避免这里再维护一份 @path 拼接逻辑
-          // （裸 @dir 过不了 chip 路径规则，模型也容易当成 mention）。
-          window.dispatchEvent(
-            new CustomEvent("composer-attach-refs", {
-              detail: {
-                refs: [
-                  fileNodeDragPayloadToRef({
-                    path: fileMenu.node.path,
-                    relativePath: fileMenu.node.relativePath,
-                    type: fileMenu.node.type,
-                  }),
-                ],
-              },
-            }),
-          );
-          setFileMenu(null);
-        }}
-        onCopyPath={() => {
-          void navigator.clipboard.writeText(fileMenu.node.path);
-          setFileMenu(null);
-          showToast(t("app.pathCopied"), 1200);
-        }}
-        onRename={() => {
-          const node = fileMenu.node;
-          setRenamingFile({ path: node.path, name: node.name });
-          setRenamingFileInput(node.name);
-          setFileMenu(null);
-        }}
-        onDelete={() => {
-          const node = fileMenu.node;
-          setFileMenu(null);
-          overlays.showConfirm({
-            title: node.type === "directory" ? t("drawer.deleteFolderTitle") : t("drawer.deleteFileTitle"),
-            message: node.type === "directory"
-              ? t("drawer.deleteFolderConfirm", { name: node.name })
-              : t("drawer.deleteFileConfirm", { name: node.name }),
-            danger: true,
-            confirmLabel: t("common.delete"),
-            onConfirm: async () => {
-              overlays.clearConfirm();
-              try {
-                await api.files.delete(node.path, true);
-                void refreshVisibleFiles();
-                showToast(t("app.fileDeleted"), 2000);
-              } catch (error) {
-                // 回收站不可用、权限不足或文件已被外部移走时，必须把主进程错误呈现给用户；
-                // 仅写控制台会让确认框关闭后看起来像“点击无效”。
-                showToast(t("app.fileDeleteFailed", {
-                  error: String(error instanceof Error ? error.message : error).replace(/^Error:\s*/, ""),
-                }), 5000, "error");
-              }
-            },
-          });
-        }}
-      />
-    )}
-
+          },
+        });
+      }}
+    />
     {projectResourcesProject && (
       <Suspense fallback={null}>
         <ProjectResourcesModal

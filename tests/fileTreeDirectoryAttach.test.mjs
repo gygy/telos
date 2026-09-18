@@ -25,22 +25,20 @@ test("FileContextMenu：文件与目录都能「加入对话引用」和「默�
   assert.doesNotMatch(menuSource, /disabled=\{!isFile\}/);
 });
 
-test("App：文件树右键引用复用 fileNodeDragPayloadToRef 并经 composer-attach-refs 插入", () => {
-  const start = appSource.indexOf("onAttach={() =>");
-  const end = appSource.indexOf("onCopyPath={() =>");
-  assert.ok(start !== -1 && end > start, "应能在 FileContextMenu 用法中找到 onAttach 分支");
-  const attachBlock = appSource.slice(start, end);
-  assert.match(attachBlock, /fileNodeDragPayloadToRef\(/);
-  assert.match(attachBlock, /composer-attach-refs/);
-  // 旧写法直接拼 @relativePath：目录缺尾斜杠、含空格路径不加引号。
-  assert.doesNotMatch(attachBlock, /@\$\{fileMenu\.node\.relativePath\}/);
-
-  // 「默认方式打开」仍按节点自身路径交给系统默认处理器（目录 → 文件管理器）。
-  const openBlock = appSource.slice(
-    appSource.indexOf("onOpen={() =>"),
-    appSource.indexOf("onReveal={() =>"),
-  );
-  assert.match(openBlock, /api\.files\.open\(fileMenu\.node\.path\)/);
+test("文件树右键引用复用 fileNodeDragPayloadToRef，并且不在点击当帧做重活", () => {
+  const host = readFileSync("src/renderer/src/components/session/FileContextMenuHost.tsx", "utf8");
+  const menu = readFileSync("src/renderer/src/components/session/ComposerOverlayComponents.tsx", "utf8");
+  assert.match(host, /fileNodeDragPayloadToRef\(/);
+  assert.match(host, /composer-attach-refs/);
+  assert.doesNotMatch(host, /@\$\{fileMenu\.node\.relativePath\}/);
+  assert.match(host, /desktopApi\.files\.open\(path\)/);
+  // 菜单开关不走 App setState；剪贴板走异步，避免 sendSync 冻住右键。
+  assert.match(host, /fileContextMenuAtom/);
+  assert.match(host, /getClipboardPathsAsync/);
+  assert.match(host, /window\.setTimeout\(action, 0\)/);
+  assert.match(menu, /instant/);
+  assert.match(appSource, /setFileMenu: setFileContextMenu/);
+  assert.doesNotMatch(appSource, /setHasClipboardFiles/);
 });
 
 test("目录节点引用带尾斜杠（raw）且可解析为 file chip", () => {

@@ -762,6 +762,8 @@ export const ipcChannels = {
 	clipboardReadHtml: "clipboard:read-html",
 	clipboardReadImage: "clipboard:read-image",
 	clipboardReadFilePaths: "clipboard:read-file-paths",
+	/** 异步读文件路径：右键菜单不能走 sendSync，否则剪贴板被占用时渲染进程整页卡住。 */
+	clipboardReadFilePathsAsync: "clipboard:read-file-paths-async",
 	clipboardWriteImage: "clipboard:write-image",
 	/**
 	 * 写纯文本到系统剪贴板。诊断报告/AI 提示词可能上百 KB，

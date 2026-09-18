@@ -32,6 +32,8 @@ export function registerClipboardIpc({ appLogger }: ClipboardIpcDeps): void {
 	ipcMain.on(ipcChannels.clipboardReadFilePaths, (event) => {
 		event.returnValue = readClipboardFilePaths();
 	});
+	// 右键菜单用 invoke：sendSync 会在剪贴板被别的进程锁住时冻住渲染进程。
+	ipcMain.handle(ipcChannels.clipboardReadFilePathsAsync, () => readClipboardFilePaths());
 	ipcMain.handle(ipcChannels.clipboardWriteImage, async (_event, dataUrl: unknown) => {
 		const result = writeClipboardImageDataUrl(dataUrl);
 		if (!result.ok) {

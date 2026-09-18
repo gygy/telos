@@ -122,7 +122,14 @@ export function FileContextMenu(props: {
 					pointerEvents: "none",
 				}}
 			/>
-			<DropdownMenuContent align="start" side="bottom" className="min-w-40">
+			<DropdownMenuContent
+				align="start"
+				side="bottom"
+				instant
+				className="min-w-40"
+				// 关掉后不要把焦点送回 0 尺寸 Trigger：会触发整页滚动/重排，点菜单像卡住。
+				onCloseAutoFocus={(event) => event.preventDefault()}
+			>
 				{/* 目录同样可引用：拖拽落点与 @ 建议列表都允许目录，右键菜单不应更严。
 				    引用文本由 fileNodeDragPayloadToRef 统一补尾斜杠（@dir/），
 				    裸 @dir 过不了 chip 路径规则，模型也容易当成 mention。 */}
