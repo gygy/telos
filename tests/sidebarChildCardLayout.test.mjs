@@ -87,6 +87,7 @@ test("sidebar child titles use the shared width clamp and hover-scroll component
   assert.doesNotMatch(titleScrollText, /title=\{overflowing \? text : undefined\}/);
   assert.match(titleScrollText, /titleScrollDurationMs\(overflow\)/);
   assert.match(titleScrollText, /titleScrollTiming/);
+  assert.match(titleScrollText, /text-ellipsis/);
   assert.doesNotMatch(titleScrollText, /TITLE_SCROLL_MIN_DURATION_MS|TITLE_SCROLL_MAX_DURATION_MS/);
   assert.match(projectTree, /truncate font-medium/);
 });
@@ -141,8 +142,9 @@ test("sidebar omits the redundant projects heading and tabs shrink to their titl
   assert.doesNotMatch(sidebarContent, /FolderTree/);
   // 项目标签不再作为独立分组标题，而是收拢到 Chats/项目分段 beUI Tab 的 trigger 文案
   assert.match(sidebarContent, /<TabsTrigger[\s\S]{0,500}value="projects"[\s\S]{0,500}\{t\("app\.sidebarProjects"\)\}/);
-  // 固定 Tab 与普通 Tab 同宽策略：不再用 w-20 固定宽度（Pin 图标挤占标题空间）
-  assert.match(tabBar, /"w-fit max-w-32",/);
+  // 固定 Tab 与普通 Tab 同宽策略：不再用 w-20 固定宽度（Pin 图标挤占标题空间）。
+  // 同时设最小宽，避免长标题被压到只剩半个字。
+  assert.match(tabBar, /"w-fit min-w-24 max-w-36",/);
   assert.doesNotMatch(tabBar, /pinned \? "w-20"/);
   assert.match(tabBar, /session-tabs-scroll (?:relative )?flex (?:h-full )?min-w-0 flex-1/);
   assert.match(tabBar, /session-tabs-actions flex shrink-0/);

@@ -944,7 +944,7 @@ function EditorWorkbenchTab(props: {
       }
       className={cn(
         "session-tab group relative flex h-7 shrink-0 cursor-pointer select-none items-center rounded-md border px-2 text-caption transition-[color,background-color,border-color,box-shadow,transform] duration-200",
-        "w-fit max-w-40",
+        "w-fit min-w-24 max-w-40",
         // 选中态：灰色柔和实底（以 bg-accent = --color-bg-active，与会话 Tab/侧栏一致），文字 text-foreground
         tab.active
           ? "border-transparent font-medium text-foreground"
@@ -964,7 +964,7 @@ function EditorWorkbenchTab(props: {
       tabIndex={0}
     >
       <span className="relative z-10 flex min-w-0 flex-1 items-center gap-1.5">
-      <span className={cn("min-w-0 flex-1 truncate", tab.preview && "italic")}>
+      <span className={cn("min-w-16 flex-1 truncate", tab.preview && "italic")}>
         {tab.label}
       </span>
       <button
@@ -1148,7 +1148,7 @@ function SessionTab(props: {
           // 固定 Tab 与普通 Tab 同宽策略（按内容收缩）：固定 Tab 无关闭按钮，
           // hover 不会因按钮出现而跳动，无需 w-20 占位；固定宽度反而让 Pin 图标挤占标题空间。
           // 有 DSH/生图徽标或模式 chip 时放宽上限（见上方 hasLeadingBadges 注释）。
-          hasLeadingBadges ? "w-fit max-w-44" : "w-fit max-w-32",
+          hasLeadingBadges ? "w-fit min-w-28 max-w-44" : "w-fit min-w-24 max-w-36",
           dragging && "opacity-50",
           // 选中态：灰色柔和实底（bg-accent = --color-bg-active，与左侧 SessionTree 选中行一致），
           // 背景由下方共享 layoutId 的 motion.span spring 滑到当前 Tab；不做黑色实底/阴影/底部条。
@@ -1209,7 +1209,7 @@ function SessionTab(props: {
           disabled={active}
           hoverDelayMs={500}
           className={cn(
-            "truncate",
+            "min-w-16 truncate",
             active ? "font-medium" : "font-normal",
             preview && "italic",
           )}

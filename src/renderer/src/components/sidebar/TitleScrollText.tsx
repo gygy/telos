@@ -123,8 +123,12 @@ export function TitleScrollText({
 			<span
 				ref={textRef}
 				className={cn(
-					"title-scroll-text inline-block whitespace-nowrap",
-					overflowing && hovering && "animate-title-scroll",
+					// 静止时必须在文字节点上省略：父级 overflow 裁的是更宽的子盒，会把汉字切成半个。
+					// 滚动时改成 max-content，translate 才能把全文滚出来；scrollWidth 仍是自然宽度。
+					"title-scroll-text block whitespace-nowrap",
+					overflowing && hovering
+						? "w-max animate-title-scroll"
+						: "max-w-full overflow-hidden text-ellipsis",
 				)}
 				style={scrollStyle}
 			>
