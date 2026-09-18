@@ -144,8 +144,15 @@ export function FileContextMenu(props: {
 				</DropdownMenuItem>
 				<DropdownMenuItem onSelect={props.onReveal}>{t("menu.revealFile")}</DropdownMenuItem>
 				<DropdownMenuItem onSelect={props.onCopyPath}>{t("menu.copyPath")}</DropdownMenuItem>
-				{props.hasClipboardFiles && props.onPaste && (
-					<DropdownMenuItem onSelect={() => props.onPaste?.(targetDir)}>
+				{/* 粘贴项始终占位：异步查剪贴板时不插拔行，避免菜单高度跳一下像卡住。 */}
+				{props.onPaste && (
+					<DropdownMenuItem
+						disabled={!props.hasClipboardFiles}
+						onSelect={() => {
+							if (!props.hasClipboardFiles) return;
+							props.onPaste?.(targetDir);
+						}}
+					>
 						{t("drawer.pasteFiles")}
 					</DropdownMenuItem>
 				)}

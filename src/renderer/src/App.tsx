@@ -1392,6 +1392,7 @@ export function App() {
     setDrawerCollapsed,
     contentOpenMode: settings.workspaceContentOpenMode ?? "split",
     releaseFileDrawer: workspace.closeDrawer,
+    collapseSidebarForReading: () => setListCollapsed(true),
     showToast,
     readFileContent: api.files.readContent,
     readGitOriginalContent: api.git.originalContent,

@@ -46,7 +46,10 @@ export function FileContextMenuHost(props: {
 	const node = menu.node;
 	const closeThen = (action: () => void) => {
 		setMenu(null);
-		window.setTimeout(action, 0);
+		// rAF：等菜单卸掉并完成一帧绘制，再跑 IPC，比 setTimeout(0) 更不容易和关菜单抢同一帧。
+		window.requestAnimationFrame(() => {
+			action();
+		});
 	};
 
 	return (

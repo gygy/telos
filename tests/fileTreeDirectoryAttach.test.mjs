@@ -35,8 +35,9 @@ test("文件树右键引用复用 fileNodeDragPayloadToRef，并且不在点击�
   // 菜单开关不走 App setState；剪贴板走异步，避免 sendSync 冻住右键。
   assert.match(host, /fileContextMenuAtom/);
   assert.match(host, /getClipboardPathsAsync/);
-  assert.match(host, /window\.setTimeout\(action, 0\)/);
+  assert.match(host, /window\.requestAnimationFrame/);
   assert.match(menu, /instant/);
+  assert.match(menu, /disabled=\{!props\.hasClipboardFiles\}/);
   assert.match(appSource, /setFileMenu: setFileContextMenu/);
   assert.doesNotMatch(appSource, /setHasClipboardFiles/);
 });

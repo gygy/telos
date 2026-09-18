@@ -64,6 +64,8 @@ export interface UseFileEditorInput {
    * 钉住时由调用方自己决定是否忽略（现有 closeDrawer 会留下钉住的抽屉）。
    */
   releaseFileDrawer?: () => void;
+  /** 文件树打开阅读面时收起左侧会话列表，给中间栏更多宽度；Tab 栏 PanelLeft 可再展开。 */
+  collapseSidebarForReading?: () => void;
   showToast: (message: string, duration?: number) => void;
   /** 读取文件内容的 API；maxBytes 用于编辑器大文件前置拦截（主进程 stat 检查，不传输超限内容） */
   readFileContent: (
@@ -204,6 +206,8 @@ export function useFileEditor(input: UseFileEditorInput): UseFileEditorOutput {
   contentOpenModeRef.current = contentOpenMode;
   const releaseFileDrawerRef = useRef(input.releaseFileDrawer);
   releaseFileDrawerRef.current = input.releaseFileDrawer;
+  const collapseSidebarForReadingRef = useRef(input.collapseSidebarForReading);
+  collapseSidebarForReadingRef.current = input.collapseSidebarForReading;
 
   // ---- 中间栏内容布局（split | maximize）----
   const [editorMode, setEditorMode] = useState<WorkspaceContentOpenMode>(contentOpenMode);
@@ -506,8 +510,9 @@ export function useFileEditor(input: UseFileEditorInput): UseFileEditorOutput {
       // 文件树点开是为了读：占满中间栏。设置里的 split 只约束会话链接和 Git Diff。
       editorModeRef.current = "maximize";
       setEditorMode("maximize");
-      // 收起文件抽屉。钉住时 closeDrawer 自己会留下。
+      // 收起文件抽屉与左侧列表。钉住的抽屉由 closeDrawer 自己留下；列表用 Tab 栏 PanelLeft 唤回。
       releaseFileDrawerRef.current?.();
+      collapseSidebarForReadingRef.current?.();
     },
     [viewFilePath],
   );

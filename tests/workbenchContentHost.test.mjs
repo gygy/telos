@@ -103,6 +103,7 @@ test("file tree open fills the middle pane and releases the file drawer", () => 
   assert.ok(treeBlock.includes("const openTreeFile"), "openTreeFile must exist");
   assert.match(treeBlock, /setEditorMode\("maximize"\)/);
   assert.match(treeBlock, /releaseFileDrawerRef\.current\?\.\(\)/);
+  assert.match(treeBlock, /collapseSidebarForReadingRef\.current\?\.\(\)/);
   // 会话链接仍跟随设置，不跟文件树一起强制占满
   const viewBlock = fileEditor.slice(
     fileEditor.indexOf("const viewFilePath = useCallback"),
@@ -111,8 +112,11 @@ test("file tree open fills the middle pane and releases the file drawer", () => 
   assert.match(viewBlock, /contentOpenModeRef\.current/);
   assert.doesNotMatch(viewBlock, /setEditorMode\("maximize"\)/);
   assert.match(app, /releaseFileDrawer:\s*workspace\.closeDrawer/);
+  assert.match(app, /collapseSidebarForReading:\s*\(\)\s*=>\s*setListCollapsed\(true\)/);
   assert.match(app, /viewFilePath:\s*openTreeFile/);
   assert.match(app, /viewFilePath\(resolved, undefined, line, fileAccessScope\)/);
+  assert.match(app, /workbenchMaximized=/);
+  assert.match(app, /app\.showChat|onShowChat/);
 });
 
 test("closing git diff dismisses the whole workbench reading surface", () => {

@@ -34,8 +34,6 @@ import { Tabs, TabsList, TabsTrigger } from "../motion/tabs";
 import { Dock, DockItem } from "../motion/dock";
 import { UpdateDotHint } from "./UpdateDotHint";
 import { parseSidebarNavTab } from "../../utils/sidebarNavTab";
-import { isChatProject } from "../../rendererUtils";
-import { desktopApi } from "../../desktopApi";
 
 export type SidebarActions = {
   projects: {
@@ -244,31 +242,6 @@ export function SidebarContent(props: SidebarContentProps) {
     ? controller.catalog.projects.find((project) => project.id === currentProject.worktreeParentId) ?? currentProject
     : currentProject;
 
-  // MorphingSearch 检索项：扁平化所有项目 + 会话，供命令面板跳转。
-  // 项目项用目录名（chat 用「Chat」），会话项用标题 + 预览；选中即打开/选中目标。
-  const searchItems: MorphingSearchItem[] = [];
-  for (const project of controller.catalog.projects) {
-    searchItems.push({
-      id: `project:${project.id}`,
-      title: displayProjectDirectoryName(project),
-      description: project.path,
-      icon: isChatProject(project) ? MessageSquare : Folder,
-      onSelect: () => {
-        actions.projects.select(project.id);
-        controller.setProjectExpanded(project.id, true);
-      },
-    });
-    for (const session of controller.catalog.sessionsByProject[project.id] ?? []) {
-      searchItems.push({
-        id: `session:${session.id}`,
-        title: sessionDisplayName(session.title, session.forked) ?? session.title,
-        description: session.preview,
-        icon: MessageSquare,
-        onSelect: () => { void actions.sessions.open(project.id, session.id); },
-      });
-    }
-  }
-
   return (
     <aside
       // 行操作按钮是 absolute 浮层：hover 时行文本通过 padding-right 压缩让位
@@ -280,60 +253,8 @@ export function SidebarContent(props: SidebarContentProps) {
       {/* 品牌区提到 body 外：贴侧栏顶边，不被 sidebar-body 的 px/py 顶开（logo 怼左上）。 */}
       {props.chrome}
       <div className="sidebar-body flex min-h-0 flex-1 flex-col gap-2 px-2 pt-2 pb-1">
-        {/* 顶部两个平铺操作：「新建会话」+「搜索」（无下拉、无外边框）。
-            新建会话 → 打开初始引导页（居中输入框 + 项目下拉切换后可直接对话）；
-            搜索 → 打开 MorphingSearch 命令面板。把搜索从整行输入框收敛成单个动作项，
-            消除与下方胶囊分段的样式重复。底部细分割线与下方分组区分，避免与分段栏粘连。 */}
-        <div className="flex shrink-0 flex-col gap-0.5 border-b border-border/40 pt-1 pb-2">
-          <button
-            type="button"
-            className="group flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-body text-foreground transition-colors hover:bg-muted/60"
-            aria-label={t("app.newSession")}
-            title={t("app.newSession")}
-            onClick={() => props.onOpenNewSession?.()}
-          >
-            <CirclePlus className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate font-medium">{t("app.newSession")}</span>
-            {/* 快捷键默认隐藏，行 hover 时才淡入（无边框，弱化到只剩文字），避免常驻视觉噪音；
-                键位跟随设置页自定义（useShortcutBindings） */}
-            <kbd className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-micro text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{newSessionKbd}</kbd>
-          </button>
-          <button
-            type="button"
-            className="group flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-body text-foreground transition-colors hover:bg-muted/60"
-            aria-label={t("app.searchSessions")}
-            title={t("app.searchSessions")}
-            onClick={() => setSearchOpen(true)}
-          >
-            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate font-medium">{t("app.searchSessions")}</span>
-            {/* 快捷键默认隐藏，行 hover 时才淡入；键位跟随设置页自定义（useShortcutBindings） */}
-            <kbd className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1 text-micro text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{searchKbd}</kbd>
-          </button>
-          {/* 定时任务入口：放在新建/搜索下面，避免藏在底栏 Dock 里不好找 */}
-          <AutomationDockButton />
-        </div>
-
-        {/* MorphingSearch 命令面板：锚点固定定位到视口水平居中、垂直约 1/5 处，
-            （VSCode/Raycast 式 command 弹窗），而不是贴在搜索按钮旁。锚点不可见但保留
-            真实尺寸供 getBoundingClientRect 测量，面板从锚点位置展开即居中。 */}
-        <div className="pointer-events-none fixed left-1/2 top-[16vh] z-50 w-[min(640px,calc(100vw-2rem))] -translate-x-1/2">
-          <MorphingSearch
-            items={searchItems}
-            placeholder={t("app.searchSessions")}
-            shortcut=""
-            iconOnly
-            maxWidth={640}
-            maxHeight={360}
-            open={searchOpen}
-            onOpenChange={setSearchOpen}
-            emptyMessage={t("app.searchNoResults")}
-            className="pointer-events-none h-12 w-full opacity-0"
-            onQueryChange={(query) => controller.setSearch(query)}
-          />
-        </div>
-
         {/* 活动 / 聊天 / 项目分段：beUI pill 分段（凹槽轨道 + 凸起高亮胶囊）。
+            新建 / 搜索 / 定时任务已上收到顶栏图标，列表区从分段开始，省掉约三行高度。
             活动页收集所有已激活的 Agent 会话（跨项目），聊天页显示历史会话，项目页显示工作区目录。
             轨道：muted 弱化底 + hairline 边框；高亮块盖掉 beUI 默认的 bg-primary 色块，
             换成 background 浮起面（细描边 + 投影；暗色用 bg-active 提亮一档做「抬起」感）。

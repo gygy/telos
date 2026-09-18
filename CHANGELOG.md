@@ -1,3 +1,11 @@
+## v0.7.15 - 2026-09-18
+
+### ✨ Improvements
+- **Show chat while reading** — When a file fills the middle pane, the tab bar gains a Show chat control; clicking a session tab also restores the split so the conversation is usable again.
+- **Sidebar actions in the brand bar** — New session, Search, and Scheduled tasks are icon buttons in the header, freeing about three rows of list height.
+- **Reading focus collapses the project list** — Opening a file from the tree also collapses the left list; expand it again from the tab bar PanelLeft button.
+- **Smoother file-tree context menu** — Paste stays reserved so the menu does not jump, and actions run after the menu paints.
+
 ## v0.7.14 - 2026-09-18
 
 ### 🚀 New Features
