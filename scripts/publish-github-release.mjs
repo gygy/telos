@@ -20,8 +20,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Agent } from "undici";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const uploadAgent = new Agent({
+	connectTimeout: 60_000,
+	headersTimeout: 30 * 60 * 1000,
+	bodyTimeout: 30 * 60 * 1000,
+});
 const OWNER = "gygy";
 const REPO = "telos";
 const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
@@ -158,6 +164,7 @@ async function uploadAsset(releaseId, asset) {
 	console.log(`Uploading ${asset.name} (${mb} MB)…`);
 	const res = await fetch(`${UPLOADS}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`, {
 		method: "POST",
+		dispatcher: uploadAgent,
 		headers: {
 			Authorization: `token ${token}`,
 			Accept: "application/vnd.github+json",
