@@ -1,5 +1,5 @@
-import { Activity, Bolt, CirclePlus, Clock, Folder, MessageSquare, Monitor, Moon, Puzzle, Search, Sparkles, Sun } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Activity, Bolt, Clock, Folder, MessageSquare, Monitor, Moon, Puzzle, Sparkles, Sun } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { AgentTab, AppThemeMode, ArchivedDshSession, ArchivedPiSession, Project, SessionRecord, SessionSummary, WorktreeEntry } from "../../../../shared/types";
 import {
   AgentContextMenu,
@@ -26,7 +26,6 @@ import {
 } from "../../utils/sessionCommands";
 import { getBoundSidebarRuntimeAgent, getBoundSidebarRuntimeAgentByAgentId, type SidebarController, type SidebarRpcLog } from "../../hooks/useSidebarController";
 import type { SidebarRunControl } from "./SidebarComponents";
-import { sessionDisplayName } from "../../utils/sessionDisplayName";
 import { DshSearchResults } from "./DshSearchResults";
 import { ProjectTree } from "./ProjectTree";
 import { Button } from "../ui-shadcn/button";
@@ -34,13 +33,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui-shadcn/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "../motion/tabs";
 import { Dock, DockItem } from "../motion/dock";
 import { UpdateDotHint } from "./UpdateDotHint";
-import { AutomationDockButton } from "../automation/AutomationDockButton";
-import { MorphingSearch, type MorphingSearchItem } from "../motion/morphing-search";
 import { parseSidebarNavTab } from "../../utils/sidebarNavTab";
-import { displayProjectDirectoryName, isChatProject } from "../../rendererUtils";
-import { formatAccelerator } from "../../../../shared/shortcuts";
+import { isChatProject } from "../../rendererUtils";
 import { desktopApi } from "../../desktopApi";
-import { useShortcutBindings } from "../../hooks/useShortcutBindings";
 
 export type SidebarActions = {
   projects: {
@@ -211,39 +206,6 @@ export function SidebarContent(props: SidebarContentProps) {
     && getBoundSidebarRuntimeAgentByAgentId(controller.catalog, menuAgent.id) !== undefined;
   // “RPC 日志已打开”提醒弹框的打开目标 agent id（null = 关闭）
   const [rpcLogOpenedAgentId, setRpcLogOpenedAgentId] = useState<string | null>(null);
-  // 顶部「搜索」菜单项控制 MorphingSearch 命令面板的展开状态。
-  const [searchOpen, setSearchOpen] = useState(false);
-  // 生效快捷键绑定（用户设置可改），kbd 提示跟随真实键位；设置保存后自动刷新
-  const { bindings: shortcutBindings, platform } = useShortcutBindings();
-  const newSessionKbd = shortcutBindings
-    ? formatAccelerator(shortcutBindings.openNewSession, platform)
-    : "Ctrl+N";
-  const searchKbd = shortcutBindings
-    ? formatAccelerator(shortcutBindings.openSearch, platform)
-    : "Ctrl+F";
-
-  // 全局快捷键：新建会话（打开引导页）与搜索（打开命令面板）由主进程
-  // before-input-event 匹配（键位可设置页自定义）后广播 appShortcutTriggered；
-  // 这里只负责执行 UI 动作。输入框/内容可编辑区域聚焦时跳过（广播已由主进程
-  // preventDefault，跳过只是不执行，不会误触发页面行为），避免打字时误开面板。
-  useEffect(() => {
-    return desktopApi.app.onShortcutTriggered((id) => {
-      if (id !== "openNewSession" && id !== "openSearch") return;
-      const target = document.activeElement;
-      if (target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target instanceof HTMLSelectElement)) {
-        return;
-      }
-      if (id === "openNewSession") {
-        props.onOpenNewSession?.();
-      } else {
-        setSearchOpen(true);
-      }
-    });
-  }, [props.onOpenNewSession]);
   const menuSessionRecord = menu?.kind === "session"
     ? controller.catalog.sessionsByProject[menu.projectId]?.find((session) => session.id === menu.sessionId)
     : undefined;

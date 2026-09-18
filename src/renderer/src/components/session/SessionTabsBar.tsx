@@ -183,6 +183,12 @@ export type SessionTabsBarProps = {
   /** 左侧栏已收起时，在 Tab 栏左侧提供展开入口（替代浮动按钮）。 */
   listCollapsed?: boolean;
   onToggleListCollapsed?: () => void;
+  /**
+   * 中间栏阅读面占满时：提供「显示对话」入口，把会话面板从 collapse 拉回分屏。
+   * 与文件头 Minimize2 同义，但放在常驻 Tab 栏，读文档时不必找预览工具条。
+   */
+  workbenchMaximized?: boolean;
+  onShowChat?: () => void;
   /** 当前会话的状态/操作区；嵌入 Tab 栏后不再单独占用标题行。 */
   actions?: ReactNode;
   /** 工具开关（草稿纸/终端/外部编辑器等）：原右侧悬浮工具条上收至此，排在抽屉开关左侧。 */
@@ -439,6 +445,19 @@ export function SessionTabsBar(props: SessionTabsBarProps) {
           onClick={props.onToggleListCollapsed}
         >
           <PanelLeft className="size-3.5" aria-hidden="true" />
+        </Button>
+      ) : null}
+      {props.workbenchMaximized && props.onShowChat ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="size-7 shrink-0"
+          aria-label={t("app.showChat")}
+          title={t("app.showChat")}
+          onClick={props.onShowChat}
+        >
+          <MessagesSquare className="size-3.5" aria-hidden="true" />
         </Button>
       ) : null}
       <div className="relative flex min-w-0 flex-1 items-center">

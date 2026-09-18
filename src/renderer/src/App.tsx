@@ -3754,6 +3754,26 @@ export function App() {
   const sessionTabsBarNode = (
     <SessionTabsBar
       {...sessionTabsProps}
+      // 预览占满时 Tab 栏常驻「显示对话」；点会话 Tab 也顺带恢复分屏，不用找预览头上的按钮。
+      workbenchMaximized={workbenchLayout === "maximize" && workbenchHasContent}
+      onShowChat={
+        workbenchLayout === "maximize" && workbenchHasContent
+          ? () => {
+              if (workbenchHasGitDiff) toggleGitDiffDisplayMode();
+              else toggleEditorMode();
+            }
+          : undefined
+      }
+      onSelect={(sessionId) => {
+        if (workbenchLayout === "maximize" && workbenchHasContent) {
+          if (workbenchHasGitDiff) {
+            if (gitDiffDisplayMode === "maximize") toggleGitDiffDisplayMode();
+          } else if (editorMode === "maximize") {
+            toggleEditorMode();
+          }
+        }
+        sessionTabsProps.onSelect(sessionId);
+      }}
       toolActions={sessionToolActions}
       placeholderTab={!currentSessionId}
       editorTabs={workbenchEditorTabs}

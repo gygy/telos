@@ -1,6 +1,6 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSetAtom } from "jotai";
-import { PanelLeft } from "lucide-react";
+import { CirclePlus, Folder, MessageSquare, PanelLeft, Search } from "lucide-react";
 import { SidebarContent, type SidebarActions } from "./SidebarContent";
 import type { AppInfo, AppThemeMode, WorktreeEntry } from "../../../../shared/types";
 import { useSidebarController } from "../../hooks/useSidebarController";
@@ -11,7 +11,14 @@ import { AnnouncementCenter } from "./AnnouncementCenter";
 import { settingsOpenAtom } from "../../atoms";
 import { desktopApi } from "../../desktopApi";
 import { Button } from "../ui-shadcn/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui-shadcn/tooltip";
 import { t } from "../../i18n";
+import { AutomationDockButton } from "../automation/AutomationDockButton";
+import { MorphingSearch, type MorphingSearchItem } from "../motion/morphing-search";
+import { displayProjectDirectoryName, isChatProject } from "../../rendererUtils";
+import { sessionDisplayName } from "../../utils/sessionDisplayName";
+import { formatAccelerator } from "../../../../shared/shortcuts";
+import { useShortcutBindings } from "../../hooks/useShortcutBindings";
 
 interface AppSidebarProps {
   actions: SidebarActions;
@@ -81,10 +88,78 @@ export function AppSidebar(props: AppSidebarProps) {
     },
   });
 
+  // 搜索命令面板：状态挂在顶栏宿主，避免占列表高度的三行按钮。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { bindings: shortcutBindings, platform } = useShortcutBindings();
+  const newSessionKbd = shortcutBindings
+    ? formatAccelerator(shortcutBindings.openNewSession, platform)
+    : "Ctrl+N";
+  const searchKbd = shortcutBindings
+    ? formatAccelerator(shortcutBindings.openSearch, platform)
+    : "Ctrl+F";
+
+  useEffect(() => {
+    return desktopApi.app.onShortcutTriggered((id) => {
+      if (id !== "openNewSession" && id !== "openSearch") return;
+      const target = document.activeElement;
+      if (target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement)) {
+        return;
+      }
+      if (id === "openNewSession") {
+        props.onOpenNewSession();
+      } else {
+        setSearchOpen(true);
+      }
+    });
+  }, [props.onOpenNewSession]);
+
+  const searchItems: MorphingSearchItem[] = [];
+  for (const project of controller.catalog.projects) {
+    searchItems.push({
+      id: `project:${project.id}`,
+      title: displayProjectDirectoryName(project),
+      description: project.path,
+      icon: isChatProject(project) ? MessageSquare : Folder,
+      onSelect: () => {
+        props.actions.projects.select(project.id);
+        controller.setProjectExpanded(project.id, true);
+      },
+    });
+    for (const session of controller.catalog.sessionsByProject[project.id] ?? []) {
+      searchItems.push({
+        id: `session:${session.id}`,
+        title: sessionDisplayName(session.title, session.forked) ?? session.title,
+        description: session.preview,
+        icon: MessageSquare,
+        onSelect: () => { void props.actions.sessions.open(project.id, session.id); },
+      });
+    }
+  }
+
   return (
     <>
     {/* 公告弹窗宿主：无侧栏按钮，toast「查看」写 atom 打开；须挂在侧栏树内以便通知开关链路同进程。 */}
     <AnnouncementCenter />
+    {/* MorphingSearch 命令面板：锚点固定到视口水平居中，与顶栏搜索图标解耦。 */}
+    <div className="pointer-events-none fixed left-1/2 top-[16vh] z-50 w-[min(640px,calc(100vw-2rem))] -translate-x-1/2">
+      <MorphingSearch
+        items={searchItems}
+        placeholder={t("app.searchSessions")}
+        shortcut=""
+        iconOnly
+        maxWidth={640}
+        maxHeight={360}
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        emptyMessage={t("app.searchNoResults")}
+        className="pointer-events-none h-12 w-full opacity-0"
+        onQueryChange={(query) => controller.setSearch(query)}
+      />
+    </div>
     <SidebarContent
       controller={controller}
       actions={props.actions}
@@ -97,7 +172,7 @@ export function AppSidebar(props: AppSidebarProps) {
       isLanWeb={props.isLanWeb}
       onOpenNewSession={props.onOpenNewSession}
       chrome={<>
-        <div className="list-toolbar flex h-10 shrink-0 items-center gap-1 border-b border-border/40 pr-2.5 pl-[max(0.625rem,var(--traffic-lights-width,0px))]">
+        <div className="list-toolbar flex h-10 shrink-0 items-center gap-0.5 border-b border-border/40 pr-1.5 pl-[max(0.625rem,var(--traffic-lights-width,0px))]">
           <AboutPopover appInfo={props.appInfo} onOpenFeedback={props.onOpenFeedback}>
             <div
               className="app-badge flex min-w-0 flex-1 cursor-pointer items-center justify-center pl-5"
@@ -116,6 +191,44 @@ export function AppSidebar(props: AppSidebarProps) {
               <BrandLockup />
             </div>
           </AboutPopover>
+          {/* 新建 / 搜索 / 定时任务收进顶栏图标行：省掉三行整宽按钮，列表立刻多出约 100px。 */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="size-7 shrink-0"
+                aria-label={t("app.newSession")}
+                onClick={() => props.onOpenNewSession()}
+              >
+                <CirclePlus className="size-3.5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t("app.newSession")}
+              <kbd className="ml-2 text-micro text-muted-foreground">{newSessionKbd}</kbd>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="size-7 shrink-0"
+                aria-label={t("app.searchSessions")}
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search className="size-3.5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t("app.searchSessions")}
+              <kbd className="ml-2 text-micro text-muted-foreground">{searchKbd}</kbd>
+            </TooltipContent>
+          </Tooltip>
+          <AutomationDockButton />
           <Button
             type="button"
             variant="ghost"
