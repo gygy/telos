@@ -93,33 +93,9 @@ export function DrawerContent(props: {
 	/** 文件树内部拖拽移动文件/目录到目标目录 */
 	onMoveFiles?: (sourcePaths: string[], targetDir: string) => void;
 }) {
-	const title =
-		props.panel === "files"
-			? null
-			: props.project
-				? t("drawer.projectSessions", { name: props.project.name })
-				: t("drawer.historyTitle");
 	return (
 		<>
-			{/* 文件抽屉：去掉「文件 + ×」顶栏，关闭改走右侧 rail；会话历史仍保留顶栏。 */}
-			{props.panel !== "files" && title && (
-				<div className="drawer-header flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-background px-3">
-					<strong className="truncate text-sm font-semibold text-foreground">{title}</strong>
-					<div className="drawer-header-actions flex shrink-0 items-center gap-1">
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							className="inline-grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-							title={t("drawer.closePanel")}
-							aria-label={t("drawer.closePanel")}
-							onClick={props.onClose}
-						>
-							<X size={16} />
-						</Button>
-					</div>
-				</div>
-			)}
+			{/* 文件抽屉：去掉「文件 + ×」顶栏，关闭改走右侧 rail。历史会话改走 SessionHistoryModal。 */}
 			{props.panel === "files" && (
 				<FilesPanel
 					files={props.files}
@@ -135,17 +111,6 @@ export function DrawerContent(props: {
 					onDropFiles={props.onDropFiles}
 					onMoveFiles={props.onMoveFiles}
 					onPasteFiles={props.onPasteFiles}
-				/>
-			)}
-			{props.panel === "sessions" && (
-				<SessionsPanel
-					sessions={props.sessions}
-					onRefresh={props.onRefreshSessions}
-					onOpen={props.onOpenSession}
-					onRename={props.onRenameSession}
-					onCopy={props.onCopySession}
-					onExport={props.onExportSession}
-					onDelete={props.onDeleteSession}
 				/>
 			)}
 		</>

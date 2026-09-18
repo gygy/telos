@@ -50,6 +50,7 @@ export function SettingsSearchBox(props: {
 
 	return (
 		<Popover
+			modal={false}
 			open={open}
 			onOpenChange={(next) => {
 				setOpen(next);
@@ -70,7 +71,7 @@ export function SettingsSearchBox(props: {
 					<span className="truncate">{t("settings.searchPlaceholder")}</span>
 				</button>
 			</PopoverTrigger>
-			<PopoverContent align="start" className="w-80 p-0" onOpenAutoFocus={(event) => event.preventDefault()}>
+			<PopoverContent align="start" className="w-80 p-0">
 				<Command shouldFilter={false} className="rounded-md border-0">
 					<CommandInput
 						autoFocus

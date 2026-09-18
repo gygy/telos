@@ -384,6 +384,12 @@ export function ComposerBottomBar(props: {
 	// 启动默认 defaultModel（launchDefaults 已校验 models.json 存在性）。
 	// 目录命中主进程全局缓存（模型选择器同源），通常不会额外 fork pi。
 	const isDsh = props.backend === "dsh";
+	const lockedBackendLabel =
+		props.backend === "dsh"
+			? t("sessionBackend.dsh")
+			: props.backend === "imagegen"
+				? t("sessionBackend.imagegen")
+				: t("sessionBackend.pi");
 	const needsWelcomeCatalog = !props.record && !isDsh;
 	const { models: welcomeCatalogModels, report: welcomeCatalogReport } = useBackendModelCatalog({
 		sessionId: props.sessionId,
@@ -492,16 +498,14 @@ export function ComposerBottomBar(props: {
 						/>
 					) : props.backend ? (
 						/* 后端已锁定（会话激活后不可切换：pi 文件与 DSH session log 格式不同，
-						   中途切换会导致消息同步渲染不可靠）：只读标识，只显示官方 logo 不重复文字。
+						   中途切换会导致消息同步渲染不可靠）：logo + 常驻短句，点击仍可看完整说明。
 						   inline-flex 居中：span 默认 inline，svg 按 baseline 排会偏上，
-						   与底栏其它按钮（flex 居中 15px 图标）水平不平齐。
-						   用户输入时 Agent 可能已被自动启动、后端随之锁定，但用户不一定知情；
-						   点击时弹提示说明锁定原因与换后端的途径（新建会话）。 */
+						   与底栏其它按钮（flex 居中 15px 图标）水平不平齐。 */
 						<button
 							type="button"
-							className="composer-bar-btn backend inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-1.5 text-control font-semibold text-foreground hover:bg-muted/60"
+							className="composer-bar-btn backend inline-flex h-7 max-w-52 cursor-pointer items-center gap-1 rounded-md px-1.5 text-control font-semibold text-foreground hover:bg-muted/60"
 							title={t("session.backendLockedHint")}
-							aria-label={t("session.backendLockedHint")}
+							aria-label={t("session.backendLockedBar", { backend: lockedBackendLabel })}
 							onClick={() => showNotice(t("session.backendLockedNotice"), 5000)}
 						>
 							{props.backend === "dsh" ? (
@@ -511,6 +515,9 @@ export function ComposerBottomBar(props: {
 							) : (
 								<PiLogo className="size-[15px] shrink-0" />
 							)}
+							<span className="truncate text-[11px] font-normal text-muted-foreground">
+								{t("session.backendLockedBar", { backend: lockedBackendLabel })}
+							</span>
 						</button>
 					) : null}
 					{/* 特殊模式退出×：模式选择已收进「+」菜单，底栏只保留进行中模式的退出入口

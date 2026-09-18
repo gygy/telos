@@ -2243,7 +2243,6 @@ export function App() {
     }
     if (sessionsProjectId === removedProjectId) {
       setSessionsProjectId(undefined);
-      if (drawer === "sessions") workspace.closeDrawer();
     }
   }
 

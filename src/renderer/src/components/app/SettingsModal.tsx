@@ -58,6 +58,8 @@ import { useVisionBridgeDraft } from "./settings/visionDraft.ts";
 import { dirtySettingsTabIds, type SettingsUnsavedTabId } from "./settings/unsavedChangesSummary";
 import { computeDirtyFields } from "./settings/settingsDirtyFields.ts";
 import { SETTINGS_TAB_IDS, SETTINGS_TAB_LAYOUT } from "./settings/settingsTabLayout";
+import { SettingsSearchBox } from "./settings/SettingsSearchBox";
+import type { SettingsSearchTarget } from "./settings/settingsSearch";
 import { useGitModels } from "./settings/gitModels.ts";
 import { formatSettingsUnsavedMessage, summarizeSettingsUnsavedChanges } from "./settings/unsavedChangesSummary.ts";
 import { UpdateInstallUnsavedDialog } from "./settings/UpdateInstallUnsavedDialog.tsx";
@@ -299,7 +301,7 @@ function SettingsModalContent(props: SettingsModalProps) {
 	const [focusPaneTarget] = useAtom(settingsFocusAtom);
 	// 深链的配置分页/供应商定位：快照进本地 state（focus atom 随后会被 useSettingsFocus 清空，
 	// 配置分区深链「圆球 → 去配置用量」需要在整个设置会话期间保持可投递给 ConfigPane）。
-	const [configFocus, setConfigFocus] = useState<{ configTab?: "models" | "auth" | "settings" | "trust" | "mcp" | "raw"; configSection?: "skills" | "extensions"; provider?: string; backendPane?: "dsh" | "pi" } | null>(() => {
+	const [configFocus, setConfigFocus] = useState<{ configTab?: "models" | "auth" | "settings" | "trust" | "mcp" | "raw"; configSection?: "skills" | "extensions" | "prompts"; provider?: string; backendPane?: "dsh" | "pi" } | null>(() => {
 		const target = getDefaultStore().get(settingsFocusAtom);
 		return target?.pane === "config" ? { configTab: target.configTab, configSection: target.configSection, provider: target.provider, backendPane: target.backendPane } : null;
 	});
@@ -580,12 +582,30 @@ function SettingsModalContent(props: SettingsModalProps) {
 	const mergedUnsavedCount =
 		(unsavedSummary?.totalCount ?? 0) + configPaneState.unsaved.totalCount;
 
+	const handleSettingsSearchPick = useCallback((hit: SettingsSearchTarget) => {
+		if (hit.pane === "settings" && hit.tab) {
+			setPane("settings");
+			persistPane("settings");
+			setActiveTab(hit.tab);
+			persistTab(hit.tab);
+			return;
+		}
+		setPane("config");
+		persistPane("config");
+		setConfigFocus({
+			configTab: hit.configTab,
+			configSection: hit.configSection,
+			backendPane: hit.backendPane,
+		});
+	}, [persistPane, persistTab]);
+
 	return (
 		<Dialog open onOpenChange={(next) => !next && handleClose()}>
 			<DialogContent showCloseButton={false} stagger className={cn("flex flex-col gap-0 overflow-hidden p-0", settingsModalSizeClass, "settings-modal", "[--wallpaper-dialog-alpha:var(--wallpaper-panel-alpha,30%)]")}>
-				<DialogHeader className="flex-row items-center justify-between px-4 py-3">
-					<DialogTitle>{t("settings.title")}</DialogTitle>
-					<div className="flex items-center gap-2">
+				<DialogHeader className="flex-row items-center gap-3 px-4 py-3">
+					<DialogTitle className="shrink-0">{t("settings.title")}</DialogTitle>
+					<SettingsSearchBox onPick={handleSettingsSearchPick} />
+					<div className="flex shrink-0 items-center gap-2">
 						{isConfigPane ? (
 							/* 配置管理分区：按钮与独立 ConfigModal 标题栏同源（ConfigPane ref 委托同一个 handler），
 							   黄点/禁用态由配置页内部脏集合与保存状态上报 */

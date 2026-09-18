@@ -15,7 +15,7 @@ export const DRAWER_ANIMATION_MS = 120;
 export const EDITOR_TAB_LIMIT = 5;
 export const EDITOR_TAB_TEXT_BUDGET = 24 * 1024 * 1024;
 
-export type WorkspaceDrawerPanel = "files" | "sessions" | "browser" | "git" | "trajectory" | "rewind";
+export type WorkspaceDrawerPanel = "files" | "browser" | "git" | "trajectory" | "rewind";
 export type WorkspaceEditorMode = "view" | "diff";
 
 export type WorkspaceEditorTab = {
@@ -119,8 +119,11 @@ function readDrawerState(storage: WorkspacePanelOptions["storage"], key: string)
     const value = parsed as { panel?: unknown; pinned?: unknown };
     // 编辑器面板已从抽屉移除（阅读面迁到分屏）；旧存档里的 "editor" 降级为文件树，
     // 避免读到旧值后面板状态无效（validPanel 校验失败会整体返回 null）。
-    const panel = value.panel === "editor" ? "files" : value.panel;
-    const validPanel = panel === null || ["files", "sessions", "browser", "git", "trajectory", "rewind"].includes(String(panel));
+    const rawPanel = value.panel;
+    // 编辑器面板已从抽屉移除（阅读面迁到分屏）；历史会话抽屉入口已下线。
+    // 旧存档 "editor" 降为文件树；"sessions" 关掉抽屉，避免空态指向不存在的按钮。
+    const panel = rawPanel === "editor" ? "files" : rawPanel === "sessions" ? null : rawPanel;
+    const validPanel = panel === null || ["files", "browser", "git", "trajectory", "rewind"].includes(String(panel));
     return validPanel && typeof value.pinned === "boolean"
       ? { panel: panel as WorkspaceDrawerPanel | null, pinned: value.pinned }
       : null;

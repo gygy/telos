@@ -124,10 +124,10 @@ export function DrawerSurface(props: DrawerSurfaceProps) {
             </div>
           </div>
         </div>
-      ) : drawer && drawer !== "browser" && drawer !== "git" && drawer !== "trajectory" ? (
+      ) : drawer === "files" && !drawerCollapsed ? (
         <LazyWrapper
-          // 滚动层上移到这里：files/sessions 面板自身不再滚动（见 timeline.css
-          // .files-panel/.sessions-panel 注释），占位与内容共用同一滚动容器，配合
+          // 滚动层上移到这里：files 面板自身不再滚动（见 timeline.css
+          // .files-panel 注释），占位与内容共用同一滚动容器，配合
           // scrollbar-gutter: stable 让内容宽度不随滚动条出现/消失跳变——
           // 否则切 tab 重挂时占位(无滚动条,320) → 内容(有滚动条,310) 瞬间收窄，
           // 且树高度跨阈值时滚动条反复出现/消失，形成“呼吸式”宽度摆动。
@@ -150,7 +150,7 @@ export function DrawerSurface(props: DrawerSurfaceProps) {
         >
           <DrawerContent
             panel={drawer}
-            project={drawer === "sessions" ? files.sessionsProject : undefined}
+            project={undefined}
             files={files.files}
             sessions={(files.sessionsProjectId && files.sessionSourceFilter[files.sessionsProjectId as string]) ? files.sessions.filter(
               (s: any) => !s.parentSessionPath && (files.sessionSourceFilter[files.sessionsProjectId as string]!)!.has(sessionPillOf(s)),

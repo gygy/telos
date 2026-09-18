@@ -65,7 +65,7 @@ test("dock keeps settings, skills, extensions, and theme; feedback lives in Abou
 });
 
 test("skills and extensions dock buttons deep-link into Pi config sections", () => {
-  assert.match(settingsAtoms, /configSection\?: "skills" \| "extensions"/);
+  assert.match(settingsAtoms, /configSection\?: "skills" \| "extensions" \| "prompts"/);
   assert.match(configModal, /focusConfigSection/);
   assert.match(configModal, /setSection\(focusConfigSection\)/);
   assert.match(settingsModal, /focusConfigSection=\{configFocus\?\.configSection\}/);

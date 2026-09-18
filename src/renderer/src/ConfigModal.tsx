@@ -264,8 +264,8 @@ type ConfigModalProps = {
 	projectName?: string;
 	/** 深链：打开时落在的配置分页（如圆球「去配置用量」直达 models）。 */
 	focusConfigTab?: ConfigTab;
-	/** 深链：Pi 管理左侧分组（技能 / 扩展）；与 focusConfigTab 并列。 */
-	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions">;
+	/** 深链：Pi 管理左侧分组（技能 / 扩展 / 提示词）；与 focusConfigTab 并列。 */
+	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions" | "prompts">;
 	/** 深链：models 页要定位展开的供应商名。 */
 	focusProvider?: string;
 	/** 深链：打开时落在的后端分页（DSH 配置 / Pi 管理）；缺省保持上次位置。 */
