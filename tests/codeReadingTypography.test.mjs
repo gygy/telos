@@ -31,8 +31,8 @@ test("editor and diff use the 15px code font, terminal stays 14px", () => {
 	assert.match(editor, /fontFamily:\s*"var\(--font-family-mono\)"/);
 	assert.doesNotMatch(editor, /fontSize:\s*"13px"/);
 
-	assert.match(terminal, /--font-size-terminal/);
-	assert.doesNotMatch(terminal, /--font-size-control/);
+	assert.match(terminal, /getPropertyValue\("--font-size-terminal"\)/);
+	assert.doesNotMatch(terminal, /getPropertyValue\("--font-size-control"\)/);
 
 	assert.match(diff, /--diffs-font-size:\s*var\(--font-size-editor\)/);
 	assert.match(diff, /--diffs-font-family:\s*var\(--font-family-mono\)/);
@@ -40,9 +40,13 @@ test("editor and diff use the 15px code font, terminal stays 14px", () => {
 });
 
 test("chat code blocks are 14px mono while body stays on the chat size token", () => {
-	assert.match(chatCode, /\[data-streamdown="code-block-body"\][\s\S]*font-size:\s*var\(--font-size-chat-code\)/);
-	assert.match(chatCode, /\[data-streamdown="code-block-body"\][\s\S]*font-family:\s*var\(--font-family-mono\)/);
-	assert.doesNotMatch(chatCode, /font-size:\s*0\.8125rem;/);
+	const codeBlock = chatCode.slice(
+		chatCode.indexOf('[data-streamdown="code-block-body"]'),
+		chatCode.indexOf('[data-streamdown="code-block-body"] > pre'),
+	);
+	assert.match(codeBlock, /font-size:\s*var\(--font-size-chat-code\)/);
+	assert.match(codeBlock, /font-family:\s*var\(--font-family-mono\)/);
+	assert.doesNotMatch(codeBlock, /0\.8125rem/);
 	assert.match(timeline, /\.markdown-body code \{[\s\S]*font-size:\s*var\(--font-size-chat-code\)/);
 	assert.match(foundation, /--font-size-chat:\s*15px;/);
 });

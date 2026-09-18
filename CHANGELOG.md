@@ -1,3 +1,16 @@
+## v0.7.16 - 2026-09-18
+
+### 🚀 New Features
+- **Sessions and files under the current project** — The project you are in gains a Sessions | Files switch. The file tree moves into that list; the folder button on the right toggles it instead of opening another column. Opening a file leaves the list in place so the next file is one click away. Git, Review, and the browser stay on the right.
+
+### ✨ Improvements
+- **Code is easier to read** — The editor and diffs default to 15px with about a 23px line. The terminal stays at 14px and no longer grows when the sidebar font is enlarged. Chat prose stays 15px; code blocks are 14px monospace.
+- **Markdown preview images fit the page** — Images stay within the column and one screen instead of shrinking to a strip. Click to view at window width; scroll to zoom toward the original pixels.
+- **Show chat stays on the tab bar** — The button is always visible. It restores the conversation only when a preview fills the middle, and does nothing when chat is already showing.
+- **Locked backend is an icon** — The composer no longer spells out the full “create a new session to switch backends” sentence. The tooltip still explains it.
+- **Tab titles no longer clip the last character** — Long labels, including Chinese, ellipsize cleanly and scroll on hover instead of cutting a glyph in half.
+- **Startup warms recent sessions** — After the window appears, Telos serially warms the newest session of the two most recently used projects. It does not block first paint or warm every project.
+
 ## v0.7.15 - 2026-09-18
 
 ### ✨ Improvements

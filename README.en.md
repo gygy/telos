@@ -79,13 +79,14 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.15** (2026-09-18)
+> **Latest: v0.7.16** (2026-09-18)
 
-### v0.7.15 Release Highlights
-- ✨ **Show chat while reading**
-- ✨ **Sidebar actions in the brand bar**
-- ✨ **Reading focus collapses the project list**
-- ✨ **Smoother file-tree context menu**
+### v0.7.16 Release Highlights
+- 🚀 **Sessions and files under the current project**
+- ✨ **Code is easier to read**
+- ✨ **Markdown preview images fit the page**
+- ✨ **Show chat stays on the tab bar**
+- ✨ **Locked backend is an icon**
 
 [View Full Changelog →](CHANGELOG.md)
 

@@ -5,6 +5,16 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.16
+
+发布时间：2026-09-18
+
+- 🚀 **当前项目下切换会话和文件**
+- ✨ **代码更好读**
+- ✨ **Markdown 预览图大小合适**
+- ✨ **显示对话一直在 Tab 栏**
+- ✨ **已锁定的后端只留图标**
+
 ## v0.7.15
 
 发布时间：2026-09-18
