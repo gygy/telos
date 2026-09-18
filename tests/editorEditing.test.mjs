@@ -72,7 +72,8 @@ test("FileDiffViewer: markdown preview reuses .markdown-body + markdown-preview-
   // 预览容器挂 markdown-body（与会话正文同一排版体系）+ markdown-preview-chrome（预览增量）
   assert.match(viewer, /markdown-body markdown-preview-chrome/);
   // 预览专属增量注册在 tailwind.css 的 @utility（新架构），不允许回落到 legacy surfaces.css 手写类
-  assert.match(tailwind, /@utility markdown-preview-chrome/);
+	assert.match(tailwind, /@utility markdown-preview-chrome/);
+	assert.match(tailwind, /max-height:\s*min\(72vh,\s*720px\)/);
   assert.doesNotMatch(surfaces, /\.file-diff-preview/);
   // HTML 预览 iframe 改用 Tailwind 类，不再依赖 legacy 类
   assert.doesNotMatch(viewer, /className="file-diff-preview"/);

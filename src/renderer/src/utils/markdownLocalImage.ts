@@ -68,3 +68,16 @@ export function resolveMarkdownImageFilePath(
 	if (isAbsoluteFilePath(raw)) return resolveFileLinkPath(raw);
 	return resolveFileLinkPath(raw, baseDir);
 }
+
+/**
+ * 预览大图滚轮缩放。1 = 铺满窗口宽度；上限是原图像素（再放大只会发糊）。
+ * 向下滚且已经是 1 时不改，让外层继续滚动。
+ */
+export function nextMarkdownImageZoom(current: number, deltaY: number, maxZoom: number): number | null {
+	const cap = Number.isFinite(maxZoom) && maxZoom > 1 ? maxZoom : 1;
+	const safe = Number.isFinite(current) ? current : 1;
+	if (deltaY > 0 && safe <= 1) return null;
+	const factor = deltaY < 0 ? 1.12 : 1 / 1.12;
+	const next = Math.min(cap, Math.max(1, safe * factor));
+	return next === safe ? null : next;
+}

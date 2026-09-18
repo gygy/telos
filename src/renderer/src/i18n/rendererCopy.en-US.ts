@@ -2106,6 +2106,8 @@ export const enUS: Record<TranslationKey, string> = {
   "editor.binaryFileNotSupported": "{ext} is a binary file and cannot be edited",
   "editor.fileNotFound": "File not found or has been moved: {path}",
   "editor.markdownImageMissing": "Image failed to load: {name}",
+  "editor.markdownImageZoom": "Click to enlarge",
+  "editor.markdownImageZoomHint": "Scroll to zoom. Esc or click the backdrop to close",
   "editor.fileTooLarge": "File size {size}MB exceeds {max}MB limit, cannot open editor",
   "editor.preview": "Preview",
   "editor.source": "Source",

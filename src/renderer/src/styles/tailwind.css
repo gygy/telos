@@ -251,10 +251,19 @@
   & tbody tr:nth-child(even) {
     background: color-mix(in srgb, var(--color-bg-muted) 55%, transparent);
   }
-  /* 图片：细边框 + 轻阴影 */
+  /* 图片：阅读栏里刚刚能看清。不放大原图（小图发糊），高度封顶约一屏，
+     避免时序图把后面的正文顶出视野。更细的字点开后铺满窗口再看。 */
   & img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: min(72vh, 720px);
+    margin-block: 0.85em;
+    margin-inline: auto;
     border: 1px solid var(--color-border-subtle);
     box-shadow: var(--shadow-sm);
+    cursor: zoom-in;
   }
   /* details/summary 可折叠块（raw HTML） */
   & details {

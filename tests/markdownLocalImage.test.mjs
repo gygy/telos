@@ -5,6 +5,7 @@ import { loadTsCommonJs } from "./helpers/loadTsCommonJs.mjs";
 const {
 	dirnameOfFilePath,
 	isPassthroughMarkdownImageSrc,
+	nextMarkdownImageZoom,
 	resolveMarkdownImageFilePath,
 } = loadTsCommonJs("src/renderer/src/utils/markdownLocalImage.ts");
 
@@ -71,4 +72,13 @@ test("resolveMarkdownImageFilePath accepts file:// and absolute paths", () => {
 		resolveMarkdownImageFilePath("https://example.com/a.png", "G:\\doc.md"),
 		null,
 	);
+});
+
+test("nextMarkdownImageZoom stays at fit-width until the user zooms in", () => {
+	assert.equal(nextMarkdownImageZoom(1, 100, 2.5), null);
+	const zoomed = nextMarkdownImageZoom(1, -100, 2.5);
+	assert.ok(zoomed != null && zoomed > 1 && zoomed <= 2.5);
+	assert.equal(nextMarkdownImageZoom(2.5, -100, 2.5), null);
+	const back = nextMarkdownImageZoom(zoomed, 100, 2.5);
+	assert.ok(back != null && back < zoomed);
 });

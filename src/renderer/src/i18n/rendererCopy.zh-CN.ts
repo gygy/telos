@@ -2091,6 +2091,8 @@ export const zhCN = {
   "editor.binaryFileNotSupported": "{ext} 是二进制文件，不支持编辑",
   "editor.fileNotFound": "文件不存在或已被移动：{path}",
   "editor.markdownImageMissing": "图片无法加载：{name}",
+  "editor.markdownImageZoom": "点击放大",
+  "editor.markdownImageZoomHint": "滚轮缩放，Esc 或点击空白关闭",
   "editor.fileTooLarge": "文件大小为 {size}MB，超过 {max}MB 限制，无法打开编辑",
   "editor.preview": "预览",
   "editor.source": "源码",
