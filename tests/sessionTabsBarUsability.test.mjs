@@ -41,7 +41,12 @@ test("settings modal has in-window search", () => {
 });
 
 test("composer shows a persistent backend-lock hint", () => {
-	assert.match(composer, /t\("session\.backendLockedBar"/);
+	const locked = composer.slice(
+		composer.indexOf("后端已锁定"),
+		composer.indexOf("特殊模式退出"),
+	);
+	assert.match(locked, /aria-label=\{t\("session\.backendLockedBar"/);
+	assert.doesNotMatch(locked, /<span/);
 	assert.match(zh, /"session\.backendLockedBar"/);
 	assert.match(en, /"session\.backendLockedBar"/);
 });

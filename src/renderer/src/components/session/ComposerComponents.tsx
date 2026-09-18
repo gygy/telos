@@ -497,14 +497,12 @@ export function ComposerBottomBar(props: {
 							onChangeBackend={props.onChangeBackend}
 						/>
 					) : props.backend ? (
-						/* 后端已锁定（会话激活后不可切换：pi 文件与 DSH session log 格式不同，
-						   中途切换会导致消息同步渲染不可靠）：logo + 常驻短句，点击仍可看完整说明。
-						   inline-flex 居中：span 默认 inline，svg 按 baseline 排会偏上，
-						   与底栏其它按钮（flex 居中 15px 图标）水平不平齐。 */
+						/* 后端已锁定：与草稿期选择器一样只留 logo。短句放 title / aria-label，
+						   点击仍弹出完整说明，避免底栏被「Pi 会话，换后端请新建」撑开。 */
 						<button
 							type="button"
-							className="composer-bar-btn backend inline-flex h-7 max-w-52 cursor-pointer items-center gap-1 rounded-md px-1.5 text-control font-semibold text-foreground hover:bg-muted/60"
-							title={t("session.backendLockedHint")}
+							className="composer-bar-btn backend inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground hover:bg-muted/60"
+							title={t("session.backendLockedBar", { backend: lockedBackendLabel })}
 							aria-label={t("session.backendLockedBar", { backend: lockedBackendLabel })}
 							onClick={() => showNotice(t("session.backendLockedNotice"), 5000)}
 						>
@@ -515,9 +513,6 @@ export function ComposerBottomBar(props: {
 							) : (
 								<PiLogo className="size-[15px] shrink-0" />
 							)}
-							<span className="truncate text-[11px] font-normal text-muted-foreground">
-								{t("session.backendLockedBar", { backend: lockedBackendLabel })}
-							</span>
 						</button>
 					) : null}
 					{/* 特殊模式退出×：模式选择已收进「+」菜单，底栏只保留进行中模式的退出入口
