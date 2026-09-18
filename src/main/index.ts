@@ -303,6 +303,7 @@ import {
 	type SessionRuntimeBinding,
 } from "./sessions/SessionRuntimeCoordinator";
 import { IdleAgentReleaser } from "./sessions/IdleAgentReleaser";
+import { runStartupSessionWarmup } from "./sessions/startupSessionWarmup";
 import { SessionCommandIpcError } from "./sessions/SessionCommandIpcError";
 import { appendSessionForkSuffix } from "./sessions/sessionForkTitle";
 import { CodexSessionImporter } from "./sessions/CodexSessionImporter";
@@ -4333,6 +4334,18 @@ app.whenReady().then(async () => {
 				await sessionCatalog.removeByProjectId(projectId).catch(() => 0);
 			}
 			broadcastVisibleProjects();
+			// 项目表和 catalog 都就绪后再预热：只排队最近两个项目的最新会话，串行、不挡首屏。
+			await sessionCatalogReady;
+			void runStartupSessionWarmup({
+				projects: projectStore.list(),
+				sessions: sessionCatalog.listEntries(),
+				isWarm: (sessionId) => Boolean(sessionRuntimeCoordinator.getAgentId(sessionId)),
+				activate: (sessionId) => sessionRuntimeCoordinator.activateRuntime(sessionId),
+				log: (level, message, detail) => {
+					if (level === "warn") void appLogger.warn("session", message, detail);
+					else void appLogger.info("session", message, detail);
+				},
+			});
 			// 项目表就绪后再扫 DSH_HOME：cwd 才能匹配已注册项目；不启动 host。
 			await scheduleDshForeignAutoImport();
 		})
