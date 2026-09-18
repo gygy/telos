@@ -184,10 +184,9 @@ export type SessionTabsBarProps = {
   listCollapsed?: boolean;
   onToggleListCollapsed?: () => void;
   /**
-   * 中间栏阅读面占满时：提供「显示对话」入口，把会话面板从 collapse 拉回分屏。
-   * 与文件头 Minimize2 同义，但放在常驻 Tab 栏，读文档时不必找预览工具条。
+   * 常驻「显示对话」。占满预览时把会话面板拉回分屏；对话已经在时点击无效果，
+   * 不会反向切成只看预览。
    */
-  workbenchMaximized?: boolean;
   onShowChat?: () => void;
   /** 当前会话的状态/操作区；嵌入 Tab 栏后不再单独占用标题行。 */
   actions?: ReactNode;
@@ -447,7 +446,7 @@ export function SessionTabsBar(props: SessionTabsBarProps) {
           <PanelLeft className="size-3.5" aria-hidden="true" />
         </Button>
       ) : null}
-      {props.workbenchMaximized && props.onShowChat ? (
+      {props.onShowChat ? (
         <Button
           type="button"
           variant="ghost"

@@ -115,8 +115,8 @@ test("file tree open fills the middle pane and releases the file drawer", () => 
   assert.match(app, /collapseSidebarForReading:\s*\(\)\s*=>\s*setListCollapsed\(true\)/);
   assert.match(app, /viewFilePath:\s*openTreeFile/);
   assert.match(app, /viewFilePath\(resolved, undefined, line, fileAccessScope\)/);
-  assert.match(app, /workbenchMaximized=/);
-  assert.match(app, /app\.showChat|onShowChat/);
+  assert.match(app, /onShowChat=\{/);
+  assert.doesNotMatch(app, /workbenchMaximized=/);
 });
 
 test("closing git diff dismisses the whole workbench reading surface", () => {
