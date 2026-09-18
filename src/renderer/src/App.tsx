@@ -53,6 +53,7 @@ import {
   announcementNotificationEnabledAtom,
 } from "./atoms/announcement-atoms";
 import { sessionInterruptedAtAtom } from "./atoms/session-interrupt";
+import { useSessionLayout } from "./hooks/useSessionLayout";
 import { useFileEditor } from "./hooks/useFileEditor";
 import { resolveFileLinkPath } from "./utils/filePathLinks";
 import { imageMimeTypeFromPath } from "./utils/composerImages";

@@ -23,7 +23,7 @@ test("collectLatestTurnCommands keeps only the latest turn's shell tools", () =>
 			meta: { toolName: "shell", args: { cmd: "exit 1" }, isError: true, result: "exit 1" },
 		},
 	]);
-	assert.deepEqual(items.map((item) => item.id), ["cmd", "fail"]);
+	assert.equal(JSON.stringify(items.map((item) => item.id)), JSON.stringify(["cmd", "fail"]));
 	assert.equal(items[0].command, "npm test");
 	assert.equal(items[0].output, "ok 1 passed");
 	assert.equal(items[0].failed, false);
@@ -32,8 +32,8 @@ test("collectLatestTurnCommands keeps only the latest turn's shell tools", () =>
 });
 
 test("collectLatestTurnCommands returns empty when the latest turn has no commands", () => {
-	assert.deepEqual(collectLatestTurnCommands([
+	assert.equal(JSON.stringify(collectLatestTurnCommands([
 		{ id: "u", role: "user", text: "hi" },
 		{ id: "a", role: "assistant", text: "ok" },
-	]), []);
+	])), "[]");
 });
