@@ -264,6 +264,8 @@ type ConfigModalProps = {
 	projectName?: string;
 	/** 深链：打开时落在的配置分页（如圆球「去配置用量」直达 models）。 */
 	focusConfigTab?: ConfigTab;
+	/** 深链：Pi 管理左侧分组（技能 / 扩展）；与 focusConfigTab 并列。 */
+	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions">;
 	/** 深链：models 页要定位展开的供应商名。 */
 	focusProvider?: string;
 	/** 深链：打开时落在的后端分页（DSH 配置 / Pi 管理）；缺省保持上次位置。 */
@@ -308,6 +310,8 @@ export type ConfigPaneProps = {
 	resourceOnly?: boolean;
 	/** 深链：打开时落在的配置分页（设置窗口内嵌分区消费 openSettingsAtom 的 configTab）。 */
 	focusConfigTab?: ConfigTab;
+	/** 深链：Pi 管理左侧分组（技能 / 扩展）；侧栏底栏入口走这里。 */
+	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions">;
 	/** 深链：models 页要定位展开的供应商名。 */
 	focusProvider?: string;
 	/** 深链：打开时落在的后端分页（DSH 配置 / Pi 管理）；缺省保持上次位置。 */
@@ -329,7 +333,7 @@ export type ConfigPaneProps = {
  * 不包错误边界——宿主 SettingsModal 的 ErrorBoundary 已兜底整个窗口。
  */
 export const ConfigPane = forwardRef<ConfigPaneHandle, ConfigPaneProps>(
-	function ConfigPane({ onClose, onSaved, projectId, projectKind, projectName, projects, resourceOnly, focusConfigTab, focusProvider, focusBackendPane, onStateChange, onRequestClose }, ref) {
+	function ConfigPane({ onClose, onSaved, projectId, projectKind, projectName, projects, resourceOnly, focusConfigTab, focusConfigSection, focusProvider, focusBackendPane, onStateChange, onRequestClose }, ref) {
 		return (
 			<ConfigModalContent
 				open
@@ -341,6 +345,7 @@ export const ConfigPane = forwardRef<ConfigPaneHandle, ConfigPaneProps>(
 				projects={projects}
 				resourceOnly={resourceOnly}
 				focusConfigTab={focusConfigTab}
+				focusConfigSection={focusConfigSection}
 				focusProvider={focusProvider}
 				focusBackendPane={focusBackendPane}
 				embedded
@@ -441,7 +446,7 @@ type ConfigModalContentProps = ConfigModalProps & {
 };
 
 function ConfigModalContent(props: ConfigModalContentProps) {
-	const { open, onClose, onSaved, projectId, projectKind, projectName, projects = [], resourceOnly = false, embedded, focusConfigTab, focusProvider, focusBackendPane } = props;
+	const { open, onClose, onSaved, projectId, projectKind, projectName, projects = [], resourceOnly = false, embedded, focusConfigTab, focusConfigSection, focusProvider, focusBackendPane } = props;
 	/**
 	 * 资源作用域是派生值而非可切换 state：
 	 * - 主配置页固定 global（全局安装 + 用户 ~/.pi 自装 + Telos 内置）；项目级技能/扩展/提示词
@@ -456,7 +461,7 @@ function ConfigModalContent(props: ConfigModalContentProps) {
 	// 弹窗每次打开都会重新挂载（Radix Dialog 关闭即卸载内容），
 	// 用 lazy initializer 在挂载时读一次 localStorage，恢复到上次所在 tab。
 	const [lastTab] = useState(loadLastConfigTab);
-	const [section, setSection] = useState<ConfigSection>(resourceOnly ? "skills" : lastTab?.section ?? "config");
+	const [section, setSection] = useState<ConfigSection>(resourceOnly ? "skills" : focusConfigSection ?? lastTab?.section ?? "config");
 	// 深链（如圆球面板「去配置用量」）优先于上次记住的配置分页。
 	const [tab, setTab] = useState<ConfigTab>(focusConfigTab ?? lastTab?.tab ?? "models");
 	// 深链 provider：models 页展开该供应商卡片并滚动高亮（ModelsTab 消费）。
@@ -474,15 +479,34 @@ function ConfigModalContent(props: ConfigModalContentProps) {
 		[],
 	);
 	useEffect(() => {
-		if (!open) return;
-		if (!resourceOnly && focusConfigTab) setTab(focusConfigTab);
-		if (!resourceOnly && focusProvider) {
+		if (!open || resourceOnly) return;
+		if (focusBackendPane) {
+			setBackendPane(focusBackendPane);
+			try {
+				localStorage.setItem(CONFIG_BACKEND_PANE_KEY, focusBackendPane);
+			} catch {
+				/* localStorage 不可用时只影响本次记忆 */
+			}
+		}
+		if (focusConfigSection) {
+			setSection(focusConfigSection);
+			try {
+				localStorage.setItem(CONFIG_LAST_TAB_KEY, focusConfigSection);
+			} catch {
+				/* localStorage 不可用时只影响本次记忆 */
+			}
+		} else if (focusConfigTab || focusProvider) {
+			// 模型/认证深链必须回到「配置」组；否则先点技能后再点「去配置用量」会停在技能页。
+			setSection("config");
+		}
+		if (focusConfigTab) setTab(focusConfigTab);
+		if (focusProvider) {
 			setFocusedProvider(focusProvider);
 			setTab("models");
 			setExpandedProvider(focusProvider);
 		}
-		// focusProvider/focusConfigTab 变化即应用：设置窗口已开时点圆球跳转也要生效。
-	}, [open, focusConfigTab, focusProvider, resourceOnly]);
+		// 设置窗口已开时点侧栏技能/扩展或圆球跳转也要生效（ConfigPane forceMount 不重建 state）。
+	}, [open, focusConfigTab, focusConfigSection, focusProvider, focusBackendPane, resourceOnly]);
 	/** 配置管理顶层后端分页：以 Pi 为主（默认 Pi，且 Pi 标签在左），dsh 页在右。
 	 *  新建会话默认后端跟随设置项 defaultAgentBackend（默认 pi），与此处配置管理入口相互独立。
 	 *  弹窗每次打开都会重建 state，这里从 localStorage 恢复上次选定的后端分页。 */

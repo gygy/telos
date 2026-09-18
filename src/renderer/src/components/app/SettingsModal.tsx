@@ -299,14 +299,14 @@ function SettingsModalContent(props: SettingsModalProps) {
 	const [focusPaneTarget] = useAtom(settingsFocusAtom);
 	// 深链的配置分页/供应商定位：快照进本地 state（focus atom 随后会被 useSettingsFocus 清空，
 	// 配置分区深链「圆球 → 去配置用量」需要在整个设置会话期间保持可投递给 ConfigPane）。
-	const [configFocus, setConfigFocus] = useState<{ configTab?: "models" | "auth" | "settings" | "trust" | "mcp" | "raw"; provider?: string; backendPane?: "dsh" | "pi" } | null>(() => {
+	const [configFocus, setConfigFocus] = useState<{ configTab?: "models" | "auth" | "settings" | "trust" | "mcp" | "raw"; configSection?: "skills" | "extensions"; provider?: string; backendPane?: "dsh" | "pi" } | null>(() => {
 		const target = getDefaultStore().get(settingsFocusAtom);
-		return target?.pane === "config" ? { configTab: target.configTab, provider: target.provider, backendPane: target.backendPane } : null;
+		return target?.pane === "config" ? { configTab: target.configTab, configSection: target.configSection, provider: target.provider, backendPane: target.backendPane } : null;
 	});
 	useEffect(() => {
 		if (focusPaneTarget?.pane === "config") {
 			setPane("config");
-			setConfigFocus({ configTab: focusPaneTarget.configTab, provider: focusPaneTarget.provider, backendPane: focusPaneTarget.backendPane });
+			setConfigFocus({ configTab: focusPaneTarget.configTab, configSection: focusPaneTarget.configSection, provider: focusPaneTarget.provider, backendPane: focusPaneTarget.backendPane });
 		}
 	}, [focusPaneTarget]);
 	useSettingsFocus(activeTab, setActiveTab, persistTab);
@@ -692,6 +692,7 @@ function SettingsModalContent(props: SettingsModalProps) {
 							projectName={props.projectName}
 							projects={props.projects}
 							focusConfigTab={configFocus?.configTab}
+							focusConfigSection={configFocus?.configSection}
 							focusProvider={configFocus?.provider}
 							focusBackendPane={configFocus?.backendPane}
 							onStateChange={handleConfigPaneStateChange}

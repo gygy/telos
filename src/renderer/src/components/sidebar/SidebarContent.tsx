@@ -1,4 +1,4 @@
-import { Activity, Bolt, CirclePlus, Clock, Folder, MessageSquare, Monitor, Moon, Search, Sun } from "lucide-react";
+import { Activity, Bolt, CirclePlus, Clock, Folder, MessageSquare, Monitor, Moon, Puzzle, Search, Sparkles, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { AgentTab, AppThemeMode, ArchivedDshSession, ArchivedPiSession, Project, SessionRecord, SessionSummary, WorktreeEntry } from "../../../../shared/types";
 import {
@@ -12,9 +12,9 @@ import {
   RpcLogOpenedDialog,
 } from "./SidebarParts";
 import { RpcLogViewer } from "./RpcLogViewer";
-import { sessionRecordToSummary } from "../../atoms";
+import { openSettingsAtom, sessionRecordToSummary } from "../../atoms";
 import { hasPendingUpdateAtom, pendingAppUpdateAtom, pendingCatalogUpdateAtom, pendingPiUpdateAtom, updateStatusAtom } from "../../atoms/update-atoms";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { isManagerSessionSummary, worktreeFamilyProjects } from "../../sessionManagerModel";
 import { t } from "../../i18n";
 import { cn } from "../../lib/utils";
@@ -147,6 +147,7 @@ export type SidebarContentProps = {
 
 export function SidebarContent(props: SidebarContentProps) {
   const { controller, actions } = props;
+  const openSettings = useSetAtom(openSettingsAtom);
   const menu = controller.menu;
   // 三个更新源 atom 必须无条件读取：不能用短路合并，否则任一更新源从 false 变 true
   // 时会跳过后续 Hook，破坏 Hook 调用顺序。快照本体供角标 tooltip 清单取版本号。
@@ -436,7 +437,7 @@ export function SidebarContent(props: SidebarContentProps) {
           />
         </section>
       </div>
-      {/* 底栏 dock（beUI Dock）：设置 / 主题切换收进浮动卡片，铺满底栏宽度
+      {/* 底栏 dock（beUI Dock）：设置 / 技能 / 扩展 / 主题切换收进浮动卡片，铺满底栏宽度
           （w-full + justify-between 让动作均匀分布，侧栏最小宽 208px 时也不溢出）。
           公告改为 toast「查看」打开（无常驻按钮）；问题反馈迁入左上角「关于」面板。
           DockItem 只提供尺寸与居中容器，按钮本体仍是 shadcn ghost；入口 hover 提示
@@ -476,6 +477,24 @@ export function SidebarContent(props: SidebarContentProps) {
                 {/* 更新角标：Telos / Pi CLI / 模型目录任一有可提示更新时显示圆点 */}
                 {hasPendingUpdate && <span className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-[var(--color-accent)]" aria-hidden="true" />}
               </div>
+            </DockItem>
+            <DockItem>
+              {/* 技能：直达配置管理 → Pi → 技能。backendPane=pi 避免停在上次的 DSH 页看不见技能。 */}
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button type="button" variant="ghost" className="size-full rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("config.nav.skills")} onClick={() => openSettings({ tab: "common", pane: "config", backendPane: "pi", configSection: "skills" })}><Sparkles className="size-4" /></Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={6}>{t("config.nav.skills")}</TooltipContent>
+              </Tooltip>
+            </DockItem>
+            <DockItem>
+              {/* 扩展：直达配置管理 → Pi → 扩展。文案沿用 config.nav.extensions（「扩展」）。 */}
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button type="button" variant="ghost" className="size-full rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("config.nav.extensions")} onClick={() => openSettings({ tab: "common", pane: "config", backendPane: "pi", configSection: "extensions" })}><Puzzle className="size-4" /></Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={6}>{t("config.nav.extensions")}</TooltipContent>
+              </Tooltip>
             </DockItem>
             <DockItem>
               {/* 主题切换：Tooltip 文案随当前模式变化（主题：X（点击切换）），与其它入口同一观感 */}

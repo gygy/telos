@@ -53,6 +53,11 @@ export type SettingsFocusTarget = {
 	 * 深链（如圆球面板「去配置用量」）直达模型页，缺省保持上次位置。
 	 */
 	configTab?: "models" | "auth" | "settings" | "trust" | "mcp" | "raw";
+	/**
+	 * pane="config" 时落在 Pi 管理左侧分组（技能 / 扩展）。
+	 * 与 configTab 分开：后者只覆盖「配置」组子页（模型/认证/…），技能扩展是并列 section。
+	 */
+	configSection?: "skills" | "extensions";
 	/** configTab="models" 时要定位的供应商名：ModelsTab 展开该卡片并滚动高亮。 */
 	provider?: string;
 	/**
