@@ -565,6 +565,9 @@ export function FileDiffViewer(props: {
 								<MarkdownStream
 									text={content}
 									onOpenExternal={() => undefined}
+									// 相对图片按本文件目录解析；dev 下不能 file:// 直链，组件内走 readBase64→blob:
+									markdownFilePath={props.filePath}
+									fileAccessScope={props.fileAccessScope}
 									remarkPlugins={[remarkGfmNoSingleTilde]}
 									rehypePlugins={[defaultRehypePlugins.raw, rehypeKatex]}
 									urlTransform={defaultUrlTransform}

@@ -56,6 +56,15 @@ test("editors bind Ctrl+/ comment toggle and JSON lint", () => {
   assert.match(editor, /resolvedLanguage\.language\.name === "json"/);
 });
 
+test("FileDiffViewer: markdown preview resolves local images via readBase64 blob URLs", () => {
+  const viewer = readFileSync("src/renderer/src/components/app/FileDiffViewer.tsx", "utf8");
+  const stream = readFileSync("src/renderer/src/components/session/MarkdownStream.tsx", "utf8");
+  assert.match(viewer, /markdownFilePath=\{props\.filePath\}/);
+  assert.match(viewer, /fileAccessScope=\{props\.fileAccessScope\}/);
+  assert.match(stream, /MarkdownLocalImage/);
+  assert.match(stream, /markdownFilePath\?:/);
+});
+
 test("FileDiffViewer: markdown preview reuses .markdown-body + markdown-preview-chrome, no parallel legacy classes", () => {
   const viewer = readFileSync("src/renderer/src/components/app/FileDiffViewer.tsx", "utf8");
   const surfaces = readFileSync("src/renderer/src/styles/surfaces.css", "utf8");

@@ -2104,6 +2104,7 @@ export const enUS: Record<TranslationKey, string> = {
   "config.others.title": "Other settings",
   "editor.binaryFileNotSupported": "{ext} is a binary file and cannot be edited",
   "editor.fileNotFound": "File not found or has been moved: {path}",
+  "editor.markdownImageMissing": "Image failed to load: {name}",
   "editor.fileTooLarge": "File size {size}MB exceeds {max}MB limit, cannot open editor",
   "editor.preview": "Preview",
   "editor.source": "Source",

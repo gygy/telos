@@ -7,6 +7,7 @@ import { MarkdownLink, remarkLinkifyPaths } from "./MarkdownLink";
 import { markdownUrlTransform } from "./MarkdownLinkCore";
 import { remarkGfmNoSingleTilde } from "../../utils/markdownPlugins";
 import { FormulaCopyLayer } from "./FormulaCopyLayer";
+import { MarkdownLocalImage } from "./MarkdownLocalImage";
 import { useSmoothStream } from "../../utils/useSmoothStream";
 import {
 	STREAM_LIGHT_MAX_CHARS,
@@ -21,6 +22,7 @@ import {
 	IncrementalMarkdownFrontier,
 	UNSTABLE_TAIL_BLOCKS,
 } from "./markdown/incrementalMarkdown";
+import type { ProjectFileAccessScope } from "../../../../shared/types";
 
 /**
  * 数学公式插件（KaTeX）。@streamdown/math 默认 singleDollarTextMath: false，
@@ -151,6 +153,13 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 	components?: Parameters<typeof Streamdown>[0]["components"];
 	/** 是否禁用图表/代码高亮等重型渲染（静态小场景如更新日志可关以省内存） */
 	light?: boolean;
+	/**
+	 * 文件预览场景：当前 Markdown 的绝对路径。有值时，相对图片按该文件目录解析，
+	 * 经 readBase64→blob: 加载（dev 下 file:// 会被 Chromium 拦截）。
+	 */
+	markdownFilePath?: string;
+	/** 与 markdownFilePath 配套的项目读边界（可选，交给 files.readBase64） */
+	fileAccessScope?: ProjectFileAccessScope;
 }) {
 	const isDark = typeof document !== "undefined" &&
 		document.documentElement.dataset.theme === "dark";
@@ -250,19 +259,36 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 	// 闭包不会捕获过期回调（比裸对象 + eslint-disable 的做法依赖链完整）。
 	// 公式复制不再走 p 层拦截：rehype-katex 产物不进组件 map，p 层只能覆盖
 	// “单个行内公式独占一段”的罕见场景；改为 FormulaCopyLayer 事件委托浮层。
-	const components: Components = useMemo(
-		() =>
-			props.components ?? {
-				a: (linkProps) => (
-					<MarkdownLink
-						{...(linkProps as unknown as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
-						onOpenExternal={props.onOpenExternal}
-						onOpenFile={props.onOpenFile}
-					/>
-				),
-			},
-		[props.components, props.onOpenExternal, props.onOpenFile],
-	);
+	const components: Components = useMemo(() => {
+		const defaults: Components = {
+			a: (linkProps) => (
+				<MarkdownLink
+					{...(linkProps as unknown as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+					onOpenExternal={props.onOpenExternal}
+					onOpenFile={props.onOpenFile}
+				/>
+			),
+		};
+		// 仅文件预览传入 markdownFilePath：会话流式正文没有稳定「源文件目录」，
+		// 相对路径图片继续按默认（不解析），避免误读磁盘。
+		if (props.markdownFilePath) {
+			const markdownFilePath = props.markdownFilePath;
+			defaults.img = (imgProps) => (
+				<MarkdownLocalImage
+					{...(imgProps as React.ImgHTMLAttributes<HTMLImageElement>)}
+					markdownFilePath={markdownFilePath}
+					fileAccessScope={props.fileAccessScope}
+				/>
+			);
+		}
+		return props.components ? { ...defaults, ...props.components } : defaults;
+	}, [
+		props.components,
+		props.onOpenExternal,
+		props.onOpenFile,
+		props.markdownFilePath,
+		props.fileAccessScope,
+	]);
 	const pipe: StreamdownPipe = useMemo(
 		() => ({
 			// 学 Proma：流式期间也用 static 模式（同步渲染）。streamdown 的 streaming 模式
