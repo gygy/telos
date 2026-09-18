@@ -79,14 +79,13 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.14** (2026-09-18)
+> **Latest: v0.7.15** (2026-09-18)
 
-### v0.7.14 Release Highlights
-- 🚀 **Long-task narrative**
-- 🚀 **Review panel**
-- ✨ **Reading a file no longer squeezes four columns**
-- ✨ **Markdown preview shows local images**
-- ✨ **File-tree context menu responds immediately**
+### v0.7.15 Release Highlights
+- ✨ **Show chat while reading**
+- ✨ **Sidebar actions in the brand bar**
+- ✨ **Reading focus collapses the project list**
+- ✨ **Smoother file-tree context menu**
 
 [View Full Changelog →](CHANGELOG.md)
 

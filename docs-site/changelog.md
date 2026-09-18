@@ -5,6 +5,15 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.15
+
+发布时间：2026-09-18
+
+- ✨ **读文件时能马上回到对话**
+- ✨ **侧栏动作收进顶栏图标**
+- ✨ **读文件时收起项目列表**
+- ✨ **文件树右键更顺**
+
 ## v0.7.14
 
 发布时间：2026-09-18
