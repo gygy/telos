@@ -40,10 +40,18 @@ test("settings search matches haystack including aliases; empty query keeps all"
 	assert.match(source, /aliases: \["provider", "models\.json", "api", "模型"\]/);
 });
 
-test("settings window wires the search box into the header", () => {
+test("settings window search sits left of pane tabs as an icon button", () => {
 	assert.match(box, /data-testid="settings-search"/);
+	assert.match(box, /size="icon-sm"/);
+	assert.match(box, /t\("settings.searchAction"\)/);
+	assert.doesNotMatch(box, /<span className="truncate">\{t\("settings.searchPlaceholder"\)\}<\/span>/);
 	assert.match(box, /shouldFilter=\{false\}/);
 	assert.match(modal, /<SettingsSearchBox onPick=\{handleSettingsSearchPick\}/);
+	assert.match(modal, /flex items-center gap-1 self-start/);
 	assert.match(modal, /setPane\("config"\)/);
 	assert.match(modal, /configSection: hit\.configSection/);
+	assert.doesNotMatch(
+		modal.slice(modal.indexOf("<DialogHeader"), modal.indexOf("</DialogHeader>")),
+		/SettingsSearchBox/,
+	);
 });

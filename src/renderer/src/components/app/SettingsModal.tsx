@@ -602,10 +602,9 @@ function SettingsModalContent(props: SettingsModalProps) {
 	return (
 		<Dialog open onOpenChange={(next) => !next && handleClose()}>
 			<DialogContent showCloseButton={false} stagger className={cn("flex flex-col gap-0 overflow-hidden p-0", settingsModalSizeClass, "settings-modal", "[--wallpaper-dialog-alpha:var(--wallpaper-panel-alpha,30%)]")}>
-				<DialogHeader className="flex-row items-center gap-3 px-4 py-3">
-					<DialogTitle className="shrink-0">{t("settings.title")}</DialogTitle>
-					<SettingsSearchBox onPick={handleSettingsSearchPick} />
-					<div className="flex shrink-0 items-center gap-2">
+				<DialogHeader className="flex-row items-center justify-between px-4 py-3">
+					<DialogTitle>{t("settings.title")}</DialogTitle>
+					<div className="flex items-center gap-2">
 						{isConfigPane ? (
 							/* 配置管理分区：按钮与独立 ConfigModal 标题栏同源（ConfigPane ref 委托同一个 handler），
 							   黄点/禁用态由配置页内部脏集合与保存状态上报 */
@@ -688,7 +687,10 @@ function SettingsModalContent(props: SettingsModalProps) {
 			}} className="flex min-h-0 min-w-0 flex-1 flex-col">
 				{/* 顶层分区 tab：直接用 shadcn Tabs 默认观感（bg-muted p-1 圆角条），与全局组件统一；
 				    不再套自定义 tab 条样式，只做外边距/自定宽定位。 */}
-				<TabsList className="mx-3 mt-2.5 w-auto justify-start gap-0.5 self-start" aria-label={t("settings.title")}>
+				<div className="mx-3 mt-2.5 flex items-center gap-1 self-start">
+					{/* 搜索挂在分区标签左侧：图标按钮，不跟「系统设置 / 配置管理」抢同一套 tab 皮。 */}
+					<SettingsSearchBox onPick={handleSettingsSearchPick} />
+					<TabsList className="w-auto justify-start gap-0.5" aria-label={t("settings.title")}>
 					<TabsTrigger value="settings" className="h-8 gap-1.5 px-3 text-[13px]">
 						<MonitorCog className="size-4" aria-hidden="true" />
 						{t("settings.panes.system")}
@@ -701,7 +703,8 @@ function SettingsModalContent(props: SettingsModalProps) {
 						{/* 配置管理分区黄点：由 ConfigPane 内部脏集合上报 */}
 						{configPaneState.hasDirty ? <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" /> : null}
 					</TabsTrigger>
-				</TabsList>
+					</TabsList>
+				</div>
 				<TabsContent value="config" forceMount hidden={pane !== "config"} className="flex min-h-0 min-w-0 flex-1 flex-col">
 					<Suspense fallback={<SettingsTabLoading />}>
 						<ConfigPane

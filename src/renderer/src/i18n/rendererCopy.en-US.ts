@@ -2858,6 +2858,7 @@ export const enUS: Record<TranslationKey, string> = {
   "settings.title": "Settings",
   "settings.titleWithUpdate": "Settings (update available)",
   "settings.searchPlaceholder": "Search settings, models, skills…",
+  "settings.searchAction": "Search settings",
   "settings.searchEmpty": "No matching settings",
   "settings.tabs.common": "General",
   "settings.tabs.shortcuts": "Shortcuts",

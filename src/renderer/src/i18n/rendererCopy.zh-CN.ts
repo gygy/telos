@@ -2831,6 +2831,7 @@ export const zhCN = {
   "settings.title": "设置",
   "settings.titleWithUpdate": "设置（有新版本可用）",
   "settings.searchPlaceholder": "搜索设置、模型、技能…",
+  "settings.searchAction": "搜索设置",
   "settings.searchEmpty": "没有匹配的设置项",
   "settings.tabs.common": "常用设置",
   "settings.tabs.shortcuts": "快捷键",
