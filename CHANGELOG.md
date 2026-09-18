@@ -1,3 +1,12 @@
+## v0.7.11 - 2026-09-18
+
+### ✨ Improvements
+- **No default third-party anonymous heartbeat** — Removed the bundled PostHog project key; packaged builds no longer send `app_heartbeat` unless you set `POSTHOG_PROJECT_KEY` / `POSTHOG_HOST`. The Settings opt-out for anonymous usage stats remains.
+- **Tray and main-process copy unified as Telos** — Tray Restart / Quit and related DSH / extension strings no longer say PiDeck.
+
+### 🐛 Fixes
+- **Dev false “preload API not injected”** — Renderer checks `window.piDesktop` at runtime instead of freezing a module-load false negative; the main window retries the Vite URL with backoff after `ERR_CONNECTION_REFUSED`.
+
 ## v0.7.10 - 2026-09-17
 
 ### 🐛 Fixes

@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.7.10-blue)
+![Version](https://img.shields.io/badge/version-0.7.11-blue)
 
 <!-- star-history:start -->
 <picture>
@@ -79,10 +79,12 @@
 
 ## 馃搵 Changelog
 
-> **Latest: v0.7.10** (2026-09-17)
+> **Latest: v0.7.11** (2026-09-18)
 
-### v0.7.10 Release Highlights
-- ✨ **Mid-conversation lag after the first turn**
+### v0.7.11 Release Highlights
+- ✨ **No default third-party anonymous heartbeat**
+- ✨ **Tray and main-process copy unified as Telos**
+- ✨ **Dev false “preload API not injected”**
 
 [View Full Changelog →](CHANGELOG.md)
 

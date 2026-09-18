@@ -1,3 +1,12 @@
+## v0.7.11 - 2026-09-18
+
+### ✨ 改进
+- **默认关闭第三方匿名心跳上报** — 移除内置 PostHog Project Key；未自行配置环境变量时不再向外部发送 `app_heartbeat`。设置里仍可关闭「匿名使用统计」，需要自建统计时用 `POSTHOG_PROJECT_KEY` / `POSTHOG_HOST` 注入。
+- **托盘与主进程文案统一 Telos** — 托盘「重启 / 退出」及 DSH / 扩展等相关提示不再残留 PiDeck 产品名。
+
+### 🐛 修复
+- **开发态误报「预加载 API 未注入」** — 渲染层改为运行时探测 `window.piDesktop`，避免模块顶层冻死假阳性；Vite 未就绪导致 `ERR_CONNECTION_REFUSED` 时主窗口自动退避重试加载。
+
 ## v0.7.10 - 2026-09-17
 
 ### 🐛 修复

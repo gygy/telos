@@ -5,6 +5,14 @@
 - [中文 CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.zh-CN.md)
 - [English CHANGELOG](https://github.com/gygy/telos/blob/main/CHANGELOG.md)
 
+## v0.7.11
+
+发布时间：2026-09-18
+
+- ✨ **默认关闭第三方匿名心跳上报**
+- ✨ **托盘与主进程文案统一 Telos**
+- ✨ **开发态误报「预加载 API 未注入」**
+
 ## v0.7.10
 
 发布时间：2026-09-17
