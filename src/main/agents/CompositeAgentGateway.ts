@@ -15,7 +15,10 @@ import type {
 	SendPromptResult,
 	SessionUiResponseInput,
 } from "../../shared/types";
-import type { SessionAgentGateway } from "../sessions/SessionRuntimeCoordinator";
+import type {
+	AgentPreferenceApplyOptions,
+	SessionAgentGateway,
+} from "../sessions/SessionRuntimeCoordinator";
 
 /**
  * 多后端 agent 网关装配器：把 pi / dsh 等具体网关聚合成一个
@@ -229,12 +232,21 @@ export class CompositeAgentGateway implements SessionAgentGateway {
 		return this.owner(agentId).prepareResendFromMessage(agentId, messageId);
 	}
 
-	async setModel(agentId: string, provider: string, modelId: string): Promise<unknown> {
-		return this.owner(agentId).setModel(agentId, provider, modelId);
+	async setModel(
+		agentId: string,
+		provider: string,
+		modelId: string,
+		options?: AgentPreferenceApplyOptions,
+	): Promise<unknown> {
+		return this.owner(agentId).setModel(agentId, provider, modelId, options);
 	}
 
-	async setThinking(agentId: string, level: string): Promise<unknown> {
-		return this.owner(agentId).setThinking(agentId, level);
+	async setThinking(
+		agentId: string,
+		level: string,
+		options?: AgentPreferenceApplyOptions,
+	): Promise<unknown> {
+		return this.owner(agentId).setThinking(agentId, level, options);
 	}
 
 	async setPermission(agentId: string, preset: string): Promise<unknown> {

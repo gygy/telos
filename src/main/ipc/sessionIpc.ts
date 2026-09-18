@@ -668,6 +668,14 @@ export function registerSessionIpc(deps: SessionIpcDeps): void {
 				title: draft.title,
 				model: draft.model,
 			});
+			// 新建对话即后台 activate：把 pi 冷启挪到用户打字前；与首键预热共用
+			// ensureRuntime 闸门，发送不会再 spawn 第二个进程。
+			void sessionRuntimeCoordinator.activateRuntime(draft.id).catch((error) => {
+				void appLogger.warn("session", "Session draft runtime prewarm failed", {
+					sessionId: draft.id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
 			return draft;
 		},
 	);

@@ -2616,7 +2616,12 @@ export class AgentManager {
 		return parseAvailableThinkingLevelsResponse(response);
 	}
 
-	async setModel(agentId: string, provider: string, modelId: string) {
+	async setModel(
+		agentId: string,
+		provider: string,
+		modelId: string,
+		options?: { refreshRuntimeState?: boolean },
+	) {
 		const runtime = this.requireRuntime(agentId);
 		// Pi RPC 没有运行中 busy 门禁：set_model 立即更新 Agent state；已经发出的
 		// provider request 不可改写，后续同一 turn step/下一次 request 会读取新模型。
@@ -2648,6 +2653,10 @@ export class AgentManager {
 			throw new Error(errorText || "set_model failed");
 		}
 		this.emitState();
+		// 激活链路会在末尾 publishRuntimeState；中间态可跳过 get_state 省数百 ms。
+		if (options?.refreshRuntimeState === false) {
+			return undefined;
+		}
 		return this.getRuntimeState(agentId);
 	}
 
@@ -2759,7 +2768,11 @@ export class AgentManager {
 		return this.getRuntimeState(agentId);
 	}
 
-	async setThinking(agentId: string, level: string) {
+	async setThinking(
+		agentId: string,
+		level: string,
+		options?: { refreshRuntimeState?: boolean },
+	) {
 		const runtime = this.requireRuntime(agentId);
 		// 与 set_model 相同：Pi 允许运行中更新 state，具体 request 是否已经发出
 		// 由 Agent 自己决定；Telos 不把它预先降级成下一轮 pending。
@@ -2768,6 +2781,10 @@ export class AgentManager {
 			60_000,
 		);
 		this.emitState();
+		// 与 setModel 同理：激活末尾会 publish；中间态可跳过。
+		if (options?.refreshRuntimeState === false) {
+			return undefined;
+		}
 		return this.getRuntimeState(agentId);
 	}
 

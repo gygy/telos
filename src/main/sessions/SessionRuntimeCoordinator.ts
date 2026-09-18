@@ -32,6 +32,15 @@ import { buildSessionOriginKey } from "../../shared/sessionIdentity";
 import { isRewindCheckpointId, isRewindRestoreScope } from "../../shared/types";
 import type { SessionCatalogEntry } from "./SessionCatalog";
 
+/**
+ * 偏好 RPC（set_model / set_thinking）是否紧跟一轮 get_state。
+ * 激活链路会连续 setModel+setThinking，末尾再 publishRuntimeState：中间两轮刷新可关，
+ * 避免握手后连刷三次 get_state/get_session_stats（常省数百 ms）。
+ */
+export type AgentPreferenceApplyOptions = {
+	refreshRuntimeState?: boolean;
+};
+
 export interface SessionCatalogGateway {
 	get(sessionId: string): SessionCatalogEntry | undefined;
 	getRecord(sessionId: string): SessionRecord | undefined;
@@ -108,8 +117,17 @@ export interface SessionAgentGateway {
 		agentId: string,
 		messageId: string,
 	): Promise<{ text: string; images?: ImageContent[] }>;
-	setModel(agentId: string, provider: string, modelId: string): Promise<unknown>;
-	setThinking(agentId: string, level: string): Promise<unknown>;
+	setModel(
+		agentId: string,
+		provider: string,
+		modelId: string,
+		options?: AgentPreferenceApplyOptions,
+	): Promise<unknown>;
+	setThinking(
+		agentId: string,
+		level: string,
+		options?: AgentPreferenceApplyOptions,
+	): Promise<unknown>;
 	/** 可选能力：DSH 会话权限预设（/permission 命令）；pi 后端不持有。 */
 	setPermission?(agentId: string, preset: string): Promise<unknown>;
 	/**
@@ -1554,7 +1572,10 @@ export class SessionRuntimeCoordinator {
 		const isDsh = entry.backend === "dsh";
 		if (entry.model) {
 			try {
-				await this.agents.setModel(agentId, entry.model.provider, entry.model.modelId);
+				// 激活末尾 publishRuntimeState 会刷底栏；此处跳过中间 get_state。
+				await this.agents.setModel(agentId, entry.model.provider, entry.model.modelId, {
+					refreshRuntimeState: false,
+				});
 			} catch (error) {
 				// pi 后端：模型既不在本地 models.json 也不在 pi 目录（AgentManager 不带
 				// needsRestart 标记地抛 "Model not found"）= 模型已被重命名/删除。与 DSH
@@ -1585,7 +1606,9 @@ export class SessionRuntimeCoordinator {
 		}
 		if (entry.thinkingLevel) {
 			try {
-				await this.agents.setThinking(agentId, entry.thinkingLevel);
+				await this.agents.setThinking(agentId, entry.thinkingLevel, {
+					refreshRuntimeState: false,
+				});
 			} catch (error) {
 				if (!isDsh) throw error;
 				const message = errorMessage(error);

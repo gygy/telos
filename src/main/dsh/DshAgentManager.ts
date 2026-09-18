@@ -1377,7 +1377,12 @@ export class DshAgentManager implements SessionAgentGateway {
 		}));
 	}
 
-	async setModel(agentId: string, provider: string, modelId: string): Promise<unknown> {
+	async setModel(
+		agentId: string,
+		provider: string,
+		modelId: string,
+		_options?: { refreshRuntimeState?: boolean },
+	): Promise<unknown> {
 		const runtime = this.runtime(agentId);
 		// 普通 DSH session 的 model selection 是 host 级可变状态：运行中切换时，
 		// 已经发出的 provider request 保持原配置，后续 step 读取新的完整选择。
@@ -1427,7 +1432,11 @@ export class DshAgentManager implements SessionAgentGateway {
 		});
 	}
 
-	async setThinking(agentId: string, level: string): Promise<unknown> {
+	async setThinking(
+		agentId: string,
+		level: string,
+		_options?: { refreshRuntimeState?: boolean },
+	): Promise<unknown> {
 		// DSH 的思考档走 selectModel.reasoningEffort，没有独立 RPC。
 		const runtime = this.runtime(agentId);
 		const selected = runtime.model;

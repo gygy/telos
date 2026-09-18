@@ -324,6 +324,9 @@ export function useSessionActions(options: UseSessionActionsOptions) {
       });
       upsertSession(session);
       commitSessionSelection(projectId, session.id, true);
+      // 主进程 createDraft 已后台 activate；此处再调一次与 ensureRuntime 合流，
+      // 覆盖仅走 hook、未走 IPC 预热的测试替身/预览 API。
+      void api.sessions.activateRuntime(session.id).catch(() => undefined);
       return session;
     } catch (error) {
       showToast(error instanceof Error ? error.message : String(error), 4000);

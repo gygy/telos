@@ -103,6 +103,7 @@ function createHarness(options = {}) {
     setModel: 0,
     setModelArgs: [],
     setThinking: 0,
+    setThinkingArgs: [],
     setPermission: 0,
     publishRuntimeState: 0,
 	update: 0,
@@ -223,13 +224,14 @@ function createHarness(options = {}) {
       if (operation === "resend") return { text: "hello" };
       return undefined;
     },
-    setModel: async (_agentId, provider, modelId) => {
+    setModel: async (_agentId, provider, modelId, applyOptions) => {
       calls.setModel += 1;
-      calls.setModelArgs.push({ provider, modelId });
+      calls.setModelArgs.push({ provider, modelId, options: applyOptions });
       if (options.modelError) throw new Error(options.modelError);
     },
-    setThinking: async () => {
+    setThinking: async (_agentId, level, applyOptions) => {
       calls.setThinking += 1;
+      calls.setThinkingArgs.push({ level, options: applyOptions });
     },
     async setPermission(_agentId, _preset) {
       if (!this?.backend) throw new Error("Cannot read properties of undefined (reading 'resolveBackend')");
@@ -686,6 +688,9 @@ test("lazy activation publishes runtime state after binding", async () => {
   assert.equal(harness.calls.create, 1);
   assert.equal(harness.calls.setModel, 1);
   assert.equal(harness.calls.setThinking, 1);
+  // 激活链路末尾才会 publish；中间 setModel/setThinking 必须跳过 get_state。
+  assert.deepEqual(harness.calls.setModelArgs[0]?.options, { refreshRuntimeState: false });
+  assert.deepEqual(harness.calls.setThinkingArgs[0]?.options, { refreshRuntimeState: false });
   // attach 有两次（activate 内 + dispatch 成功后），这里只断言本测试关注的行为
   assert.equal(harness.calls.publishRuntimeState, 1);
 });
@@ -718,6 +723,7 @@ test("applies the latest catalog model when the user changes it during activatio
   assert.deepEqual(harness.calls.setModelArgs[0], {
     provider: "anthropic",
     modelId: "new-model",
+    options: { refreshRuntimeState: false },
   });
 });
 
