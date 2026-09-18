@@ -151,6 +151,11 @@ export type SessionToolAction = {
   label: string;
   icon: ReactNode;
   active?: boolean;
+  /**
+   * 钉在 ⋯ 菜单左侧的一级图标（终端/草稿纸）。缺省只出现在 ⋯ 的「工具」组，
+   * 避免编码工作台的高频入口被运行控制/导出挤成二级。
+   */
+  pinToBar?: boolean;
   /** 参数放宽到 HTMLElement：按钮既可直渲染也可作为下拉菜单项挂载。 */
   onClick: (event: React.MouseEvent<HTMLElement>) => void;
 };
@@ -182,6 +187,11 @@ export type SessionTabsBarProps = {
   actions?: ReactNode;
   /** 工具开关（草稿纸/终端/外部编辑器等）：原右侧悬浮工具条上收至此，排在抽屉开关左侧。 */
   toolActions?: readonly SessionToolAction[];
+  /**
+   * 引导页/新建会话（尚无 currentSessionId）时在 Tab 条展示占位项，
+   * 避免「点了新建却看不到 Tab」被理解成没点上。
+   */
+  placeholderTab?: boolean;
   /** 开始/结束拖拽会话 Tab 时通知外层（用于分屏落点预览）。 */
   onDragSessionChange?: (sessionId: string | null) => void;
   /** 分屏组：分屏内会话聚合为组（浏览器标签组风格：颜色标记 + 展开/收起）。 */
@@ -245,6 +255,14 @@ export type SessionTabsBarProps = {
 
 export function SessionTabsBar(props: SessionTabsBarProps) {
   const { tabs, pinnedTabs, currentSessionId, previewTabId } = props;
+  const pinnedToolActions = useMemo(
+    () => (props.toolActions ?? []).filter((action) => action.pinToBar),
+    [props.toolActions],
+  );
+  const menuToolActions = useMemo(
+    () => (props.toolActions ?? []).filter((action) => !action.pinToBar),
+    [props.toolActions],
+  );
   const tabItems = useMemo(() => tabs.map((sessionId) => ({ sessionId })), [tabs]);
   const dragSourceRef = useRef<string | null>(null);
   const dragTargetRef = useRef<{ targetId: string; position: "before" | "after" } | null>(null);
@@ -430,6 +448,24 @@ export function SessionTabsBar(props: SessionTabsBarProps) {
         onWheel={handleTabsWheel}
         className="session-tabs-scroll relative flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
       >
+        {props.placeholderTab ? (
+          <div
+            role="tab"
+            aria-selected="true"
+            data-testid="session-tab-placeholder"
+            title={t("tabs.placeholderNewSessionHint")}
+            className="session-tab group relative flex h-7 w-fit max-w-32 shrink-0 cursor-default select-none items-center rounded-md border border-transparent px-2 text-caption font-medium italic text-foreground"
+          >
+            <span className="relative z-10 truncate">{t("tabs.placeholderNewSession")}</span>
+            <motion.span
+              aria-hidden="true"
+              layoutId={activeIndicatorId}
+              layout="position"
+              transition={indicatorTransition}
+              className="pointer-events-none absolute inset-0 rounded-md bg-accent"
+            />
+          </div>
+        ) : null}
         {(() => {
           // 分屏组：组内会话聚合渲染（组头胶囊 + 颜色标记）；收起时组内 Tab 隐藏
           const splitGroupIds = props.splitGroupIds ?? [];
@@ -715,18 +751,35 @@ export function SessionTabsBar(props: SessionTabsBarProps) {
           Tab 级操作（固定/关闭等）保留在 Tab 右键菜单。 */}
       {props.onToggleDrawer ||
       props.actions != null ||
+      pinnedToolActions.length > 0 ||
+      menuToolActions.length > 0 ||
       (props.toolActions && props.toolActions.length > 0) ||
       props.runControl ||
       props.sessionActions ? (
         <div className="session-tabs-actions flex shrink-0 items-center gap-1 border-l border-border/30 pl-1">
           {props.actions}
+          {pinnedToolActions.map((action) => (
+            <Button
+              key={action.id}
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={`size-7${action.active ? " text-[var(--color-accent)]" : ""}`}
+              title={action.label}
+              aria-label={action.label}
+              aria-pressed={action.active}
+              onClick={action.onClick}
+            >
+              {action.icon}
+            </Button>
+          ))}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className={`size-7${props.toolActions?.some((action) => action.active) ? " text-[var(--color-accent)]" : ""}`}
+                className={`size-7${menuToolActions.some((action) => action.active) ? " text-[var(--color-accent)]" : ""}`}
                 title={t("tabs.moreActions")}
                 aria-label={t("tabs.moreActions")}
               >
@@ -811,11 +864,11 @@ export function SessionTabsBar(props: SessionTabsBarProps) {
                   </DropdownMenuItem>
                 </>
               )}
-              {props.toolActions && props.toolActions.length > 0 && (
+              {menuToolActions.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>{t("tabs.toolsGroup")}</DropdownMenuLabel>
-                  {props.toolActions.map((action) => (
+                  {menuToolActions.map((action) => (
                     <DropdownMenuItem key={action.id} onClick={action.onClick}>
                       {action.icon}
                       <span>{action.label}</span>
@@ -865,7 +918,11 @@ function EditorWorkbenchTab(props: {
     <div
       role="tab"
       aria-selected={Boolean(tab.active)}
-      title={tab.title ?? tab.label}
+      title={
+        tab.preview
+          ? t("tabs.previewHint", { name: tab.title ?? tab.label })
+          : (tab.title ?? tab.label)
+      }
       className={cn(
         "session-tab group relative flex h-7 shrink-0 cursor-pointer select-none items-center rounded-md border px-2 text-caption transition-[color,background-color,border-color,box-shadow,transform] duration-200",
         "w-fit max-w-40",
@@ -1052,7 +1109,7 @@ function SessionTab(props: {
         role="tab"
         aria-selected={active}
         data-session-id={sessionId}
-        title={title}
+        title={preview ? t("tabs.previewHint", { name: title }) : title}
         draggable
         onDragStart={props.onDragStart}
         onDragOver={props.onDragOver}

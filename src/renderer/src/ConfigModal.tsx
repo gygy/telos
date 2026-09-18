@@ -310,8 +310,8 @@ export type ConfigPaneProps = {
 	resourceOnly?: boolean;
 	/** 深链：打开时落在的配置分页（设置窗口内嵌分区消费 openSettingsAtom 的 configTab）。 */
 	focusConfigTab?: ConfigTab;
-	/** 深链：Pi 管理左侧分组（技能 / 扩展）；侧栏底栏入口走这里。 */
-	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions">;
+	/** 深链：Pi 管理左侧分组（技能 / 扩展 / 提示词）；侧栏底栏与设置内搜索走这里。 */
+	focusConfigSection?: Extract<ConfigSection, "skills" | "extensions" | "prompts">;
 	/** 深链：models 页要定位展开的供应商名。 */
 	focusProvider?: string;
 	/** 深链：打开时落在的后端分页（DSH 配置 / Pi 管理）；缺省保持上次位置。 */

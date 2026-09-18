@@ -3709,15 +3709,17 @@ export function App() {
       label: t("scratchPad.openTooltip"),
       icon: <Pencil size={14} />,
       active: scratchPad.isOpen,
+      pinToBar: true,
       onClick: () => scratchPad.toggle(),
     },
     ...(!isLanWeb && terminalTarget
       ? [
           {
             id: "terminal",
-            label: t("app.terminal"),
+            label: t("app.openTerminalTitle"),
             icon: <Terminal size={14} />,
             active: terminalOpen,
+            pinToBar: true,
             onClick: () => {
               setTerminalOpenForOwner(!terminalOpen);
             },
@@ -3752,6 +3754,7 @@ export function App() {
     <SessionTabsBar
       {...sessionTabsProps}
       toolActions={sessionToolActions}
+      placeholderTab={!currentSessionId}
       editorTabs={workbenchEditorTabs}
       onSelectEditorTab={(tabId) => {
         if (workbenchHasGitDiff) return;
