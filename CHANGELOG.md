@@ -1,3 +1,12 @@
+## v0.7.13 - 2026-09-18
+
+### ✨ Improvements
+- **Background Agent warmup on new sessions** — Creating a draft immediately starts `activateRuntime` in the background, so the pi cold start is often paid before the first send.
+- **Fewer get_state calls after handshake** — Applying model/thinking preferences during activation skips the mid-path state refreshes and publishes once at the end, often saving a few hundred ms.
+- **Virtualized file-tree scrolling** — Deeply expanded trees only mount viewport rows, so scroll and drag stay responsive.
+- **Lighter large Markdown previews** — Big docs render light first, then upgrade highlighting/diagrams when idle; KaTeX is skipped on the light path.
+- **Debounced @ filename deep search** — Full-tree scans for bare-name `@` search wait ~280ms, avoiding wasted IPC while typing.
+
 ## v0.7.12 - 2026-09-18
 
 ### 🚀 New Features
