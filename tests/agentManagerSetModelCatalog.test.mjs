@@ -128,3 +128,60 @@ test("setModel: catalog callback absent and model not in models.json → plain e
   assert.ok(error && typeof error === "object", "setModel 应抛出错误");
   assert.equal(error.needsRestart, undefined);
 });
+
+test("setModel skips getRuntimeState when refreshRuntimeState is false", async () => {
+  const manager = createManager();
+  let getStateCalls = 0;
+  manager.agents.set("agent-1", {
+    tab: {
+      id: "agent-1",
+      projectId: "project-1",
+      cwd: "C:/project",
+      title: "Session",
+      status: "idle",
+      sessionPath: "C:/sessions/session-1.jsonl",
+      sessionEnvironment: "native",
+      sessionSource: "pi",
+      createdAt: 1,
+    },
+    process: { client: { request: async () => ({ success: true }) } },
+  });
+  manager.getRuntimeState = async () => {
+    getStateCalls += 1;
+    return { isStreaming: false };
+  };
+
+  await manager.setModel("agent-1", "openai", "gpt-test", { refreshRuntimeState: false });
+  assert.equal(getStateCalls, 0, "激活链路中间态不应再刷 get_state");
+
+  await manager.setModel("agent-1", "openai", "gpt-test");
+  assert.equal(getStateCalls, 1, "默认路径仍应刷新 runtime state");
+});
+
+test("setThinking skips getRuntimeState when refreshRuntimeState is false", async () => {
+  const manager = createManager();
+  let getStateCalls = 0;
+  manager.agents.set("agent-1", {
+    tab: {
+      id: "agent-1",
+      projectId: "project-1",
+      cwd: "C:/project",
+      title: "Session",
+      status: "idle",
+      sessionPath: "C:/sessions/session-1.jsonl",
+      sessionEnvironment: "native",
+      sessionSource: "pi",
+      createdAt: 1,
+    },
+    process: { client: { request: async () => ({ success: true }) } },
+  });
+  manager.getRuntimeState = async () => {
+    getStateCalls += 1;
+    return { isStreaming: false };
+  };
+
+  await manager.setThinking("agent-1", "high", { refreshRuntimeState: false });
+  assert.equal(getStateCalls, 0);
+  await manager.setThinking("agent-1", "high");
+  assert.equal(getStateCalls, 1);
+});

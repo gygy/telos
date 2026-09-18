@@ -31,7 +31,7 @@ test("SessionRuntimeCoordinator exposes a full lifecycle logger interface", () =
 
 test("session runtime lifecycle events are logged", () => {
   assert.match(coordinator, /"Runtime activated", \{\s*sessionId,\s*agentId: tab\.id,\s*status: tab\.status,/);
-  assert.match(coordinator, /"Runtime stopped", \{\s*sessionId: target\.sessionId,\s*agentId: target\.agentId,\s*runtimeGeneration: target\.runtimeGeneration,/);
+  assert.match(coordinator, /"Runtime stopped", \{\s*sessionId: stopTarget\.sessionId,\s*agentId: stopTarget\.agentId,\s*runtimeGeneration: stopTarget\.runtimeGeneration,/);
   assert.match(coordinator, /"Runtime restarted"/);
   assert.match(coordinator, /"Runtime renamed"/);
   assert.match(coordinator, /"Runtime model changed", \{\s*sessionId: target\.sessionId,\s*agentId,\s*provider,\s*modelId,/);
@@ -58,6 +58,9 @@ test("settings changes are logged once, key names only, never values", () => {
 
 test("session write operations are logged", () => {
   assert.match(sessionIpc, /"Session draft created", \{\s*sessionId: draft\.id,/);
+  // 新建草稿后后台预热 runtime，把 pi 冷启挪到用户打字前。
+  assert.match(sessionIpc, /activateRuntime\(draft\.id\)/);
+  assert.match(sessionIpc, /"Session draft runtime prewarm failed"/);
   assert.match(sessionIpc, /"Anonymous session created", \{\s*sessionId: result\.session\.id,/);
   assert.match(sessionIpc, /"Session renamed \(file\)"/);
   assert.match(sessionIpc, /"Session copied", \{\s*sessionId,\s*targetSessionId:/);

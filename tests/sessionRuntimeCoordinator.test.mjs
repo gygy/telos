@@ -689,8 +689,9 @@ test("lazy activation publishes runtime state after binding", async () => {
   assert.equal(harness.calls.setModel, 1);
   assert.equal(harness.calls.setThinking, 1);
   // 激活链路末尾才会 publish；中间 setModel/setThinking 必须跳过 get_state。
-  assert.deepEqual(harness.calls.setModelArgs[0]?.options, { refreshRuntimeState: false });
-  assert.deepEqual(harness.calls.setThinkingArgs[0]?.options, { refreshRuntimeState: false });
+  // 属性级断言：loadTsCommonJs 在 VM 里构造的对象与测试 realm 的 deepEqual 会因原型跨界失败。
+  assert.equal(harness.calls.setModelArgs[0]?.options?.refreshRuntimeState, false);
+  assert.equal(harness.calls.setThinkingArgs[0]?.options?.refreshRuntimeState, false);
   // attach 有两次（activate 内 + dispatch 成功后），这里只断言本测试关注的行为
   assert.equal(harness.calls.publishRuntimeState, 1);
 });
@@ -720,11 +721,9 @@ test("applies the latest catalog model when the user changes it during activatio
 
   assert.equal(result.ok, true);
   assert.equal(harness.calls.setModel, 1);
-  assert.deepEqual(harness.calls.setModelArgs[0], {
-    provider: "anthropic",
-    modelId: "new-model",
-    options: { refreshRuntimeState: false },
-  });
+  assert.equal(harness.calls.setModelArgs[0]?.provider, "anthropic");
+  assert.equal(harness.calls.setModelArgs[0]?.modelId, "new-model");
+  assert.equal(harness.calls.setModelArgs[0]?.options?.refreshRuntimeState, false);
 });
 
 // 预热已把 Agent 绑上后，用户再改 catalog 模型然后发送：activate 对已绑定 runtime 直接
@@ -742,10 +741,9 @@ test("send applies a catalog model change made after the runtime is already boun
 
   const activated = await coordinator.activateRuntime("session-1");
   assert.equal(activated.ok, true);
-  assert.deepEqual(harness.calls.setModelArgs[0], {
-    provider: "openai",
-    modelId: "old-model",
-  });
+  assert.equal(harness.calls.setModelArgs[0]?.provider, "openai");
+  assert.equal(harness.calls.setModelArgs[0]?.modelId, "old-model");
+  assert.equal(harness.calls.setModelArgs[0]?.options?.refreshRuntimeState, false);
 
   await harness.catalog.update("session-1", {
     model: { provider: "anthropic", modelId: "new-model" },
@@ -755,10 +753,9 @@ test("send applies a catalog model change made after the runtime is already boun
   assert.equal(sent.accepted, true);
   assert.equal(harness.calls.create, 1);
   assert.equal(harness.calls.setModel, 2);
-  assert.deepEqual(harness.calls.setModelArgs[1], {
-    provider: "anthropic",
-    modelId: "new-model",
-  });
+  assert.equal(harness.calls.setModelArgs[1]?.provider, "anthropic");
+  assert.equal(harness.calls.setModelArgs[1]?.modelId, "new-model");
+  assert.equal(harness.calls.setModelArgs[1]?.options?.refreshRuntimeState, false);
 });
 
 test("does not send or bind a new runtime when model setup fails", async () => {

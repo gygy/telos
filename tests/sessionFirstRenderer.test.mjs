@@ -118,11 +118,9 @@ test("typing in the current Composer prewarms its runtime once", () => {
 
 test("creating a session draft also prewarms its runtime", () => {
   // 新建对话应立刻后台 activate，把冷启挪到用户打字前（与首键预热合流）。
-  assert.match(sessionActionsSource, /createDraft\(/);
-  assert.match(
-    sessionActionsSource,
-    /void api\.sessions\.activateRuntime\(session\.id\)\.catch/,
-  );
+  const sessionIpc = readFileSync("src/main/ipc/sessionIpc.ts", "utf8");
+  assert.match(sessionIpc, /activateRuntime\(draft\.id\)/);
+  assert.match(sessionIpc, /Session draft runtime prewarm failed/);
 });
 
 
