@@ -167,7 +167,7 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 	// 流结束 isStreaming 变 false 后，全量渲染（高亮/mermaid/表格/元素树）是一次
 	// 实测 70-100ms 的同步长任务：若发生在用户滚动/交互期间会造成可见卡顿与滚动跳动。
 	// 因此 settle 后先保持流式末帧的轻量渲染，requestIdleCallback 空闲时再切全量
-	// （timeout 兜底防永久延迟）；静态场景（从未流式，如 FileDiffViewer）不延迟。
+	// （timeout 兜底防永久延迟）；静态小文档立即全量，静态大文档同样 idle 升级。
 	const wasStreamingRef = useRef(false);
 	const [settleFull, setSettleFull] = useState(false);
 	const effectiveLight = props.light || isStreamingNow || !settleFull ||
@@ -180,7 +180,19 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 			return;
 		}
 		if (!wasStreamingRef.current) {
-			// 静态场景（从未流式）：立即全量，不延迟
+			// 静态场景（从未流式，如 FileDiffViewer）：
+			// 小文档立即全量；大文档先轻量再 idle 升级——同步全量高亮/mermaid
+			// 实测 70–100ms+，打开预览时会卡死滚动/切换。
+			if (props.text.length > STREAM_LIGHT_MAX_CHARS) {
+				const schedule = () => setSettleFull(true);
+				const id = typeof window.requestIdleCallback === "function"
+					? window.requestIdleCallback(schedule, { timeout: 1500 })
+					: window.setTimeout(schedule, 50);
+				return () => {
+					if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(id);
+					else window.clearTimeout(id);
+				};
+			}
 			setSettleFull(true);
 			return;
 		}
@@ -193,7 +205,7 @@ export const MarkdownStream = memo(function MarkdownStream(props: {
 			if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(id);
 			else window.clearTimeout(id);
 		};
-	}, [isStreamingNow]);
+	}, [isStreamingNow, props.text.length]);
 	// ── 冻结切分必须先于 streamPlain：不可冻结（prefixEnd=0）时需要据此回退纯文本 ──
 	// 每条 MarkdownStream 实例跟一段流：非 append 升 generation，冻结节点整段重建。
 	// settle 等待全量渲染期间（settleFull=false）继续用冻结渲染展示完整文本（轻量插件），

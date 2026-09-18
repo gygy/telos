@@ -247,8 +247,10 @@ test("settle full render is deferred to idle (no long task during interaction)",
 	// 避免在用户滚动/交互期间卡帧造成滚动跳动
 	assert.match(stream, /wasStreamingRef = useRef\(false\)/);
 	assert.match(stream, /requestIdleCallback\(schedule, \{ timeout: 1500 \}\)/);
-	// 静态场景（从未流式，如 FileDiffViewer）不得延迟：立即全量
+	// 静态小文档立即全量；静态大文档（>STREAM_LIGHT_MAX_CHARS）同样 idle 升级，
+	// 避免打开大 README/CHANGELOG 预览时同步卡死主线程。
 	assert.match(stream, /if \(!wasStreamingRef\.current\) \{\s*\n\s*\/\/ 静态场景/);
+	assert.match(stream, /props\.text\.length > STREAM_LIGHT_MAX_CHARS/);
 	assert.match(stream, /setSettleFull\(true\);\s*\n\s*return;/);
 	// settle 等待期保持轻量渲染（effectiveLight 含 !settleFull），并继续走冻结渲染
 	assert.match(stream, /const effectiveLight = props\.light \|\| isStreamingNow \|\| !settleFull/);

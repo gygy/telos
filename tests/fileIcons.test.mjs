@@ -121,4 +121,13 @@ describe("Seti file icon integration", () => {
     assert.doesNotMatch(workspaceSurface, /files-panel[^"]*overflow-y-auto/);
     assert.doesNotMatch(workspaceSurface, /files-panel[^"]*overflow-hidden"/);
   });
+
+  test("file tree nodes memoize on expanded/isDragOver booleans", () => {
+    // 展开/拖入高亮只传布尔值 + memo 跳过 Set 身份，避免整树无意义重渲。
+    assert.match(workspaceSurface, /const FileNode = memo\(FileNodeView/);
+    assert.match(workspaceSurface, /prev\.expanded === next\.expanded/);
+    assert.match(workspaceSurface, /prev\.isDragOver === next\.isDragOver/);
+    assert.match(workspaceSurface, /expanded=\{props\.expandedDirs\.has\(node\.path\)\}/);
+    assert.match(workspaceSurface, /isDragOver=\{dragOverDir === node\.path\}/);
+  });
 });

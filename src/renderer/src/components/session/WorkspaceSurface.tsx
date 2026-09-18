@@ -1,6 +1,7 @@
 import { cn } from "../../lib/utils";
 import { useAtom } from "jotai";
 import {
+	memo,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -288,6 +289,7 @@ function FilesPanel(props: {
 				<FileNode
 					key={node.path}
 					node={node}
+					expanded={props.expandedDirs.has(node.path)}
 					expandedDirs={props.expandedDirs}
 					onToggleDirectory={props.onToggleDirectory}
 					onFileContextMenu={props.onFileContextMenu}
@@ -295,7 +297,8 @@ function FilesPanel(props: {
 					onViewFile={props.onViewFile}
 					onDropFiles={props.onDropFiles}
 					onMoveFiles={props.onMoveFiles}
-				dragOverDir={dragOverDir}
+					isDragOver={dragOverDir === node.path}
+					dragOverDir={dragOverDir}
 					onDragOverDirChange={setDragOverDir}
 				/>
 			))}
@@ -456,8 +459,10 @@ function fileIconElement(name: string, isDirectory: boolean, isExpanded: boolean
 	}
 }
 
-function FileNode(props: {
+function FileNodeView(props: {
 	node: FileTreeNode;
+	/** 本节点是否展开（布尔值便于 memo；勿只传 Set 引用）。 */
+	expanded: boolean;
 	expandedDirs: Set<string>;
 	onToggleDirectory: (path: string) => void;
 	onFileContextMenu: (node: FileTreeNode, x: number, y: number) => void;
@@ -469,11 +474,12 @@ function FileNode(props: {
 	onDropFiles?: (targetDir: string, files: FileList) => void;
 	/** 内部拖拽移动文件/目录 */
 	onMoveFiles?: (sourcePaths: string[], targetDir: string) => void;
+	/** 本节点是否为当前拖入高亮目标 */
+	isDragOver: boolean;
 	dragOverDir?: string | null;
 	onDragOverDirChange?: (path: string | null) => void;
 }) {
-	const { node, expandedDirs, onToggleDirectory, depth = 0 } = props;
-	const expanded = expandedDirs.has(node.path);
+	const { node, expanded, onToggleDirectory, depth = 0 } = props;
 	const typeLabel = node.type === "file" ? getFileTypeLabel(node.name) : "";
 	const rowStyle = {
 		/* 每层 8px：旧 16 在窄抽屉里空白过大（标注「缩进太大」）。 */
@@ -517,7 +523,7 @@ function FileNode(props: {
 			props.onDropFiles(node.path, event.dataTransfer.files);
 		}
 	}, [node.path, props.onDropFiles, props.onMoveFiles, props.onDragOverDirChange]);
-	const isDragOver = props.dragOverDir === node.path;
+	const isDragOver = props.isDragOver;
 	/* 树行用原生 button，不用 shadcn Button：后者基类强制子 SVG size-4，
 	   会压掉 Seti --file-type-icon-size 与 lucide size，靠 ! 反压是补丁。
 	   2027-01：hover 高亮加与侧栏行同款的过渡动画（transition-[background-color,
@@ -579,17 +585,22 @@ function FileNode(props: {
 					{node.children && node.children.length > 0 && (
 						<div className="file-children">
 							{node.children.map((child) => (
-								<FileNode key={child.path} node={child}
-									expandedDirs={expandedDirs}
+								<FileNode
+									key={child.path}
+									node={child}
+									expanded={props.expandedDirs.has(child.path)}
+									expandedDirs={props.expandedDirs}
 									onToggleDirectory={onToggleDirectory}
 									onFileContextMenu={props.onFileContextMenu}
 									onOpenFile={props.onOpenFile}
 									onViewFile={props.onViewFile}
 									onDropFiles={props.onDropFiles}
 									onMoveFiles={props.onMoveFiles}
+									isDragOver={props.dragOverDir === child.path}
 									dragOverDir={props.dragOverDir}
 									onDragOverDirChange={props.onDragOverDirChange}
-									depth={depth + 1} />
+									depth={depth + 1}
+								/>
 							))}
 						</div>
 					)}
@@ -598,6 +609,24 @@ function FileNode(props: {
 		</div>
 	);
 }
+
+/**
+ * 展开 Set / 拖入高亮路径引用常变，但多数兄弟节点的 expanded/isDragOver 布尔值不变。
+ * 自定义比较跳过 Set 身份，避免展开一处或拖过一处时整棵树重渲。
+ */
+const FileNode = memo(FileNodeView, (prev, next) => (
+	prev.node === next.node &&
+	prev.expanded === next.expanded &&
+	prev.isDragOver === next.isDragOver &&
+	prev.depth === next.depth &&
+	prev.onToggleDirectory === next.onToggleDirectory &&
+	prev.onFileContextMenu === next.onFileContextMenu &&
+	prev.onOpenFile === next.onOpenFile &&
+	prev.onViewFile === next.onViewFile &&
+	prev.onDropFiles === next.onDropFiles &&
+	prev.onMoveFiles === next.onMoveFiles &&
+	prev.onDragOverDirChange === next.onDragOverDirChange
+));
 
 function SessionsPanel(props: {
 	sessions: SessionSummary[];
